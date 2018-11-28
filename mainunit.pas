@@ -3443,7 +3443,7 @@ begin
      exit;
   end;
   fnm := GetFullPath(Filenames[0]);
-  if not fileexists(fnm) then exit;
+  if (not fileexists(fnm)) and (not DirectoryExists(fnm)) then exit;
   if (isDICOM(fnm)) then begin
   //if (not isNifti(Filenames[0])) then begin
      fnm := dcm2Nifti(dcm2niiForm.getExeName, fnm);

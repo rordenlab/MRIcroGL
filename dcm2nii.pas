@@ -136,7 +136,7 @@ begin
         end;  //not in same folder as GUI
      end; //not in path
      {$IFNDEF UNIX} //strip .exe for Windows
-     result := ChangeFileExt(result, '');
+     //result := ChangeFileExt(result, '');
      {$ENDIF}
 end; //exeName()
 

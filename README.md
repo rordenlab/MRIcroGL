@@ -16,7 +16,7 @@ It is generally recommended that [download a pre-compiled executable](https://gi
 
  - Download and install [Lazarus 2.0 or later](https://www.lazarus-ide.org/).
  - Get the [Metal-Demos repository](https://github.com/neurolabusc/Metal-Demos), for example: `git clone https://github.com/neurolabusc/Metal-Demos`.
- - Get the [MRIcroGL12 repository](https://github.com/neurolabusc/MRIcroGL12), for example: `git clone https://github.com/neurolabusc/MRIcroGL12`.
+ - Get the [MRIcroGL12 repository]( https://github.com/rordenlab/MRIcroGL12.git), for example: `git clone https://github.com/neurolabusc/MRIcroGL12`.
  - If you are using MacOS and want to build for Apple Metal (instead of OpenGL):
  ⋅⋅* Get the [lazmetalcontrol repository](https://github.com/genericptr/Metal-Framework).
  ⋅⋅* Use the Lazarus Package menu to open and install the lazmetal control.
