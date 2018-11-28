@@ -1,0 +1,17 @@
+[FLT]
+min=-23
+max=246
+[INT]
+numnodes=5
+[BYT]
+nodeintensity0=0
+nodeintensity1=64
+nodeintensity2=131
+nodeintensity3=196
+nodeintensity4=255
+[RGBA255]
+nodergba0=0|0|0|0
+nodergba1=44|128|0|0
+nodergba2=255|90|70|82
+nodergba3=255|255|0|184
+nodergba4=255|255|255|228

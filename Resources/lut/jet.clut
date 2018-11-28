@@ -1,0 +1,23 @@
+[FLT]
+min=0
+max=0
+[INT]
+numnodes=5
+[BYT]
+nodeintensity0=0
+nodeintensity1=63
+nodeintensity2=128
+nodeintensity3=192
+nodeintensity4=255
+[RGBA255]
+nodergba0=0|0|127|0
+nodergba1=0|127|255|32
+nodergba2=127|255|127|64
+nodergba3=255|127|0|96
+nodergba4=127|0|0|128
+
+#00007F", "blue",
+"#007FFF", "cyan",
+"#7FFF7F", "yellow",
+"#FF7F00", "red",
+"#7F0000"
