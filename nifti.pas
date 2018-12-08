@@ -230,6 +230,7 @@ const
 var
    i, j, nVox, nVoi, sumTotal : integer;
    sumVois, sumVoisNot0: TUInt32s;
+   frac: single;
 begin
      result := TStringList.Create();
      if fLabels.Count < 1 then exit;
@@ -253,12 +254,18 @@ begin
          sumVoisNot0[j] := sumVoisNot0[j] + 1;
      end;
      result.Add('Background image: '+ShortName);
+     result.Add(format('Regions: ', [nVoi]));
      result.Add(format('TotalVoxelsNotZero%s%d', [kTab, sumTotal]));
-     result.Add('Index'+kTab+'Name'+kTab+'numVox'+kTab+'numVoxNotZero');
+     result.Add('Background image: '+ShortName);
+     result.Add('Index'+kTab+'Name'+kTab+'numVox'+kTab+'numVoxNotZero'+kTab+'fracVoxNotZero');
      for i := 0 to (fLabels.Count -1) do begin
-         if fLabels[i] = '' then continue;
          if sumVoisNot0[i] < 1 then continue;
-         result.Add(format('%d%s"%s"%s%d%s%d', [i,kTab, fLabels[i], kTab, sumVois[i], kTab, sumVoisNot0[i]]));
+         if sumVois[i] < 1 then continue;
+         frac := sumVoisNot0[i] / sumVois[i];
+         if fLabels[i] = '' then
+            result.Add(format('%d%s<%d>%s%d%s%d%s%g', [i,kTab, i, kTab, sumVois[i], kTab, sumVoisNot0[i],kTab,frac]))
+         else
+             result.Add(format('%d%s"%s"%s%d%s%d%s%g', [i,kTab, fLabels[i], kTab, sumVois[i], kTab, sumVoisNot0[i],kTab,frac]));
      end;
      sumVois := nil;
      sumVoisNot0 := nil;
@@ -1984,7 +1991,7 @@ begin
   skipVx := SkipVox();
   if (IsLabels()) then begin
     //DisplayLabel2Uint8();
-    clut.GenerateLUT(abs(fWindowMax-fWindowMin)/100);
+    clut.GenerateLUT(abs(fWindowMax-fWindowMin)/100, fOpacityPct);
     result := fCache8;
     fWindowMinCache8 := fWindowMin;
     fWindowMaxCache8 := fWindowMax;
@@ -2675,11 +2682,15 @@ begin
       while lPos <= lLength do begin
         lStr1 := '';
         repeat
-	             lCh := lInStr[lPos]; inc(lPos);
-	             if (lCh >= '0') and (lCh <= '9') then
-		        lStr1 := lStr1 + lCh;
-        until (lPos > lLength) or (lCh = kCR) or (lCh = kUNIXeoln) or (((lCh = kTab)or (lCh=' ')) and (length(lStr1)>0));
-        if (length(lStr1) > 0) and (lPos <= lLength) then begin
+	      lCh := lInStr[lPos]; inc(lPos);
+	      if (lCh >= '0') and (lCh <= '9') then
+	         lStr1 := lStr1 + lCh
+              else
+                  lCh := kTab;
+        until (lPos > lLength) or ((lCh = kTab) and (length(lStr1)>0));
+
+              // until (lPos > lLength) or (lCh = kCR) or (lCh = kUNIXeoln) or ((lCh = kTab) and (length(lStr1)>0));
+       if (length(lStr1) > 0) and (lPos <= lLength) then begin
 		      lIndex := strtoint(lStr1);
           if lPass = 1 then begin
                       if lIndex > lMaxIndex then
@@ -2822,7 +2833,7 @@ begin
      if (fHdr.bitpix <= 16)  then begin
         LoadLabelsTxt(fFilename, fLabels);
         if (fLabels.Count < 1) and (( fHdr.vox_offset- fHdr.HdrSz) > 128) then
-           LoadLabels(fFilename, fLabels, fHdr.HdrSz, round( fHdr.vox_offset)) ;
+           LoadLabels(fFilename, fLabels, fHdr.HdrSz, round( fHdr.vox_offset));
      end;
       if (fLabels.Count < 1) then
         fHdr.intent_code :=  kNIFTI_INTENT_NONE

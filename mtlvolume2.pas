@@ -81,7 +81,7 @@ type
 
 implementation
 
-uses mainunit;
+//uses mainunit;
 
 destructor TGPUVolume.Destroy;
 begin
@@ -90,6 +90,7 @@ begin
   colorEditor.free;
   txt.free;
   {$ENDIF}
+  {$IFDEF CUBE} gCube.free; {$ENDIF}
   clrbar.free;
   inherited;
 end;
@@ -268,7 +269,6 @@ var
   threadgroupCount: MTLSize;
   tempTex: MTLTextureProtocol;
 begin
- //GLForm1.caption := inttostr(random(888))+'<<<';
   grTexDesc := MTLTextureDescriptor.alloc.init.autorelease;
   grTexDesc.setTextureType(MTLTextureType3D);
   grTexDesc.setUsage(MTLTextureUsageShaderWrite or MTLTextureUsageShaderRead);
@@ -276,6 +276,8 @@ begin
   grTexDesc.setWidth(Xsz);
   grTexDesc.setHeight(Ysz);
   grTexDesc.setDepth(Zsz);
+  //grTex := nil; //789
+  if (grTex <> nil) then grTex.release;
   grTex := mtlControl.renderView.device.newTextureWithDescriptor(grTexDesc);
   Fatal(grTex = nil, 'CreateGradientVolumeGPU: newTextureWithDescriptor failed');
   tempTex := mtlControl.renderView.device.newTextureWithDescriptor(grTexDesc);
@@ -304,6 +306,7 @@ begin
   MTLEndCommand(true); //<- syncrhonous: waitUntilCompleted, reduce flicker
   sobelShader.Free;
   blurShader.Free;
+  tempTex.release;
   tempTex := nil;
 end;
 
@@ -332,6 +335,8 @@ begin
   volTexDesc.setWidth(256);
   volTexDesc.setHeight(1);
   volTexDesc.setDepth(1);
+  //drawVolLut := nil; //789
+  if (drawVolLut <> nil) then  drawVolLut.release;
   drawVolLut := mtlControl.renderView.device.newTextureWithDescriptor(volTexDesc);
   Fatal(drawVolLut = nil, 'drawVolume: newTextureWithDescriptor failed');
   //i := 256;
@@ -364,6 +369,8 @@ begin
   volTexDesc.setWidth(Dim.X);
   volTexDesc.setHeight(Dim.Y);
   volTexDesc.setDepth(Dim.Z);
+  //drawVolTex := nil; //789
+  if drawVolTex <> nil then drawVolTex.release;
   drawVolTex := mtlControl.renderView.device.newTextureWithDescriptor(volTexDesc);
   Fatal(drawVolTex = nil, 'DrawTex: newTextureWithDescriptor failed');
   volRegion := MTLRegionMake3D(0, 0, 0, Dim.X, Dim.Y, Dim.Z);
@@ -400,6 +407,8 @@ begin
   volTexDesc.setWidth(Dim.X);
   volTexDesc.setHeight(Dim.Y);
   volTexDesc.setDepth(Dim.Z);
+  //overlayVolTex := nil; //789
+  if overlayVolTex <> nil then overlayVolTex.release;
   overlayVolTex := mtlControl.renderView.device.newTextureWithDescriptor(volTexDesc);
   Fatal(overlayVolTex = nil, 'volTex: newTextureWithDescriptor failed');
   volRegion := MTLRegionMake3D(0, 0, 0, Dim.X, Dim.Y, Dim.Z);
@@ -412,6 +421,7 @@ begin
   //Vol.CreateGradientVolume (intensityData, Dim.X, Dim.Y, Dim.Z, gradData);
   CreateGradientVolumeX (TUInt8s(volRGBA), Dim.X, Dim.Y, Dim.Z, 1, gradData);
   volTexDesc.setUsage(MTLTextureUsageShaderWrite or MTLTextureUsageShaderRead);
+  if (overlayGradTex <> nil) then overlayGradTex.release;
   overlayGradTex := mtlControl.renderView.device.newTextureWithDescriptor(volTexDesc);
   Fatal(overlayGradTex = nil, 'newTextureWithDescriptor failed');
   gradRegion := MTLRegionMake3D(0, 0, 0, Dim.X, Dim.Y, Dim.Z);
@@ -430,6 +440,7 @@ begin
   if not vols.Layer(0,Vol) then exit;
   overlayNum := vols.NumLayers -1; //-1 as we ignore background
   if (overlayNum < 1) then begin //background only
+    //GLForm1.LayerBox.Caption := '->>'+inttostr(random(888));
     if (overlayGradTex = nil) or (overlayGradTex.width > 1) then //e.g. update texture after user closes overlays
        CreateOverlayTextures(Vol.Dim, nil); // <- empty overlay texture
     exit; //no overlays
@@ -458,6 +469,8 @@ begin
  volTexDesc.setWidth(Vol.Dim.X);
  volTexDesc.setHeight(Vol.Dim.Y);
  volTexDesc.setDepth(Vol.Dim.Z);
+ //volTex := nil; //789
+ if volTex <> nil then volTex.release;
  volTex := mtlControl.renderView.device.newTextureWithDescriptor(volTexDesc);
  Fatal(volTex = nil, 'loadTex: newTextureWithDescriptor failed');
  volRegion := MTLRegionMake3D(0, 0, 0, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z);
@@ -475,6 +488,7 @@ begin
  gradTexDesc.setDepth(Vol.Dim.Z);
  gradTex := mtlControl.renderView.device.newTextureWithDescriptor(gradTexDesc);*)
  volTexDesc.setUsage(MTLTextureUsageShaderWrite or MTLTextureUsageShaderRead);
+ if gradTex <> nil then gradTex.release;
  gradTex := mtlControl.renderView.device.newTextureWithDescriptor(volTexDesc);
  Fatal(gradTex = nil, 'newTextureWithDescriptor failed');
  gradRegion := MTLRegionMake3D(0, 0, 0, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z);
@@ -581,7 +595,10 @@ begin
 
   if slices2D.NumberOfVertices < 3 then exit;
   vertUniforms.viewportSize := V2(w, h);
-  fragUniforms.backAlpha := vol.OpacityPercent/100;
+  if vol.IsLabels then
+     fragUniforms.backAlpha :=  1
+  else
+   fragUniforms.backAlpha := vol.OpacityPercent/100;
   UpdateDraw(Drawing);
   if (not Drawing.IsOpen) or (Drawing.OpacityFraction <= 0.0) then
      fragUniforms.drawAlpha := 0.0
@@ -705,7 +722,10 @@ begin
   fragUniforms.rayDir.X := rayDir.x; fragUniforms.rayDir.Y := rayDir.y; fragUniforms.rayDir.Z := rayDir.z;
   fragUniforms.lightPos := modelLightPos;
   fragUniforms.numOverlays:= overlayNum;
-  fragUniforms.backAlpha:= vol.OpacityPercent/100;
+  if vol.IsLabels then
+     fragUniforms.backAlpha :=  1
+  else
+      fragUniforms.backAlpha:= vol.OpacityPercent/100;
   fragUniforms.clipPlane := fClipPlane;
   fragUniforms.sliceSize := 1/maxDim;
   //fragUniforms.stepSize := 1.0/ ((maxDim*0.25)+ (maxDim*1.75)* (RayCastQuality1to10/10));
@@ -804,7 +824,10 @@ begin
   fragUniforms.rayDir.X := rayDir.x; fragUniforms.rayDir.Y := rayDir.y; fragUniforms.rayDir.Z := rayDir.z;
   fragUniforms.lightPos := modelLightPos;
   fragUniforms.numOverlays:= overlayNum;
-  fragUniforms.backAlpha:= vol.OpacityPercent/100;
+  if vol.IsLabels then
+     fragUniforms.backAlpha :=  1
+  else
+      fragUniforms.backAlpha:= vol.OpacityPercent/100;
 
   fragUniforms.clipPlane := fClipPlane;
   fragUniforms.sliceSize := 1/maxDim;
@@ -860,7 +883,10 @@ procedure TGPUVolume.PaintMosaic2D(var vol: TNIfTI; Drawing: TDraw; MosaicString
     h := mtlControl.clientheight;
     if (slices2D.NumberOfVertices < 3) and (slices2D.NumberOfMosaicRenders < 1) then exit;
     vertUniforms.viewportSize := V2(w, h);
-    fragUniforms.backAlpha:= vol.OpacityPercent/100;
+    if vol.IsLabels then
+       fragUniforms.backAlpha :=  1
+    else
+        fragUniforms.backAlpha:= vol.OpacityPercent/100;
     MTLBeginFrame();
       if (slices2D.NumberOfVertices >= 3) then begin
         //draw 2D slices
@@ -956,7 +982,10 @@ begin
   fragUniforms.lightPos := modelLightPos;
   fragUniforms.clipPlane := fClipPlane;
   fragUniforms.numOverlays:= overlayNum;
-  fragUniforms.backAlpha:= vol.OpacityPercent/100;
+  if vol.IsLabels then
+     fragUniforms.backAlpha :=  1
+  else
+      fragUniforms.backAlpha:= vol.OpacityPercent/100;
   //GLForm1.Caption := format('>> %g', [fragUniforms.backAlpha]);
 
   fragUniforms.sliceSize := 1/maxDim;

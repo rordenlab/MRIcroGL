@@ -92,6 +92,7 @@ begin
   colorEditor.free;
   txt.free;
   {$ENDIF}
+  {$IFDEF CUBE} gCube.free; {$ENDIF}
   clrbar.free;
   inherited;
 end;
@@ -768,6 +769,7 @@ procedure TGPUVolume.CreateOverlayTextures(Dim: TVec3i; volRGBA: TRGBAs);
 var
    gradData: TRGBAs;
 begin
+  //GLForm1.LayerBox.Caption := ':>>'+inttostr(random(888));
   if (overlayIntensityTexture3D <> 0) then glDeleteTextures(1,@overlayIntensityTexture3D);
   if (overlayGradientTexture3D <> 0) then glDeleteTextures(1,@overlayGradientTexture3D);
   if (volRGBA = nil) then begin
@@ -811,6 +813,8 @@ begin
   end else
       glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Dim.X, Dim.Y, Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@volRGBA[0]);
  overlayGradTexWidth := Dim.X;
+ //GLForm1.LayerBox.Caption := ':>>'+inttostr(random(888));
+
  volRGBA := nil; //free
 end;
 
@@ -821,7 +825,10 @@ var
 begin
   if not vols.Layer(0,Vol) then exit;
   overlayNum := vols.NumLayers -1; //-1 as we ignore background
+
   if (overlayNum < 1)  then begin //background only
+      //GLForm1.LayerBox.Caption := '>>>'+inttostr(random(888));
+
     if (overlayGradientTexture3D = 0) or (overlayGradTexWidth > 1) then //e.g. update texture after user closes overlays
        CreateOverlayTextures(Vol.Dim, nil); // <- empty overlay texture
     exit; //no overlays
@@ -969,7 +976,10 @@ begin
   glUniform1i(overlayGradientVolLoc, 5);
   //other uniforms...
   glUniform1f(stepSizeLoc, ComputeStepSize(RayCastQuality1to10, maxDim)) ;
-  glUniform1f(backAlphaLoc, vol.OpacityPercent/100);
+  if vol.IsLabels then
+     glUniform1f(backAlphaLoc, 1)
+   else
+     glUniform1f(backAlphaLoc, vol.OpacityPercent/100);
   glUniform1f(sliceSizeLoc, 1/maxDim);
   glUniform1i(loopsLoc,round(maxDim*2.2));
   //unit model matrix for lighting
@@ -1085,9 +1095,11 @@ begin
     glActiveTexture( GL_TEXTURE4);
     glBindTexture(GL_TEXTURE_1D, drawTexture1D);
     glUniform1i(uniform_drawLUT, 4);
-
     //other uniforms
-    glUniform1f(uniform_backAlpha, vol.OpacityPercent/100);
+    if vol.IsLabels then
+       glUniform1f(uniform_backAlpha, 1)
+    else
+        glUniform1f(uniform_backAlpha, vol.OpacityPercent/100);
     glUniform2f(uniform_viewportSizeTex, w, h);
     glBindBuffer(GL_ARRAY_BUFFER, vboTex2D);
     glBufferData(GL_ARRAY_BUFFER,slices2D.NumberOfVertices*SizeOf(TVertex2D), @slices2D.SliceVertices[0], GL_STATIC_DRAW);
@@ -1176,7 +1188,10 @@ begin
   else
       glUniform1f(uniform_drawAlpha, Drawing.OpacityFraction); //<- loaded!
   //other uniforms
-  glUniform1f(uniform_backAlpha, vol.OpacityPercent/100);
+  if vol.IsLabels then
+     glUniform1f(uniform_backAlpha, 1)
+  else
+      glUniform1f(uniform_backAlpha, vol.OpacityPercent/100);
   glUniform2f(uniform_viewportSizeTex, w, h);
   glBindBuffer(GL_ARRAY_BUFFER, vboTex2D);
   glBufferData(GL_ARRAY_BUFFER,slices2D.NumberOfVertices*SizeOf(TVertex2D), @slices2D.SliceVertices[0], GL_STATIC_DRAW);
@@ -1243,7 +1258,10 @@ begin
   glUniform1i(overlayGradientVolLoc, 5);
   //bind other uniforms
   glUniform1f(stepSizeLoc, ComputeStepSize(RayCastQuality1to10, maxDim)) ;
-  glUniform1f(backAlphaLoc, vol.OpacityPercent/100);
+  if vol.IsLabels then
+     glUniform1f(backAlphaLoc, 1)
+  else
+   glUniform1f(backAlphaLoc, vol.OpacityPercent/100);
   glUniform1f(sliceSizeLoc, 1/maxDim);
   glUniform1i(loopsLoc,round(maxDim*2.2));
   //glUniform3f(clearColorLoc, fClearColor.r/255, fClearColor.g/255, fClearColor.b/255);

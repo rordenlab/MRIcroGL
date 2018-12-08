@@ -24,7 +24,7 @@ type
     public
       property FromZero: boolean read fIsFromZero write fIsFromZero;
       property BackColor: TRGBA read fBackColor write fBackColor;
-      procedure GenerateLUT(saturation: float = 1.0);
+      procedure GenerateLUT(saturation: float = 1.0; LabelAlpha: integer = -1);
       property NeedsUpdate: boolean read fNeedsUpdate write fNeedsUpdate;
       property Tag: integer read CLUT.Tag; //arbitrary number associated with table, e.g. position in drop down list
       property SuggestedMinIntensity: single read CLUT.min;
@@ -219,7 +219,7 @@ begin
   lRGBA.b := b;
 end;
 
-procedure  TCLUT.GenerateLUT(saturation: float = 1.0);
+procedure  TCLUT.GenerateLUT(saturation: float = 1.0; LabelAlpha: integer = -1);
 var
   lSlope: single;
   lSpace,lI,lIprev,lS: integer;
@@ -229,6 +229,10 @@ begin
      //GLForm1.Caption := floattostr(saturation) +'+-->'+inttostr(random(888));
      fLUT := fLUTlabel;
      fLUT[0] := SetRGBA(fBackColor.r,fBackColor.g, fBackColor.b,0);
+     if (LabelAlpha >= 0) and (LabelAlpha <= 255) then
+        for lI := 1 to 255 do
+            if (fLUT[lI].a > 0) then
+               fLUT[lI] := SetRGBA(fLUT[lI].r,fLUT[lI].g, fLUT[lI].b, LabelAlpha);
      if (saturation < 0) or (saturation >= 1.0) then
         exit;
      for lI := 1 to 255 do

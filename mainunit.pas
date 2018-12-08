@@ -28,7 +28,7 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20181114';
+  kVers = '1.2.20181114+'; //+fixes Metal memory leak
 type
 
   { TGLForm1 }
@@ -434,7 +434,6 @@ const
      kNaN : double = 1/0;
 var
  gPrefs: TPrefs;
- //gClearColor: TRGBA = (r: 200; g:200; b:255; a: 255);
  gMouse : TPoint = (x: -1; y: -1);
  gMouseDrag: boolean = false;
  gSliceMM : TVec3 = (x: 0; y: 0; z: 0);
@@ -4441,7 +4440,7 @@ begin
     exit;
  end;
  if gPrefs.DisplayOrient <= kMax2DOrient then begin
-    if (Vols.Drawing.IsOpen) and (Vols.Drawing.ActivePenColor >= 0) and (Vols.Drawing.MouseDown) then begin
+    if  (Vols.Drawing.IsOpen) and (Vols.Drawing.ActivePenColor >= 0) and (Vols.Drawing.MouseDown) then begin
        fracXYZ := Vol1.GetSlice2DFrac(X,Y,i);
        if (i = Vols.Drawing.voiActiveOrient) then begin
           Vols.Drawing.voiMouseMove(fracXYZ.X, fracXYZ.Y, fracXYZ.Z);
