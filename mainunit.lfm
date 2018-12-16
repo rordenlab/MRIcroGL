@@ -1,5 +1,5 @@
 object GLForm1: TGLForm1
-  Left = 247
+  Left = 238
   Height = 756
   Top = 22
   Width = 1033
@@ -1576,6 +1576,12 @@ object GLForm1: TGLForm1
         Caption = 'Copy'
         ShortCut = 16451
         OnClick = EditCopyMenuClick
+      end
+      object StoreFMRIMenu: TMenuItem
+        Caption = 'Store FMRI Coordinates'
+        ShortCut = 4171
+        Visible = False
+        OnClick = StoreFMRIMenuClick
       end
     end
     object ImportMenu: TMenuItem

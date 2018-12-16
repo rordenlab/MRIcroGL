@@ -15,9 +15,11 @@ unit mainunit;
 {$DEFINE CLRBAR} //provide color bar
 {$WARN 5024 OFF} //disable warnings about unused parameters
 {$WARN 5043 off : Symbol "$1" is deprecated}
+//{$DEFINE MATT1}
 interface
 
 uses
+  {$IFDEF MATT1}umat, {$ENDIF}
   {$IFDEF COMPILEYOKE} yokesharemem, {$ENDIF}
   {$IFDEF MYPY}PythonEngine,  {$ENDIF}
   {$IFDEF LCLCocoa} {$IFDEF NewCocoa}nsappkitext, UserNotification,{$ENDIF} {$ENDIF}
@@ -103,6 +105,7 @@ type
     LayerShowBidsMenu: TMenuItem;
     ExitFullScreenMenu: TMenuItem;
     LayerMaskWithBackgroundMenu: TMenuItem;
+    StoreFMRIMenu: TMenuItem;
     SmoothMenu: TMenuItem;
     TextAndCubeMenu: TMenuItem;
     OpenFSLMenu: TMenuItem;
@@ -315,6 +318,7 @@ type
     procedure ScriptPanelDblClick(Sender: TObject);
     procedure SetColorBarPosition;
     procedure SmoothMenuClick(Sender: TObject);
+    procedure StoreFMRIMenuClick(Sender: TObject);
     procedure TextAndCubeMenuClick(Sender: TObject);
     procedure ToolPanelDblClick(Sender: TObject);
     procedure UpdateColorBar;
@@ -3247,6 +3251,29 @@ begin
    ViewGPU1.Invalidate;
 end;
 
+procedure TGLForm1.StoreFMRIMenuClick(Sender: TObject);
+{$IFDEF MATT1}
+var
+  fnm: string;
+  txt : TextFile;
+begin
+  fnm := gPrefs.PrevBackgroundImage;
+  fnm := changefileext(fnm,'.txt');
+  if fileexists(fnm) then begin
+     showmessage('Already a file named '+fnm);
+     exit;
+  end;
+  AssignFile (txt,fnm);
+  Rewrite(txt); {open the file 'fname' for writing}
+  Writeln(txt, GLForm1.caption);
+  CloseFile(txt);
+end;
+{$ELSE}
+begin
+     //
+end;
+{$ENDIF}
+
 procedure TGLForm1.TextAndCubeMenuClick(Sender: TObject);
 begin
    gPrefs.LabelOrient := TextAndCubeMenu.Checked;
@@ -3374,6 +3401,7 @@ end;
 function TGLForm1.AddBackground(Filename: string; isAddToRecent: boolean = true): boolean;
 //close all open layers and add a new background layer
 var
+   {$IFDEF MATT1}ext: string; {$ENDIF}
  fnm: string;
 begin
   AnimateTimer.Enabled := false;
@@ -3383,10 +3411,21 @@ begin
   if not Fileexists(fnm) then exit(false);
   vols.CloseAllLayers;
   CutNoneBtnClick(nil); //turn off cut-out: not persistent like clip plane
+  {$IFDEF MATT1}
+  ext := uppercase(extractfileext(fnm));
+  if (ext = '.MAT') then
+     MatLoadForce(kMatForceT1);
+  {$ENDIF}
   if not AddLayer(fnm) then
     exit(false);
   gPrefs.PrevBackgroundImage := fnm; //launch with last image, even if it is template/fsl image
   if (isAddToRecent) then AddOpenRecent(fnm);
+  {$IFDEF MATT1}
+  if (ext = '.MAT') then begin
+     MatLoadForce(kMatForcefMRI);
+     AddLayer(fnm);
+  end;
+  {$ENDIF}
   exit(true);
 end;
 
@@ -4724,6 +4763,9 @@ begin
   finally
     shaderNames.Free;
   end;
+  {$IFDEF MATT1}
+  StoreFMRIMenu.Visible := true;
+  {$ENDIF}
   {$IFDEF Darwin}
   SetDarkMode();
   HelpPrefMenu.Visible := false; //use apple menu

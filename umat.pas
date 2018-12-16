@@ -9,12 +9,25 @@ uses
   ExtCtrls, StdCtrls, Forms, Controls, Classes, SysUtils, gziputils, nifti_types;
 Type
     TUInt8s = array of uint8;
+const
+  kMatForceT1 = 1;
+  kMatForcefMRI = 2;
+  kMatNoForce = 0;
 
+procedure MatLoadForce(Modality: integer);
 function MatLoadNii(fnm: string; out hdr: TNIFTIHdr; var img: TUInt8s): boolean;
 
 implementation
 
 uses dialogs;
+
+var
+  gMatModality : integer = kMatNoForce;//kMatNoForce;
+
+procedure MatLoadForce(Modality: integer);
+begin
+     gMatModality := modality;
+end;
 
 procedure readTag(stream : TMemoryStream; var offset, itemType, itemBytes, itemOffset: uint32);
 begin
@@ -331,7 +344,7 @@ var
   PrefForm: TForm;
   rg: TRadioGroup;
   OKBtn, CancelBtn: TButton;
-  w,h: integer;
+  w,h, idx: integer;
 begin
   result := '';
   if matStrings.Count < 1 then exit; //no files
@@ -339,10 +352,22 @@ begin
     result := matStrings[0];//seriesNum(dcmStrings[0]);
     exit;
   end;
+  if gMatModality = kMatForceT1 then begin
+     idx := matStrings.IndexOf('T1');
+     if idx >= 0 then
+        exit('T1');
+     exit('');
+  end;
+  if gMatModality = kMatForcefMRI then begin
+     idx := matStrings.IndexOf('fMRI');
+     if idx >= 0 then
+        exit('fMRI');
+     exit('');
+  end;
   PrefForm:=TForm.Create(nil);
   //PrefForm.SetBounds(100, 100, 520, 212);
   //PrefForm.Caption:='DICOM Loading '+dcm2niixExe;
-  PrefForm.Caption:='Choose image from Mat file ';
+  PrefForm.Caption:='Choose image from MAT file ';
   PrefForm.Position := poScreenCenter;
   PrefForm.BorderStyle := bsDialog;
   PrefForm.BorderWidth := 8;
@@ -424,7 +449,7 @@ begin
      strs.Free;
      exit;
   end;
-  tagname :=  matSeriesSelectForm(strs);
+  tagname := matSeriesSelectForm(strs);
   strs.Clear;
   img := nil;
   if (tagname = '') or (not MatLoad(fnm, tagname, strs, hdr, img)) then begin

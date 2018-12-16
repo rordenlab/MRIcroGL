@@ -78,7 +78,7 @@ TDraw = Class //(TNIfTI)  // This is an actual class definition :
     procedure voiInterpolate (Orient: int64);
     procedure voiInterpolateAllGaps(Orient: int64);
     procedure voiInterpolateCore(orient, zLoIn, zHiIn: int64);
-    function CopySlice2DSingle(Orient: int64; out out2D: TSlice2D): boolean;
+    function CopySlice2DSingle(Orient: int64; out out2D: TSlice2D; lSmooth: boolean = true): boolean;
     procedure SmoothSlice(var slice: TSlice2D; Xdim, Ydim: int64);
     procedure voiClose;
     procedure voiSmoothIntensity();
@@ -200,7 +200,7 @@ begin
         colorLut[i] := colorLut[((i-1) mod 9)+1];
 end;
 
-procedure TDraw.SmoothSlice(var slice: TSlice2D; Xdim, Ydim: int64);
+(*procedure TDraw.SmoothSlice(var slice: TSlice2D; Xdim, Ydim: int64);
 var
   x,y, pos: int64;
   sliceTemp : TSlice2D;
@@ -225,6 +225,38 @@ begin
              pos := pos + 1;
              if (y = 0) or (y = (Ydim-1)) then continue;
              slice[pos] := (sliceTemp[pos-Ydim] + sliceTemp[pos] + sliceTemp[pos] + sliceTemp[pos+Ydim]) * 0.25;
+         end;
+     end;
+     sliceTemp := nil; //free
+end;*)
+
+procedure TDraw.SmoothSlice(var slice: TSlice2D; Xdim, Ydim: int64);
+var
+  x,y, pos: int64;
+  sliceTemp : TSlice2D;
+begin
+     if (Xdim < 3) or (Ydim < 3) then exit;
+     setlength(sliceTemp, Xdim * Ydim);
+     //emulate 2D Gaussian blur: since function is separable, compute as two 1D filter
+     //smooth in X dimension
+     pos := 0;
+     sliceTemp := Copy(slice, Low(slice), Length(slice));  //really clean, but unnecessary
+     for x := 0 to (Xdim -1) do begin
+         for y := 0 to (Ydim -1) do begin
+             pos := pos + 1;
+             if (x = 0) or (x = (Xdim-1)) then continue;
+             sliceTemp[pos] := (slice[pos-1] + slice[pos] + slice[pos] + slice[pos+1]) * 0.25;
+         end;
+     end;
+     //smooth in Y dimension
+     pos := 0;
+     for x := 0 to (Xdim -1) do begin
+         for y := 0 to (Ydim -1) do begin
+             pos := pos + 1;
+             if (y = 0) or (y = (Ydim-1)) then continue;
+             //slice[pos] := (sliceTemp[pos-Ydim] + sliceTemp[pos] + sliceTemp[pos] + sliceTemp[pos+Ydim]) * 0.25;
+             slice[pos] := (sliceTemp[pos-Xdim] + sliceTemp[pos] + sliceTemp[pos] + sliceTemp[pos+Xdim]) * 0.25;
+
          end;
      end;
      sliceTemp := nil; //free
@@ -361,7 +393,7 @@ end;
 
 procedure TDraw.voiSmoothIntensity();
 var
-  nPix, dark, bright, i, alpha: int64;
+  nPix, dark, bright, i: int64;
 begin
      if (view3d = nil) then exit;
      if (dim3d[1] < 5) or (dim3d[2] < 5) or (dim3d[3] < 5) then exit;
@@ -389,7 +421,7 @@ begin
   isModifiedSinceSave := true;
 end;
 
-function TDraw.CopySlice2DSingle(Orient: int64; out out2D: TSlice2D): boolean;
+function TDraw.CopySlice2DSingle(Orient: int64; out out2D: TSlice2D; lSmooth: boolean = true): boolean;
 var
    u8_2D: TUInt8s;
    nPix, i: int64;
@@ -404,7 +436,8 @@ begin
           result := true; //variability
      for i := 0 to (nPix -1) do
        out2D[i] := u8_2D[i];
-     SmoothSlice(out2D, dim2d[1], dim2d[2]);
+     if lSmooth then
+        SmoothSlice(out2D, dim2d[1], dim2d[2]);
      u8_2D := nil;
 end;
 
@@ -414,7 +447,7 @@ label
   666;
 var
   xy, z, zLo, zHi, nSlices, nPix: int64;
-  FracLo, FracHi: single;
+  FracLo, FracHi: double;
   sliceLo, sliceHi: TSlice2D;
   outSlice: TUInt8s;
 begin
@@ -441,14 +474,14 @@ begin
      end;
      //estimate intensity at each voxel in between
      for z := (zLo+1) to (zHi -1) do begin
-         fracHi := (z-zLo) / (zHi - zLo);//weighting for of lower slice
+         fracHi := abs(z-zLo) / abs(zHi - zLo);//weighting for of lower slice
          fracLo := 1 - fracHi; //weighting for upper slice
          for xy := 0 to (nPix-1) do begin
              if ((sliceLo[xy]*fracLo) + (sliceHi[xy]*fracHi)) >= 0.375 then
                 outSlice[xy] := 1
              else
                  outSlice[xy] := 0;
-             //outSlice[xy] := 2;
+             //outSlice[xy] := 1;
          end; //each pixel in 2D slice
          dim2d[3] :=z;
          PasteSlice2D(Orient, outSlice, view2d);
