@@ -67,6 +67,7 @@ TDraw = Class //(TNIfTI)  // This is an actual class definition :
     procedure CopySlice2D(Orient: int64; var out2D: TUInt8s);
     procedure voiMouseDown(Color, Orient: int64; Xfrac, Yfrac, Zfrac:  single); overload;
     procedure voiMouseDown(Orient: int64; XYZfrac:  TVec3); overload;
+    procedure voiFloodFill(Orient: int64; XYZfrac:  TVec3);
     procedure voiPasteSlice(Xfrac, Yfrac, Zfrac:  single);
     procedure voiUndo;
     procedure voiMouseUp ( autoClose, overwriteColors: boolean);
@@ -792,6 +793,11 @@ begin
      doFloodFill(x,y, Color, oldColor);
      doRedraw := true;
      UpdateView3d;
+end;
+
+procedure TDraw.voiFloodFill(Orient: int64; XYZfrac:  TVec3);
+begin
+    voiMouseFloodFill(penColor, Orient,  XYZfrac.X, XYZfrac.Y, XYZfrac.Z);
 end;
 
 procedure TDraw.drawPixel (x,y: int64);

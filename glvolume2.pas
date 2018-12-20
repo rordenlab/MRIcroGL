@@ -58,6 +58,7 @@ type
         function Slice2Dmm(var vol: TNIfTI; out vox: TVec3i): TVec3;
         procedure SetSlice2DFrac(frac : TVec3);
         function GetSlice2DFrac(mouseX, mouseY: integer; out Orient: integer): TVec3;
+        function GetSlice2DMaxXY(mouseX, mouseY: integer; var Lo: TPoint): TPoint;
         procedure Paint2D(var vol: TNIfTI; Drawing: TDraw; DisplayOrient: integer);
         procedure PaintMosaicRender(var vol: TNIfTI; lRender: TMosaicRender);
         procedure PaintMosaic2D(var vol: TNIfTI; Drawing: TDraw; MosaicString: string);
@@ -860,10 +861,14 @@ begin
  (*if vol.IsLabels then begin
    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
- end;*)
+ end;
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
- glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
+ glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER); *)
+
+ glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);   //GL_CLAMP_TO_EDGE
+ glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+ glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
  glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE, @Vol.VolRGBA[0]);
  glPixelStorei(GL_UNPACK_ALIGNMENT,1);
  glGenTextures(1, @gradientTexture3D);
@@ -930,6 +935,11 @@ end;
 procedure TGPUVolume.SetSlice2DFrac(frac : TVec3);
 begin
      slices2D.sliceFrac := frac;
+end;
+
+function TGPUVolume.GetSlice2DMaxXY(mouseX, mouseY: integer; var Lo: TPoint): TPoint;
+begin
+  result := slices2D.GetSlice2DMaxXY(mouseX, mouseY, lo);
 end;
 
 function TGPUVolume.GetSlice2DFrac(mouseX, mouseY: integer; out Orient: integer): TVec3;

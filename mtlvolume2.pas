@@ -10,7 +10,8 @@ interface
 uses
     {$IFDEF CUBE} mtlcube, {$ENDIF}
     mtlfont, mtlclrbar, VectorMath, MetalPipeline, MetalControl, Metal, MetalUtils,
-    SysUtils, Math, nifti, niftis, SimdUtils {$IFDEF VIEW2D}, drawvolume, slices2D, colorEditor{$ENDIF};
+    SysUtils, Math, nifti, niftis, SimdUtils, Classes
+    {$IFDEF VIEW2D}, drawvolume, slices2D, colorEditor{$ENDIF};
 const
  kDefaultDistance = 2.25;
  kMaxDistance = 40;
@@ -56,6 +57,7 @@ type
         property Slices: Tslices2D read slices2D;
         procedure SetSlice2DFrac(frac : TVec3);
         function GetSlice2DFrac(mouseX, mouseY: integer; out Orient: integer): TVec3;
+        function GetSlice2DMaxXY(mouseX, mouseY: integer; var Lo: TPoint): TPoint;
         procedure Paint2D(var vol: TNIfTI; Drawing: TDraw; DisplayOrient: integer);
         procedure PaintMosaicRender(var vol: TNIfTI; lRender: TMosaicRender);
         procedure PaintMosaic2D(var vol: TNIfTI; Drawing: TDraw; MosaicString: string);
@@ -557,6 +559,11 @@ begin
    result := colorEditor.ColorEditorMouseDown(mouseX, mouseY);
 
 end; *)
+
+function TGPUVolume.GetSlice2DMaxXY(mouseX, mouseY: integer; var Lo: TPoint): TPoint;
+begin
+  result := slices2D.GetSlice2DMaxXY(mouseX, mouseY, lo);
+end;
 
 function TGPUVolume.GetSlice2DFrac(mouseX, mouseY: integer; out Orient: integer): TVec3;
 begin

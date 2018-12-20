@@ -12,6 +12,7 @@ procedure ApplyOtsu(var Img: TUInt8s; nVox, levels: integer);//levels: 2=black/w
 procedure ApplyOtsuBinary(var Img: TUInt8s; nVox,levels: integer);
 procedure PreserveLargestCluster(var lImg: TUInt8s; Xi,Yi,Zi: integer; lClusterValue,ValueForSmallClusters: byte  );
 procedure SimpleMaskDilate(var lImg: TUInt8s; lXi,lYi,lZi: integer);
+procedure SimpleMaskErode(var lImg: TUInt8s; lXi,lYi,lZi: integer);
 
 implementation
 
@@ -135,6 +136,32 @@ begin
       end;
   end;
 end;// ZeroFaces()
+
+procedure SimpleMaskErode(var lImg: TUInt8s; lXi,lYi,lZi: integer);
+var
+  i,lXYZ, lXY: integer;
+  lTemp: TUInt8s;
+begin
+     if (lXi < 5) or (lYi < 5) or (lZi < 1) then exit;
+     lXYZ := lXi*lYi*lZi;
+     lXY := lXi*lYi;
+     setlength(lTemp, lXYZ);
+     lTemp := Copy(lImg, Low(lImg), Length(lImg));
+     ZeroFaces (lTemp, lXi,lYi,lZi);
+     for i := 1 to (lXYZ-1) do  //left
+         lImg[i] := min(lImg[i], lTemp[i-1]);
+     for i := 0 to (lXYZ-2) do  //right
+         lImg[i] := min(lImg[i], lTemp[i+1]);
+     for i := lXi to (lXYZ-1) do  //posterior
+         lImg[i] := min(lImg[i], lTemp[i-lXi]);
+     for i := 0 to (lXYZ-1-lXi) do  //anterior
+         lImg[i] := min(lImg[i], lTemp[i+lXi]);
+     for i := lXY to (lXYZ-1) do  //inferior
+         lImg[i] := min(lImg[i], lTemp[i-lXY]);
+     for i := 0 to (lXYZ-1-lXY) do  //superior
+         lImg[i] := min(lImg[i], lTemp[i+lXY]);
+     lTemp := nil;
+end;// SimpleMaskErode()
 
 procedure SimpleMaskDilate(var lImg: TUInt8s; lXi,lYi,lZi: integer);
 var

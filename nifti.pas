@@ -73,7 +73,10 @@ Type
 
         procedure ApplyCutout();
         function LoadRaw(FileName : AnsiString; out isNativeEndian: boolean): boolean;
-        {$IFDEF GZIP}function LoadGz(FileName : AnsiString; out isNativeEndian: boolean): boolean;{$ENDIF}
+        {$IFDEF GZIP}
+        function SaveGz(niftiFileName: string): boolean;
+        function LoadGz(FileName : AnsiString; out isNativeEndian: boolean): boolean;
+        {$ENDIF}
         function skipVox(): int64; //if fVolumeDisplayed > 0, skip this many VOXELS for first byte of data
         //function skipBytes(): int64; //if fVolumeDisplayed > 0, skip this many BYTES for first byte of data
         //function skipRawVolBytes(): TUInt8s;
@@ -128,9 +131,11 @@ Type
         property Filename: String read fFileName;
         property BidsName: String read fBidsName;
         procedure Sharpen();
-        procedure Smooth();
+        procedure Smooth(Mask: TUInt8s = nil);
+        procedure Mask(MaskingVolume: TUInt8s; isPreserveMask: boolean);
         procedure RemoveHaze();
         procedure GPULoadDone();
+        function Save(niftiFileName: string): boolean;
         function Load(niftiFileName: string): boolean; overload;
         function Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; volumeNumber: integer = 0; isKeepContrast: boolean = false): boolean; overload;
         procedure SetDisplayMinMax(newMin, newMax: single); overload;
@@ -1365,7 +1370,76 @@ begin
  End; { Try }
  result := true;
 end;
+
+function TNIfTI.SaveGz(niftiFileName: string): boolean;
+var
+   Stream : TGZFileStream;
+   pad: uint32;
+   hdr : TNIFTIhdr;
+begin
+ result := false;
+ if fileexists(niftiFileName) then begin
+    Showmessage('Unable to overwrite existing file "'+niftiFileName+'".');
+    exit;
+ end;
+ hdr := fHdr;
+ hdr.HdrSz:= SizeOf (TNIFTIHdr);
+ hdr.vox_offset:= 352;
+ Stream:= TGZFileStream.Create(niftiFileName, gzopenwrite);
+ Try
+    Stream.WriteBuffer(hdr, SizeOf(TNIFTIHdr));
+    pad := 0;
+    Stream.WriteBuffer(pad, SizeOf(pad));
+    Stream.WriteBuffer(fRawVolBytes[0], length(fRawVolBytes));
+
+ Finally
+  Stream.Free;
+ End;
+ result := true;
+end;
+
 {$ENDIF}
+
+
+function TNIfTI.Save(niftiFileName: string): boolean;
+var
+   Stream : TFileStream;
+   pad: uint32;
+   hdr : TNIFTIhdr;
+   lExt: string;
+begin
+ result := false;
+ if fileexists(niftiFileName) then begin
+    Showmessage('Unable to overwrite existing file "'+niftiFileName+'".');
+    exit;
+ end;
+ lExt := uppercase(extractfileext(niftiFileName));
+ if (lExt = '.GZ') or (lExt = '.VOI') then begin
+    if lExt <> '.VOI' then
+       niftiFileName := changefileextX(niftiFileName,'.nii.gz');
+    {$IFDEF GZIP}
+    result := SaveGz(niftiFileName);
+    {$ELSE}
+    showmessage('Please recompile for GZ support.');
+    {$ENDIF}
+    exit;
+ end;
+ if (lExt <> '.NII') then niftiFileName := niftiFileName + '.nii';
+ hdr := fHdr;
+ hdr.HdrSz:= SizeOf (TNIFTIHdr);
+ hdr.vox_offset:= 352;
+ Stream:= TFileStream.Create(niftiFileName, fmCreate);
+ Try
+    Stream.WriteBuffer(hdr, SizeOf(TNIFTIHdr));
+    pad := 0;
+    Stream.WriteBuffer(pad, SizeOf(pad));
+    Stream.WriteBuffer(fRawVolBytes[0], length(fRawVolBytes));
+
+ Finally
+  Stream.Free;
+ End;
+ result := true;
+end;
 
 function TNIfTI.LoadRaw(FileName : AnsiString; out isNativeEndian: boolean): boolean;// Load 3D data                                 }
 //Uncompressed .nii or .hdr/.img pair
@@ -1373,7 +1447,6 @@ var
    lSwappedReportedSz: LongInt;
    volBytes: int64;
    Stream : TFileStream;
-
 begin
  isNativeEndian := true;
  result := false;
@@ -1467,38 +1540,124 @@ begin
  svol32b := nil;
 end;
 
-procedure TNIfTI.Smooth();
+(*procedure SmoothCore(var rawVolBytes: TUInt8s; dimx, dimy, dimz, datatype: integer);
 //blur image
 var
-   inSkip, i, vx, xydim: integer;
+   inSkip, i, vx: integer;
    vol32, svol32 : TFloat32s;
    vol16: TInt16s;
    vol8: TUInt8s;
+   x,y,z: integer;
+   zMask, yMask: boolean;
+begin
+ if datatype = kDT_RGB then exit;
+ if (dimx < 3) or (dimy < 3) or (dimz < 3) then exit;
+ vx := dimx * dimy * dimz;
+ vol8 := rawVolBytes;
+ vol16 := TInt16s(vol8);
+ vol32 := TFloat32s(vol8);
+ //smooth
+ setlength(svol32,vx);
+ if datatype = kDT_UINT8 then begin
+   for i := 0 to (vx-1) do
+       svol32[i] := vol8[i];
+ end else if datatype = kDT_INT16 then begin
+     for i := 0 to (vx-1) do
+         svol32[i] := vol16[i];
+ end else if datatype = kDT_FLOAT then begin
+    svol32 := Copy(vol32, 0, vx);
+ end;
+ smoothFloat(svol32, dimx, dimy, dimz);
+ i := 0;
+ for z := 1 to dimz do begin
+     zMask := (z = 1) or (z = dimz);
+     for y := 1 to dimy do begin
+         yMask := (y = 1) or (y = dimy);
+         for x := 1 to dimx] do begin
+             if (not zMask) and (not yMask) and (x > 1) and (x < dimx) then begin
+                if datatype = kDT_UINT8 then
+                   vol8[i] := round(svol32[i])
+                else if fHdr.datatype = kDT_INT16 then
+                     vol16[i] := round(svol32[i])
+                else if datatype = kDT_FLOAT then
+                  vol32[i] := svol32[i];
+             end;
+             i := i +1;
+         end; //x
+
+     end; //y
+ end; //z
+ svol32 := nil;
+end; //SmoothCore()  *)
+
+
+procedure TNIfTI.Smooth(Mask: TUInt8s = nil);
+//blur image
+{$DEFINE NOWRAP}
+var
+   lBPP, i, vx: integer;
+   vol32, svol32 : TFloat32s;
+   vol16: TInt16s;
+   vol8: TUInt8s;
+   {$IFDEF NOWRAP}
+   x,y,z: integer;
+   xMask, yMask, zMask: boolean;
+   {$ELSE}
+   xydim: integer;
+   {$ENDIF}
 begin
  if fHdr.datatype = kDT_RGB then exit;
  if (fHdr.dim[1] < 3) or (fHdr.dim[2] < 3) or (fHdr.dim[3] < 3) then exit;
  if ((fMax-fMin) <= 0) then exit;
+ lBPP := 4;
+ case fHdr.datatype of
+   kDT_UNSIGNED_CHAR : lBPP := 1;
+   kDT_SIGNED_SHORT: lBPP := 2;
+ end;
  vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
- xydim := fHdr.dim[1]*fHdr.dim[2];
- inSkip  := skipVox();
- vol8 := fRawVolBytes;
+ vol8 := @fRawVolBytes[lBPP*skipVox()];
  vol16 := TInt16s(vol8);
  vol32 := TFloat32s(vol8);
  //smooth
  setlength(svol32,vx);
  if fHdr.datatype = kDT_UINT8 then begin
    for i := 0 to (vx-1) do
-       svol32[i] := vol8[inSkip+i];
+       svol32[i] := vol8[i];
  end else if fHdr.datatype = kDT_INT16 then begin
      for i := 0 to (vx-1) do
-         svol32[i] := vol16[inSkip+i];
+         svol32[i] := vol16[i];
  end else if fHdr.datatype = kDT_FLOAT then begin
     svol32 := Copy(vol32, 0, vx);
  end;
  smoothFloat(svol32, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]);
+ {$IFDEF NOWRAP} //avoid smoothing wrapping around top/bottom, left/right, anterior poserion
+ i := 0;
+ for z := 1 to fHdr.dim[3] do begin
+     zMask := (z = 1) or (z = fHdr.dim[3]);
+     for y := 1 to fHdr.dim[2] do begin
+         yMask := (y = 1) or (y = fHdr.dim[2]);
+         for x := 1 to fHdr.dim[1] do begin
+             xMask := (x = 1) or (x = fHdr.dim[1]);
+             if (Mask <> nil) and (Mask[i] <> 0) then
+               xMask := true;
+             if (not zMask) and (not yMask) and (not xMask) then begin
+                if fHdr.datatype = kDT_UINT8 then
+                   vol8[i] := round(svol32[i])
+                else if fHdr.datatype = kDT_INT16 then
+                     vol16[i] := round(svol32[i])
+                else if fHdr.datatype = kDT_FLOAT then
+                  vol32[i] := svol32[i];
+             end;
+             i := i +1;
+         end; //x
+
+     end; //y
+ end; //z
+ {$ELSE}
+ xydim := fHdr.dim[1]*fHdr.dim[2];
  if fHdr.datatype = kDT_UINT8 then begin
    for i := inSkip+xydim to (inSkip+vx-1-xydim) do
-          vol8[inSkip+i] := round(svol32[i]);
+       vol8[i] := round(svol32[i]);
  end else if fHdr.datatype = kDT_INT16 then begin
    for i := inSkip+xydim to (inSkip+vx-1-xydim) do
        vol16[i] := round(svol32[i]);
@@ -1506,8 +1665,10 @@ begin
    for i := inSkip+xydim to (inSkip+vx-1-xydim) do
        vol32[i] := svol32[i];
  end;
+ {$ENDIF}
  svol32 := nil;
- SetDisplayMinMax(true);
+ if (Mask <> nil) then
+    SetDisplayMinMax(true);
 end; //smooth()
 
 procedure TNIfTI.Sharpen();
@@ -1831,13 +1992,58 @@ begin
 	result := (lScaled-lHdr.scl_inter) / lHdr.scl_slope;
 end;
 
+procedure TNIfTI.Mask(MaskingVolume: TUInt8s; isPreserveMask: boolean);
+var
+  mni, i,vx, skipVx: integer;
+  mn: single;
+  vol8: TUInt8s;
+  vol16: TInt16s;
+  vol32: TFloat32s;
+begin
+  vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+  if vx < 1 then exit;
+  if vx <> length(MaskingVolume) then exit;
+  skipVx := skipVox();
+
+  vol8 := fRawVolBytes;
+  vol16 := TInt16s(vol8);
+  vol32 := TFloat32s(vol8);
+  mn := Scaled2RawIntensity(fHdr, fMin);
+  mni := round(mn);
+  if (isPreserveMask) then begin
+     if fHdr.datatype = kDT_UINT8 then begin
+        for i := 0 to (vx-1) do
+            if MaskingVolume[i] = 0 then vol8[skipVx+i] := 0;
+     end else if fHdr.datatype = kDT_INT16 then begin
+       for i := 0 to (vx-1) do
+           if MaskingVolume[i] = 0 then vol16[skipVx+i] := mni;
+     end else if fHdr.datatype = kDT_FLOAT then begin
+       for i := 0 to (vx-1) do
+           if MaskingVolume[i] = 0 then vol32[skipVx+i] := mn;
+     end;
+  end else begin
+    if fHdr.datatype = kDT_UINT8 then begin
+       for i := 0 to (vx-1) do
+           if MaskingVolume[i] <> 0 then vol8[skipVx+i] := 0;
+    end else if fHdr.datatype = kDT_INT16 then begin
+      for i := 0 to (vx-1) do
+          if MaskingVolume[i] <> 0 then vol16[skipVx+i] := mni;
+    end else if fHdr.datatype = kDT_FLOAT then begin
+      for i := 0 to (vx-1) do
+          if MaskingVolume[i] <> 0 then vol32[skipVx+i] := mn;
+    end;
+  end;
+
+  SetDisplayMinMax(true);
+
+end;
 
 procedure TNIfTI.RemoveHaze();
 const
  kOtsuLevels = 5;
 var
    mni, i,vx, skipVx: integer;
-   vol8, out8: TUInt8s;
+   mask8, vol8, out8: TUInt8s;
    vol16: TInt16s;
    vol32: TFloat32s;
    mn: single;
@@ -1849,6 +2055,15 @@ begin
   skipVx := skipVox();
   ApplyOtsuBinary (vol8, vx, kOtsuLevels);
   PreserveLargestCluster(vol8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3],255,0 );
+  //.Smooth soften edges but preserve interior
+  setlength(mask8,vx);
+  mask8 := Copy(vol8, Low(vol8), Length(vol8));
+  SimpleMaskErode(mask8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]);
+  SimpleMaskErode(mask8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]);
+  SimpleMaskErode(mask8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]);
+  Smooth(mask8);
+  mask8 := nil;
+  //
   SimpleMaskDilate(vol8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]);
   SimpleMaskDilate(vol8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]);
   out8 := fRawVolBytes;
@@ -2719,7 +2934,7 @@ var
   ptr: bytep;
 begin
  lExt := uppercase(extractfileext(lFileName));
- if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
+ if (lExt = '.GZ') or (lExt = '.VOI') then begin  //open gz compressed
     if (lLength < 1) then exit;
     SetLength(s, lLength);
     ptr :=  @s[1];

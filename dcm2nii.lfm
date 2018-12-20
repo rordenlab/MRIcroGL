@@ -1,7 +1,7 @@
 object dcm2niiForm: Tdcm2niiForm
-  Left = 150
+  Left = 367
   Height = 511
-  Top = 173
+  Top = 131
   Width = 925
   AllowDropFiles = True
   Caption = 'dcm2niix'

@@ -2391,8 +2391,6 @@ begin
     result := readNRRDHeader(lFilename, lHdr, gzBytes, swapEndian, isDimPermute2341)
   else if (lExt = '.HEAD') then
     result := readAFNIHeader(lFilename, lHdr, gzBytes, swapEndian);
-  //else
-  //  result := readDICOMHeader (lFilename, lHdr, gzBytes, swapEndian);
   if (not result) and (isTIFF(lFilename)) then
     NSLog('Use the Import/Foreign menu to convert TIFF and LSM files for viewing');
 end;

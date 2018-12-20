@@ -105,6 +105,11 @@ type
     LayerShowBidsMenu: TMenuItem;
     ExitFullScreenMenu: TMenuItem;
     LayerMaskWithBackgroundMenu: TMenuItem;
+    MaskMenu: TMenuItem;
+    MaskDeleteMenu: TMenuItem;
+    MaskPreserveMenu: TMenuItem;
+    DrawHintsMenu: TMenuItem;
+    SaveNIfTIMenu: TMenuItem;
     StoreFMRIMenu: TMenuItem;
     SmoothMenu: TMenuItem;
     TextAndCubeMenu: TMenuItem;
@@ -268,6 +273,7 @@ type
     procedure CreateStandardMenus;
     procedure DisplayAnimateMenuClick(Sender: TObject);
     function DisplayNextMenuClick(Sender: TObject): boolean;
+    procedure DrawHintsMenuClick(Sender: TObject);
     procedure EditCopyMenuClick(Sender: TObject);
     procedure ExitFullScreenMenuClick(Sender: TObject);
     procedure FileExitMenuClick(Sender: TObject);
@@ -282,6 +288,7 @@ type
     procedure LayerShowBidsMenuClick(Sender: TObject);
     procedure LayerShowHeaderMenuClick(Sender: TObject);
     procedure LayerVolumeChange(Sender: TObject);
+    procedure MaskMenuClick(Sender: TObject);
     procedure MenuItem1Click(Sender: TObject);
     procedure OpenFSLMenuClick(Sender: TObject);
     procedure Quit2TextEditor;
@@ -312,6 +319,7 @@ type
     procedure LayerResetBrightnessMenuClick(Sender: TObject);
     procedure LayerUpDownClick(Sender: TObject);
     procedure NewWindowMenuClick(Sender: TObject);
+    procedure SaveNIfTIMenuClick(Sender: TObject);
     procedure ScriptingPyVersionClick(Sender: TObject);
     procedure ScriptMemoKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState
       );
@@ -438,6 +446,7 @@ const
      kNaN : double = 1/0;
 var
  gPrefs: TPrefs;
+ gMouseLimitLo, gMouseLimitHi : TPoint;
  gMouse : TPoint = (x: -1; y: -1);
  gMouseDrag: boolean = false;
  gSliceMM : TVec3 = (x: 0; y: 0; z: 0);
@@ -492,8 +501,6 @@ begin
   if not vols.Layer(0,niftiVol) then exit;
   EnsureOpenVoi();
   mm := Vec3(niftiVol.Header.pixdim[1], niftiVol.Header.pixdim[2], niftiVol.Header.pixdim[3]);
-
-
   Vols.Drawing.voiMorphologyFill(niftiVol.DisplayMinMax2Uint8, clr, mm.X, mm.Y, mm.Z, Origin.X, Origin.Y, Origin.Z, dxOrigin, radiusMM, drawMode);
   ViewGPU1.Invalidate;
 end;
@@ -3175,7 +3182,26 @@ begin
   AProcess.Execute;
   AProcess.Free;
 end;
+
 {$ENDIF}
+
+procedure TGLForm1.SaveNIfTIMenuClick(Sender: TObject);
+var
+niftiVol: TNIfTI;
+dlg : TSaveDialog;
+begin
+ if not vols.Layer(0,niftiVol) then exit;
+ dlg := TSaveDialog.Create(self);
+ dlg.Title := 'Save NIfTI volume';
+ dlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+ dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
+ dlg.DefaultExt := '*.nii';
+ dlg.FilterIndex := 0;
+ if dlg.Execute then
+    niftiVol.Save(dlg.FileName);
+ dlg.Free;
+
+end;
 
 procedure TGLForm1.ScriptingPyVersionClick(Sender: TObject);
 (*const
@@ -3370,8 +3396,6 @@ begin
  Showmessage('Scripting not yet implemented');
  {$ENDIF}
 end;
-
-
 
 function TGLForm1.AddLayer(Filename: string): boolean;
 //add a new layer on top of existing layers
@@ -3930,6 +3954,21 @@ begin
 
 end;
 
+procedure TGLForm1.DrawHintsMenuClick(Sender: TObject);
+const
+  {$IFDEF UNIX} //end of line
+  kEOLN = #10; //Windows CRLF   ;
+  {$ELSE}
+   kEOLN = #13#10; //Windows CRLF
+  {$ENDIF}
+begin
+  showmessage('Drag mouse to draw'+kEOLN
++'Shift+Drag to erase'+kEOLN
++'Control+Click to change view'+kEOLN
++'Option+click for flood fill'+kEOLN
++'Mouse-wheel to change slice'+kEOLN )
+end;
+
 procedure TGLForm1.FileExitMenuClick(Sender: TObject);
 begin
   Close;
@@ -3950,6 +3989,19 @@ begin
       v.SetDisplayVolume(v.VolumeDisplayed - 1);
   //caption := format('%d/%d ',[v.VolumeDisplayed+1, v.Header.dim[4]]); //+1 as indexed from 1
   UpdateLayerBox(true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
+  UpdateTimer.Enabled := true;
+end;
+
+procedure TGLForm1.MaskMenuClick(Sender: TObject);
+var
+   niftiVol: TNIfTI;
+begin
+  if not vols.Layer(0,niftiVol) then exit;
+  if not vols.Drawing.IsOpen then begin
+     showmessage('Open or create a drawing to use as a mask');
+     exit;
+  end;
+  niftiVol.Mask(vols.Drawing.VolRawBytes, ((sender as TMenuItem).Tag <> 0));
   UpdateTimer.Enabled := true;
 end;
 
@@ -4399,17 +4451,23 @@ begin
      exit;
   end;
  if gPrefs.DisplayOrient > kMax2DOrient then exit;
- if  (Vols.Drawing.ActivePenColor >= 0) and (not AutoROIForm.Visible) then begin
+ if  (Vols.Drawing.ActivePenColor >= 0) and (not AutoROIForm.Visible) and (not (ssCtrl in Shift)) and (not (ssMeta in Shift))  then begin
     EnsureOpenVoi();
     fracXYZ := Vol1.GetSlice2DFrac(X,Y,i);
+    gMouseLimitHi := Vol1.GetSlice2DMaxXY(X,Y, gMouseLimitLo);
     if (ssShift in Shift) then begin
        if Vols.Drawing.ActivePenColor <> 0 then
            Vols.Drawing.ActivePenColor := 0
         else
           Vols.Drawing.ActivePenColor := 1;
      end;
-    if (i > 0) then
-       Vols.Drawing.voiMouseDown(i, fracXYZ);
+    if (i > 0) then begin
+       if (ssAlt in Shift) then begin
+          Vols.Drawing.voiFloodFill(i, fracXYZ);
+          ViewGPU1.Invalidate;
+       end else
+           Vols.Drawing.voiMouseDown(i, fracXYZ);
+    end;
     exit;
  end;
  ViewGPUMouseMove(Sender, Shift, xIn,Yin);
@@ -4480,7 +4538,18 @@ begin
  end;
  if gPrefs.DisplayOrient <= kMax2DOrient then begin
     if  (Vols.Drawing.IsOpen) and (Vols.Drawing.ActivePenColor >= 0) and (Vols.Drawing.MouseDown) then begin
+       if (X < gMouseLimitLo.X) then X := gMouseLimitLo.X;
+       if (Y < gMouseLimitLo.Y) then Y := gMouseLimitLo.Y;
+       if (X > gMouseLimitHi.X) then X := gMouseLimitHi.X;
+       if (Y > gMouseLimitHi.Y) then Y := gMouseLimitHi.Y;
+
+       //i := Vols.Drawing.voiActiveOrient;
        fracXYZ := Vol1.GetSlice2DFrac(X,Y,i);
+       LayerBox.Caption := format('lo %d %d  hi %d %d xy %d %d', [gMouseLimitLo.X, gMouseLimitLo.Y, gMouseLimitHi.X, gMouseLimitHi.Y, X, Y]);
+       SliceBox.Caption := format('%.2f %.2f %.2f',[fracXYZ.x, fracXYZ.y, fracXYZ.z]);
+       if (fracXYZ.x > 1) or (fracXYZ.x < 0) or (fracXYZ.y > 1) or (fracXYZ.y < 0) or (fracXYZ.z > 1) or (fracXYZ.z < 0) then
+          exit;
+       //fracXYZ := Vol1.GetSlice2DFrac(X,Y,i);
        if (i = Vols.Drawing.voiActiveOrient) then begin
           Vols.Drawing.voiMouseMove(fracXYZ.X, fracXYZ.Y, fracXYZ.Z);
           ViewGPU1.Invalidate;
@@ -4566,12 +4635,38 @@ procedure TGLForm1.ViewGPUMouseWheel(Sender: TObject; Shift: TShiftState;
   WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
 var
    niftiVol: TNIfTI;
+   isUp: boolean;
 begin
   if gPrefs.DisplayOrient = kMosaicOrient then exit;
   if gPrefs.DisplayOrient <> kRenderOrient then begin
      if not vols.Layer(0,niftiVol) then exit;
-     if niftiVol.VolumesLoaded > 1 then
-        niftiVol.SetDisplayVolume(niftiVol.VolumeDisplayed + 1);
+     //if niftiVol.VolumesLoaded > 1 then
+     //   niftiVol.SetDisplayVolume(niftiVol.VolumeDisplayed + 1)
+     //else
+         begin
+        if WheelDelta = 0 then exit;
+        isUp := (WheelDelta > 0);
+        if gPrefs.DisplayOrient = kCoronalOrient then begin
+             if (isUp) then
+                SliceABtn.Click
+             else
+                 SlicePBtn.Click;
+        end else if (gPrefs.DisplayOrient = kSagRightOrient) or (gPrefs.DisplayOrient =  kSagLeftOrient) then begin
+
+             if (isUp) then
+                SliceRBtn.Click
+             else
+                 SliceLBtn.Click;
+        end else begin
+            if (isUp) then
+               SliceSBtn.Click
+            else
+                SliceIBtn.Click;
+
+        end;
+        exit;
+
+     end;
      UpdateTimer.Enabled := true;
      exit;
   end;

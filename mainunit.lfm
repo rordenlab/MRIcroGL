@@ -1,5 +1,5 @@
 object GLForm1: TGLForm1
-  Left = 238
+  Left = 247
   Height = 756
   Top = 22
   Width = 1033
@@ -1562,6 +1562,10 @@ object GLForm1: TGLForm1
         Caption = 'Save Bitmap'
         OnClick = SaveMenuClick
       end
+      object SaveNIfTIMenu: TMenuItem
+        Caption = 'Save NIfTI'
+        OnClick = SaveNIfTIMenuClick
+      end
       object FileSepMenu: TMenuItem
         Caption = '-'
       end
@@ -1691,6 +1695,10 @@ object GLForm1: TGLForm1
           ShortCut = 16435
           OnClick = DrawTool1Click
         end
+        object DrawHintsMenu: TMenuItem
+          Caption = 'Hints'
+          OnClick = DrawHintsMenuClick
+        end
       end
       object DrawAdvancedMenu: TMenuItem
         Caption = 'Advanced'
@@ -1736,6 +1744,18 @@ object GLForm1: TGLForm1
             Tag = 3
             Caption = 'All sagittal gaps'
             OnClick = InterpolateDrawMenuClick
+          end
+        end
+        object MaskMenu: TMenuItem
+          Caption = 'Mask image'
+          object MaskDeleteMenu: TMenuItem
+            Caption = 'Delete regions with VOI'
+            OnClick = MaskMenuClick
+          end
+          object MaskPreserveMenu: TMenuItem
+            Tag = 1
+            Caption = 'Preserve regions with VOI'
+            OnClick = MaskMenuClick
           end
         end
         object DrawDescriptivesMenu: TMenuItem

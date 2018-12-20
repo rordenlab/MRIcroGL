@@ -51,7 +51,6 @@ type
     procedure DrawCor(L,B, W,H, YFrac: single);
     procedure DrawSag(L,B, W,H, XFrac: single);
     procedure DrawSagMirror(L,B, W,H, XFrac: single);
-
     procedure DrawLine(startX,startY,endX,endY: single);
     procedure DrawLineLBWH(left,bottom,width,height: single);
     procedure DrawCross(L,B, W,H, Xfrac,Yfrac: single);
@@ -79,6 +78,7 @@ type
     //constructor Create();
     procedure Update(volScale: TVec3; w,h: single; Orient: integer; actualH : integer = -1);
     function GetSlice2DFrac(mouseX, mouseY: integer; out Orient: integer): TVec3;
+    function GetSlice2DMaxXY(mouseX, mouseY: integer; var Lo: TPoint): TPoint;
     function FracMM(Mat: TMat4; Dim: TVec3i; out Vox: TVec3i): TVec3;
     {$IFDEF MOSAICS}
     procedure MosaicScale(lMosaicString: string; Mat, InvMat: TMat4; Dim: TVec3i; volScale: TVec3; out w, h: integer);
@@ -95,6 +95,35 @@ const
   //kBlockSzQ = 256; //expand "quad2Ds" buffer by chunks of 256 quads
   kBlockSz = 256 * 6; //expand "sliceVerts" and "lineVerts" by chunks
 
+function TSlices2D.GetSlice2DMaxXY(mouseX, mouseY: integer; var Lo: TPoint): TPoint;
+var
+  xy1, xy2: TVec2;
+  x, y: single;
+  i, orient: integer;
+begin
+  result.x := 0;
+  result.y := 0;
+  lo := result;
+     orient := -1;
+     x := mouseX;
+     y := viewPixelHeight - mouseY; //flip vertical axis: mouse coordinates y increase as we go down the screen
+     i := 2;
+     while (i < numSliceVerts) do begin
+           xy1 := sliceVerts[i-1].position;
+           xy2 := sliceVerts[i].position;
+           i := i + 1;
+           if (x < xy1.x) or (x > xy2.x) or (y < xy1.y) or (y > xy2.y) then continue;
+           if (xy2.x <= xy1.x) or (xy2.y <= xy1.y)  then continue; //should never happen: avoid divide by zero
+           lo.x := ceil(xy1.x);
+           result.y := trunc(viewPixelHeight - xy1.y);
+           result.x := trunc(xy2.x);
+           lo.y := ceil(viewPixelHeight - xy2.y);
+
+           exit;
+     end;
+end;
+
+
 function TSlices2D.GetSlice2DFrac(mouseX, mouseY: integer; out orient: integer): TVec3;
 //each quad has six positions 0..5: position 1=L,B, position 2=R,T
 var
@@ -104,7 +133,6 @@ var
 begin
      orient := -1;
      x := mouseX;
-
      y := viewPixelHeight - mouseY; //flip vertical axis: mouse coordinates y increase as we go down the screen
      result := Vec3(-1,-1,-1); //assume no hit
      i := 2;
@@ -120,7 +148,6 @@ begin
            zFrac := sliceVerts[i-1].texDepth;
            if (isRadiological) and ((orient = kAxialOrient) or (orient = kCoronalOrient)) then
               xFrac := 1.0 - xFrac;
-
            case orient of
              kAxialOrient : result := Vec3(xFrac, yFrac, zFrac); //LR=X, TB=Y, Slice=Z
              kCoronalOrient : result := Vec3(xFrac, zFrac, yFrac); //LR=X, TB=Z, Slice=Y
