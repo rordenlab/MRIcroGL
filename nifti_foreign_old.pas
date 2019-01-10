@@ -4,16 +4,7 @@ interface
 {$H+}
 {$DEFINE GZIP}
 {$DEFINE GUI}
-//{$DEFINE GL10} //define for MRIcroGL1.0, comment for MRIcroGL1.2 and later
-{$H+}
-{$IFDEF GL10}
-{$Include isgui.inc}
-{$ENDIF}
 uses
-
-{$IFDEF GL10} define_types,
-        {$IFNDEF FPC}gziod,{$ELSE}gzio2,{$ENDIF}
-{$ENDIF}
 {$IFDEF GZIP}zstream, {$ENDIF}
 {$IFDEF GUI}
  dialogs,
@@ -23,15 +14,11 @@ uses
 //ClipBrd,
  nifti_types,  sysutils, classes, StrUtils;//2015! dialogsx
 
-{$IFDEF GL10}
-procedure NII_Clear (out lHdr: TNIFTIHdr);
-procedure NII_SetIdentityMatrix (var lHdr: TNIFTIHdr); //create neutral rotation matrix
-{$ELSE}
 Type
     	ByteRA = array [1..1] of byte;
 	Bytep = ^ByteRA;
+
 procedure UnGZip(const FileName: string; buffer: bytep; offset, sz: integer);
-{$ENDIF}
 function readForeignHeader (var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean): boolean;
 procedure convertForeignToNifti(var nhdr: TNIFTIhdr);
 function FSize (lFName: String): Int64;
@@ -47,116 +34,25 @@ Type
   mat33 = array [0..2, 0..2] of Single;
   vect3 = array [0..2] of Single;
   ivect3 = array [0..2] of integer;
+        function UpCaseExt(lFileName: string): string;
+        var lI: integer;
+        l2ndExt,lExt : string;
+        begin
+        	 lExt := ExtractFileExt(lFileName);
+        	 if length(lExt) > 0 then
+        		for lI := 1 to length(lExt) do
+        			lExt[lI] := upcase(lExt[lI]);
+        	 result := lExt;
+        	 if lExt <> '.GZ' then exit;
+        	 lI := length(lFileName) - 6;
+        	 if li < 1 then exit;
+        	 l2ndExt := upcase(lFileName[lI])+upcase(lFileName[lI+1])+upcase(lFileName[li+2])+upcase(lFileName[li+3]);
+        	 if (l2ndExt = '.NII')then
+        		result :=  l2ndExt+lExt
+                 else if  (l2ndExt = 'BRIK') and (lI > 1) and (lFileName[lI-1] = '.') then
+                      result := '.BRIK'+lExt;
+        end;
 
-{$IFDEF GL10}
-procedure NII_SetIdentityMatrix (var lHdr: TNIFTIHdr); //create neutral rotation matrix
-var lInc: integer;
-begin
-	with lHdr do begin
-		 for lInc := 0 to 3 do
-			 srow_x[lInc] := 0;
-		 for lInc := 0 to 3 do
-             srow_y[lInc] := 0;
-         for lInc := 0 to 3 do
-             srow_z[lInc] := 0;
-         for lInc := 1 to 16 do
-             intent_name[lInc] := chr(0);
-         //next: create identity matrix: if code is switched on there will not be a problem
-		 srow_x[0] := 1;
-         srow_y[1] := 1;
-         srow_z[2] := 1;
-    end;
-end; //proc NIFTIhdr_IdentityMatrix
-
-procedure NII_Clear (out lHdr: TNIFTIHdr);
-var
- lInc: integer;
-begin
-  with lHdr do begin
-    HdrSz := sizeof(TNIFTIhdr);
-    for lInc := 1 to 10 do
-       Data_Type[lInc] := chr(0);
-    for lInc := 1 to 18 do
-       db_name[lInc] := chr(0);
-    extents:=0;
-    session_error:= 0;
-    regular:='r'{chr(0)};
-    dim_info:=(0);
-    dim[0] := 4;
-    for lInc := 1 to 7 do
-       dim[lInc] := 0;
-    intent_p1 := 0;
-    intent_p2 := 0;
-    intent_p3 := 0;
-    intent_code:=0;
-    datatype:=0 ;
-    bitpix:=0;
-    slice_start:=0;
-    for lInc := 1 to 7 do
-       pixdim[linc]:= 1.0;
-    vox_offset:= 0.0;
-    scl_slope := 1.0;
-    scl_inter:= 0.0;
-    slice_end:= 0;
-    slice_code := 0;
-    xyzt_units := 10;
-    cal_max:= 0.0;
-    cal_min:= 0.0;
-    slice_duration:=0;
-    toffset:= 0;
-    glmax:= 0;
-    glmin:= 0;
-    for lInc := 1 to 80 do
-      descrip[lInc] := chr(0);{80 spaces}
-    for lInc := 1 to 24 do
-      aux_file[lInc] := chr(0);{80 spaces}
-    {below are standard settings which are not 0}
-    bitpix := 16;//vc16; {8bits per pixel, e.g. unsigned char 136}
-    DataType := 4;//vc4;{2=unsigned char, 4=16bit int 136}
-    Dim[0] := 3;
-    Dim[1] := 256;
-    Dim[2] := 256;
-    Dim[3] := 1;
-    Dim[4] := 1; {n vols}
-    Dim[5] := 1;
-    Dim[6] := 1;
-    Dim[7] := 1;
-    glMin := 0;
-    glMax := 255;
-    qform_code := kNIFTI_XFORM_UNKNOWN;
-    sform_code:= kNIFTI_XFORM_UNKNOWN;
-    quatern_b := 0;
-    quatern_c := 0;
-    quatern_d := 0;
-    qoffset_x := 0;
-    qoffset_y := 0;
-    qoffset_z := 0;
-    NII_SetIdentityMatrix(lHdr);
-    magic := kNIFTI_MAGIC_SEPARATE_HDR;
-  end; //with the NIfTI header...
-end;
-{$ENDIF}
-
-function UpCaseExt(lFileName: string): string;
-var lI: integer;
-l2ndExt,lExt : string;
-begin
-         lExt := ExtractFileExt(lFileName);
-         if length(lExt) > 0 then
-        	for lI := 1 to length(lExt) do
-        		lExt[lI] := upcase(lExt[lI]);
-         result := lExt;
-         if lExt <> '.GZ' then exit;
-         lI := length(lFileName) - 6;
-         if li < 1 then exit;
-         l2ndExt := upcase(lFileName[lI])+upcase(lFileName[lI+1])+upcase(lFileName[li+2])+upcase(lFileName[li+3]);
-         if (l2ndExt = '.NII')then
-        	result :=  l2ndExt+lExt
-         else if  (l2ndExt = 'BRIK') and (lI > 1) and (lFileName[lI-1] = '.') then
-              result := '.BRIK'+lExt;
-end;
-
-{$IFNDEF GL10}
 procedure UnGZip(const FileName: string; buffer: bytep; offset, sz: integer);
 {$IFDEF GZIP}
 var
@@ -175,7 +71,6 @@ end;
 begin
   {$IFDEF UNIX} writeln('Recompile with GZ support!'); {$ENDIF}
 end;
-{$ENDIF}
 {$ENDIF}
 (*  function isECAT(fnm: string): boolean;
   type
@@ -769,10 +664,7 @@ end;
 
 procedure NSLog( str: string);
 begin
-  {$IFDEF GUI}
   showmsg(str);
-  {$ENDIF}
-  {$IFDEF UNIX}writeln(str);{$ENDIF}
 end;
 
 function parsePicString(s: string): single;

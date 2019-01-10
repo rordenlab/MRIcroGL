@@ -2,17 +2,24 @@ unit nifti;
 {$IFDEF FPC}{$mode objfpc}{$H+}{$ENDIF}
 {$DEFINE CUSTOMCOLORS}
 interface
+{$DEFINE FASTGZ}
+//{$DEFINE TIMER} //reports load times to stdout (Unix only)
 {$IFDEF FPC}
  {$DEFINE GZIP}
 {$ENDIF}
+//{$DEFINE PARALLEL}  //for parallel Unix also edit CThreads in LPR file
 {$DEFINE OPENFOREIGN}
 //{$DEFINE CPUGRADIENTS} //Computing volume gradients on the GPU is much faster than using the CPU
 {$DEFINE CACHEUINT8} //save 8-bit data: faster requires RAM
 uses
+
+  //{$IFDEF UNIX}cthreads, cmem,{$ENDIF}
+  MTProcs,
+  {$IFDEF TIMER} DateUtils,{$ENDIF}
+  {$IFDEF FASTGZ} SynZip, {$ENDIF}
   {$IFDEF OPENFOREIGN} nifti_foreign, {$ENDIF}
   {$IFDEF CUSTOMCOLORS} colorTable,  {$ENDIF}
-
-  {$IFDEF GZIP}zstream, GZIPUtils,umat,{$ENDIF} //Freepascal includes the handy zstream function for decompressing GZip files
+  {$IFDEF GZIP}zstream, umat, {$IFNDEF FASTGZ}GZIPUtils,{$ENDIF} {$ENDIF} //Freepascal includes the handy zstream function for decompressing GZip files
   dialogs, clipbrd, SimdUtils, sysutils,Classes, nifti_types, Math, VectorMath, otsuml;
 //Written by Chris Rorden, released under BSD license
 //This is the header NIfTI format http://nifti.nimh.nih.gov/nifti-1/
@@ -62,6 +69,9 @@ Type
         //procedure SetDisplayMinMaxFloat32();
         //procedure SetDisplayMinMaxInt16();
         //procedure SetDisplayMinMaxUint8();
+        {$IFDEF PARALLEL}
+        procedure SetDisplayMinMaxParallel(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
+        {$ENDIF}
         procedure SetDisplayMinMax(isForceRefresh: boolean = false); overload;
         procedure Convert2Float();
         procedure VolumeReslice(tarMat: TMat4; tarDim: TVec3i; isLinearReslice: boolean);
@@ -69,12 +79,12 @@ Type
         //procedure ApplyVolumeReorient(perm: TVec3i; outR: TMat4);
         function OpenNIfTI(): boolean;
         procedure MakeBorg(voxelsPerDimension: integer);
-        procedure initHistogram();
-
+        procedure initHistogram(Histo: TUInt32s =  nil);
         procedure ApplyCutout();
         function LoadRaw(FileName : AnsiString; out isNativeEndian: boolean): boolean;
         {$IFDEF GZIP}
         function SaveGz(niftiFileName: string): boolean;
+        {$IFDEF FASTGZ}function LoadFastGz(FileName : AnsiString; out isNativeEndian: boolean): boolean;{$ENDIF}
         function LoadGz(FileName : AnsiString; out isNativeEndian: boolean): boolean;
         {$ENDIF}
         function skipVox(): int64; //if fVolumeDisplayed > 0, skip this many VOXELS for first byte of data
@@ -133,7 +143,7 @@ Type
         procedure Sharpen();
         procedure Smooth(Mask: TUInt8s = nil);
         procedure Mask(MaskingVolume: TUInt8s; isPreserveMask: boolean);
-        procedure RemoveHaze();
+        procedure RemoveHaze(isSmoothEdges: boolean = true);
         procedure GPULoadDone();
         function Save(niftiFileName: string): boolean;
         function Load(niftiFileName: string): boolean; overload;
@@ -1311,15 +1321,376 @@ begin
   result := Nifti2to1(h2);
 end;
 
+{$IFDEF FASTGZ}
+function Nifti2to1(Stream:TMemoryStream): TNIFTIhdr; overload;
+var
+  h2 : TNIFTI2hdr;
+  h1 : TNIFTIhdr;
+  lSwappedReportedSz: LongInt;
+begin
+  h1.HdrSz:= 0; //error
+  Stream.Seek(0,soFromBeginning);
+  Stream.ReadBuffer (h2, SizeOf (TNIFTI2hdr));
+  lSwappedReportedSz := h2.HdrSz;
+  swap4(lSwappedReportedSz);
+  if (lSwappedReportedSz = SizeOf (TNIFTI2hdr)) then begin
+    printf('Not yet able to handle byte-swapped NIfTI2');
+    exit(h1);
+  end;
+  if (h2.HdrSz <> SizeOf (TNIFTI2hdr)) then exit(h1);
+  result := Nifti2to1(h2);
+end;
+
+function GetCompressedFileInfo(const comprFile: TFileName; var size: int64; var crc32: dword; skip: integer = 0): integer;
+//read GZ footer https://www.forensicswiki.org/wiki/Gzip
+type
+TGzHdr = packed record
+   Signature: Word;
+   Method, Flags: byte;
+   ModTime: DWord;
+   Extra, OS: byte;
+ end;
+var
+  F : File Of byte;
+  b: byte;
+  i, xtra: word;
+  cSz : int64; //uncompressed, compressed size
+  uSz: dword;
+  Hdr: TGzHdr;
+begin
+  result := -1;
+  size := 0;
+  crc32 := 0;
+  if not fileexists(comprFile) then exit;
+  result := skip;
+  FileMode := fmOpenRead;
+  Assign (F, comprFile);
+  Reset (F);
+  cSz := FileSize(F);
+  if cSz < (18+skip) then begin
+    Close (F);
+    exit;
+  end;
+  seek(F,skip);
+  blockread(F, Hdr, SizeOf(Hdr) );
+  //n.b. GZ header/footer is ALWAYS little-endian
+  {$IFDEF ENDIAN_BIG}
+  Hdr.Signature := Swap(Hdr.Signature);
+  {$ENDIF}
+  if Hdr.Signature = $9C78 then begin
+    exit(2);
+    //printf('Error: not gz format: deflate with zlib wrapper');
+    //UnCompressStream(inStream.Memory, tagBytes, outStream, nil, true);
+  end;
+  if Hdr.Signature <> $8B1F then begin //hex: 1F 8B
+    Close (F);
+    exit;
+  end;
+  //http://www.zlib.org/rfc-gzip.html
+  if ((Hdr.Flags and $04) = $04) then begin //FEXTRA
+  	blockread(F, xtra, SizeOf(xtra));
+  	{$IFDEF ENDIAN_BIG}
+  	xtra := Swap(xtra);
+  	{$ENDIF}
+  	if xtra > 1 then
+  		for i := 1 to xtra do
+  			blockread(F, b, SizeOf(b));
+  end;
+  if ((Hdr.Flags and $08) = $08) then begin //FNAME
+  	b := 1;
+  	while (b <> 0) and (not EOF(F)) do
+  		blockread(F, b, SizeOf(b));
+  end;
+  if ((Hdr.Flags and $10) = $10) then begin //FCOMMENT
+  	b := 1;
+  	while (b <> 0) and (not EOF(F)) do
+  		blockread(F, b, SizeOf(b));
+  end;
+  if ((Hdr.Flags and $02) = $02) then begin //FHCRC
+  	blockread(F, xtra, SizeOf(xtra));
+  end;
+  result := Filepos(F);
+  Seek(F,cSz-8);
+  blockread(f, crc32, SizeOf(crc32) );
+  blockread(f, uSz, SizeOf(uSz) );
+  {$IFDEF ENDIAN_BIG}
+  crc32 = Swap(crc32);
+  uSz = Swap(uSz);
+  {$ENDIF}
+  size := uSz; //note this is the MODULUS of the file size, beware for files > 2Gb
+  Close (F);
+end;
+
+function ExtractGzNoCrc(fnm: string; var mStream : TMemoryStream; skip: integer = 0): boolean;
+//a bit faster: do not compute CRC check
+var
+   ret, size, usize: int64;
+   crc32: dword;
+   src : array of byte;
+   f: file of byte;
+begin
+  result := false;
+  AssignFile(f, fnm);
+  FileMode := fmOpenRead;
+  Reset(f,1);
+  size := FileSize(f);
+  if size < 1 then begin
+     CloseFile(f);
+     exit;
+  end;
+  setlength(src, size);
+  blockread(f, src[0], size );
+  CloseFile(f);
+  result := false;
+  ret := GetCompressedFileInfo(fnm, usize, crc32, skip);
+  if (ret = 2)  then begin //zlib : no file size...
+     UnCompressStream(@src[0], size, mStream, nil, true);
+     result := true;
+  end else if (ret > skip) then begin
+     mStream.setSize(usize);
+     mStream.position := 0;
+     ret := UnCompressMem(@src[ret], mStream.memory, size-ret, usize);
+     result := (ret = usize);
+  end else if (skip < size) then begin //assume uncompressed
+      mStream.Write(src[skip],size-skip);
+      result := true;
+  end;
+  src := nil;
+end;
+
+(*function GetCompressedFileInfo(dat: TUint8s; out outSize: int64; out crc32: dword): integer;
+//read GZ footer https://www.forensicswiki.org/wiki/Gzip
+//  http://www.zlib.org/rfc-gzip.html
+type
+TGzHdr = packed record
+   Signature: Word;
+   Method, Flags: byte;
+   ModTime: DWord;
+   Extra, OS: byte;
+ end;
+var
+  b: byte;
+  pos: integer;
+  xtra: word;
+  inSize : int64; //uncompressed, compressed size
+  uSz: dword;
+  Hdr: TGzHdr;
+begin
+  result := -1;
+  inSize := length(dat);
+  crc32 := 0;
+  if inSize < (18) then
+    exit;
+  pos := 0;
+  //blockread(F, Hdr, SizeOf(Hdr) );
+  Move(dat[pos],Hdr, SizeOf(Hdr));
+  pos := pos + SizeOf(Hdr);
+  //n.b. GZ header/footer is ALWAYS little-endian
+  {$IFDEF ENDIAN_BIG}
+  Hdr.Signature := Swap(Hdr.Signature);
+  {$ENDIF}
+  if Hdr.Signature = $9C78 then begin
+    result := 2;
+    exit;
+  end;
+  if Hdr.Signature <> $8B1F then //hex: 1F 8B
+    exit;
+  if ((Hdr.Flags and $04) = $04) then begin //FEXTRA
+        Move(dat[pos],xtra, SizeOf(xtra));
+        pos := pos + SizeOf(xtra);
+        {$IFDEF ENDIAN_BIG}
+  	xtra := Swap(xtra);
+  	{$ENDIF}
+        pos := pos + SizeOf(xtra) + xtra;
+  end;
+  if ((Hdr.Flags and $08) = $08) then begin //FNAME
+  	b := 1;
+  	while (b <> 0) and (pos < inSize) do begin
+  	      b := dat[pos];
+              pos := pos + 1;
+        end;
+  end;
+  if ((Hdr.Flags and $10) = $10) then begin //FCOMMENT
+  	b := 1;
+  	while (b <> 0) and (pos < inSize) do begin
+  	      b := dat[pos];
+              pos := pos + 1;
+        end;
+  end;
+  if ((Hdr.Flags and $02) = $02) then begin //FHCRC - 16 bit CRC appened to header
+     pos := pos + 2;
+  end;
+  Move(dat[inSize-8],crc32, SizeOf(crc32));
+  Move(dat[inSize-4],uSz, SizeOf(uSz));
+  {$IFDEF ENDIAN_BIG}
+  crc32 = Swap(crc32);
+  uSz = Swap(uSz);
+  {$ENDIF}
+  outSize := uSz; //note this is the MODULUS of the file size, beware for files > 2Gb
+  result := pos;
+end;
+
+function ExtractGzNoCrc(fnm: string; var mStream : TMemoryStream; skip: integer = 0): boolean;
+//a bit faster: do not compute CRC check
+var
+   ret, inSize, outSize: int64;
+   crc32: dword;
+   src : TUint8s;
+   f: file of byte;
+begin
+  result := false;
+  AssignFile(f, fnm);
+  FileMode := fmOpenRead;
+  Reset(f,1);
+  inSize := FileSize(f) - skip;
+  if inSize < 1 then begin
+     CloseFile(f);
+     exit;
+  end;
+  setlength(src, inSize);
+  seek(f, skip);
+  blockread(f, src[0], inSize);
+  CloseFile(f);
+  result := false;
+  ret := GetCompressedFileInfo(src, outSize, crc32);
+  //showmessage(inttostr(skip)+' '+inttostr(ret)+' '+inttostr(outSize));
+  if (ret = 2) then begin //zraw: seen in some MGH - we do not know outsize...
+     UnCompressStream(@src[0], inSize, mStream, nil, true);
+     result := true;
+  end else if (ret > 0) then begin
+     mStream.setSize(outSize);
+     mStream.position := 0;
+     ret := UnCompressMem(@src[ret], mStream.memory, inSize-ret, outSize);
+     result := (ret = outSize);
+  end else begin //assume uncompressed
+      mStream.Write(src[0],inSize);
+      result := true;
+  end;
+  src := nil;
+end; *)
+
+function ExtractGz(fnm: string; var mStream : TMemoryStream): boolean;
+var
+  gz: TGZRead;
+  F : File Of byte;
+  src : array of byte;
+  cSz : int64; //uncompressed, compressed size
+begin
+  if not fileexists(fnm) then exit(false);
+  FileMode := fmOpenRead;
+  Assign (F, fnm);
+  Reset (F);
+  cSz := FileSize(F);
+  setlength(src, cSz);
+  blockread(f, src[0], cSz );
+  CloseFile(f);
+  result := gz.Init(@src[0], cSz);
+  if not result then begin
+    src := nil;
+    exit;
+  end;
+  gz.ToStream(mStream, cSz);
+  src := nil;
+  gz.ZStreamDone;
+end;
+
+function TNIfTI.LoadFastGZ(FileName : AnsiString; out isNativeEndian: boolean): boolean;
+//FSL compressed nii.gz file
+var
+  volBytes: int64;
+  lSwappedReportedSz : LongInt;
+  Stream : TMemoryStream;
+begin
+ isNativeEndian := true;
+ result := false;
+ Stream := TMemoryStream.Create;
+ if not ExtractGz(FileName,  Stream) then begin
+   printf('Unable to extract image '+Filename);
+   Stream.Free;
+   exit;
+ end;
+ Stream.Position:=0;
+ Try
+  {$warn 5058 off}Stream.ReadBuffer (fHdr, SizeOf (TNIFTIHdr));{$warn 5058 on}
+  //Stream.ReadBuffer(fHdr, SizeOf (TNIFTIHdr));
+  //Move(Stream.memory, fHdr, Sizeof(fHdr));
+  lSwappedReportedSz := fHdr.HdrSz;
+  swap4(lSwappedReportedSz);
+  //showmessage(format('%d @ %d = %d %d %d',[Stream.Size, fHdr.HdrSz,   fHdr.dim[1], fHdr.dim[2], fHdr.dim[3] ]));
+  if (lSwappedReportedSz = SizeOf (TNIFTIHdr)) then begin
+    NIFTIhdr_SwapBytes(fHdr);
+     isNativeEndian := false;
+  end;
+  if fHdr.HdrSz <> SizeOf (TNIFTIHdr) then begin
+     fHdr := Nifti2to1(Stream);
+     if fHdr.HdrSz <> SizeOf (TNIFTIHdr) then begin
+       printf('Unable to read image '+Filename);
+       exit;
+     end;
+  end;
+  if (fHdr.bitpix <> 8) and (fHdr.bitpix <> 16) and (fHdr.bitpix <> 24) and (fHdr.bitpix <> 32) and (fHdr.bitpix <> 64) then begin
+   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
+   exit;
+  end;
+  Quat2Mat(fHdr);
+  //read the image data
+  volBytes := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3]* (fHdr.bitpix div 8);
+  if  (fVolumeDisplayed > 0) and (fVolumeDisplayed < fHdr.dim[4]) and (fIsOverlay) then begin
+      Stream.Seek(round(fHdr.vox_offset)+(fVolumeDisplayed*volBytes),soFromBeginning);
+  end else begin
+      fVolumeDisplayed := 0;
+      Stream.Seek(round(fHdr.vox_offset),soFromBeginning);
+  end;
+  if (fHdr.dim[4] > 1) and (not fIsOverlay) then begin
+     if LoadFewVolumes then
+       fVolumesLoaded :=  trunc((16777216.0 * 4) /volBytes)
+     else
+         fVolumesLoaded :=  trunc(2147483647.0 /volBytes);
+     if fVolumesLoaded < 1 then fVolumesLoaded := 1;
+     if fVolumesLoaded > fHdr.dim[4] then fVolumesLoaded := fHdr.dim[4];
+     volBytes := volBytes * fVolumesLoaded;
+  end;
+  if (Stream.Position+ volBytes) > Stream.Size then begin
+       showmessage(format('Fatal error decoding GZ expected %d bytes found %d', [Stream.Position+ volBytes, Stream.Size]));
+     exit
+  end;
+  SetLength (fRawVolBytes, volBytes);
+  Stream.ReadBuffer (fRawVolBytes[0], volBytes);
+  if not isNativeEndian then
+   SwapImg(fRawVolBytes, fHdr.bitpix);
+ Finally
+  Stream.Free;
+ End; { Try }
+ result := true;
+end;
+{$ENDIF} //FastGZ()
+
 function TNIfTI.LoadGZ(FileName : AnsiString; out isNativeEndian: boolean): boolean;
 //FSL compressed nii.gz file
 var
+  {$IFDEF FASTGZ}
+  F: File of byte;
+  {$ENDIF}
   Stream: TGZFileStream;
   volBytes: int64;
   lSwappedReportedSz : LongInt;
 begin
  isNativeEndian := true;
  result := false;
+ {$IFDEF FASTGZ}
+ if not fileexists(FileName) then exit;
+ FileMode := fmOpenRead;
+ Assign (F, FileName);
+ Reset (F);
+ volBytes := FileSize(F);
+ Close (F);
+ if (volBytes < 104857600) then begin // < 100mb, unlikely to trigger LoadFewVolumes
+    //FastGz uncompresses entire volume in one step: much faster
+    // disadvantage: for very large files we might not want to decompress entire volume
+    result := LoadFastGz(FileName,isNativeEndian);
+    exit;
+ end;
+ {$ENDIF}
  Stream := TGZFileStream.Create (FileName, gzopenread);
  Try
   {$warn 5058 off}Stream.ReadBuffer (fHdr, SizeOf (TNIFTIHdr));{$warn 5058 on}
@@ -1358,8 +1729,6 @@ begin
      if fVolumesLoaded < 1 then fVolumesLoaded := 1;
      if fVolumesLoaded > fHdr.dim[4] then fVolumesLoaded := fHdr.dim[4];
      volBytes := volBytes * fVolumesLoaded;
-     //vol := SimpleGetInt(extractfilename(Filename)+' select volume',1,1,fHdr.dim[4]);
-     //Stream.Seek((vol-1)*volBytes,soFromCurrent);
   end;
   SetLength (fRawVolBytes, volBytes);
   Stream.ReadBuffer (fRawVolBytes[0], volBytes);
@@ -1399,7 +1768,6 @@ begin
 end;
 
 {$ENDIF}
-
 
 function TNIfTI.Save(niftiFileName: string): boolean;
 var
@@ -1452,7 +1820,14 @@ begin
  result := false;
  Stream := TFileStream.Create (FileName, fmOpenRead or fmShareDenyWrite);
  Try
-  Stream.ReadBuffer (fHdr, SizeOf (TNIFTIHdr));
+  try
+     Stream.ReadBuffer (fHdr, SizeOf (TNIFTIHdr));
+
+  except
+    Stream.Free;
+    showmessage('Fatal error (check file size and permissions): '+ FileName);
+    exit;
+  end;
   lSwappedReportedSz := fHdr.HdrSz;
   swap4(lSwappedReportedSz);
   if (lSwappedReportedSz = SizeOf (TNIFTIHdr)) then begin
@@ -1593,82 +1968,63 @@ end; //SmoothCore()  *)
 
 procedure TNIfTI.Smooth(Mask: TUInt8s = nil);
 //blur image
-{$DEFINE NOWRAP}
 var
-   lBPP, i, vx: integer;
+   skip, i, vx: integer;
    vol32, svol32 : TFloat32s;
    vol16: TInt16s;
    vol8: TUInt8s;
-   {$IFDEF NOWRAP}
    x,y,z: integer;
    xMask, yMask, zMask: boolean;
-   {$ELSE}
-   xydim: integer;
-   {$ENDIF}
 begin
  if fHdr.datatype = kDT_RGB then exit;
  if (fHdr.dim[1] < 3) or (fHdr.dim[2] < 3) or (fHdr.dim[3] < 3) then exit;
  if ((fMax-fMin) <= 0) then exit;
- lBPP := 4;
+ (*lBPP := 4;
  case fHdr.datatype of
    kDT_UNSIGNED_CHAR : lBPP := 1;
    kDT_SIGNED_SHORT: lBPP := 2;
- end;
+ end;*)
+ skip := skipVox();
  vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
- vol8 := @fRawVolBytes[lBPP*skipVox()];
+ //vol8 := @fRawVolBytes[lBPP*skipVox()];                            s
+ vol8 := fRawVolBytes;
  vol16 := TInt16s(vol8);
  vol32 := TFloat32s(vol8);
  //smooth
  setlength(svol32,vx);
- if fHdr.datatype = kDT_UINT8 then begin
+ if fHdr.datatype = kDT_UINT8 then
    for i := 0 to (vx-1) do
-       svol32[i] := vol8[i];
- end else if fHdr.datatype = kDT_INT16 then begin
+       svol32[i] := vol8[i+skip]
+ else if fHdr.datatype = kDT_INT16 then
      for i := 0 to (vx-1) do
-         svol32[i] := vol16[i];
- end else if fHdr.datatype = kDT_FLOAT then begin
-    svol32 := Copy(vol32, 0, vx);
- end;
+         svol32[i] := vol16[i+skip]
+ else if fHdr.datatype = kDT_FLOAT then
+    svol32 := Copy(vol32, skip, vx+skip);
  smoothFloat(svol32, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]);
- {$IFDEF NOWRAP} //avoid smoothing wrapping around top/bottom, left/right, anterior poserion
- i := 0;
- for z := 1 to fHdr.dim[3] do begin
-     zMask := (z = 1) or (z = fHdr.dim[3]);
-     for y := 1 to fHdr.dim[2] do begin
-         yMask := (y = 1) or (y = fHdr.dim[2]);
-         for x := 1 to fHdr.dim[1] do begin
-             xMask := (x = 1) or (x = fHdr.dim[1]);
-             if (Mask <> nil) and (Mask[i] <> 0) then
-               xMask := true;
-             if (not zMask) and (not yMask) and (not xMask) then begin
-                if fHdr.datatype = kDT_UINT8 then
-                   vol8[i] := round(svol32[i])
-                else if fHdr.datatype = kDT_INT16 then
-                     vol16[i] := round(svol32[i])
-                else if fHdr.datatype = kDT_FLOAT then
-                  vol32[i] := svol32[i];
-             end;
-             i := i +1;
-         end; //x
+   i := 0;
+   for z := 1 to fHdr.dim[3] do begin
+       zMask := (z = 1) or (z = fHdr.dim[3]);
+       for y := 1 to fHdr.dim[2] do begin
+           yMask := (y = 1) or (y = fHdr.dim[2]);
+           for x := 1 to fHdr.dim[1] do begin
+               xMask := (x = 1) or (x = fHdr.dim[1]);
+               if (Mask <> nil) and (Mask[i] <> 0) then
+                 xMask := true;
+               if (not zMask) and (not yMask) and (not xMask) then begin
+                  if fHdr.datatype = kDT_UINT8 then
+                     vol8[i+skip] := round(svol32[i])
+                  else if fHdr.datatype = kDT_INT16 then
+                       vol16[i+skip] := round(svol32[i])
+                  else if fHdr.datatype = kDT_FLOAT then
+                    vol32[i+skip] := svol32[i];
+               end;
+               i := i +1;
+           end; //x
 
-     end; //y
- end; //z
- {$ELSE}
- xydim := fHdr.dim[1]*fHdr.dim[2];
- if fHdr.datatype = kDT_UINT8 then begin
-   for i := inSkip+xydim to (inSkip+vx-1-xydim) do
-       vol8[i] := round(svol32[i]);
- end else if fHdr.datatype = kDT_INT16 then begin
-   for i := inSkip+xydim to (inSkip+vx-1-xydim) do
-       vol16[i] := round(svol32[i]);
- end else if fHdr.datatype = kDT_FLOAT then begin
-   for i := inSkip+xydim to (inSkip+vx-1-xydim) do
-       vol32[i] := svol32[i];
- end;
- {$ENDIF}
+       end; //y
+   end; //z
+   SetDisplayMinMax(true);
  svol32 := nil;
- if (Mask <> nil) then
-    SetDisplayMinMax(true);
 end; //smooth()
 
 procedure TNIfTI.Sharpen();
@@ -1731,7 +2087,7 @@ begin
  SetDisplayMinMax(true);
 end; //sharpen()
 
-procedure TNIfTI.initHistogram();
+procedure TNIfTI.initHistogram(Histo: TUInt32s = nil);
 var
    i,j,vx, mx: integer;
    v,scale255: single;
@@ -1744,31 +2100,39 @@ begin
         fHistogram[i].A := 0;
     vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
     if (vx < 1) or ((fMax-fMin) <= 0) then exit;
-    vol8 := fRawVolBytes;
-    vol16 := TInt16s(vol8);
-    vol32 := TFloat32s(vol8);
     for i := 0 to 255 do
         cnt[i] := 0;
-    //scale voxels fMin..fMax -> 0..255
-    scale255 := 255 / (fMax-fMin);
-    j := 1; //for RGBA read Green
-    v := 0;
-    for i := 0 to (vx - 1) do begin
-        if fHdr.datatype = kDT_UINT8 then
-           v := vol8[i]
-        else if fHdr.datatype = kDT_INT16 then
-             v := vol16[i]
-        else if fHdr.datatype = kDT_FLOAT then
-             v := vol32[i]
-        else if fHdr.datatype = kDT_RGB then begin
-             v := vol8[j];
-             j := j + 3;
+    if (Histo = nil) or (length(Histo) < 255) then begin
+      vol8 := fRawVolBytes;
+      vol16 := TInt16s(vol8);
+      vol32 := TFloat32s(vol8);
+      scale255 := 255 / (fMax-fMin);
+      j := 1; //for RGBA read Green
+      v := 0;
+        for i := 0 to (vx - 1) do begin
+            if fHdr.datatype = kDT_UINT8 then
+               v := vol8[i]
+            else if fHdr.datatype = kDT_INT16 then
+                 v := vol16[i]
+            else if fHdr.datatype = kDT_FLOAT then
+                 v := vol32[i]
+            else if fHdr.datatype = kDT_RGB then begin
+                 v := vol8[j];
+                 j := j + 3;
+            end;
+            v := (v * fHdr.scl_slope) + fHdr.scl_inter;
+            v := (v - fMin) * scale255;
+            if (v < 0) then v := 0;
+            if (v > 255) then v := 255;
+            inc(cnt[round(v)]);
         end;
-        v := (v * fHdr.scl_slope) + fHdr.scl_inter;
-        v := (v - fMin) * scale255;
-        if (v < 0) then v := 0;
-        if (v > 255) then v := 255;
-        inc(cnt[round(v)]);
+    end else begin //if Histo = nil, else use provided histogram
+        mx := length(Histo)-1;
+        scale255 := 255/mx;
+        for i := 0 to mx do begin
+            j := round(i * scale255);
+            cnt[j] := cnt[j] + Histo[i];
+        end;
     end;
     mx := 0;
     for i := 0 to 255 do
@@ -1787,10 +2151,12 @@ end;
 procedure TNIfTI.initUInt8();
 //use header's cal_max and cal_min to rescale 8-bit data
 var
-  histo: array[0..255] of integer;
-  i,vx,mn,mx, thresh, sum: integer;
+  histo: TUInt32s;
+  //slope255, f: single;
+  i, vx,mn,mx, thresh, sum: integer;
   vol8: TUInt8s;
 begin
+  setlength(histo,256);
   for i := 0 to 255 do
       histo[i] := 0;
   vol8 := fRawVolBytes;
@@ -1821,6 +2187,23 @@ begin
   end;
   fAutoBalMax := (i * fHdr.scl_slope) + fHdr.scl_inter;
   printf(format('uint8 window %g...%g', [ fAutoBalMin, fAutoBalMax]));
+  (*if (mn > 0) or (mx < 255) then begin //histogram 0..256 is assumed to be range fMin..fMax
+     setlength(h, 256);
+     for i := 0 to 255 do begin
+         h[i] := histo[i];
+         histo[i] := 0;
+     end;
+     slope255 := 255/(mx-mn);
+     for i := 0 to 255 do begin
+         f := (i-mn)*slope255;
+         if (f < 0) or (f > 255) then exit;
+         histo[i] := histo[i]+h[round(f)];
+     end;
+     h := nil;
+
+  end;*)
+  initHistogram(histo);
+  histo := nil;
 end;
 
 procedure TNIfTI.Convert2Float();
@@ -1882,7 +2265,7 @@ var
   mn : Single = 1.0 / 0.0;
   mx : Single = (- 1.0) / (0.0);
   slope: single;
-  histo: array[0..kMaxBin] of integer;
+  histo: TUInt32s;
 begin
   vol32 := TFloat32s(fRawVolBytes);
   //vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]*fVolumesLoaded);
@@ -1900,6 +2283,7 @@ begin
   fMax := mx;
   slope := kMaxBin / (mx - mn);
   printf(format('float range %g..%g',[mn,mx]));
+  setlength(histo, kMaxBin+1);//0..kMaxBin
   for i := 0 to kMaxBin do
       histo[i] := 0;
   for i := 0 to (vx-1) do begin
@@ -1921,6 +2305,8 @@ begin
   if (fAutoBalMax = fAutoBalMin) then
      fAutoBalMax := ((i+1) * 1/slope) + mn;
   printf(format('float window %g...%g', [ fAutoBalMin, fAutoBalMax]));
+  initHistogram(histo);
+  histo := nil;
 end;
 
 procedure TNIfTI.initInt16(); //kDT_SIGNED_SHORT
@@ -1934,10 +2320,11 @@ begin
 end;
 var
   vol16: TInt16s;
-  histo: array[0..kMaxBin] of integer;
+  histo: TUInt32s;
   i, vx,mn,mx, thresh, sum: integer;
   slope: single;
 begin
+  setlength(histo, kMaxBin+1); //0..kMaxBin
   for i := 0 to kMaxBin do
       histo[i] := 0;
   vol16 := TInt16s(fRawVolBytes);
@@ -1982,6 +2369,8 @@ begin
   fAutoBalMin := (fAutoBalMin * fHdr.scl_slope) + fHdr.scl_inter;
   fAutoBalMax := (fAutoBalMax * fHdr.scl_slope) + fHdr.scl_inter;
   printf(format('int16 window %g...%g', [ fAutoBalMin, fAutoBalMax]));
+  initHistogram(histo);
+  histo := nil;
 end;
 
 function Scaled2RawIntensity (lHdr: TNIFTIhdr; lScaled: single): single;
@@ -2033,12 +2422,10 @@ begin
           if MaskingVolume[i] <> 0 then vol32[skipVx+i] := mn;
     end;
   end;
-
   SetDisplayMinMax(true);
-
 end;
 
-procedure TNIfTI.RemoveHaze();
+procedure TNIfTI.RemoveHaze(isSmoothEdges: boolean);
 const
  kOtsuLevels = 5;
 var
@@ -2055,14 +2442,15 @@ begin
   skipVx := skipVox();
   ApplyOtsuBinary (vol8, vx, kOtsuLevels);
   PreserveLargestCluster(vol8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3],255,0 );
-  //.Smooth soften edges but preserve interior
-  setlength(mask8,vx);
-  mask8 := Copy(vol8, Low(vol8), Length(vol8));
-  SimpleMaskErode(mask8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]);
-  SimpleMaskErode(mask8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]);
-  SimpleMaskErode(mask8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]);
-  Smooth(mask8);
-  mask8 := nil;
+  if (isSmoothEdges) then begin //.Smooth soften edges but preserve interior
+    setlength(mask8,vx);
+    mask8 := Copy(vol8, Low(vol8), Length(vol8));
+    SimpleMaskErode(mask8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]);
+    SimpleMaskErode(mask8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]);
+    SimpleMaskErode(mask8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]);
+    Smooth(mask8);
+    mask8 := nil;
+  end;
   //
   SimpleMaskDilate(vol8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]);
   SimpleMaskDilate(vol8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]);
@@ -2188,10 +2576,80 @@ begin
    end; //if 16bit else 8bit
 end;
 
+{$IFDEF PARALLEL}
+const kMaxParallel = 4;
+
+procedure TNIfTI.SetDisplayMinMaxParallel(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
+//Compute transfer function across cores
+//http://wiki.lazarus.freepascal.org/Parallel_procedures
+//Remarkably little benefit, perhaps because
+// "Do not work on vast amounts of memory. On some systems one thread alone is fast enough to fill the memory bus speed."
+var
+  slope, lMin, lMax, lSwap, lRng, lMod: single;
+  skipVx, i, vx, vxLo, vxHi: integer;
+  vol8:TUInt8s;
+  vol16: TInt16s;
+  vol32: TFloat32s;
+  luts: array[0..255] of byte;
+begin
+ vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+ vxLo := round((index/kMaxParallel) * vx);
+ vxHi := round(((index+1)/kMaxParallel) * vx)-1;
+ //printf(format('%d/%d %d..%d %d',[index,kMaxParallel, vxLo, vxHi , vx]));
+ vol8 := fRawVolBytes;
+ skipVx := SkipVox();
+ lMin := Scaled2RawIntensity(fHdr, fWindowMin);
+ lMax := Scaled2RawIntensity(fHdr, fWindowMax);
+ slope := 255/(lMax - lMin);
+ vol16 := TInt16s(vol8);
+ vol32 := TFloat32s(vol8);
+ if fHdr.datatype = kDT_UINT8 then begin
+   lRng := (lMax - lMin);
+   if lRng <> 0 then
+    lMod := abs((((254)/lRng)))
+   else
+     lMod := 0;
+   if lMin > lMax then begin
+        lSwap := lMin;
+        lMin := lMax;
+        lMax := lSwap;
+   end;
+   for i := 0 to 255 do begin
+     if i <= lMin then
+       luts[i] := 0
+     else if i >= lMax then
+         luts[i] := 255
+     else
+        luts[i] := trunc(((i-lMin)*lMod)+1);
+   end;
+   for i := vxLo to (vxHi) do
+       fCache8[i] := luts[vol8[skipVx+i]];
+ end else if fHdr.datatype = kDT_INT16 then begin
+     for i := vxLo to (vxHi) do begin
+       if (vol16[skipVx+i] >= lMax) then
+          fCache8[i] := 255
+       else if  (vol16[skipVx+i] <= lMin) then
+           fCache8[i] := 0
+       else
+          fCache8[i] := round((vol16[skipVx+i] - lMin) * slope);
+     end;
+ end else if fHdr.datatype = kDT_FLOAT then begin
+   for i := vxLo to vxHi do begin
+     if (vol32[skipVx+i] >= lMax) then
+        fCache8[i] := 255
+     else if  (vol32[skipVx+i] <= lMin) then
+         fCache8[i] := 0
+     else
+        fCache8[i] := round((vol32[skipVx+i] - lMin) * slope);
+   end;
+ end;
+end;
+{$ENDIF}
+
 function TNIfTI.DisplayMinMax2Uint8(isForceRefresh: boolean = false): TUInt8s;
 var
   slope, lMin, lMax, lSwap, lRng, lMod: single;
-  skipVx, i, j, vx: integer;
+  skipVx, i, vx: integer;
   vol8:TUInt8s;
   vol16: TInt16s;
   vol32: TFloat32s;
@@ -2214,7 +2672,10 @@ begin
     clut.NeedsUpdate := false;
     exit;
   end;
-  setlength(fCache8, vx);
+  setlength(fCache8, vx);{$IFDEF PARALLEL}
+  if (vx > (kMaxParallel*10)) and (kMaxParallel > 1) then begin
+     ProcThreadPool.DoParallel(@SetDisplayMinMaxParallel,0,kMaxParallel-1,nil);
+  end else {$ENDIF} begin
   lMin := Scaled2RawIntensity(fHdr, fWindowMin);
   lMax := Scaled2RawIntensity(fHdr, fWindowMax);
   slope := 255/(lMax - lMin);
@@ -2233,36 +2694,34 @@ begin
     end;
     for i := 0 to 255 do begin
       if i <= lMin then
-        j := 0
+        luts[i] := 0
       else if i >= lMax then
-          j := 255
+          luts[i] := 255
       else
-         j := trunc(((i-lMin)*lMod)+1);
-      luts[i] := j;
+         luts[i] := trunc(((i-lMin)*lMod)+1);
     end;
     for i := 0 to (vx - 1) do
         fCache8[i] := luts[vol8[skipVx+i]];
   end else if fHdr.datatype = kDT_INT16 then begin
-    for i := 0 to (vx - 1) do begin
-      if (vol16[skipVx+i] >= lMax) then
-         j := 255
-      else if  (vol16[skipVx+i] <= lMin) then
-          j := 0
-      else
-         j := round((vol16[skipVx+i] - lMin) * slope);
-      fCache8[i] := j;
-    end;
+      for i := 0 to (vx - 1) do begin
+        if (vol16[skipVx+i] >= lMax) then
+           fCache8[i] := 255
+        else if  (vol16[skipVx+i] <= lMin) then
+           fCache8[i] := 0
+        else
+           fCache8[i] := round((vol16[skipVx+i] - lMin) * slope);
+      end;
   end else if fHdr.datatype = kDT_FLOAT then begin
     for i := 0 to (vx - 1) do begin
       if (vol32[skipVx+i] >= lMax) then
-         j := 255
+         fCache8[i] := 255
       else if  (vol32[skipVx+i] <= lMin) then
-          j := 0
+          fCache8[i] := 0
       else
-         j := round((vol32[skipVx+i] - lMin) * slope);
-      fCache8[i] := j;
+         fCache8[i] := round((vol32[skipVx+i] - lMin) * slope);
     end;
   end;
+  end; //parallel
   result := fCache8;
   fWindowMinCache8 := fWindowMin;
   fWindowMaxCache8 := fWindowMax;
@@ -2286,7 +2745,7 @@ begin
     ApplyCutout();
     exit;
   end;
-  printf(format('Window %g..%g', [fWindowMin, fWindowMax]));
+  {$IFDEF TIMER}printf(format(' Min/Max Window %g..%g', [fWindowMin, fWindowMax]));{$ENDIF}
   DisplayMinMax2Uint8(isForceRefresh);
   setlength(fVolRGBA, vx);
   for i := 0 to (vx - 1) do
@@ -2403,11 +2862,15 @@ begin
  result := true;
 end;
 
+
 function LoadHdrRawImgGZ(FileName : AnsiString; swapEndian: boolean; var  rawData: TUInt8s; var lHdr: TNIFTIHdr): boolean;
 var
-   Stream: TFileStream;
+   {$IFNDEF FASTGZ}
+   fStream: TFileStream;
+   inStream: TMemoryStream;
+   {$ENDIF}
    volBytes: integer;
-   inStream, outStream : TMemoryStream;
+   outStream : TMemoryStream;
 label
      123;
 begin
@@ -2417,79 +2880,161 @@ begin
    printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
    exit;
  end;
- Stream := TFileStream.Create(Filename, fmOpenRead);
- inStream := TMemoryStream.Create();
  outStream := TMemoryStream.Create();
- Stream.seek(round(lHdr.vox_offset), soFromBeginning);
- inStream.CopyFrom(Stream, Stream.Size - round(lHdr.vox_offset));
+ {$IFDEF FASTGZ}
+ result := ExtractGzNoCrc(Filename, outStream, round(lHdr.vox_offset));
+ {$ELSE}
+ fStream := TFileStream.Create(Filename, fmOpenRead);
+ fStream.seek(round(lHdr.vox_offset), soFromBeginning);
+ inStream := TMemoryStream.Create();
+ inStream.CopyFrom(fStream, fStream.Size - round(lHdr.vox_offset));
  result := unzipStream(inStream, outStream);
+ fStream.Free;
+ inStream.Free;
+ {$ENDIF}
  if not result then goto 123;
  volBytes := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3] * (lHdr.bitpix div 8);
  if lHdr.dim[4] > 1 then
    volBytes := volBytes * lHdr.dim[4];
  if outStream.Size < volBytes then begin
     result := false;
+    showmessage(format('GZ error expected %d found %d bytes: %s',[volBytes,outStream.Size, Filename]));
     goto 123;
  end;
  SetLength (rawData, volBytes);
+ outStream.Position := 0;
  outStream.ReadBuffer (rawData[0], volBytes);
  if swapEndian then
    SwapImg(rawData, lHdr.bitpix);
  123:
-   inStream.Free;
    outStream.Free;
-   Stream.Free;
 end;
 
 {$ENDIF}
+procedure DimPermute2341(var  rawData: TUInt8s; var lHdr: TNIFTIHdr);
+//NIfTI demands first three dimensions are spatial, NRRD often makes first dimension non-spatial (e.g. DWI direction)
+// This function converts NRRD TXYZ to NIfTI compatible XYZT
+var
+   i, x,y,z,t,xInc,yInc,zInc,tInc, nbytes: integer;
+   i8, o8: TUint8s;
+   i16, o16: TUInt16s;
+   i32, o32: TUInt32s;
+begin
+     if lHdr.Dim[4] < 2 then exit;
+     if (lHdr.bitpix mod 8) <> 0 then exit;
+     if (lHdr.bitpix <> 8) and (lHdr.bitpix <> 16) and (lHdr.bitpix <> 32) then exit;
+     nbytes := lHdr.Dim[1] * lHdr.Dim[2] * lHdr.Dim[3] * lHdr.Dim[4] * (lHdr.bitpix div 8);
+     if nbytes < 4 then exit;
+     setlength(i8, nbytes);
+     i8 := copy(rawData, low(rawData), high(rawData));
+     i16 := TUInt16s(i8);
+     i32 := TUInt32s(i8);
+     o8 := TUInt8s(rawData);
+     o16 := TUInt16s(rawData);
+     o32 := TUInt32s(rawData);
+     t :=  lHdr.Dim[1];
+     x :=  lHdr.Dim[2];
+     y :=  lHdr.Dim[3];
+     z :=  lHdr.Dim[4];
+     lHdr.Dim[1] := x;
+     lHdr.Dim[2] := y;
+     lHdr.Dim[3] := z;
+     lHdr.Dim[4] := t;
+     tInc := 1;
+     xInc := t;
+     yInc := t * x;
+     zInc := t * x * y;
+     i := 0;
+     if (lHdr.bitpix = 8) then
+        for t := 0 to (lHdr.Dim[4]-1) do
+            for z := 0 to (lHdr.Dim[3]-1) do
+                for y := 0 to (lHdr.Dim[2]-1) do
+                    for x := 0 to (lHdr.Dim[1]-1) do begin
+                        o8[i] := i8[(x*xInc)+(y*yInc)+(z*zInc)+(t*tInc)];
+                        i := i + 1;
+                    end;
+     if (lHdr.bitpix = 16) then
+        for t := 0 to (lHdr.Dim[4]-1) do
+            for z := 0 to (lHdr.Dim[3]-1) do
+                for y := 0 to (lHdr.Dim[2]-1) do
+                    for x := 0 to (lHdr.Dim[1]-1) do begin
+                        o16[i] := i16[(x*xInc)+(y*yInc)+(z*zInc)+(t*tInc)];
+                        i := i + 1;
+                    end;
+     if (lHdr.bitpix = 32) then
+        for t := 0 to (lHdr.Dim[4]-1) do
+            for z := 0 to (lHdr.Dim[3]-1) do
+                for y := 0 to (lHdr.Dim[2]-1) do
+                    for x := 0 to (lHdr.Dim[1]-1) do begin
+                        o32[i] := i32[(x*xInc)+(y*yInc)+(z*zInc)+(t*tInc)];
+                        i := i + 1;
+                    end;
+     i8 := nil;
+end;
 
 function loadForeign(FileName : AnsiString; var  rawData: TUInt8s; var lHdr: TNIFTIHdr): boolean;// Load 3D data                                 }
 //Uncompressed .nii or .hdr/.img pair
 var
    Stream : TFileStream;
-   gzBytes, volBytes: int64;
+   gzBytes, volBytes, FSz: int64;
    swapEndian, isDimPermute2341: boolean;
 begin
  result := readForeignHeader (FileName, lHdr,  gzBytes, swapEndian, isDimPermute2341);
  if not result then exit;
  if (lHdr.bitpix <> 8) and (lHdr.bitpix <> 16) and (lHdr.bitpix <> 24) and (lHdr.bitpix <> 32) and (lHdr.bitpix <> 64) then begin
   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
-  exit;
+  exit(false);
  end;
- if gzBytes = K_gzBytes_onlyImageCompressed then begin
-   result := LoadHdrRawImgGZ(FileName, swapEndian,  rawData, lHdr);
-   exit;
-   //{$IFNDEF Windows} writeln('Unsupported format: foreign uncompressed header, compressed image ', gzBytes);{$ENDIF}
-   //exit(false);
- end else if gzBytes < 0 then begin
-   //{$IFNDEF Windows} writeln('foreign compressed header and image ', gzBytes);{$ENDIF}
-    result := LoadImgGZ(FileName, swapEndian,  rawData, lHdr);
-    exit;
+ if gzBytes = K_gzBytes_onlyImageCompressed then
+   result := LoadHdrRawImgGZ(FileName, swapEndian,  rawData, lHdr)
+ else if gzBytes < 0 then
+    result := LoadImgGZ(FileName, swapEndian,  rawData, lHdr)
+ else begin
+   volBytes := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3] * (lHdr.bitpix div 8);
+   FSz := FSize(FileName);
+   if (FSz < (round(lHdr.vox_offset)+volBytes)) then begin
+    showmessage(format('Unable to load '+Filename+' - file size (%d) smaller than expected (%d) ', [FSz, round(lHdr.vox_offset)+volBytes]));
+    exit(false);
+   end;
+   Stream := TFileStream.Create (FileName, fmOpenRead or fmShareDenyWrite);
+   Try
+    Stream.Seek(round(lHdr.vox_offset),soFromBeginning);
+    if lHdr.dim[4] > 1 then
+      volBytes := volBytes * lHdr.dim[4];
+    SetLength (rawData, volBytes);
+    Stream.ReadBuffer (rawData[0], volBytes);
+   Finally
+    Stream.Free;
+   End;
+   if swapEndian then
+    SwapImg(rawData, lHdr.bitpix);
  end;
- Stream := TFileStream.Create (FileName, fmOpenRead or fmShareDenyWrite);
- Try
-  Stream.Seek(round(lHdr.vox_offset),soFromBeginning);
-  volBytes := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3] * (lHdr.bitpix div 8);
-  if lHdr.dim[4] > 1 then
-    volBytes := volBytes * lHdr.dim[4];
-  SetLength (rawData, volBytes);
-  Stream.ReadBuffer (rawData[0], volBytes);
-  if swapEndian then
-   SwapImg(rawData, lHdr.bitpix);
- Finally
-  Stream.Free;
- End;
+ if not result then exit;
+ if isDimPermute2341 then
+    DimPermute2341(rawData, lHdr);
  result := true;
+end;
+
+function extractfileextX(fnm: string): string; //treat ".nii.gz" as single extension, return .NII.GZ
+var
+  s: string;
+begin
+ result := upcase(extractfileext(fnm));
+ if  result <> '.GZ' then exit;
+ s := changefileext(fnm,'');
+ result := upcase(extractfileext(s))+result;
 end;
 
 function TNIfTI.OpenNIfTI(): boolean;
 var
+   {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
    F_Filename,lExt: string;
 begin
  result := false;
  if (length(fFilename) < 1) or (not FileExists(fFilename)) then exit;
  fVolumesLoaded := 1;
- lExt := uppercase(extractfileext(fFilename));
+ lExt := extractfileextX (fFilename);
+ //lExt := uppercase(extractfileext(fFilename));
  if lExt = '.IMG' then begin
    //NIfTI images can be a single .NII file [contains both header and image]
    //or a pair of files named .HDR and .IMG. If the latter, we want to read the header first
@@ -2509,14 +3054,15 @@ begin
     exit;
  end;
  {$ENDIF}
- if (lExt <> '.IMG') and (lExt <> '.NII') and (lExt <> '.VOI') and  (lExt <> '.HDR') and (lExt <> '.GZ') then begin
+ if (lExt <> '.IMG') and (lExt <> '.NII') and (lExt <> '.NII.GZ') and (lExt <> '.VOI') and  (lExt <> '.HDR') and (lExt <> '.GZ') then begin
     result := loadForeign(F_FileName, fRawVolBytes, fHdr);
     if result then begin
        fVolumesLoaded := length(fRawVolBytes) div (fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3] * (fHdr.bitpix div 8));
     end;
     exit;
  end;
- if (lExt = '.GZ') or (lExt = '.VOI') then begin
+ {$IFDEF TIMER}startTime := now;{$ENDIF}
+ if (lExt = '.NII.GZ') or (lExt = '.GZ') or (lExt = '.VOI') then begin
    {$IFDEF GZIP}
    if not LoadGZ(F_FileName, fIsNativeEndian) then
       exit;
@@ -2530,6 +3076,7 @@ begin
      exit(false);
    end;
  end;
+ {$IFDEF TIMER}printf(format('Load time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
  if (fHdr.sform_code > kNIFTI_XFORM_UNKNOWN) or (fHdr.qform_code > kNIFTI_XFORM_UNKNOWN) then
     fKnownOrientation := true
  else
@@ -3014,6 +3561,7 @@ function TNIfTI.Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInt
 var
    scaleMx: single;
    lLUTname: string;
+   {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
 begin
   {$IFDEF CACHEUINT8} //release cache, reload on next refresh
   fWindowMinCache8 := infinity;
@@ -3077,6 +3625,7 @@ begin
   fPermInOrient := pti(1,2,3);
   fMat := SForm2Mat(fHdr);
   fMatInOrient := fMat;
+  {$IFDEF TIMER}startTime := now;{$ENDIF}
   if fHdr.scl_slope = 0 then fHdr.scl_slope := 1;
   if (fHdr.datatype = kDT_UINT16) or (fHdr.datatype = kDT_INT32) or (fHdr.datatype = kDT_DOUBLE)  then
      Convert2Float();
@@ -3091,8 +3640,10 @@ begin
     SetDisplayMinMax();
     exit;
   end;
+  {$IFDEF TIMER}printf(format('Reorient time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
   fMat := SForm2Mat(fHdr);
   fInvMat := fMat.inverse;
+  {$IFDEF TIMER}startTime := now;{$ENDIF}
   if IsLabels then begin
     fAutoBalMin := 0;
     fAutoBalMax := 100;
@@ -3115,6 +3666,7 @@ begin
        fMax := 255;
        fWindowMin := 0;
        fWindowMax := 255;
+       initHistogram();
   end else
       printf('Unsupported data format '+inttostr(fHdr.datatype));
   if (IsLabels) then
@@ -3128,7 +3680,8 @@ begin
     fAutoBalMin := fAutoBalMax;
     fAutoBalMax := fAutoBalMax;
   end;
-  initHistogram();
+  {$IFDEF TIMER}printf(format('Init time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+  {$IFDEF TIMER}startTime := now;{$ENDIF}
   if (IsLabels) then
      //
   else if (fHdr.cal_max > fHdr.cal_min) then begin
@@ -3150,7 +3703,9 @@ begin
      fWindowMin := 1;
      fWindowMax := 1;
   end;
+  {$IFDEF TIMER}startTime := now;{$ENDIF}
   SetDisplayMinMax();
+  {$IFDEF TIMER}printf(format('Set Min/Max time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
 end;
 
 function TNIfTI.Load(niftiFileName: string): boolean; overload;
@@ -3191,7 +3746,6 @@ begin
  {$IFDEF CUSTOMCOLORS}
  clut := TCLUT.Create();
  clut.BackColor :=  backColor;
-
  {$ELSE}
  for i := 0 to 255 do
      fLUT[i] := setRGBA(i,i,i,i); //grayscale default

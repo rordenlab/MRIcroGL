@@ -6,7 +6,9 @@ interface
 {$DEFINE GPUGRADIENTS} //Computing volume gradients on the GPU is much faster than using the CPU
 {$DEFINE VIEW2D}
 {$DEFINE CUBE}
+{$DEFINE TIMER} //reports GPU gradient time to stdout (Unix only)
 uses
+  {$IFDEF TIMER} DateUtils,{$ENDIF}
  {$IFDEF CUBE} glcube, {$ENDIF}
  retinahelper,glclrbar, niftis, SimdUtils, glcorearb, gl_core_utils, VectorMath, Classes, SysUtils, Graphics,
     math, OpenGLContext, dialogs, nifti {$IFDEF VIEW2D}, drawvolume, colorEditor, slices2D, glfont{$ENDIF};
@@ -85,6 +87,11 @@ type
 implementation
 
 //uses mainunit;
+
+procedure printf (lS: AnsiString);
+begin
+{$IFNDEF WINDOWS} writeln(lS); {$ENDIF}
+end;
 
 destructor TGPUVolume.Destroy;
 begin
@@ -294,10 +301,13 @@ procedure TGPUVolume.CreateGradientVolumeGPU(Xsz,Ysz,Zsz: integer; var inTex, gr
 var
    i: integer;
    coordZ: single;
-   fb, tempTex3D: GLuint;
+   fb, tempTex3D: GLuint;{$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
 begin
   glFinish();//force update
-  {$IFDEF UNIX}writeln('Creating GPU gradients');{$ENDIF}
+  {$IFDEF TIMER}startTime := now;
+  {$ELSE}
+  {$IFDEF UNIX}printf('Creating GPU gradients');{$ENDIF}
+  {$ENDIF}
   glBindVertexArray(vao);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboBox3D);
   glGenFramebuffers(1, @fb);
@@ -365,6 +375,7 @@ begin
      glBindFramebuffer(GL_FRAMEBUFFER, 0);
      glDeleteFramebuffers(1, @fb);
      glActiveTexture( GL_TEXTURE0 );  //required if we will draw 2d slices next
+    {$IFDEF TIMER}printf(format('GPU Gradient time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
 end;
 
 {$ENDIF}

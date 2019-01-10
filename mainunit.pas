@@ -15,7 +15,7 @@ unit mainunit;
 {$DEFINE CLRBAR} //provide color bar
 {$WARN 5024 OFF} //disable warnings about unused parameters
 {$WARN 5043 off : Symbol "$1" is deprecated}
-//{$DEFINE MATT1}
+{$DEFINE MATT1}
 interface
 
 uses
@@ -24,7 +24,7 @@ uses
   {$IFDEF MYPY}PythonEngine,  {$ENDIF}
   {$IFDEF LCLCocoa} {$IFDEF NewCocoa}nsappkitext, UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
-  lcltype, GraphType, Graphics, dcm_load,
+  lcltype, GraphType, Graphics, dcm_load, nifti_tiff,
   LCLIntf, slices2D, StdCtrls, SimdUtils, Classes, SysUtils, Forms, Controls,clipbrd,
   Dialogs, Menus, ExtCtrls, CheckLst, ComCtrls, Spin, Types, fileutil, ulandmarks,
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
@@ -109,6 +109,8 @@ type
     MaskDeleteMenu: TMenuItem;
     MaskPreserveMenu: TMenuItem;
     DrawHintsMenu: TMenuItem;
+    ImportTIFFMenu: TMenuItem;
+    RemoveHazeSmoothMenu: TMenuItem;
     SaveNIfTIMenu: TMenuItem;
     StoreFMRIMenu: TMenuItem;
     SmoothMenu: TMenuItem;
@@ -278,6 +280,7 @@ type
     procedure ExitFullScreenMenuClick(Sender: TObject);
     procedure FileExitMenuClick(Sender: TObject);
     procedure FormCloseQuery(Sender: TObject; var CanClose: boolean);
+    procedure ImportTIFFMenuClick(Sender: TObject);
     procedure LandmarkSelectNextClick(Sender: TObject);
     procedure LayerCloseMenuClick(Sender: TObject);
     procedure LayerCutoutMenuClick(Sender: TObject);
@@ -321,8 +324,7 @@ type
     procedure NewWindowMenuClick(Sender: TObject);
     procedure SaveNIfTIMenuClick(Sender: TObject);
     procedure ScriptingPyVersionClick(Sender: TObject);
-    procedure ScriptMemoKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState
-      );
+    procedure ScriptMemoKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure ScriptPanelDblClick(Sender: TObject);
     procedure SetColorBarPosition;
     procedure SmoothMenuClick(Sender: TObject);
@@ -1568,7 +1570,7 @@ begin
   with GetPythonEngine do
     if Boolean(PyArg_ParseTuple(Args, 'iii:extract', @Otsu,@Dil,@One)) then begin
       //EXTRACT(Otsu,Dil,Boolean(One));
-      niftiVol.RemoveHaze; //todo: dilation and number of Otsu layers
+      niftiVol.RemoveHaze(true); //todo: dilation and number of Otsu layers
       ViewGPU1.Invalidate;
     end;
 end;
@@ -2156,6 +2158,31 @@ begin
      Application.ProcessMessages;
 end;
 
+procedure TGLForm1.ImportTIFFMenuClick(Sender: TObject);
+var
+  lF: integer;
+  openDialog : TOpenDialog;
+  fnm: string;
+begin
+  openDialog := TOpenDialog.Create(self);
+  openDialog.InitialDir := ExtractFileDir(gPrefs.PrevBackgroundImage);//GetCurrentDir;
+  openDialog.Options := [ofAllowMultiSelect,ofFileMustExist];
+  openDialog.filter := 'TIFF/LSM Images|*.*';
+  if not openDialog.Execute then begin
+     openDialog.Free;
+     exit;
+  end;
+  if openDialog.Files.Count < 1 then
+     exit;
+  for lF := 0 to (openDialog.Files.Count-1) do
+      fnm := SaveTIFFAsNifti(openDialog.Files[lF]);
+  openDialog.Free;
+  if fnm <> '' then
+     AddBackground(fnm)
+  else
+     showmessage('Unable to convert image(s): make sure they are TIFF format');
+end;
+
 procedure TGLForm1.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
  gPrefs.CustomDcm2niix := dcm2niiForm.getCustomDcm2niix();
@@ -2465,7 +2492,7 @@ var
  niftiVol: TNIfTI;
 begin
   if not vols.Layer(0,niftiVol) then exit;
-  niftiVol.RemoveHaze;
+  niftiVol.RemoveHaze((Sender as TMenuItem).tag = 1);
   ViewGPU1.Invalidate;
 end;
 
@@ -3224,9 +3251,10 @@ begin
   //{$IFDEF Darwin} openDialog.Filter := 'Python library|*.dylib|All files|*.*'; {$ENDIF}
   //{$IFDEF Linux} openDialog.Filter := 'Python library|*.so|All files|*.*'; {$ENDIF}
   //{$IFDEF Windows} openDialog.Filter := 'Python library|*.dll|All files|*.*'; {$ENDIF}
-  if not OpenDialog.execute then exit;
+  if not OpenDialog.execute then begin openDialog.free; exit; end;
   if not fileexists(openDialog.FileName) then exit;
   gPrefs.Pylib := openDialog.FileName;
+  openDialog.free;
 *)
 begin
  {$IFDEF MYPY}
@@ -3425,7 +3453,10 @@ end;
 function TGLForm1.AddBackground(Filename: string; isAddToRecent: boolean = true): boolean;
 //close all open layers and add a new background layer
 var
-   {$IFDEF MATT1}ext: string; {$ENDIF}
+   {$IFDEF MATT1}
+   ext: string;
+   i: integer;
+   {$ENDIF}
  fnm: string;
 begin
   AnimateTimer.Enabled := false;
@@ -3448,6 +3479,9 @@ begin
   if (ext = '.MAT') then begin
      MatLoadForce(kMatForcefMRI);
      AddLayer(fnm);
+     i := GLForm1.LayerColorDrop.Items.IndexOf('actc'); //search is case-insensitive!
+     if i > 0 then
+        GLForm1.LayerChange(1, i, -1, kNaNsingle, kNaNsingle); //kNaNsingle
   end;
   {$ENDIF}
   exit(true);
@@ -3965,8 +3999,8 @@ begin
   showmessage('Drag mouse to draw'+kEOLN
 +'Shift+Drag to erase'+kEOLN
 +'Control+Click to change view'+kEOLN
-+'Option+click for flood fill'+kEOLN
-+'Mouse-wheel to change slice'+kEOLN )
++'Option+Click for flood fill'+kEOLN
++'Mouse-Wheel to change slice'+kEOLN )
 end;
 
 procedure TGLForm1.FileExitMenuClick(Sender: TObject);
@@ -4018,8 +4052,9 @@ begin
  s := 'Display 3D Render'
     +kEOLN+'  Drag: Rotate view'
     +kEOLN+'Display 2D Slices'
-    +kEOLN+'Drag: Move crosshair'
+    +kEOLN+'  Click: Move crosshair'
     +kEOLN+'  Shift-Drag: Adjust contrast'
+    +kEOLN+'  Mouse-wheel: Change slice'
     +kEOLN+'Colorbar'
     +kEOLN+'  Double-Click: Change position'
     +kEOLN+'Color Editor'
@@ -4027,12 +4062,17 @@ begin
     +kEOLN+'  Shift-Click Node: Delete node'
     +kEOLN+'  Double-Click Node: Edit node color'
     +kEOLN+'  Control-Click: Add node'
-    +kEOLN+'  Alt-Click: Save colors to disk';
-  {$IFDEF NewCocoa}
-  ShowAlertSheet(GLForm1.Handle,'Mouse Gestures', s);
-  {$ELSE}
+    +kEOLN+'  Alt-Click: Save colors to disk'
+    +kEOLN+'Drawing (Draw/DrawColor selected)'
+    +kEOLN+'  Drag: draw filled region'
+    +kEOLN+'  Shift-Drag: erase filled region'
+    +kEOLN+'  Option-Click: Flood fill'
+    +kEOLN+'  Control-Click: Move crosshair';
+  //{$IFDEF NewCocoa}
+  //ShowAlertSheet(GLForm1.Handle,'Mouse Gestures', s);
+  //{$ELSE}
   Showmessage(s);
-  {$ENDIF}
+  //{$ENDIF}
 end;
 
 procedure TGLForm1.LayerCloseMenuClick(Sender: TObject);
@@ -4444,7 +4484,7 @@ begin
   if not vols.Layer(0,niftiVol) then exit;
  gMouse.Y := Y;
  gMouse.X := X;
-  if (Vol1.CE.ColorEditorMouseDown(X,Y, (ssShift in Shift), (ssCtrl in Shift), niftiVol)) then begin
+ if (Vol1.CE.ColorEditorMouseDown(X,Y, (ssShift in Shift), (ssCtrl in Shift), niftiVol)) then begin
      ViewGPU1.Invalidate;
      if (ssShift in Shift) or (ssCtrl in Shift) then
         UpdateTimer.Enabled := true;
@@ -4516,6 +4556,7 @@ var
  f:single;
  {$ENDIF}{$ENDIF}
 begin
+ //LayerBox.Caption := inttostr(random(888)); //On OpenGL MacOS 10.13.6 no MouseMove generated when shift is down!
  {$IFDEF LCLCocoa}{$IFNDEF METALAPI}
  f := ViewGPU1.retinaScale;
  X := round(X * f);
@@ -4862,6 +4903,7 @@ begin
   StoreFMRIMenu.Visible := true;
   {$ENDIF}
   {$IFDEF Darwin}
+  LayerList.Style := lbOwnerDrawFixed;//Dark mode bug https://bugs.freepascal.org/view.php?id=34600
   SetDarkMode();
   HelpPrefMenu.Visible := false; //use apple menu
   HelpAboutMenu.Visible := false; //use apple menu

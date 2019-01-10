@@ -302,9 +302,12 @@ begin
       if (pos('Compression', Line1) = 1) and (OutputLines.Count > 0) then
          Line1 := OutputLines[1];
   end;
-  if isDemo then
-     Memo1.Lines.Add(lCmd+' "MyDicomFolder"')
-  else
+  if isDemo then begin
+     Memo1.Lines.Add(lCmd+' "MyDicomFolder"');
+     Memo1.Lines.Add('');
+     Memo1.Lines.Add('');
+     Memo1.Lines.Add(' Drop DICOM folders here to convert');
+  end else
       Memo1.Lines.Add(lCmd);
   OutputLines.Free;
   result := OurProcess.ExitCode;
@@ -417,11 +420,8 @@ procedure Tdcm2niiForm.FormShow(Sender: TObject);
 begin
      if not fileexists(getExeName) then
         findCustomDcm2niix();
-
      ProcessFile('');
      inherited;
-
-
 end;
 
 procedure Tdcm2niiForm.FormDropFiles(Sender: TObject; const FileNames: array of String);

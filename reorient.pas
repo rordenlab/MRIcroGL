@@ -469,7 +469,10 @@ begin
     finalImg := tempImgY;
     goto 666;
   {$ENDIF}
-  if (lZi = lHdr.dim[3]) then goto 666; //e.g. 2D image
+  if (lZi = lHdr.dim[3]) then begin
+     finalImg := tempImgY;
+     goto 666; //e.g. 2D image
+  end;
   //shrink the 3rd dimension
   lZo := lHdr.dim[3]; //reduce Z output
   Setlength( tempImgZ,lXo*lYo*lZo); //8
@@ -558,7 +561,7 @@ label
   666;
 var
   sum, mx, mn: single;
-  lineStart, x,y,z,  lXo,lYo,lZo,lXi,lYi,lZi, outBytes, i,j: integer;
+  lineStart, x,y,z,  lXo,lYo,lZo,lXi,lYi,lZi, i,j: integer;
   contrib: PCListList;
   lImg32,finalImg, tempImgX, tempImgY, tempImgZ: TFloat32s;
 begin
@@ -575,6 +578,7 @@ begin
       if lImg32[i] < mn then mn := lImg32[i];
       if lImg32[i] > mx then mx := lImg32[i];
   end;
+
   Zoom(lHdr,xScale, yScale, zScale);
   //shrink in 1st dimension : do X as these are contiguous = faster, compute slower dimensions at reduced resolution
   lXo := lHdr.dim[1]; //input X
@@ -632,7 +636,10 @@ begin
     finalImg := tempImgY;
     goto 666;
   {$ENDIF}
-  if (lZi = lHdr.dim[3]) then goto 666; //e.g. 2D image
+  if (lZi = lHdr.dim[3]) then begin
+     finalImg := tempImgY;
+     goto 666; //e.g. 2D image
+  end;
   //shrink the 3rd dimension
   lZo := lHdr.dim[3]; //reduce Z output
   Setlength( tempImgZ,lXo*lYo*lZo); //8
@@ -733,6 +740,7 @@ begin
   imx := max(max(lHdr.dim[1], lHdr.dim[2]), lHdr.dim[3]);
   if (imx <= lMaxDim) or (lMaxDim < 1) then exit;
   scale := lMaxDim/imx;
+  //showmessage(format('%g %d %d %d',[scale, lHdr.dim[1], lHdr.dim[2], lHdr.dim[3]]));
   //n.b. can also be used to upsize or downsize data:
   // xscale := 0.5; // 50%
   // xscale := 1.5; //150%
@@ -741,6 +749,7 @@ begin
   //filter := @Hermite; fwidth := 1;
   //filter := @BellFilter; fwidth := 1.5;
   //filter := @SplineFilter; fwidth := 2;
+
   filter := @Lanczos3Filter; fwidth := 3;
   //filter := @MitchellFilter; fwidth := 2;
   if lHdr.datatype = kDT_UNSIGNED_CHAR then

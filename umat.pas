@@ -6,7 +6,7 @@ unit umat;
 interface
 
 uses
-  ExtCtrls, StdCtrls, Forms, Controls, Classes, SysUtils, gziputils, nifti_types;
+  ExtCtrls, StdCtrls, Forms, Controls, Classes, SysUtils, nifti_types;
 Type
     TUInt8s = array of uint8;
 const
@@ -18,8 +18,16 @@ procedure MatLoadForce(Modality: integer);
 function MatLoadNii(fnm: string; out hdr: TNIFTIHdr; var img: TUInt8s): boolean;
 
 implementation
-
-uses dialogs;
+//{$DEFINE TIMER}
+{$DEFINE FASTGZ}
+uses
+  {$IFDEF FASTGZ}
+  SynZip,
+  {$ELSE}
+  gziputils,
+  {$ENDIF}
+  zstream,
+  {$IFDEF TIMER} DateUtils,{$ENDIF}dialogs;
 
 var
   gMatModality : integer = kMatNoForce;//kMatNoForce;
@@ -129,18 +137,27 @@ begin
     result := 0;
 end; //readItem()
 
+function MinU32(a,b: uint32): uint32;
+begin
+     if a < b then exit(a);
+     exit(b);
+
+end;
+
 function MatLoad(fnm, tagname: string; var strs: TStringList; out hdr: TNIFTIHdr; var img: TUInt8s): boolean;
 const
   miCOMPRESSED = 15;
   miMATRIX = 14;
+  kCache = 8000;
 var
+  bytes : array of byte;
+  zStream: Tdecompressionstream;
   fieldNameLength, itemType, itemBytes, tagStartOffsetBytes,
     itemOffset, tagType, offsetBytes, nSubfields: uint32;
   tag: array [0..1] of uint32;
   tagBytes, tagEnd: uint32;
   sig: array [0..63] of word;
   mat: array [0..15] of double;
-  //dataType, nx, ny, nz,
   x, i, numfields, datIndex, hdrIndex, indx, nameBytes: integer;
   Stream: TFileStream;
   inStream, outStream : TMemoryStream;
@@ -172,8 +189,24 @@ begin
 
     if (tag[0] > 65535) then tagBytes := tag[0] shr 16; //small element format
     if (tag[0] = miCOMPRESSED) then begin
+        inStream.SetSize(0);
         inStream.CopyFrom(Stream, tagBytes);
+        {$IFDEF FASTGZ}
+           inStream.Position := 0; // goto start of input stream
+           zStream := Tdecompressionstream.create(inStream,false);
+           outStream.SetSize(0);
+           outStream.Position := 0; // goto start of output stream
+           setlength(bytes, kCache);
+           //only read first chunk of data to read tag name
+	   //repeat
+		i := zStream.read(bytes[0],kCache);
+		outStream.Write(bytes[0],i) ;
+	   //until i < kCache;
+           zStream.Free;
+        {$ELSE}
         unzipStream(inStream, outStream);
+        {$ENDIF}
+        //UnCompressStream
         if outStream.Size < 56 then continue;
 
         //if outStream.Size >= 56 then begin
@@ -184,6 +217,7 @@ begin
             //uint32_t off = offsetBytes;
             readTag(outStream, offsetBytes, itemType, itemBytes, itemOffset); //name
             namStr := stream2String(outStream, itemOffset, itemBytes);
+            //showmessage(namStr+' '+inttostr(Stream.position)+' '+inttostr(outStream.SIZE));
             //showmessage(format('%d->%d %d %d', [inStream.Size, outStream.Size, length(namStr), itemBytes]));
             //if CompareText(namStr,'lesion') = 0 then showmessage(namStr);
             readTag(outStream, offsetBytes, itemType, itemBytes, itemOffset); //field name
@@ -210,6 +244,12 @@ begin
                strs.Add(namStr);
             if tagname = '' then continue;
             if CompareText(namStr,tagname) <> 0 then continue;
+            {$IFDEF FASTGZ}
+            outStream.SetSize(0);
+            inStream.Position := 0; // goto start of input stream
+            outStream.Position := 0; // goto start of output stream
+            UnCompressStream(inStream.Memory, tagBytes, outStream, nil, true);
+            {$ENDIF}
             //at this stage we have found our desired header and image
             //read header
             tagStartOffsetBytes := offsetBytes;
@@ -326,6 +366,7 @@ begin
             //showmessage(format('%d@%d %d', [outStream.Position, outStream.Size, itemBytes]));
             goto 128; //success!
     end;
+    inStream.SetSize(0);
     Stream.seek(tagEnd, soFromBeginning);
   end;
 128:
@@ -439,16 +480,19 @@ function MatLoadNii(fnm: string; out hdr: TNIFTIHdr; var img: TUInt8s): boolean;
 var
   strs: TStringList;
   tagname: string;
+  {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
 begin
   result := false;
   if not fileexists(fnm) then exit;
   strs := TStringList.Create();
   tagname := '';
   img := nil; //clear
+   {$IFDEF TIMER}startTime := now;{$ENDIF}
   if not MatLoad(fnm, '', strs, hdr, img) then begin
      strs.Free;
      exit;
   end;
+  {$IFDEF TIMER}Showmessage(inttostr(MilliSecondsBetween(Now,startTime)));{$ENDIF}
   tagname := matSeriesSelectForm(strs);
   strs.Clear;
   img := nil;

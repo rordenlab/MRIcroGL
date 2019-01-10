@@ -27,16 +27,19 @@
       <FormatVersion Value="2"/>
       <Modes Count="0"/>
     </RunParams>
-    <RequiredPackages Count="3">
+    <RequiredPackages Count="4">
       <Item1>
-        <PackageName Value="python4lazarus_package"/>
+        <PackageName Value="lazmetalcontrol"/>
       </Item1>
       <Item2>
-        <PackageName Value="LazOpenGLContext"/>
+        <PackageName Value="python4lazarus_package"/>
       </Item2>
       <Item3>
-        <PackageName Value="LCL"/>
+        <PackageName Value="LazOpenGLContext"/>
       </Item3>
+      <Item4>
+        <PackageName Value="LCL"/>
+      </Item4>
     </RequiredPackages>
     <Units Count="6">
       <Unit0>
@@ -84,7 +87,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="../Metal-Demos/common"/>
+      <OtherUnitFiles Value="../Metal-Demos/common;$(LazarusDir)/components/multithreadprocs"/>
       <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <CodeGeneration>
