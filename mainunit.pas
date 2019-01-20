@@ -1785,6 +1785,20 @@ begin
 end;
 {$ENDIF}
 
+function isNifti(fnm: string): boolean;
+var
+ lExt: string;
+begin
+     result := true;
+     lExt := uppercase(extractfileext(fnm));
+     if (lExt = '.NII') or (lExt = '.HDR') or (lExt = '.VOI') then exit;
+     if (lExt = '.GZ') then begin
+        lExt := uppercase(extractfileext(changefileext(fnm,'')));
+        if (lExt = '.NII') then exit;
+     end;
+     result := false;
+end;
+
 procedure TGLForm1.SetDisplayCheck();
 begin
   case gPrefs.DisplayOrient of
@@ -2800,19 +2814,28 @@ begin
       result := max;
   end;
   FreeAndNil(PrefForm);
-end; //GetFloat()
+end; //GetFloat()                                                  r
 
 procedure TGLForm1.ExtractBrainMenuClick(Sender: TObject);
 var
 lFrac: double;
-lB: string;
+lFnm: string;
 begin
 lFrac := GetFloat('Brain extraction fraction',0.1,0.45,0.9);
 if (lFrac= kNaN) then exit;
-if not OpenDialog1.Execute then
-  exit;
-lB := FSLbet(OpenDialog1.FileName,lFrac);
-AddBackground(lB);
+lFnm := gPrefs.PrevBackgroundImage;
+OpenDialog1.FileName := '';
+if fileexists(lFnm) and isNifti(lFnm) then begin
+   if MessageDlg('Choose image', 'Do you wish extract '+ lFnm+'?', mtConfirmation, [mbYes, mbNo],0) = mrYes then
+      OpenDialog1.FileName := lFnm;
+end;
+if (OpenDialog1.FileName = '') then
+    if not OpenDialog1.Execute then
+       exit;
+if not isNifti(OpenDialog1.FileName) then
+   showmessage('BET brain extraction requires NIfTI format images.');
+lFnm := FSLbet(OpenDialog1.FileName,lFrac);
+AddBackground(lFnm);
 end;
 
 procedure TGLForm1.LayerAdditiveMenuClick(Sender: TObject);
@@ -3485,20 +3508,6 @@ begin
   end;
   {$ENDIF}
   exit(true);
-end;
-
-function isNifti(fnm: string): boolean;
-var
- lExt: string;
-begin
-     result := true;
-     lExt := uppercase(extractfileext(fnm));
-     if (lExt = '.NII') or (lExt = '.HDR') or (lExt = '.VOI') then exit;
-     if (lExt = '.GZ') then begin
-        lExt := uppercase(extractfileext(changefileext(fnm,'')));
-        if (lExt = '.NII') then exit;
-     end;
-     result := false;
 end;
 
 function isDICOM(fnm: string): boolean;
@@ -4415,22 +4424,24 @@ begin
   w := 'QT5';
   {$ENDIF}
   {$IFDEF LCLQT}
-  w := 'QT';
+  w := 'QT4';
   {$ENDIF}
   {$IFDEF LCLGTK2}
-  w := 'QT';
+  w := 'GTK2';
   {$ENDIF}
-  {$IFDEF LCLGTK2}
-  w := 'QT';
+  {$IFDEF LCLGTK3}
+  w := 'GTK3';
   {$ENDIF}
   {$IFDEF LCLWin64}
-  w := 'QT';
+  w := 'Windows';
   {$ENDIF}
   w := w +chr(13)+chr(10);
+  w := w+ 'Author: Chris Rorden' +chr(13)+chr(10);
+  w := w+ 'License: BSD 2-Clause' +chr(13)+chr(10);
   s := chr(13)+chr(10)+ glGetString(GL_VENDOR)+'; OpenGL= '+glGetString(GL_VERSION)+'; Shader='+glGetString(GL_SHADING_LANGUAGE_VERSION);
   ViewGPU1.ReleaseContext;
   {$ENDIF}
-  s := format('%s %sVolume rendering for NIfTI images %d %d %d %s', [kVers, w, niftiVol.Dim.X, niftiVol.Dim.Y, niftiVol.Dim.Z, s]);
+  s := format('%s %sCurrent volume: %d %d %d %s', [kVers, w, niftiVol.Dim.X, niftiVol.Dim.Y, niftiVol.Dim.Z, s]);
   {$IFDEF NewCocoa}
   ShowAlertSheet(GLForm1.Handle,'MRIcroGL', s);
   {$ELSE}
@@ -4903,7 +4914,7 @@ begin
   StoreFMRIMenu.Visible := true;
   {$ENDIF}
   {$IFDEF Darwin}
-  LayerList.Style := lbOwnerDrawFixed;//Dark mode bug https://bugs.freepascal.org/view.php?id=34600
+  //LayerList.Style := lbOwnerDrawFixed;//Dark mode bug https://bugs.freepascal.org/view.php?id=34600
   SetDarkMode();
   HelpPrefMenu.Visible := false; //use apple menu
   HelpAboutMenu.Visible := false; //use apple menu

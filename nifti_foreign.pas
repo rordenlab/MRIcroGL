@@ -2651,7 +2651,6 @@ begin
 
       str := str+ch;
     end;
-    //showmessage('"'+str+'"');
     if str = '' then break; //if str = '' then continue;
     if (isFirstLine) then begin
       if (length(str) <4) or (str[1]<>'N') or (str[2]<>'R') or (str[3]<>'R') or (str[4]<>'D') then
@@ -2822,6 +2821,8 @@ begin
     //NSLog('Unsupported NRRD feature: byteskip');
     //result := false;
   end;
+  if (isDetachedFile) then
+     headerSize := byteskip;
   if not isOK then result := false;
   //GLForm1.ShaderMemo.Lines.Add(format(' %d', [gzBytes]));
 666:
@@ -2829,7 +2830,7 @@ begin
   Filemode := 2;
   mArray.free;
   if not result then exit;
-  nhdr.vox_offset :=headerSize;
+  nhdr.vox_offset := headerSize;
   if (matElements >= 9) then begin
       //mat := nifti_mat33_mul( mat , rot33);
       if rot33[0,0] < 0 then offset[0] := -offset[0]; //origin L<->R

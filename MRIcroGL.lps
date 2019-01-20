@@ -7,7 +7,7 @@
       <Unit0>
         <Filename Value="MRIcroGL.lpr"/>
         <IsPartOfProject Value="True"/>
-        <EditorIndex Value="5"/>
+        <EditorIndex Value="8"/>
         <CursorPos X="39" Y="7"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
@@ -18,8 +18,9 @@
         <ComponentName Value="GLForm1"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
-        <TopLine Value="3470"/>
-        <CursorPos X="30" Y="3484"/>
+        <IsVisibleTab Value="True"/>
+        <TopLine Value="2806"/>
+        <CursorPos X="70" Y="2836"/>
         <UsageCount Value="204"/>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
@@ -147,13 +148,15 @@
       </Unit16>
       <Unit17>
         <Filename Value="nifti_types.pas"/>
-        <EditorIndex Value="-1"/>
-        <CursorPos X="36" Y="6"/>
+        <EditorIndex Value="4"/>
+        <TopLine Value="65"/>
+        <CursorPos X="2" Y="78"/>
         <UsageCount Value="54"/>
+        <Loaded Value="True"/>
       </Unit17>
       <Unit18>
         <Filename Value="slices2D.pas"/>
-        <EditorIndex Value="7"/>
+        <EditorIndex Value="10"/>
         <TopLine Value="23"/>
         <CursorPos X="22" Y="31"/>
         <UsageCount Value="95"/>
@@ -182,22 +185,22 @@
       </Unit21>
       <Unit22>
         <Filename Value="nifti.pas"/>
-        <IsVisibleTab Value="True"/>
-        <EditorIndex Value="1"/>
-        <CursorPos X="73" Y="10"/>
+        <EditorIndex Value="2"/>
+        <TopLine Value="2843"/>
+        <CursorPos X="66" Y="2851"/>
         <UsageCount Value="103"/>
         <Loaded Value="True"/>
       </Unit22>
       <Unit23>
         <Filename Value="prefs.pas"/>
-        <EditorIndex Value="-1"/>
-        <TopLine Value="154"/>
-        <CursorPos X="35" Y="159"/>
+        <EditorIndex Value="1"/>
+        <CursorPos X="75" Y="14"/>
         <UsageCount Value="85"/>
+        <Loaded Value="True"/>
       </Unit23>
       <Unit24>
         <Filename Value="glvolume2.pas"/>
-        <EditorIndex Value="6"/>
+        <EditorIndex Value="9"/>
         <TopLine Value="1120"/>
         <CursorPos X="36" Y="1135"/>
         <UsageCount Value="101"/>
@@ -211,8 +214,9 @@
       </Unit25>
       <Unit26>
         <Filename Value="nifti_foreign.pas"/>
-        <EditorIndex Value="4"/>
-        <CursorPos X="17" Y="8"/>
+        <EditorIndex Value="7"/>
+        <TopLine Value="2850"/>
+        <CursorPos X="5" Y="2866"/>
         <UsageCount Value="101"/>
         <Loaded Value="True"/>
       </Unit26>
@@ -285,7 +289,7 @@
       </Unit36>
       <Unit37>
         <Filename Value="umat.pas"/>
-        <EditorIndex Value="2"/>
+        <EditorIndex Value="5"/>
         <TopLine Value="7"/>
         <CursorPos X="7" Y="25"/>
         <UsageCount Value="69"/>
@@ -377,7 +381,7 @@
       </Unit49>
       <Unit50>
         <Filename Value="SynZip.pas"/>
-        <EditorIndex Value="3"/>
+        <EditorIndex Value="6"/>
         <TopLine Value="540"/>
         <CursorPos X="3" Y="546"/>
         <UsageCount Value="66"/>
@@ -393,10 +397,11 @@
       </Unit51>
       <Unit52>
         <Filename Value="/usr/local/share/fpcsrc/packages/paszlib/src/zstream.pp"/>
-        <EditorIndex Value="-1"/>
+        <EditorIndex Value="3"/>
         <TopLine Value="63"/>
-        <CursorPos X="29" Y="69"/>
-        <UsageCount Value="1"/>
+        <CursorPos X="9" Y="84"/>
+        <UsageCount Value="10"/>
+        <Loaded Value="True"/>
       </Unit52>
       <Unit53>
         <Filename Value="reorient.pas"/>
@@ -436,127 +441,123 @@
     <Build>
       <CleanOutputFileMask Value="*.ppu;*.ppl;*.o;*.or"/>
     </Build>
-    <JumpHistory Count="30" HistoryIndex="29">
+    <JumpHistory Count="29" HistoryIndex="28">
       <Position1>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="1234" Column="24" TopLine="1210"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="2991" Column="24" TopLine="2968"/>
       </Position1>
       <Position2>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="1268" TopLine="1249"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="2862" Column="90" TopLine="2839"/>
       </Position2>
       <Position3>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="3480" Column="58" TopLine="3469"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="2858" Column="11" TopLine="2845"/>
       </Position3>
       <Position4>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="3484" Column="76" TopLine="3469"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="2844" Column="20" TopLine="2841"/>
       </Position4>
       <Position5>
         <Filename Value="nifti.pas"/>
-        <Caret Line="8" Column="44"/>
+        <Caret Line="7" Column="118"/>
       </Position5>
       <Position6>
         <Filename Value="nifti.pas"/>
-        <Caret Line="71" Column="43" TopLine="53"/>
+        <Caret Line="8" Column="15"/>
       </Position6>
       <Position7>
         <Filename Value="nifti.pas"/>
-        <Caret Line="2583" Column="15" TopLine="2570"/>
+        <Caret Line="22" Column="146"/>
       </Position7>
       <Position8>
         <Filename Value="nifti.pas"/>
-        <Caret Line="2584" Column="15" TopLine="2580"/>
+        <Caret Line="87" Column="21" TopLine="64"/>
       </Position8>
       <Position9>
         <Filename Value="nifti.pas"/>
-        <Caret Line="1428" Column="53" TopLine="1418"/>
+        <Caret Line="1321" TopLine="1294"/>
       </Position9>
       <Position10>
-        <Filename Value="SynZip.pas"/>
-        <Caret Line="5" Column="106"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="1344" Column="31" TopLine="1336"/>
       </Position10>
       <Position11>
-        <Filename Value="SynZip.pas"/>
-        <Caret Line="457" Column="79" TopLine="432"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="1445" Column="31" TopLine="1422"/>
       </Position11>
       <Position12>
-        <Filename Value="SynZip.pas"/>
-        <Caret Line="454" Column="15" TopLine="448"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="1461" Column="33" TopLine="1438"/>
       </Position12>
       <Position13>
-        <Filename Value="SynZip.pas"/>
-        <Caret Line="991" Column="17" TopLine="970"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="1555" Column="31" TopLine="1532"/>
       </Position13>
       <Position14>
-        <Filename Value="SynZip.pas"/>
-        <Caret Line="1135" Column="21" TopLine="1115"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="1344" TopLine="1330"/>
       </Position14>
       <Position15>
-        <Filename Value="SynZip.pas"/>
-        <Caret Line="1331" Column="35" TopLine="1311"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="2848" Column="25" TopLine="2832"/>
       </Position15>
       <Position16>
-        <Filename Value="SynZip.pas"/>
-        <Caret Line="1333" Column="76" TopLine="1313"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="1344" Column="31" TopLine="1330"/>
       </Position16>
       <Position17>
-        <Filename Value="SynZip.pas"/>
-        <Caret Line="1497" Column="23" TopLine="1476"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="1456" Column="31" TopLine="1430"/>
       </Position17>
       <Position18>
-        <Filename Value="SynZip.pas"/>
-        <Caret Line="1505" Column="21" TopLine="1484"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="2854" Column="18" TopLine="2848"/>
       </Position18>
       <Position19>
-        <Filename Value="SynZip.pas"/>
-        <Caret Line="1548" Column="24" TopLine="1527"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="4906" Column="5" TopLine="4886"/>
       </Position19>
       <Position20>
-        <Filename Value="SynZip.pas"/>
-        <Caret Line="1542" Column="82" TopLine="1537"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="4909" Column="13" TopLine="4889"/>
       </Position20>
       <Position21>
-        <Filename Value="SynZip.pas"/>
-        <Caret Line="1549" Column="10" TopLine="1536"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="43" Column="15" TopLine="30"/>
       </Position21>
       <Position22>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="18" Column="25"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="255" Column="11" TopLine="235"/>
       </Position22>
       <Position23>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="71" Column="43" TopLine="42"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="371" Column="21" TopLine="351"/>
       </Position23>
       <Position24>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="2585" Column="13" TopLine="2580"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="4897" Column="73" TopLine="4866"/>
       </Position24>
       <Position25>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="2647" Column="13" TopLine="2619"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="4943" Column="36" TopLine="4911"/>
       </Position25>
       <Position26>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="3484" Column="30" TopLine="3470"/>
+        <Caret Line="2813" Column="44" TopLine="2804"/>
       </Position26>
       <Position27>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="10" Column="20"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="2814" Column="4" TopLine="2793"/>
       </Position27>
       <Position28>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="76" Column="19" TopLine="43"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="3233" Column="54" TopLine="3200"/>
       </Position28>
       <Position29>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="2647" Column="9" TopLine="2622"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="1787" TopLine="1762"/>
       </Position29>
-      <Position30>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="72" Column="17" TopLine="57"/>
-      </Position30>
     </JumpHistory>
     <RunParams>
       <FormatVersion Value="2"/>

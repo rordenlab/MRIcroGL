@@ -2838,9 +2838,19 @@ function LoadImgGZ(FileName : AnsiString; swapEndian: boolean; var  rawData: TUI
 //foreign: both image and header compressed
 var
   Stream: TGZFileStream;
-  volBytes: int64;
+  StreamSize: int64;
+  crc32: dword;
+  volBytes, offset: int64;
 begin
  result := false;
+ StreamSize := 0; //unknown
+ if lHdr.vox_offset < 0 then begin
+   //byteskip = -1
+   // this is expressly forbidden in the NRRD specification
+   // " skip can be -1. This is valid only with raw encoding"
+   // we handle it here because these images are seen in practice
+   GetCompressedFileInfo(FileName, StreamSize, crc32);
+ end;
  Stream := TGZFileStream.Create (FileName, gzopenread);
  Try
   if (lHdr.bitpix <> 8) and (lHdr.bitpix <> 16) and (lHdr.bitpix <> 24) and (lHdr.bitpix <> 32) and (lHdr.bitpix <> 64) then begin
@@ -2851,7 +2861,17 @@ begin
   volBytes := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3] * (lHdr.bitpix div 8);
   if lHdr.dim[4] > 1 then
     volBytes := volBytes * lHdr.dim[4];
-  Stream.Seek(round(lHdr.vox_offset),soFromBeginning);
+  offset := round(lHdr.vox_offset);
+  if lHdr.vox_offset < 0 then begin
+     offset := StreamSize-volBytes;
+     if offset < 0 then
+       offset := 0; //report sensible error
+  end;
+  if ((offset+volBytes) < StreamSize) then begin
+    printf(format('Uncompressed file too small: expected %d got %d: %s', [offset+volBytes , StreamSize , Filename]));
+    exit;
+  end;
+  Stream.Seek(offset,soFromBeginning);
   SetLength (rawData, volBytes);
   Stream.ReadBuffer (rawData[0], volBytes);
   if swapEndian then
