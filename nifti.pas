@@ -3,7 +3,7 @@ unit nifti;
 {$DEFINE CUSTOMCOLORS}
 interface
 {$DEFINE FASTGZ}
-//{$DEFINE TIMER} //reports load times to stdout (Unix only)
+{$DEFINE TIMER} //reports load times to stdout (Unix only)
 {$IFDEF FPC}
  {$DEFINE GZIP}
 {$ENDIF}
@@ -14,7 +14,7 @@ interface
 uses
 
   //{$IFDEF UNIX}cthreads, cmem,{$ENDIF}
-  MTProcs,
+  {$IFDEF PARALLEL}MTProcs,{$ENDIF}
   {$IFDEF TIMER} DateUtils,{$ENDIF}
   {$IFDEF FASTGZ} SynZip, {$ENDIF}
   {$IFDEF OPENFOREIGN} nifti_foreign, {$ENDIF}
@@ -172,6 +172,7 @@ Type
 
 implementation
 
+//uses reorient, mainunit;
 uses reorient;
 
 procedure  Coord(var lV: TVec4; lMat: TMat4);
@@ -478,9 +479,13 @@ begin
      if (fDim.X < 1) or (fDim.Y < 1) or (fDim.Z < 1) then
           exit(vec3(0.5, 0.5, 0.5));
      Coord (lV,InvMat);
-     result.X := (lV[0]+1)/fDim.X;
-     result.Y := (lV[1]+1)/fDim.Y;
-     result.Z := (lV[2]+1)/fDim.Z;
+     result.X := (lV[0]+0.5)/fDim.X;
+     result.Y := (lV[1]+0.5)/fDim.Y;
+     result.Z := (lV[2]+0.5)/fDim.Z;
+
+     //result.X := (lV[0]+1)/fDim.X;
+     //result.Y := (lV[1]+1)/fDim.Y;
+     //result.Z := (lV[2]+1)/fDim.Z;
 end;
 
 function TNIfTI.FracMM(Frac: TVec3): TVec3;
@@ -2102,7 +2107,10 @@ begin
     if (vx < 1) or ((fMax-fMin) <= 0) then exit;
     for i := 0 to 255 do
         cnt[i] := 0;
-    if (Histo = nil) or (length(Histo) < 255) then begin
+    if (Histo <> nil) and (length(Histo) = 256) then begin
+      for i := 0 to 255 do
+        cnt[i] := Histo[i];
+    end else if (Histo = nil) or (length(Histo) < 255) then begin
       vol8 := fRawVolBytes;
       vol16 := TInt16s(vol8);
       vol32 := TFloat32s(vol8);
@@ -2172,7 +2180,6 @@ begin
   end;
   fMin := (mn * fHdr.scl_slope) + fHdr.scl_inter;
   fMax := (mx * fHdr.scl_slope) + fHdr.scl_inter;
-  printf(format('uint8 range %g...%g', [ fMin, fMax]));
   thresh := round(0.01 * vx);
   sum := 0;
   for i := 0 to 255 do begin
@@ -2186,24 +2193,12 @@ begin
       if (sum > thresh) then break;
   end;
   fAutoBalMax := (i * fHdr.scl_slope) + fHdr.scl_inter;
-  printf(format('uint8 window %g...%g', [ fAutoBalMin, fAutoBalMax]));
-  (*if (mn > 0) or (mx < 255) then begin //histogram 0..256 is assumed to be range fMin..fMax
-     setlength(h, 256);
-     for i := 0 to 255 do begin
-         h[i] := histo[i];
-         histo[i] := 0;
-     end;
-     slope255 := 255/(mx-mn);
-     for i := 0 to 255 do begin
-         f := (i-mn)*slope255;
-         if (f < 0) or (f > 255) then exit;
-         histo[i] := histo[i]+h[round(f)];
-     end;
-     h := nil;
-
-  end;*)
   initHistogram(histo);
   histo := nil;
+  {$IFDEF TIMER}
+  printf(format('uint8 range %g...%g', [ fMin, fMax]));
+  printf(format('uint8 window %g...%g', [ fAutoBalMin, fAutoBalMax]));
+  {$ENDIF}
 end;
 
 procedure TNIfTI.Convert2Float();
@@ -2250,6 +2245,14 @@ begin
   fHdr.bitpix:= 32;
 end;
 
+function Scaled2RawIntensity (lHdr: TNIFTIhdr; lScaled: single): single;
+begin
+  if lHdr.scl_slope = 0 then
+	result := (lScaled)-lHdr.scl_inter
+  else
+	result := (lScaled-lHdr.scl_inter) / lHdr.scl_slope;
+end;
+
 procedure TNIfTI.InitFloat32(); //kDT_FLOAT
 const
  kMaxBin = 4095;
@@ -2264,12 +2267,14 @@ var
   thresh, sum, i,vx: integer;
   mn : Single = 1.0 / 0.0;
   mx : Single = (- 1.0) / (0.0);
-  slope: single;
+  v, slope: single;
   histo: TUInt32s;
 begin
   vol32 := TFloat32s(fRawVolBytes);
   //vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]*fVolumesLoaded);
   vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+  //{$DEFINE RESCALE32}
+  {$IFDEF RESCALE32}
   for i := 0 to (vx-1) do begin
      if (specialsingle(vol32[i])) then vol32[i] := 0.0;
      vol32[i] := (vol32[i] * fHdr.scl_slope) + fHdr.scl_inter;
@@ -2278,37 +2283,135 @@ begin
      if vol32[i] > mx then
         mx := vol32[i];
   end;
+  //the for loop above has applied the scale and intercept
+  // next lines ensure we do not apply them again!
+  fHdr.scl_inter := 0;
+  fHdr.scl_slope := 1;
+  {$ELSE}
+  for i := 0 to (vx-1) do begin
+     if (specialsingle(vol32[i])) then vol32[i] := 0.0;
+     v := (vol32[i] * fHdr.scl_slope) + fHdr.scl_inter;
+     if v < mn then
+        mn := v;
+     if v > mx then
+        mx := v;
+  end;
+  {$ENDIF}
   //robustMinMax(mn,mx);
   fMin := mn;
   fMax := mx;
+  {$IFNDEF RESCALE32}
+  mn := Scaled2RawIntensity(fHdr, mn);
+  mx := Scaled2RawIntensity(fHdr, mx);
+  {$ENDIF}
   slope := kMaxBin / (mx - mn);
-  printf(format('float range %g..%g',[mn,mx]));
+  //GLForm1.LayerBox.caption := format('%g',[slope]);
   setlength(histo, kMaxBin+1);//0..kMaxBin
   for i := 0 to kMaxBin do
       histo[i] := 0;
-  for i := 0 to (vx-1) do begin
+  for i := 0 to (vx-1) do
       inc(histo[ boundFloat((vol32[i]-mn) * slope)]);
-  end;
   thresh := round(0.01 * vx);
   sum := 0;
   for i := 0 to kMaxBin do begin
       sum := sum + histo[i];
       if (sum > thresh) then break;
   end;
+  {$IFDEF RESCALE32}
   fAutoBalMin := (i * 1/slope) + mn;
+  {$ELSE}
+  fAutoBalMin := (i/slope) + mn;
+  fAutoBalMin := (fAutoBalMin * fHdr.scl_slope) + fHdr.scl_inter;
+  {$ENDIF}
   sum := 0;
   for i := kMaxBin downto 0 do begin
       sum := sum + histo[i];
       if (sum > thresh) then break;
   end;
+  {$IFDEF RESCALE32}
   fAutoBalMax := (i * 1/slope) + mn;
+  {$ELSE}
+  fAutoBalMax := (i/slope) + mn;
+  fAutoBalMax := (fAutoBalMax * fHdr.scl_slope) + fHdr.scl_inter;
+  {$ENDIF}
   if (fAutoBalMax = fAutoBalMin) then
      fAutoBalMax := ((i+1) * 1/slope) + mn;
-  printf(format('float window %g...%g', [ fAutoBalMin, fAutoBalMax]));
   initHistogram(histo);
   histo := nil;
+  {$IFDEF TIMER}
+  printf(format('float range %g..%g',[fMin,fMax]));
+  printf(format('float window %g...%g', [ fAutoBalMin, fAutoBalMax]));
+  {$ENDIF}
 end;
 
+{$DEFINE FAST16}
+{$IFDEF FAST16}
+procedure TNIfTI.initInt16(); //kDT_SIGNED_SHORT
+const
+ kMaxWord = 65535;
+ kMin16 = 32768;
+var
+  histo, histo8: TUInt32s;
+  vol16: TInt16s;
+  slope: single;
+  i, j, vx, mn,mx, thresh, sum: integer;
+begin
+  vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+  if vx < 1 then exit;
+  setlength(histo, kMaxWord+1); //0..kMaxBin
+  FillChar(histo[0], Length(histo) * SizeOf(uint32), 0);
+  vol16 := TInt16s(fRawVolBytes);
+  for i := 0 to (vx-1) do
+      inc(histo[vol16[i]+kMin16]);
+  //find min
+  for i := 0 to kMaxWord do
+    if histo[i] > 0 then
+      break;
+  mn := i;
+  fMin := ((mn-kMin16) * fHdr.scl_slope) + fHdr.scl_inter;
+  //find max
+  for i := kMaxWord downto 0 do
+    if histo[i] > 0 then
+      break;
+  mx := i;
+  fMax := ((mx-kMin16) * fHdr.scl_slope) + fHdr.scl_inter;
+  thresh := round(0.01 * vx);
+  //find low thresh
+  sum := 0;
+  for i := 0 to kMaxWord do begin
+      sum := sum + histo[i];
+      if (sum > thresh) then break;
+  end;
+  fAutoBalMin := i - kMin16;
+  fAutoBalMin := (fAutoBalMin * fHdr.scl_slope) + fHdr.scl_inter;
+  //find high thresh
+  sum := 0;
+  for i := kMaxWord downto 0 do begin
+    sum := sum + histo[i];
+    if (sum > thresh) then break;
+  end;
+  fAutoBalMax := i - kMin16;
+  fAutoBalMax := (fAutoBalMax * fHdr.scl_slope) + fHdr.scl_inter;
+  //histogram is in range 0...65535, we want a histogram from min..max
+  setlength(histo8, 256); //0..255
+  for i := 0 to 255 do
+      histo8[i] := 0;
+  slope := 1;
+  if (mx > mn) then
+     slope := 255 / (mx - mn) ;
+  for i := mn to mx do begin
+      j := round((i - mn) * slope);
+      histo8[j] := histo8[j] + histo[i];
+  end;
+  histo := nil;
+  initHistogram(histo8);
+  histo8 := nil;
+  {$IFDEF TIMER}
+  printf(format('int16 range %g...%g', [ fMin, fMax]));
+  printf(format('int16 window %g...%g', [fAutoBalMin, fAutoBalMax]));
+  {$ENDIF}
+end;
+{$ELSE}
 procedure TNIfTI.initInt16(); //kDT_SIGNED_SHORT
 const
  kMaxBin = 4095;
@@ -2345,7 +2448,6 @@ begin
   mx := round(fMax);
   fMin := (mn * fHdr.scl_slope) + fHdr.scl_inter;
   fMax := (mx * fHdr.scl_slope) + fHdr.scl_inter;
-  printf(format('int16 range %g...%g', [ fMin, fMax]));
   slope := kMaxBin / (mx - mn) ;
   for i := 0 to kMaxBin do
       histo[i] := 0;
@@ -2368,18 +2470,14 @@ begin
      fAutoBalMax := ((i+1) * 1/slope) + mn;
   fAutoBalMin := (fAutoBalMin * fHdr.scl_slope) + fHdr.scl_inter;
   fAutoBalMax := (fAutoBalMax * fHdr.scl_slope) + fHdr.scl_inter;
-  printf(format('int16 window %g...%g', [ fAutoBalMin, fAutoBalMax]));
   initHistogram(histo);
   histo := nil;
+  {$IFDEF TIMER}
+  printf(format('int16 range %g...%g', [ fMin, fMax]));
+  printf(format('int16 window %g...%g', [ fAutoBalMin, fAutoBalMax]));
+  {$ENDIF}
 end;
-
-function Scaled2RawIntensity (lHdr: TNIFTIhdr; lScaled: single): single;
-begin
-  if lHdr.scl_slope = 0 then
-	result := (lScaled)-lHdr.scl_inter
-  else
-	result := (lScaled-lHdr.scl_inter) / lHdr.scl_slope;
-end;
+{$ENDIF}
 
 procedure TNIfTI.Mask(MaskingVolume: TUInt8s; isPreserveMask: boolean);
 var
@@ -2595,7 +2693,6 @@ begin
  vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
  vxLo := round((index/kMaxParallel) * vx);
  vxHi := round(((index+1)/kMaxParallel) * vx)-1;
- //printf(format('%d/%d %d..%d %d',[index,kMaxParallel, vxLo, vxHi , vx]));
  vol8 := fRawVolBytes;
  skipVx := SkipVox();
  lMin := Scaled2RawIntensity(fHdr, fWindowMin);
@@ -2647,9 +2744,16 @@ end;
 {$ENDIF}
 
 function TNIfTI.DisplayMinMax2Uint8(isForceRefresh: boolean = false): TUInt8s;
+{$DEFINE LUT16}
+{$IFDEF LUT16}
+const
+ kMaxWord = 65535;
+ kMin16 = 32768;
+{$ENDIF}
 var
+  {$IFDEF LUT16}luts16: TUInt16s;{$ENDIF}
   slope, lMin, lMax, lSwap, lRng, lMod: single;
-  skipVx, i, vx: integer;
+  skipVx, i, j, vx: integer;
   vol8:TUInt8s;
   vol16: TInt16s;
   vol32: TFloat32s;
@@ -2672,55 +2776,73 @@ begin
     clut.NeedsUpdate := false;
     exit;
   end;
-  setlength(fCache8, vx);{$IFDEF PARALLEL}
+  setlength(fCache8, vx);
+  {$IFDEF PARALLEL}
   if (vx > (kMaxParallel*10)) and (kMaxParallel > 1) then begin
      ProcThreadPool.DoParallel(@SetDisplayMinMaxParallel,0,kMaxParallel-1,nil);
   end else {$ENDIF} begin
-  lMin := Scaled2RawIntensity(fHdr, fWindowMin);
-  lMax := Scaled2RawIntensity(fHdr, fWindowMax);
-  slope := 255/(lMax - lMin);
-  vol16 := TInt16s(vol8);
-  vol32 := TFloat32s(vol8);
-  if fHdr.datatype = kDT_UINT8 then begin
-    lRng := (lMax - lMin);
-    if lRng <> 0 then
-     lMod := abs((((254)/lRng)))
-    else
-      lMod := 0;
-    if lMin > lMax then begin
-         lSwap := lMin;
-         lMin := lMax;
-         lMax := lSwap;
-    end;
-    for i := 0 to 255 do begin
-      if i <= lMin then
-        luts[i] := 0
-      else if i >= lMax then
-          luts[i] := 255
+    lMin := Scaled2RawIntensity(fHdr, fWindowMin);
+    lMax := Scaled2RawIntensity(fHdr, fWindowMax);
+    slope := 255.0/(lMax - lMin);
+    vol16 := TInt16s(vol8);
+    vol32 := TFloat32s(vol8);
+    if fHdr.datatype = kDT_UINT8 then begin
+      lRng := (lMax - lMin);
+      if lRng <> 0 then
+       lMod := abs((((254)/lRng)))
       else
-         luts[i] := trunc(((i-lMin)*lMod)+1);
-    end;
-    for i := 0 to (vx - 1) do
-        fCache8[i] := luts[vol8[skipVx+i]];
-  end else if fHdr.datatype = kDT_INT16 then begin
-      for i := 0 to (vx - 1) do begin
-        if (vol16[skipVx+i] >= lMax) then
-           fCache8[i] := 255
-        else if  (vol16[skipVx+i] <= lMin) then
-           fCache8[i] := 0
-        else
-           fCache8[i] := round((vol16[skipVx+i] - lMin) * slope);
+        lMod := 0;
+      if lMin > lMax then begin
+           lSwap := lMin;
+           lMin := lMax;
+           lMax := lSwap;
       end;
-  end else if fHdr.datatype = kDT_FLOAT then begin
-    for i := 0 to (vx - 1) do begin
-      if (vol32[skipVx+i] >= lMax) then
-         fCache8[i] := 255
-      else if  (vol32[skipVx+i] <= lMin) then
-          fCache8[i] := 0
-      else
-         fCache8[i] := round((vol32[skipVx+i] - lMin) * slope);
+      for i := 0 to 255 do begin
+        if i <= lMin then
+          luts[i] := 0
+        else if i >= lMax then
+            luts[i] := 255
+        else
+           luts[i] := trunc(((i-lMin)*lMod)+1);
+      end;
+      for i := 0 to (vx - 1) do
+          fCache8[i] := luts[vol8[skipVx+i]];
+    {$IFDEF LUT16}
+    end else if (fHdr.datatype = kDT_INT16) and (vx > (10 * kMaxWord)) then begin
+        setlength(luts16, kMaxWord + 1); // 0..65535
+        for i := 0 to kMaxWord do begin
+          j := i - kMin16;
+          if (j >= lMax) then
+             luts16[i] := 255
+          else if  (j <= lMin) then
+             luts16[i] := 0
+          else
+             luts16[i] := round((j - lMin) * slope);
+        end;
+        for i := 0 to (vx - 1) do
+            fCache8[i] := luts16[vol16[skipVx+i] + kMin16];
+        luts16 := nil;
+    {$ENDIF} //LUT16
+    end else if fHdr.datatype = kDT_INT16 then begin
+        for i := 0 to (vx - 1) do begin
+          if (vol16[skipVx+i] >= lMax) then
+             fCache8[i] := 255
+          else if  (vol16[skipVx+i] <= lMin) then
+             fCache8[i] := 0
+          else
+             fCache8[i] := round((vol16[skipVx+i] - lMin) * slope);
+        end;
+    end else if fHdr.datatype = kDT_FLOAT then begin
+      //GLForm1.LayerBox.caption := format('%g %g  %g',[lMin, lMax, slope]);
+      for i := 0 to (vx - 1) do begin
+        if (vol32[skipVx+i] >= lMax) then
+           fCache8[i] := 255
+        else if  (vol32[skipVx+i] <= lMin) then
+            fCache8[i] := 0
+        else
+           fCache8[i] := round((vol32[skipVx+i] - lMin) * slope);
+      end;
     end;
-  end;
   end; //parallel
   result := fCache8;
   fWindowMinCache8 := fWindowMin;

@@ -30,11 +30,8 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20181114+'; //+fixes Metal memory leak
+  kVers = '1.2.20190127'; //+fixes Metal memory leak
 type
-
-  { TGLForm1 }
-
   TGLForm1 = class(TForm)
     AnatDrop: TComboBox;
     LayerOptionsBtn: TButton;
@@ -264,6 +261,7 @@ type
     X2TrackBar: TTrackBar;
     YTrackBar: TTrackBar;
     ZTrackBar: TTrackBar;
+    procedure ReportPositionXYZ(isUpdateYoke: boolean = false);
     procedure AnatAddBtnClick(Sender: TObject);
     procedure AnatDeleteBtnClick(Sender: TObject);
     procedure AnatDropChange(Sender: TObject);
@@ -387,7 +385,7 @@ type
     procedure SharpenMenuClick(Sender: TObject);
     //procedure SplitterMoved(Sender: TObject);
     procedure SaveMenuClick(Sender: TObject);
-    procedure SetXHairPosition (lX,lY,lZ: single);
+    procedure SetXHairPosition (lXmm,lYmm,lZmm: single; isUpdateYoke: boolean = false);
     procedure UpdateShaderSettings(Sender: TObject);
     procedure UpdateTimerTimer(Sender: TObject);
     procedure ViewGPUMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
@@ -3363,20 +3361,56 @@ begin
   ToolPanel.Width := 4;
 end;
 
-procedure TGLForm1.SetXHairPosition (lX,lY,lZ: single);
+
+procedure TGLForm1.ReportPositionXYZ(isUpdateYoke: boolean = false);
+var
+   str: string;
+   niftiVol: TNIfTI;
+   sliceMM: TVec3;
+   vox: TVec3i;
+   i: integer;
+begin
+     if not vols.Layer(0,niftiVol) then exit;
+     str := '';
+     sliceMM := Vol1.Slice2Dmm(niftiVol, vox);
+     {$IFDEF COMPILEYOKE}
+     if (isUpdateYoke) then begin
+        gSliceMM := Vec3(sliceMM.X, sliceMM.Y, sliceMM.Z);
+        SetShareFloats2D(sliceMM.X,sliceMM.Y,sliceMM.Z);
+     end;
+     {$ENDIF}
+     str := str + format('%3.6g %3.6g %3.6g = ', [sliceMM.x, sliceMM.y, sliceMM.z]);
+     str := str + niftiVol.VoxIntensityString(vox);//format('%3.6g', [niftiVol.VoxIntensity(vox)]);
+     if vols.NumLayers > 1 then
+        for i := 1 to (vols.NumLayers-1) do begin
+            if not vols.Layer(i,niftiVol) then exit;
+            str := str + '; ' + niftiVol.VoxIntensityString(vox);
+        end;
+     caption := str;
+end;
+
+procedure TGLForm1.SetXHairPosition (lXmm,lYmm,lZmm: single; isUpdateYoke: boolean = false);
 var
    vFrac: TVec3;
    niftiVol: TNIfTI;
 begin
      if not vols.Layer(0,niftiVol) then exit;
-     vFrac := niftiVol.MMFrac(Vec3(lX,lY,lZ));
+     vFrac := niftiVol.MMFrac(Vec3(lXmm,lYmm,lZmm));
      vol1.SetSlice2DFrac(vFrac);
+     ReportPositionXYZ(isUpdateYoke);
      ViewGPU1.Invalidate;
+     //{$DEFINE XDEBUG}
+     {$IFDEF XDEBUG}
+     ScriptOutputMemo.Lines.Clear;
+     ScriptOutputMemo.Lines.Add(format('XYZmm=[%g %g %g]',[lXmm,lYmm,lZmm]));
+     ScriptOutputMemo.Lines.Add(format('Frac=[%g %g %g]',[vFrac.x,vFrac.y,vFrac.z]));
+     ScriptFormVisible(true);
+     {$ENDIF}
 end;
 
 procedure TGLForm1.CoordEditChange(Sender: TObject);
 begin
-  SetXHairPosition(StrToFloatDef(XCoordEdit.Text,0),StrToFloatDef(YCoordEdit.Text,0),StrToFloatDef(ZCoordEdit.Text,0) );
+ SetXHairPosition(StrToFloatDef(XCoordEdit.Text,0),StrToFloatDef(YCoordEdit.Text,0),StrToFloatDef(ZCoordEdit.Text,0), true );
 end;
 
 procedure TGLForm1.ClrbarVisibleClick(Sender: TObject);
@@ -3507,6 +3541,13 @@ begin
         GLForm1.LayerChange(1, i, -1, kNaNsingle, kNaNsingle); //kNaNsingle
   end;
   {$ENDIF}
+  //if not YokeMenu.Checked then begin
+  if true then begin
+    XCoordEdit.Text := '0';
+    YCoordEdit.Text := '0';
+    ZCoordEdit.Text := '0';
+    SetXHairPosition(0,0,0 );
+  end;
   exit(true);
 end;
 
@@ -4181,6 +4222,9 @@ begin
   i := LayerList.ItemIndex;
   if (i < 0) or (i >= LayerList.Count) then exit;
   if not vols.Layer(LayerList.ItemIndex,niftiVol) then exit;
+  {$IFDEF LCLCocoa}
+  setThemeMode(HdrForm, gPrefs.DarkMode);
+  {$ENDIF}
   HdrForm.WriteHdrForm(niftiVol.HeaderNoRotation, niftiVol.IsNativeEndian, niftiVol.Filename, niftiVol.Dim);
   HdrForm.SaveHdrDlg.Filename := niftiVol.Filename;
   HdrForm.show;
@@ -4594,11 +4638,9 @@ begin
        if (Y < gMouseLimitLo.Y) then Y := gMouseLimitLo.Y;
        if (X > gMouseLimitHi.X) then X := gMouseLimitHi.X;
        if (Y > gMouseLimitHi.Y) then Y := gMouseLimitHi.Y;
-
-       //i := Vols.Drawing.voiActiveOrient;
        fracXYZ := Vol1.GetSlice2DFrac(X,Y,i);
-       LayerBox.Caption := format('lo %d %d  hi %d %d xy %d %d', [gMouseLimitLo.X, gMouseLimitLo.Y, gMouseLimitHi.X, gMouseLimitHi.Y, X, Y]);
-       SliceBox.Caption := format('%.2f %.2f %.2f',[fracXYZ.x, fracXYZ.y, fracXYZ.z]);
+       //LayerBox.Caption := format('lo %d %d  hi %d %d xy %d %d', [gMouseLimitLo.X, gMouseLimitLo.Y, gMouseLimitHi.X, gMouseLimitHi.Y, X, Y]);
+       //SliceBox.Caption := format('%.2f %.2f %.2f',[fracXYZ.x, fracXYZ.y, fracXYZ.z]);
        if (fracXYZ.x > 1) or (fracXYZ.x < 0) or (fracXYZ.y > 1) or (fracXYZ.y < 0) or (fracXYZ.z > 1) or (fracXYZ.z < 0) then
           exit;
        //fracXYZ := Vol1.GetSlice2DFrac(X,Y,i);
@@ -4612,20 +4654,7 @@ begin
     if (Vols.Drawing.IsOpen) then //set crosshair to voxel center
        Vol1.SetSlice2DFrac(niftiVol.FracShiftSlice(vol1.Slices.SliceFrac, pti(0,0,0)));
      sliceMM := Vol1.Slice2Dmm(niftiVol, vox);
-     {$IFDEF COMPILEYOKE}
-     //if (not isYoke) then
-     gSliceMM := Vec3(sliceMM.X, sliceMM.Y, sliceMM.Z);
-        SetShareFloats2D(sliceMM.X,sliceMM.Y,sliceMM.Z);
-     {$ENDIF}
-     str := '';
-     str := str + format('%3.6g %3.6g %3.6g = ', [sliceMM.x, sliceMM.y, sliceMM.z]);
-     str := str + niftiVol.VoxIntensityString(vox);//format('%3.6g', [niftiVol.VoxIntensity(vox)]);
-     if vols.NumLayers > 1 then
-        for i := 1 to (vols.NumLayers-1) do begin
-            if not vols.Layer(i,niftiVol) then exit;
-            str := str + '; ' + niftiVol.VoxIntensityString(vox);
-        end;
-     caption := str;
+     ReportPositionXYZ(true);
      ViewGPU1.Invalidate;
      exit;
   end;

@@ -837,10 +837,8 @@ var
 begin
   if not vols.Layer(0,Vol) then exit;
   overlayNum := vols.NumLayers -1; //-1 as we ignore background
-
   if (overlayNum < 1)  then begin //background only
       //GLForm1.LayerBox.Caption := '>>>'+inttostr(random(888));
-
     if (overlayGradientTexture3D = 0) or (overlayGradTexWidth > 1) then //e.g. update texture after user closes overlays
        CreateOverlayTextures(Vol.Dim, nil); // <- empty overlay texture
     exit; //no overlays

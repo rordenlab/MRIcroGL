@@ -658,7 +658,6 @@ begin
      clrbar.Draw();
   MTLEndFrame;
   //GLForm1.caption := inttostr(slices2D.NumberOfLineVertices) +' '+inttostr(random(888));
-
 end;
 
 procedure VertVertexColor(var v: TVertVertex; r, g, b: TScalar);
@@ -994,7 +993,6 @@ begin
   else
       fragUniforms.backAlpha:= vol.OpacityPercent/100;
   //GLForm1.Caption := format('>> %g', [fragUniforms.backAlpha]);
-
   fragUniforms.sliceSize := 1/maxDim;
   //fragUniforms.stepSize := 1.0/ ((maxDim*0.25)+ (maxDim*1.75)* (RayCastQuality1to10/10));
   fragUniforms.stepSize := ComputeStepSize (RayCastQuality1to10, maxDim);

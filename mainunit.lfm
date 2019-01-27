@@ -1,5 +1,5 @@
 object GLForm1: TGLForm1
-  Left = 247
+  Left = 656
   Height = 756
   Top = 22
   Width = 1033
@@ -35,13 +35,13 @@ object GLForm1: TGLForm1
     OnDblClick = ToolPanelDblClick
     object LayerBox: TGroupBox
       Left = 0
-      Height = 187
+      Height = 189
       Top = 0
       Width = 253
       Align = alTop
       AutoSize = True
       Caption = 'Layers'
-      ClientHeight = 169
+      ClientHeight = 171
       ClientWidth = 245
       Constraints.MinWidth = 10
       ParentFont = False
@@ -70,7 +70,7 @@ object GLForm1: TGLForm1
         AnchorSideTop.Side = asrCenter
         Left = 0
         Height = 16
-        Top = 100
+        Top = 102
         Width = 47
         Caption = 'Darkest'
         ParentColor = False
@@ -83,10 +83,10 @@ object GLForm1: TGLForm1
         AnchorSideRight.Side = asrBottom
         Left = 122
         Height = 21
-        Top = 98
+        Top = 100
         Width = 116
         BorderSpacing.Left = 122
-        BorderSpacing.Top = 2
+        BorderSpacing.Top = 4
         OnKeyUp = LayerContrastKeyUp
         ParentFont = False
         TabOrder = 1
@@ -99,7 +99,7 @@ object GLForm1: TGLForm1
         AnchorSideRight.Side = asrBottom
         Left = 122
         Height = 21
-        Top = 121
+        Top = 123
         Width = 116
         BorderSpacing.Left = 122
         BorderSpacing.Top = 2
@@ -114,7 +114,7 @@ object GLForm1: TGLForm1
         AnchorSideTop.Side = asrCenter
         Left = 0
         Height = 16
-        Top = 123
+        Top = 125
         Width = 55
         Caption = 'Brightest'
         ParentColor = False
@@ -146,7 +146,7 @@ object GLForm1: TGLForm1
         AnchorSideTop.Side = asrCenter
         Left = 0
         Height = 16
-        Top = 148
+        Top = 150
         Width = 47
         Caption = 'Opacity'
         ParentColor = False
@@ -159,7 +159,7 @@ object GLForm1: TGLForm1
         AnchorSideRight.Side = asrBottom
         Left = 122
         Height = 25
-        Top = 144
+        Top = 146
         Width = 116
         Max = 100
         Position = 100
@@ -191,7 +191,7 @@ object GLForm1: TGLForm1
     object ClipBox: TGroupBox
       Left = 0
       Height = 97
-      Top = 187
+      Top = 189
       Width = 253
       Align = alTop
       AutoSize = True
@@ -307,7 +307,7 @@ object GLForm1: TGLForm1
     object ShaderBox: TGroupBox
       Left = 0
       Height = 337
-      Top = 738
+      Top = 740
       Width = 253
       Align = alClient
       Caption = 'Shader'
@@ -804,7 +804,7 @@ object GLForm1: TGLForm1
     object LineBox: TGroupBox
       Left = 0
       Height = 44
-      Top = 284
+      Top = 286
       Width = 253
       Align = alTop
       AutoSize = True
@@ -862,7 +862,7 @@ object GLForm1: TGLForm1
     object SliceBox: TGroupBox
       Left = 0
       Height = 135
-      Top = 603
+      Top = 605
       Width = 253
       Align = alTop
       AutoSize = True
@@ -1043,7 +1043,7 @@ object GLForm1: TGLForm1
     object CutoutBox: TGroupBox
       Left = 0
       Height = 99
-      Top = 504
+      Top = 506
       Width = 253
       Align = alTop
       AutoSize = True
@@ -1227,7 +1227,7 @@ object GLForm1: TGLForm1
     object MosaicBox: TGroupBox
       Left = 0
       Height = 176
-      Top = 328
+      Top = 330
       Width = 253
       Align = alTop
       AutoSize = True
