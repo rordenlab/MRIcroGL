@@ -17,7 +17,6 @@
         <ComponentName Value="GLForm1"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
-        <IsVisibleTab Value="True"/>
         <TopLine Value="2213"/>
         <CursorPos X="10" Y="2223"/>
         <UsageCount Value="204"/>
@@ -153,7 +152,7 @@
       </Unit17>
       <Unit18>
         <Filename Value="slices2D.pas"/>
-        <EditorIndex Value="1"/>
+        <EditorIndex Value="2"/>
         <TopLine Value="23"/>
         <CursorPos X="22" Y="31"/>
         <UsageCount Value="99"/>
@@ -182,9 +181,10 @@
       </Unit21>
       <Unit22>
         <Filename Value="nifti.pas"/>
-        <EditorIndex Value="2"/>
-        <TopLine Value="171"/>
-        <CursorPos X="14" Y="176"/>
+        <IsVisibleTab Value="True"/>
+        <EditorIndex Value="3"/>
+        <TopLine Value="1082"/>
+        <CursorPos X="9" Y="1104"/>
         <UsageCount Value="103"/>
         <Loaded Value="True"/>
       </Unit22>
@@ -210,10 +210,11 @@
       </Unit25>
       <Unit26>
         <Filename Value="nifti_foreign.pas"/>
-        <EditorIndex Value="-1"/>
-        <TopLine Value="2850"/>
-        <CursorPos X="5" Y="2866"/>
+        <EditorIndex Value="1"/>
+        <TopLine Value="1523"/>
+        <CursorPos X="32" Y="1543"/>
         <UsageCount Value="101"/>
+        <Loaded Value="True"/>
       </Unit26>
       <Unit27>
         <Filename Value="../common/mtlclrbar.pas"/>
@@ -462,7 +463,7 @@
     <Build>
       <CleanOutputFileMask Value="*.ppu;*.ppl;*.o;*.or"/>
     </Build>
-    <JumpHistory Count="6" HistoryIndex="5">
+    <JumpHistory Count="10" HistoryIndex="9">
       <Position1>
         <Filename Value="mainunit.pas"/>
         <Caret Line="4614" Column="15" TopLine="4584"/>
@@ -487,6 +488,22 @@
         <Filename Value="nifti.pas"/>
         <Caret Line="2835" Column="28" TopLine="2806"/>
       </Position6>
+      <Position7>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="2866" Column="5" TopLine="2850"/>
+      </Position7>
+      <Position8>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="1536" Column="150" TopLine="1519"/>
+      </Position8>
+      <Position9>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="176" Column="14" TopLine="171"/>
+      </Position9>
+      <Position10>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="1096" Column="8" TopLine="1074"/>
+      </Position10>
     </JumpHistory>
     <RunParams>
       <FormatVersion Value="2"/>

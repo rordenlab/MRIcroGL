@@ -1533,7 +1533,7 @@ begin
         nhdr.datatype := kDT_FLOAT32;
   if ((mgh.width > 32767) or (mgh.height > 32767) or (mgh.depth > 32767) or (mgh.nframes > 32767)) then begin
      //MGH datasets can be huge 1D streams, see https://github.com/vistalab/vistasoft/tree/master/fileFilters/freesurfer
-        NSLog('Error: this software limits rows/columns/slices/volumes to 32767 or less.');
+        NSLog(format('Error: this software requires each dimension is 32767 or less (%dx%dx%dx%d). Perhaps this is a surface you can open in Surfice.', [mgh.width, mgh.height, mgh.depth,mgh.nframes]));
         exit;
   end;
   nhdr.dim[1]:=mgh.width;
