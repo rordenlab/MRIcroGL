@@ -29,9 +29,13 @@
         <ComponentName Value="dcm2niiForm"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
-        <EditorIndex Value="-1"/>
-        <CursorPos Y="305"/>
+        <IsVisibleTab Value="True"/>
+        <EditorIndex Value="2"/>
+        <TopLine Value="317"/>
+        <CursorPos X="29" Y="324"/>
         <UsageCount Value="200"/>
+        <Loaded Value="True"/>
+        <LoadedDesigner Value="True"/>
       </Unit2>
       <Unit3>
         <Filename Value="drawvolume.pas"/>
@@ -152,7 +156,7 @@
       </Unit17>
       <Unit18>
         <Filename Value="slices2D.pas"/>
-        <EditorIndex Value="2"/>
+        <EditorIndex Value="3"/>
         <TopLine Value="23"/>
         <CursorPos X="22" Y="31"/>
         <UsageCount Value="99"/>
@@ -181,10 +185,9 @@
       </Unit21>
       <Unit22>
         <Filename Value="nifti.pas"/>
-        <IsVisibleTab Value="True"/>
-        <EditorIndex Value="3"/>
-        <TopLine Value="1082"/>
-        <CursorPos X="9" Y="1104"/>
+        <EditorIndex Value="4"/>
+        <TopLine Value="3110"/>
+        <CursorPos X="47" Y="3124"/>
         <UsageCount Value="103"/>
         <Loaded Value="True"/>
       </Unit22>
@@ -211,8 +214,8 @@
       <Unit26>
         <Filename Value="nifti_foreign.pas"/>
         <EditorIndex Value="1"/>
-        <TopLine Value="1523"/>
-        <CursorPos X="32" Y="1543"/>
+        <TopLine Value="3079"/>
+        <CursorPos X="27" Y="3106"/>
         <UsageCount Value="101"/>
         <Loaded Value="True"/>
       </Unit26>
@@ -463,7 +466,7 @@
     <Build>
       <CleanOutputFileMask Value="*.ppu;*.ppl;*.o;*.or"/>
     </Build>
-    <JumpHistory Count="10" HistoryIndex="9">
+    <JumpHistory Count="14" HistoryIndex="13">
       <Position1>
         <Filename Value="mainunit.pas"/>
         <Caret Line="4614" Column="15" TopLine="4584"/>
@@ -504,6 +507,22 @@
         <Filename Value="nifti.pas"/>
         <Caret Line="1096" Column="8" TopLine="1074"/>
       </Position10>
+      <Position11>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="1087" Column="55" TopLine="1083"/>
+      </Position11>
+      <Position12>
+        <Filename Value="dcm2nii.pas"/>
+        <Caret Line="177" Column="12" TopLine="173"/>
+      </Position12>
+      <Position13>
+        <Filename Value="dcm2nii.pas"/>
+        <Caret Line="204" Column="15" TopLine="182"/>
+      </Position13>
+      <Position14>
+        <Filename Value="dcm2nii.pas"/>
+        <Caret Line="292" Column="33" TopLine="277"/>
+      </Position14>
     </JumpHistory>
     <RunParams>
       <FormatVersion Value="2"/>

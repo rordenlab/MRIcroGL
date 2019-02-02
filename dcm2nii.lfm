@@ -1,5 +1,5 @@
 object dcm2niiForm: Tdcm2niiForm
-  Left = 367
+  Left = 355
   Height = 511
   Top = 131
   Width = 925

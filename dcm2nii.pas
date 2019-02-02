@@ -261,6 +261,8 @@ var
   BytesRead: LongInt;
 const
   READ_BYTES = 2048;
+  READ_BYTES_BIG = 32768;
+
 begin
      result := 1; //EXIT_FAILURE
    if (not isAppDoneInitializing) then exit;
@@ -281,6 +283,7 @@ begin
   // waiting. So we get a deadlock here if we use poWaitOnExit.
   OurProcess.Options := [poUsePipes, poNoConsole];
   OurProcess.Execute;
+  {$IFDEF TEXT_ON_TERMINATE} //otherwise show text as it is converted
   while True do begin
     // make sure we have room
     MemStream.SetSize(BytesRead + READ_BYTES);
@@ -289,8 +292,11 @@ begin
     if NumBytes > 0 // All read() calls will block, except the final one.
     then begin
       Inc(BytesRead, NumBytes);
+      dcm2niiForm.Refresh;
     end else
-      BREAK // Program has finished execution.
+      BREAK; // Program has finished execution.
+    Application.ProcessMessages;
+    Sleep(15);
   end;
   MemStream.SetSize(BytesRead);
   OutputLines := TStringList.Create;
@@ -302,6 +308,29 @@ begin
       if (pos('Compression', Line1) = 1) and (OutputLines.Count > 0) then
          Line1 := OutputLines[1];
   end;
+  {$ELSE}
+  OutputLines := TStringList.Create;
+  MemStream.SetSize(READ_BYTES_BIG);
+  dcm2niiForm.Refresh;
+  while True do begin
+    // make sure we have room
+    // try reading it
+    NumBytes := OurProcess.Output.Read((MemStream.Memory)^, READ_BYTES_BIG);
+    if NumBytes > 0 then begin
+       MemStream.SetSize(NumBytes);
+       OutputLines.LoadFromStream(MemStream);
+       Memo1.Lines.AddStrings(OutputLines);
+       MemStream.SetSize(READ_BYTES_BIG);
+       MemStream.Position:=0;
+       //MemStream.Clear;
+       dcm2niiForm.Refresh;
+    end else
+      BREAK; // Program has finished execution.
+    Application.ProcessMessages;
+    Sleep(15);
+  end;
+  dcm2niiForm.Refresh;
+  {$ENDIF}
   if isDemo then begin
      Memo1.Lines.Add(lCmd+' "MyDicomFolder"');
      Memo1.Lines.Add('');

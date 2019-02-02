@@ -3121,11 +3121,16 @@ var
    gzBytes, volBytes, FSz: int64;
    swapEndian, isDimPermute2341: boolean;
 begin
+ if not fileexists(FileName) then exit(false);
  result := readForeignHeader (FileName, lHdr,  gzBytes, swapEndian, isDimPermute2341);
  if not result then exit;
  if (lHdr.bitpix <> 8) and (lHdr.bitpix <> 16) and (lHdr.bitpix <> 24) and (lHdr.bitpix <> 32) and (lHdr.bitpix <> 64) then begin
   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
   exit(false);
+ end;
+ if not fileexists(FileName) then begin
+    showmessage('Unable to find '+Filename);
+    exit(false);
  end;
  if gzBytes = K_gzBytes_onlyImageCompressed then
    result := LoadHdrRawImgGZ(FileName, swapEndian,  rawData, lHdr)
