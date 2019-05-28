@@ -23,10 +23,15 @@ type
     position: TVec2;
     //metal requires we align each vertex attribute on 16 byte boundries
     // here these values do double duty to reveal location of mouse clicks
-    texDepth: single;
+    unused: single;
     orient: int32;
     textureCoord: TVec4;
   end;
+  //TZoom2D = record
+    //scale: single; //1 = full size, 2=twice size
+  //  sliceFrac2D: TVec3; //focus for expansion
+  //end;
+
   TVertex2Ds = array of TVertex2D;
   TMosaicRender = record
   	Left,Bottom,Width,Height: single;
@@ -45,8 +50,14 @@ type
     lineClr: TVec4;
     fontScale,viewPixelHeight: single;
     newLines, newSlices, isRadiological, isLabelOrient: boolean;
+    //zoom: TZoom2D;
+    fZoomScale: single;
+    fZoomCenter: TVec3;
     sliceFrac2D: TVec3;
     txt: TSDFFont;
+    //procedure AddQuad(L,B, W,H, tL, tT, tR, TB, tZ: single; orient: integer);
+    //procedure AddQuadX(L,B, W,H, tZ: single; orient: integer; m: TMat4);
+    procedure AddQuad(L,B, W,H, tZ: single; orient: integer; m: TMat4);
     procedure DrawAx(L,B, W,H, ZFrac: single);
     procedure DrawCor(L,B, W,H, YFrac: single);
     procedure DrawSag(L,B, W,H, XFrac: single);
@@ -54,11 +65,14 @@ type
     procedure DrawLine(startX,startY,endX,endY: single);
     procedure DrawLineLBWH(left,bottom,width,height: single);
     procedure DrawCross(L,B, W,H, Xfrac,Yfrac: single);
+    procedure DrawCrossX(L,B, W,H, Xfrac,Yfrac: single);
     procedure DrawRender(L,B, W, H, Slice: single; Orient: integer);
     procedure TextLabelLeft(X,Y: single; Caption: string);
     procedure TextLabelTop(X,Y: single; Caption: string);
   public
     procedure DrawOutLine(L,T,R,B: single);
+    property ZoomScale: single read fZoomScale write fZoomScale;
+    property ZoomCenter: TVec3 read fZoomCenter write fZoomCenter;
     property RadiologicalConvention: boolean read isRadiological write isRadiological; //radiologists view from patient's feet (L on R)
     property LabelOrient: boolean read isLabelOrient write isLabelOrient;
     property NumberOfLineVertices : integer read numLineVerts;
@@ -86,7 +100,6 @@ type
     //Str2Mosaic ( lMosaicString: string; lInvMat: TMat4; var Dim: TVec3i; volScale: TVec3X)
     {$ENDIF}
   end;
-  //function Vertex2D(constref position: TVec2; constref coord: TVec4; texDepth: single; orient: int32): TVertex2D;
 
 implementation
 
@@ -99,12 +112,12 @@ function TSlices2D.GetSlice2DMaxXY(mouseX, mouseY: integer; var Lo: TPoint): TPo
 var
   xy1, xy2: TVec2;
   x, y: single;
-  i, orient: integer;
+  i: integer;
 begin
   result.x := 0;
   result.y := 0;
   lo := result;
-     orient := -1;
+     //orient := -1;
      x := mouseX;
      y := viewPixelHeight - mouseY; //flip vertical axis: mouse coordinates y increase as we go down the screen
      i := 2;
@@ -118,52 +131,158 @@ begin
            result.y := trunc(viewPixelHeight - xy1.y);
            result.x := trunc(xy2.x);
            lo.y := ceil(viewPixelHeight - xy2.y);
-
            exit;
      end;
 end;
 
 
-function TSlices2D.GetSlice2DFrac(mouseX, mouseY: integer; out orient: integer): TVec3;
-//each quad has six positions 0..5: position 1=L,B, position 2=R,T
+(*function TSlices2D.GetSlice2DFrac(mouseX, mouseY: integer; out orient: integer): TVec3;
+//each quad composed of two triangles = six vertices 0..5: position 1=L,B, position 2=R,T
+// order LT,LB,RT,RB,RT,LB
 var
-  xy1, xy2: TVec2;
-  x, y, xFrac, yFrac, zFrac: single;
+  //xy1, xy2: TVec2;
+  v1,v2: TVertex2D;
+  x, y, xFrac, yFrac, zFrac, oxFrac, oyFrac, ozFrac: single;
   i: integer;
 begin
      orient := -1;
      x := mouseX;
      y := viewPixelHeight - mouseY; //flip vertical axis: mouse coordinates y increase as we go down the screen
      result := Vec3(-1,-1,-1); //assume no hit
+     //result := Vec3(0.5,0.5,0.5); //assume no hit
      i := 2;
      while (i < numSliceVerts) do begin
-           xy1 := sliceVerts[i-1].position;
-           xy2 := sliceVerts[i].position;
-           i := i + 1;
-           if (x < xy1.x) or (x > xy2.x) or (y < xy1.y) or (y > xy2.y) then continue;
-           if (xy2.x <= xy1.x) or (xy2.y <= xy1.y)  then continue; //should never happen: avoid divide by zero
-           orient := sliceVerts[i-1].orient;
-           xFrac := (x-xy1.x)/ (xy2.x - xy1.x);
-           yFrac := (y-xy1.y)/ (xy2.y - xy1.y);
-           zFrac := sliceVerts[i-1].texDepth;
+           v1 := sliceVerts[i-1];
+           v2 := sliceVerts[i];
+           i := i + 6; //skip to next quad: each quad composed of two triangles = 6 vertices
+           if (x < v1.position.x) or (x > v2.position.x) or (y < v1.position.y) or (y > v2.position.y) then continue;
+           if (v2.position.x <= v1.position.x) or (v2.position.y <= v1.position.y)  then continue; //should never happen: avoid divide by zero
+           xFrac := (x-v1.position.x)/ (v2.position.x - v1.position.x);
+           yFrac := (y-v1.position.y)/ (v2.position.y - v1.position.y);
+           orient := v1.orient;
+           if (orient = kAxialOrient) or (orient =kCoronalOrient) then //LR=X
+              oxFrac :=  xFrac * ((v2.textureCoord.x) - (v1.textureCoord.x))
+           else  //Sagittal x = LR=Y
+               oyFrac := xFrac * ((v2.textureCoord.y) - (v1.textureCoord.y));
+           if (orient = kAxialOrient) then //TB=Y
+              oyFrac :=  yFrac * ((v2.textureCoord.y) - (v1.textureCoord.y))
+           else  //Sagittal x = LR=Y
+               ozFrac := yFrac * ((v2.textureCoord.z) - (v1.textureCoord.z));
+           case orient of
+             kAxialOrient : ozFrac := v1.textureCoord.z; //LR=X, TB=Y, Slice=Z
+             kCoronalOrient : oyFrac := v1.textureCoord.y; //LR=X, TB=Z, Slice=Y
+             kSagRightOrient,kSagLeftOrient : oxFrac := v1.textureCoord.x; //LR=Y, TB=Z, Slice=X
+           end;
            if (isRadiological) and ((orient = kAxialOrient) or (orient = kCoronalOrient)) then
+              oxFrac := 1.0 + oxFrac;
+           if (orient = kSagLeftOrient) then
+              oyFrac := 1.0 + oyFrac;
+           //GLForm1.LayerBox.caption := format('%f %f %f', [oxFrac, oyFrac, ozFrac]) ;
+           result := Vec3(oxFrac, oyFrac, ozFrac);
+
+           {if (isRadiological) and ((orient = kAxialOrient) or (orient = kCoronalOrient)) then
               xFrac := 1.0 - xFrac;
+           case orient of
+             kAxialOrient : zFrac := v1.textureCoord.z; //LR=X, TB=Y, Slice=Z
+             kCoronalOrient : zFrac := v1.textureCoord.y; //LR=X, TB=Z, Slice=Y
+             kSagRightOrient,kSagLeftOrient : zFrac := v1.textureCoord.x; //LR=Y, TB=Z, Slice=X
+           end;
            case orient of
              kAxialOrient : result := Vec3(xFrac, yFrac, zFrac); //LR=X, TB=Y, Slice=Z
              kCoronalOrient : result := Vec3(xFrac, zFrac, yFrac); //LR=X, TB=Z, Slice=Y
              kSagRightOrient : result :=  Vec3(zFrac, xFrac, yFrac); //LR=Y, TB=Z, Slice=X
              kSagLeftOrient : result := Vec3(zFrac, 1-xFrac, yFrac); //LR=Y, TB=Z, Slice=X
            end;
+           //GLForm1.LayerBox.caption := format('%g:%g %g:%g:%g', [oxFrac,oyFrac, xFrac,yFrac,zFrac]) ;
+           GLForm1.LayerBox.caption := format('%f %f %f', [ozFrac, yFrac]) ;
+              }
            exit;
      end;
-     //sliceVerts[numSliceVerts+1] := Vertex2D(V2(L, B),     V4(XFrac, 1, 0, 1), Xfrac, kSagLeftOrient);
-     //sliceVerts[numSliceVerts+2] := Vertex2D(V2(L+W, B+H), V4(XFrac, 0, 1, 1), Xfrac, kSagLeftOrient);
+end;*)
+
+
+function TSlices2D.GetSlice2DFrac(mouseX, mouseY: integer; out orient: integer): TVec3;
+//each quad composed of two triangles = six vertices 0..5: position 1=L,B, position 2=R,T
+// order 0=LT,1=LB,2=RT,3=RB,4=RT,5=LB
+var
+  lt,lb,rb,v2: TVertex2D;
+  up, right: TVec4;
+  x, y, xFrac, yFrac: single;
+  i: integer;
+begin
+     orient := -1;
+     x := mouseX;
+     y := viewPixelHeight - mouseY; //flip vertical axis: mouse coordinates y increase as we go down the screen
+     result := Vec3(-1,-1,-1); //assume no hit
+     i := 3;
+     while (i < numSliceVerts) do begin
+           lt := sliceVerts[i-3];
+           lb := sliceVerts[i-2];
+           v2 := sliceVerts[i-1];
+           rb := sliceVerts[i];
+           i := i + 6; //skip to next quad: each quad composed of two triangles = 6 vertices
+           xFrac := (x-lb.position.x)/ (rb.position.x - lb.position.x);
+           if (xFrac < 0) or (xFrac > 1) then continue;
+           yFrac := (y-lb.position.y)/ (lt.position.y - lb.position.y);
+           if (yFrac < 0) or (yFrac > 1) then continue;
+           up := lt.textureCoord - lb.textureCoord;
+           right := rb.textureCoord - lb.textureCoord;
+           result.x :=  lb.textureCoord.x + xFrac * right.x + yFrac * up.x;
+           result.y :=  lb.textureCoord.y + xFrac * right.y + yFrac * up.y;
+           result.z :=  lb.textureCoord.z + xFrac * right.z + yFrac * up.z;
+           orient := lb.orient;
+           exit;
+     end;
 end;
 
-  function Vertex2D(constref position: TVec2; constref coord: TVec4; texDepth: single; orient: int32): TVertex2D;
+(*function TSlices2D.GetSlice2DFrac(mouseX, mouseY: integer; out orient: integer): TVec3;
+//each quad composed of two triangles = six vertices 0..5: position 1=L,B, position 2=R,T
+// order LT,LB,RT,RB,RT,LB
+var
+  v1,v2: TVertex2D;
+  x, y, xFrac, yFrac, oxFrac, oyFrac, ozFrac: single;
+  i: integer;
+begin
+     orient := -1;
+     x := mouseX;
+     y := viewPixelHeight - mouseY; //flip vertical axis: mouse coordinates y increase as we go down the screen
+     result := Vec3(-1,-1,-1); //assume no hit
+     //result := Vec3(0.5,0.5,0.5); //assume no hit
+     i := 2;
+     while (i < numSliceVerts) do begin
+           v1 := sliceVerts[i-1];
+           v2 := sliceVerts[i];
+           i := i + 6; //skip to next quad: each quad composed of two triangles = 6 vertices
+           if (x < v1.position.x) or (x > v2.position.x) or (y < v1.position.y) or (y > v2.position.y) then continue;
+           if (v2.position.x <= v1.position.x) or (v2.position.y <= v1.position.y)  then continue; //should never happen: avoid divide by zero
+           //input (screen space) x and y coordinates as fraction
+           xFrac := (x-v1.position.x)/ (v2.position.x - v1.position.x);
+           yFrac := (y-v1.position.y)/ (v2.position.y - v1.position.y);
+           //output (mni space) mni coordinates as fraction
+           orient := v1.orient;
+           if (orient = kAxialOrient) or (orient =kCoronalOrient) then //LR=X
+              oxFrac :=  v1.textureCoord.x + xFrac * ((v2.textureCoord.x) - (v1.textureCoord.x))
+           else  //Sagittal x = LR=Y
+               oyFrac := v1.textureCoord.y + xFrac * ((v2.textureCoord.y) - (v1.textureCoord.y));
+           if (orient = kAxialOrient) then //TB=Y
+              oyFrac :=  v1.textureCoord.y + yFrac * ((v2.textureCoord.y) - (v1.textureCoord.y))
+           else  //Sagittal/Coronal TB=Z
+               ozFrac := v1.textureCoord.z + yFrac * ((v2.textureCoord.z) - (v1.textureCoord.z));
+           case orient of
+             kAxialOrient : ozFrac := v1.textureCoord.z; //LR=X, TB=Y, Slice=Z
+             kCoronalOrient : oyFrac := v1.textureCoord.y; //LR=X, TB=Z, Slice=Y
+             kSagRightOrient,kSagLeftOrient : oxFrac := v1.textureCoord.x; //LR=Y, TB=Z, Slice=X
+           end;
+           //GLForm1.LayerBox.caption := format('%f %f %f', [oxFrac, oyFrac, ozFrac]) ;
+           result := Vec3(oxFrac, oyFrac, ozFrac);
+           exit;
+     end;
+end;*)
+
+  function Vertex2D(constref position: TVec2; constref coord: TVec4; orient: int32): TVertex2D;
   begin
-    result.position := position;
-    result.texDepth := texDepth;
+    result.position := position; //pixel position X,Y
+    //result.texDepth := texDepth; //used for mouse click to give 3rd dimension
     result.orient := orient;
     result.textureCoord := coord;
   end;
@@ -173,6 +292,9 @@ constructor TSlices2D.Create(sdffont: TSDFFont);
 begin
   txt := sdffont;
   fontScale := 1;
+  fZoomScale := 1;
+  fZoomCenter := Vec3(0.5, 0.5, 0.5);// ? ? Z
+  //zoom.sliceFrac2D := Vec3(0.5, 0.5, 0.5);
   isLabelOrient := true;
   isRadiological := false;
   numLineVerts := 0;
@@ -245,6 +367,32 @@ begin
   DrawLine(R,Y,min(X+lineXGap,R),Y);
 end;
 
+procedure TSlices2D.DrawCrossX(L,B, W,H,Xfrac,Yfrac: single);
+var
+  X, Y, T, R: single;
+begin
+  T := B + H; //top
+  R := L + W; //right
+  X := L+(W * Xfrac);
+  Y := B+(H * Yfrac);
+  if (Xfrac >= 0) and (Xfrac <= 1) and (Yfrac >= 0) and (Yfrac <= 1) then begin
+     //Both horizontal and vertical lines in bitmap
+     DrawLine(X, B, X, max(Y-lineXGap, B));
+     DrawLine(X, T, X, min(Y+lineXGap,T));
+     DrawLine(L,Y,max(X-lineXGap,L),Y);
+     DrawLine(R,Y,min(X+lineXGap,R),Y);
+     exit;
+  end;
+  if (Xfrac >= 0) and (Xfrac <= 1) then begin
+     //vertical line in bitmap
+     DrawLine(X, B, X, T);
+  end;
+  if (Yfrac >= 0) and (Yfrac <= 1) then begin
+     //horizontal line in bitmap
+     DrawLine(L,Y,R,Y);
+  end;
+end;
+
 procedure TSlices2D.DrawRender(L,B, W,H, Slice: single; Orient: integer);
 begin
   if (length(mosRenders) < (numMosRender + 1)) then
@@ -277,35 +425,156 @@ begin
     txt.TextOut(x-lW,y-lH-2,FontScale,Caption);
 end;
 
-procedure TSlices2D.DrawAx(L,B, W,H, ZFrac: single);
+function LerpZero(lo, hi, val: single): single;
+//if lo= 0 hi=3 and val=1 then returns 0.33 (val is 1/3 of way between lo and hi
 var
-  TexL, TexR: single;
+  rng: single;
 begin
-  if isRadiological then begin
-   TexL := 1;
-   TexR := 0;
-  end else begin
-   TexL := 0;
-   TexR := 1;
-  end;
+     rng := hi - lo;
+     if (rng = 0) then exit(-1.0);
+     result := (val - lo)/rng;
+end;
+procedure TSlices2D.AddQuad(L,B, W,H, tZ: single; orient: integer; m: TMat4);
+var
+  mZoom:TMat4;
+  x,y, scale: single;
+  pivot1, pivot, tLT, tRT, tLB, tRB,tD: TVec4;
+  mx: TMat4;
+begin
+  mZoom := TMat4.Diag(1,1,1);
+  //  kAxialOrient = 1;
+  //  kCoronalOrient = 2;
+  //  kSagRightOrient = 4;
+  //  kSagLeftOrient = 8;
+  scale := 1;
+  if (fZoomScale > 0) then scale := 1.0 / fZoomScale;
+  if (orient <> kSagLeftOrient) and (orient <> kSagRightOrient) then
+     mZoom.m[0,0] := scale;
+  if orient <> kCoronalOrient then
+     mZoom.m[1,1] := scale;
+  if orient <> kAxialOrient then
+     mZoom.m[2,2] := scale;
+  pivot := Vec4(0.5, 0.5, 0.5, 0.0);
+  tD :=  m * Vec4(0.0, 0.0, tZ, 0.0); //depth
+  pivot1 := pivot;
+  //fZoomCenter := Vec3(0.5, 0.5, 0.5);
+  if (orient = kSagLeftOrient) then
+      pivot1.x := 0.5 - fZoomScale * (fZoomCenter.y-0.5) //Sagittal: horizontal is Y texture
+  else if (orient = kAxialOrient) or (orient = kCoronalOrient) then begin
+       if isRadiological then
+         pivot1.x := 0.5 - fZoomScale * (fZoomCenter.x-0.5)
+       else
+           pivot1.x := 0.5 + fZoomScale * (fZoomCenter.x-0.5)
+  end else
+      pivot1.x := 0.5 + fZoomScale * (fZoomCenter.y-0.5); //Sagittal: horizontal is Y texture
+  if (orient <> kAxialOrient) then //for Sagitall and Coronal: Screen Up/Down based on Z
+     pivot1.y := 0.5 + fZoomScale * (fZoomCenter.z-0.5)
+  else
+      pivot1.y := 0.5 + fZoomScale * (fZoomCenter.y-0.5);
+  mx :=  (mZoom * m);
+  tLB := (mx * (Vec4(0.0, 0.0, 0.0, 0.1) - pivot1)) + pivot + tD;
+  tRB := (mx * (Vec4(1.0, 0.0, 0.0, 0.1) - pivot1)) + pivot + tD;
+  tLT := (mx * (Vec4(0.0, 1.0, 0.0, 0.1) - pivot1)) + pivot + tD;
+  tRT := (mx * (Vec4(1.0, 1.0, 0.0, 0.1) - pivot1)) + pivot + tD;
+  //GLForm1.LayerBox.Caption := format('%f %f %f', [tRB.X,tRB.Y,tRB.Z]);
+  //GLForm1.LayerBox.Refresh;
   if (length(sliceVerts) < (numSliceVerts + 6)) then
      setlength(sliceVerts, (numSliceVerts + kBlockSz));
   newSlices := true;
-  sliceVerts[numSliceVerts+0] := Vertex2D(V2(L, B+H), V4(TexL, 1, ZFrac, 1), Zfrac, kAxialOrient);
-  sliceVerts[numSliceVerts+1] := Vertex2D(V2(L, B), V4(TexL, 0, ZFrac, 1), Zfrac, kAxialOrient);
-  sliceVerts[numSliceVerts+2] := Vertex2D(V2(L+W, B+H), V4(TexR, 1, ZFrac, 1), Zfrac, kAxialOrient);
-  sliceVerts[numSliceVerts+3] := Vertex2D(V2(L+W, B), V4(TexR, 0, ZFrac, 1), Zfrac, kAxialOrient);
+  sliceVerts[numSliceVerts+0] := Vertex2D(V2(L, B+H),   V4(tLT.x, tLT.y, tLT.z, 1), orient); //LT
+  sliceVerts[numSliceVerts+1] := Vertex2D(V2(L, B),     V4(tLB.x, tLB.y, tLB.z, 1), orient);  //LB
+  sliceVerts[numSliceVerts+2] := Vertex2D(V2(L+W, B+H), V4(tRT.x, tRT.y, tRT.z, 1), orient); //RT
+  sliceVerts[numSliceVerts+3] := Vertex2D(V2(L+W, B),   V4(tRB.x, tRB.y, tRB.z, 1), orient); //RB
   sliceVerts[numSliceVerts+4] := sliceVerts[numSliceVerts+2];
   sliceVerts[numSliceVerts+5] := sliceVerts[numSliceVerts+1];
   numSliceVerts := numSliceVerts + 6;
   if lineWid <= 0 then exit;
-  //DrawLine(L,B+(sliceFrac2D.y*H),L+W,B+(sliceFrac2D.y*H));
-  //DrawLine(L+(sliceFrac2D.x*W), B, L+(sliceFrac2D.x*W), B+H);
+  if (orient <> kSagRightOrient) and (orient <> kSagLeftOrient) then
+   x := LerpZero(tLB.x, tRB.x, sliceFrac2D.x) //for axial and coronal images screen X is texture X
+  else
+      x := LerpZero(tLB.y, tRB.y, sliceFrac2D.y); //for sagitall screen x is texture y
+  if orient <> kAxialOrient then
+     y := LerpZero(tLB.z, tLT.z, sliceFrac2D.z)   //for sagittal and coronal screen y is texture z
+  else
+      y := LerpZero(tLB.y, tLT.y, sliceFrac2D.y); //for axial scans, screen y is texture y
+  //if (x < 0) or (x > 1) or (y < 0) or (y > 1) then exit;
+  DrawCrossX(L,B,W,H,x, y);
+end;   //radio
+
+(*procedure TSlices2D.AddQuad(L,B, W,H, tZ: single; orient: integer; m: TMat4);
+var
+  mZoom:TMat4;
+  x,y, scale: single;
+  pivot, tLT, tRT, tLB, tRB,tD: TVec4;
+  mx: TMat4;
+begin
+  mZoom := TMat4.Diag(1,1,1);
+  //  kAxialOrient = 1;
+  //  kCoronalOrient = 2;
+  //  kSagRightOrient = 4;
+  //  kSagLeftOrient = 8;
+  scale := 1;
+  if (zoom > 0) then scale := 1.0 / zoom;
+  if (orient <> kSagRightOrient) and (orient <> kSagRightOrient) then
+   mZoom.m[0,0] := scale;
+  if orient <> kCoronalOrient then
+     mZoom.m[1,1] := scale;
+  if orient <> kAxialOrient then
+     mZoom.m[2,2] := scale;
+  pivot := Vec4(0.5, 0.5, 0.5, 0.0);
+  //ZoomCenter := Vec3(0.5, 0.5, 0.5);// ? ? Z
+  //pivot := Vec4(ZoomCenter.x, ZoomCenter.y, ZoomCenter.z, 0.0);
+  //pivot := Vec4(0.2, 0.0, 0.0, 0.0);
+  tD :=  m * Vec4(0.0, 0.0, tZ, 0.1) + pivot; //depth
+
+  mx := (mZoom * m);
+  tLB := (mx * Vec4(0.0, 0.0, 0.0, 0.1) )- pivot  + tD;
+  tRB := (mx * Vec4(1.0, 0.0, 0.0, 0.1) )- pivot  + tD;
+  tLT := (mx * Vec4(0.0, 1.0, 0.0, 0.1) )- pivot  + tD;
+  tRT := (mx * Vec4(1.0, 1.0, 0.0, 0.1) )- pivot  + tD;
+
+
+  //ZoomCenter := Vec3(0.5, 0.5, 0.5);
+
+  if (length(sliceVerts) < (numSliceVerts + 6)) then
+     setlength(sliceVerts, (numSliceVerts + kBlockSz));
+  newSlices := true;
+  sliceVerts[numSliceVerts+0] := Vertex2D(V2(L, B+H),   V4(tLT.x, tLT.y, tLT.z, 1), orient); //LT
+  sliceVerts[numSliceVerts+1] := Vertex2D(V2(L, B),     V4(tLB.x, tLB.y, tLB.z, 1), orient);  //LB
+  sliceVerts[numSliceVerts+2] := Vertex2D(V2(L+W, B+H), V4(tRT.x, tRT.y, tRT.z, 1), orient); //RT
+  sliceVerts[numSliceVerts+3] := Vertex2D(V2(L+W, B),   V4(tRB.x, tRB.y, tRB.z, 1), orient); //RB
+  sliceVerts[numSliceVerts+4] := sliceVerts[numSliceVerts+2];
+  sliceVerts[numSliceVerts+5] := sliceVerts[numSliceVerts+1];
+  numSliceVerts := numSliceVerts + 6;
+  if lineWid <= 0 then exit;
+  if (orient <> kSagRightOrient) and (orient <> kSagRightOrient) then
+   x := LerpZero(tLB.x, tRB.x, sliceFrac2D.x) //for axial and coronal images screen X is texture X
+  else
+      x := LerpZero(tLB.y, tRB.y, sliceFrac2D.y); //for sagitall screen x is texture y
+  if orient <> kAxialOrient then
+     y := LerpZero(tLB.z, tLT.z, sliceFrac2D.z)   //for sagittal and coronal screen y is texture z
+  else
+      y := LerpZero(tLB.y, tLT.y, sliceFrac2D.y); //for axial scans, screen y is texture y
+  if (x < 0) or (x > 1) or (y < 0) or (y > 1) then exit;
+  DrawCross(L,B,W,H,x, y);
+end;  *)
+
+procedure TSlices2D.DrawAx(L,B, W,H, ZFrac: single);
+var
+  rot:TMat4=(m:((1.0,0.0,0,0.0),(0.0,1.0,0.0,0.0),(0.0,0.0,1.0,0.0),(0.0,0.0,0,1.0)));
+begin
   if isRadiological then begin
+     rot.m[0,0] := -1;
+     //rot.m[3,0] := -0;
+
+  end;
+  AddQuad(L,B, W, H, ZFrac, kAxialOrient, rot);
+  if lineWid <= 0 then exit;
+  (*if isRadiological then begin
      DrawCross(L,B,W,H,1.0-sliceFrac2D.x,sliceFrac2D.y)
   end else begin
       DrawCross(L,B,W,H,sliceFrac2D.x,sliceFrac2D.y);
-  end;
+  end;*)
   if FontScale <= 0.0 then exit;
   if isRadiological then
      TextLabelLeft(L,B+(H * 0.5),'R')
@@ -314,6 +583,51 @@ begin
   TextLabelTop(L+(W * 0.5),B+H,'A');
 end;
 
+procedure TSlices2D.DrawCor(L,B, W,H, YFrac: single);
+var
+//  rot:TMat4=(m:((1.0,0.0,0,0.0),(0.0,1.0,0.0,0.0),(0.0,0.0,1.0,0.0),(0.0,0.0,0,1.0)));
+  rot:TMat4=(m:((1.0,0.0,0,0.0),(0.0,0.0,1.0,0.0),(0.0,1.0,0.0,0.0),(0.0,0.0,0,1.0)));
+begin
+  if isRadiological then
+     rot.m[0,0] := -1;;
+  AddQuad(L,B, W, H, YFrac, kCoronalOrient, rot);
+  if lineWid <= 0 then exit;
+  (*if isRadiological then
+     DrawCross(L,B,W,H,1.0-sliceFrac2D.x,sliceFrac2D.z)
+  else
+      DrawCross(L,B,W,H,sliceFrac2D.x,sliceFrac2D.z);*)
+  if FontScale <= 0.0 then exit;
+  if isRadiological then
+     TextLabelLeft(L,B+(H * 0.5),'R')
+  else
+      TextLabelLeft(L,B+(H * 0.5),'L');
+  TextLabelTop(L+(W * 0.5),B+H,'S');
+end;
+
+procedure TSlices2D.DrawSag(L,B, W,H, XFrac: single);
+var
+   rot:TMat4=(m:((0.0,1.0,0,0.0),(0.0,0.0,1.0,0.0),(1.0,0.0,0.0,0.0),(0.0,0.0,0,1.0)));
+begin
+  AddQuad(L,B, W, H, XFrac, kSagRightOrient, rot);
+  //DrawCross(L,B,W,H,sliceFrac2D.y,sliceFrac2D.z);
+  if FontScale <= 0.0 then exit;
+  TextLabelLeft(L,B+(H * 0.5),'P');
+  TextLabelTop(L+(W * 0.5),B+H,'S');
+end;
+
+
+procedure TSlices2D.DrawSagMirror(L,B, W,H, XFrac: single);
+var
+  rot:TMat4=(m:((0.0,-1.0,0,0.0),(0.0,0.0,1.0,0.0),(1.0,0.0,0.0,0.0),(0.0,0.0,0,1.0)));
+begin
+  AddQuad(L,B, W, H, XFrac, kSagLeftOrient, rot);
+  //DrawCross(L,B,W,H,sliceFrac2D.y,sliceFrac2D.z);
+  if FontScale <= 0.0 then exit;
+  TextLabelLeft(L,B+(H * 0.5),'A');
+  TextLabelTop(L+(W * 0.5),B+H,'S');
+end;
+
+{$IFDEF UNUSED}
 procedure TSlices2D.DrawCor(L,B, W,H, YFrac: single);
 var
   TexL, TexR: single;
@@ -329,10 +643,10 @@ begin
   if (length(sliceVerts) < (numSliceVerts + 6)) then
      setlength(sliceVerts, (numSliceVerts + kBlockSz));
   newSlices := true;
-  sliceVerts[numSliceVerts+0] := Vertex2D(V2(L, B+H), V4(TexL, YFrac, 1, 1), Yfrac, kCoronalOrient);
-  sliceVerts[numSliceVerts+1] := Vertex2D(V2(L, B), V4(TexL, YFrac, 0, 1), Yfrac, kCoronalOrient);
-  sliceVerts[numSliceVerts+2] := Vertex2D(V2(L+W, B+H), V4(TexR, YFrac, 1, 1), Yfrac, kCoronalOrient);
-  sliceVerts[numSliceVerts+3] := Vertex2D(V2(L+W, B), V4(TexR, YFrac, 0, 1), Yfrac, kCoronalOrient);
+  sliceVerts[numSliceVerts+0] := Vertex2D(V2(L, B+H), V4(TexL, YFrac, 1, 1), kCoronalOrient);
+  sliceVerts[numSliceVerts+1] := Vertex2D(V2(L, B), V4(TexL, YFrac, 0, 1), kCoronalOrient);
+  sliceVerts[numSliceVerts+2] := Vertex2D(V2(L+W, B+H), V4(TexR, YFrac, 1, 1), kCoronalOrient);
+  sliceVerts[numSliceVerts+3] := Vertex2D(V2(L+W, B), V4(TexR, YFrac, 0, 1), kCoronalOrient);
   sliceVerts[numSliceVerts+4] := sliceVerts[numSliceVerts+2];
   sliceVerts[numSliceVerts+5] := sliceVerts[numSliceVerts+1];
   numSliceVerts := numSliceVerts + 6;
@@ -353,14 +667,13 @@ end;
 
 procedure TSlices2D.DrawSag(L,B, W,H, XFrac: single);
 begin
-  //AddQuad(L,B, W,H, XFrac, kSagRightOrient);
   if (length(sliceVerts) < (numSliceVerts + 6)) then
      setlength(sliceVerts, (numSliceVerts + kBlockSz));
   newSlices := true;
-  sliceVerts[numSliceVerts+0] := Vertex2D(V2(L, B+H), V4(XFrac, 0, 1, 1), Xfrac, kSagRightOrient);
-  sliceVerts[numSliceVerts+1] := Vertex2D(V2(L, B), V4(XFrac, 0, 0, 1), Xfrac, kSagRightOrient);
-  sliceVerts[numSliceVerts+2] := Vertex2D(V2(L+W, B+H), V4(XFrac, 1, 1, 1), Xfrac, kSagRightOrient);
-  sliceVerts[numSliceVerts+3] := Vertex2D(V2(L+W, B), V4(XFrac, 1, 0, 1), Xfrac, kSagRightOrient);
+  sliceVerts[numSliceVerts+0] := Vertex2D(V2(L, B+H), V4(XFrac, 0, 1, 1), kSagRightOrient);
+  sliceVerts[numSliceVerts+1] := Vertex2D(V2(L, B), V4(XFrac, 0, 0, 1), kSagRightOrient);
+  sliceVerts[numSliceVerts+2] := Vertex2D(V2(L+W, B+H), V4(XFrac, 1, 1, 1), kSagRightOrient);
+  sliceVerts[numSliceVerts+3] := Vertex2D(V2(L+W, B), V4(XFrac, 1, 0, 1), kSagRightOrient);
   sliceVerts[numSliceVerts+4] := sliceVerts[numSliceVerts+2];
   sliceVerts[numSliceVerts+5] := sliceVerts[numSliceVerts+1];
   numSliceVerts := numSliceVerts + 6;
@@ -376,10 +689,10 @@ begin
   if (length(sliceVerts) < (numSliceVerts + 6)) then
      setlength(sliceVerts, (numSliceVerts + kBlockSz));
   newSlices := true;
-  sliceVerts[numSliceVerts+0] := Vertex2D(V2(L, B+H),   V4(XFrac, 1, 1, 1), Xfrac, kSagLeftOrient);
-  sliceVerts[numSliceVerts+1] := Vertex2D(V2(L, B),     V4(XFrac, 1, 0, 1), Xfrac, kSagLeftOrient);
-  sliceVerts[numSliceVerts+2] := Vertex2D(V2(L+W, B+H), V4(XFrac, 0, 1, 1), Xfrac, kSagLeftOrient);
-  sliceVerts[numSliceVerts+3] := Vertex2D(V2(L+W, B),   V4(XFrac, 0, 0, 1), Xfrac, kSagLeftOrient);
+  sliceVerts[numSliceVerts+0] := Vertex2D(V2(L, B+H),   V4(XFrac, 1, 1, 1), kSagLeftOrient);
+  sliceVerts[numSliceVerts+1] := Vertex2D(V2(L, B),     V4(XFrac, 1, 0, 1), kSagLeftOrient);
+  sliceVerts[numSliceVerts+2] := Vertex2D(V2(L+W, B+H), V4(XFrac, 0, 1, 1), kSagLeftOrient);
+  sliceVerts[numSliceVerts+3] := Vertex2D(V2(L+W, B),   V4(XFrac, 0, 0, 1), kSagLeftOrient);
   sliceVerts[numSliceVerts+4] := sliceVerts[numSliceVerts+2];
   sliceVerts[numSliceVerts+5] := sliceVerts[numSliceVerts+1];
   numSliceVerts := numSliceVerts + 6;
@@ -388,6 +701,53 @@ begin
   //DrawLine(L+(sliceFrac2D.y*W), B, L+(sliceFrac2D.y*W), B+H);
   DrawCross(L,B,W,H,1-sliceFrac2D.y,sliceFrac2D.z);
 end;
+
+{$ENDIF}
+
+
+(*procedure TSlices2D.DrawAx(L,B, W,H, ZFrac: single);
+var
+  tL, tR, tT, tB: single;
+begin
+  tT := 1;
+  tB := 0;
+  if isRadiological then begin
+   tL := 1;
+   tR := 0;
+  end else begin
+   tL := 0;
+   tR := 1;
+  end;
+  (*if zoom.scale > 1.0 then begin
+     TexR := 0.25;
+     TexL := 0.75;
+     //TexB := 0.25;
+     //TexT := 0.75;
+  end; *)
+  AddQuad(L,B, W, H, tL, tT, tR, TB, ZFrac, kAxialOrient);
+  (*if (length(sliceVerts) < (numSliceVerts + 6)) then
+     setlength(sliceVerts, (numSliceVerts + kBlockSz));
+  newSlices := true;
+  sliceVerts[numSliceVerts+0] := Vertex2D(V2(L, B+H), V4(TexL, TexT, ZFrac, 1), kAxialOrient);
+  sliceVerts[numSliceVerts+1] := Vertex2D(V2(L, B), V4(TexL, TexB, ZFrac, 1), kAxialOrient);
+  sliceVerts[numSliceVerts+2] := Vertex2D(V2(L+W, B+H), V4(TexR, TexT, ZFrac, 1), kAxialOrient);
+  sliceVerts[numSliceVerts+3] := Vertex2D(V2(L+W, B), V4(TexR, TexB, ZFrac, 1), kAxialOrient);
+  sliceVerts[numSliceVerts+4] := sliceVerts[numSliceVerts+2];
+  sliceVerts[numSliceVerts+5] := sliceVerts[numSliceVerts+1];
+  numSliceVerts := numSliceVerts + 6;*)
+  if lineWid <= 0 then exit;
+  if isRadiological then begin
+     DrawCross(L,B,W,H,1.0-sliceFrac2D.x,sliceFrac2D.y)
+  end else begin
+      DrawCross(L,B,W,H,sliceFrac2D.x,sliceFrac2D.y);
+  end;
+  if FontScale <= 0.0 then exit;
+  if isRadiological then
+     TextLabelLeft(L,B+(H * 0.5),'R')
+  else
+      TextLabelLeft(L,B+(H * 0.5),'L');
+  TextLabelTop(L+(W * 0.5),B+H,'A');
+end;*)
 
 procedure  TSlices2D.Update(volScale: TVec3; w,h: single; orient: integer; actualH : integer = -1);
 var
@@ -412,6 +772,7 @@ begin
   texB := 0;
   texH := h;
   texW := w;
+  // sliceFrac2D zoomScale will be 0 for mosaics and autofit, x2, x3 etc for other orients centered on sliceFrac2D
   if (orient = kAxialOrient) then begin //axial
     texwhratio := volScale.x / volScale.y;
     if texwhratio < whratio then
@@ -715,17 +1076,17 @@ begin
   end;//row
 end;
 
-function SliceXY(lOrient: integer; volScale: TVec3; pix: integer): TPointF;
+function SliceXY(lOrient: integer; volScale: TVec3; scalePix: integer): TPointF;
 begin
   lOrient := (lOrient and kOrientMask);
   case lOrient of
-    kAxialOrient,kCoronalOrient: result.X := pix*volScale.X;//screen L/R corresponds to X
-    kSagRightOrient,kSagLeftOrient: result.X := pix*volScale.Y;//screen L/R corresponds to Y dimension
+    kAxialOrient,kCoronalOrient: result.X := scalePix*volScale.X;//screen L/R corresponds to X
+    kSagRightOrient,kSagLeftOrient: result.X := scalePix*volScale.Y;//screen L/R corresponds to Y dimension
     else result.X := 0;
   end;//case
   case lOrient of
-    kAxialOrient: result.Y := pix*volScale.Y;//screen vert is Y
-    kCoronalOrient,kSagRightOrient,kSagLeftOrient: result.Y := pix*volScale.Z;//screen vert is Z dimension
+    kAxialOrient: result.Y := scalePix*volScale.Y;//screen vert is Y
+    kCoronalOrient,kSagRightOrient,kSagLeftOrient: result.Y := scalePix*volScale.Z;//screen vert is Z dimension
     else result.Y := 0;
   end;//case
 end;
@@ -734,15 +1095,37 @@ procedure MosaicSetXY (var lMosaic: TMosaic; volScale: TVec3; Dim: TVec3i);
 var
   lRow,lCol, mPix: integer;
   lMaxYDim, lMaxY,lX,Hfrac,Vfrac: single;
+  //pxScale: TVec3;
 begin
-  mPix := min(min(Dim.x, Dim.y),Dim.z);
+  //GLForm1.Caption := (format('--> %g %g %g %d %d %d', [volScale.X, volScale.Y, volScale.Z, Dim.X, Dim.Y, Dim.Z]));
+  //mPix := min(min(Dim.x, Dim.y),Dim.z);
+  //mPix := max(max(Dim.x, Dim.y),Dim.z);
+  (*pxScale.x := 1;
+  pxScale.y := 1;
+  pxScale.z := 1;
+  if (pxScale.X > 0.0) then pxScale.x := Dim.X / volScale.X;
+  if (pxScale.Y > 0.0) then pxScale.y := Dim.Y / volScale.Y;
+  if (pxScale.Z > 0.0) then pxScale.y := Dim.Z / volScale.Z;
+
+  mPix := Dim.x;
+  if (pxScale.y > pxScale.x) then mPix := Dim.y;
+  if (pxScale.z > pxScale.x) and (pxScale.z > pxScale.y) then mPix := Dim.z;  *)
+  //Consider 1x1x1mm volume with dim= 207x256x215. volScale will be [0.808, 1, 0.839]
+  // the mPix is set to the pixels with the largest volscale, so 256
+  // not for non-isotropic data we are typically forced to have interpolation in at least one dimension
+  mPix := Dim.x;
+  if (volScale.y > volScale.x) then mPix := Dim.y;
+  if (volScale.z > volScale.x) and (volScale.z > volScale.y) then mPix := Dim.z;
+  //GLForm1.Caption := (format('%g--> %g %g %g %d %d %d', [scalePix, volScale.X, volScale.Y, volScale.Z, Dim.X, Dim.Y, Dim.Z]));
+
   lMosaic.MaxWid := 0;
   if (lMosaic.Cols < 1) or (lMosaic.Rows < 1)  then
     exit;
+  //GLForm1.Caption := (format('--> %g %g %g', [volScale.X, volScale.Y, volScale.Z]));
   for lRow := 1 to lMosaic.Rows do begin
     for lCol := 1 to lMosaic.Cols do begin
       lMosaic.Dim[lCol,lRow] := SliceXY(lMosaic.Orient[lCol,lRow], volScale, mPix);
-      //showmessage(format('--> %g %g', [lMosaic.Dim[lCol,lRow].X, lMosaic.Dim[lCol,lRow].Y]));
+      //GLForm1.Caption :=(format('--> %g %g', [lMosaic.Dim[lCol,lRow].X, lMosaic.Dim[lCol,lRow].Y]));
     end;//col
   end;//row
   lMaxYDim := 0;
@@ -995,6 +1378,7 @@ var
 begin
  w := -1;
  lMosaic := Str2Mosaic (lMosaicString, InvMat, Dim, volScale);
+
  //if (gPrefs.SliceView  <> 5) or (gRayCast.MosaicString = '') then exit;
  //lMosaic := Str2Mosaic ( gRayCast.MosaicString);
  if (lMosaic.MaxWid = 0) or (lMosaic.MaxHt= 0) then exit;
@@ -1082,11 +1466,15 @@ end;
   end;
 var
   lMosaic: TMosaic;
-  lFontScale, lScale, lLineWid: single;
-  //lHasRender,
+  lZoomScale, lFontScale, lScale, lLineWid: single;
+  lZoomCenter: TVec3;
   lRender: boolean;
   lOrient,lRowInc,lColInc,lRow,lCol, lDec:integer;
 begin
+  lZoomScale := fZoomScale;
+  lZoomCenter := fZoomCenter;
+  fZoomCenter := Vec3(0.5, 0.5, 0.5);
+  fZoomScale := 1; //torn off zoom
   viewPixelHeight := h;
   numLineVerts := 0;
   numSliceVerts := 0;
@@ -1148,6 +1536,8 @@ begin
   end;//row
   lineWid := lLineWid;
   GLCrossLine(lMosaic, lScale, lLineWid);
+  fZoomScale := lZoomScale; //restore zoomScale
+  fZoomCenter := lZoomCenter;
 end;
 {$ENDIF}
 

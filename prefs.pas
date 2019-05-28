@@ -9,8 +9,8 @@ const
 type
   TMRU =  array [1..knMRU] of string;
   TPrefs = record
-         AnimationIntervalMsec, LineWidth, StartupWindowMode,DisplayOrient, ColorbarSize,ColorbarPosition, Quality1to10, BitmapZoom, MaxVox: integer;
-         LandmarkPanel, LoadFewVolumes, LabelOrient, ColorbarVisible, DarkMode, RetinaDisplay, FlipYZ, FlipLR_Radiological, SkipPrefWriting: boolean;
+         AnimationIntervalMsec, LineWidth, StartupWindowMode,DisplayOrient, StartupDisplayOrient, ColorbarSize,ColorbarPosition, Quality1to10, BitmapZoom, MaxVox: integer;
+         LandmarkPanel, LoadFewVolumes, LabelOrient, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay, FlipYZ, FlipLR_Radiological, SkipPrefWriting: boolean;
          CustomDcm2niix, PyLib, MosaicStr, InitScript, PrevBackgroundImage: string;
          ClearColor: TRGBA;
          PrevFilename: TMRU;
@@ -62,7 +62,8 @@ begin
             PrevBackgroundImage := '';
             CustomDcm2niix := '';
             RetinaDisplay := false;
-            DisplayOrient:= kRenderOrient;
+            DisplayOrient:= kAxCorSagOrient; //kRenderOrient;
+            StartupDisplayOrient := DisplayOrient;
             DarkMode := false;
             StartupWindowMode := 0;
             LineWidth := 1;
@@ -74,11 +75,13 @@ begin
             FlipLR_Radiological := true;
             ColorbarSize := 50;
             MaxVox := 640;
+            Smooth2D := true;
        end;
   end;
   with lPrefs do begin
     //clear
       ColorbarVisible := true;
+
     ClearColor := setRGBA( 0, 0, 0, 255);
     //ClearColor := setRGBA( 255, 255, 255, 255);
     ColorBarPosition := 3;
@@ -183,7 +186,9 @@ begin
   IniInt(lRead,lIniFile, 'ColorbarPosition',lPrefs.ColorBarPosition);
   IniInt(lRead,lIniFile, 'ColorbarSize', lPrefs.ColorbarSize);
   IniInt(lRead,lIniFile, 'BitmapZoom', lPrefs.BitmapZoom);
-  IniInt(lRead,lIniFile, 'DisplayOrient', lPrefs.DisplayOrient);
+  //IniInt(lRead,lIniFile, 'DisplayOrient', lPrefs.DisplayOrient);
+  IniInt(lRead,lIniFile, 'StartupDisplayOrient', lPrefs.StartupDisplayOrient);
+
   IniInt(lRead,lIniFile, 'MaxVox', lPrefs.MaxVox);
   IniInt(lRead,lIniFile, 'LineWidth', lPrefs.LineWidth);
   IniInt(lRead,lIniFile, 'StartupWindowMode', lPrefs.StartupWindowMode);
@@ -193,6 +198,7 @@ begin
         IniBool(lRead,lIniFile, 'DarkMode',lPrefs.DarkMode);
     {$ENDIF}
   IniBool(lRead,lIniFile, 'ColorbarVisible',lPrefs.ColorbarVisible);
+  IniBool(lRead,lIniFile, 'Smooth2D',lPrefs.Smooth2D);
   IniBool(lRead,lIniFile, 'LabelOrient',lPrefs.LabelOrient);
   IniBool(lRead,lIniFile, 'LoadFewVolumes',lPrefs.LoadFewVolumes);
   IniBool(lRead,lIniFile, 'LandmarkPanel',lPrefs.LandmarkPanel);

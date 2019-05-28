@@ -67,7 +67,9 @@ TDraw = Class //(TNIfTI)  // This is an actual class definition :
     procedure CopySlice2D(Orient: int64; var out2D: TUInt8s);
     procedure voiMouseDown(Color, Orient: int64; Xfrac, Yfrac, Zfrac:  single); overload;
     procedure voiMouseDown(Orient: int64; XYZfrac:  TVec3); overload;
-    procedure voiFloodFill(Orient: int64; XYZfrac:  TVec3);
+    procedure voiMouseDown(Orient: int64; XYZfrac:  TVec3; isInvertPenColor: boolean); overload;
+    procedure voiFloodFill(Orient: int64; XYZfrac:  TVec3); overload;
+    procedure voiFloodFill(Orient: int64; XYZfrac:  TVec3; isInvertPenColor: boolean); overload;
     procedure voiPasteSlice(Xfrac, Yfrac, Zfrac:  single);
     procedure voiUndo;
     procedure voiMouseUp ( autoClose, overwriteColors: boolean);
@@ -142,12 +144,25 @@ begin
      voiMouseDown(penColor, Orient, XYZfrac.X, XYZfrac.Y, XYZfrac.Z);
 end;
 
+procedure TDraw.voiMouseDown(Orient: int64; XYZfrac:  TVec3; isInvertPenColor: boolean); overload;
+//https://bugs.freepascal.org/view.php?id=35480
+begin
+     if (isInvertPenColor) then begin
+        if PenColorOnRelease <> 0 then
+           voiMouseDown(0, Orient, XYZfrac.X, XYZfrac.Y, XYZfrac.Z)
+        else
+          voiMouseDown(1, Orient, XYZfrac.X, XYZfrac.Y, XYZfrac.Z);
+     end else
+         voiMouseDown(penColor, Orient, XYZfrac.X, XYZfrac.Y, XYZfrac.Z);
+end;
+
 function frac2pix (frac: single; dimPix: int64): int64;
 begin
   result := round((frac * dimPix)-0.5);
   if (result < 0) then result := 0;
   if (result >= dimPix) then result := dimPix - 1;
 end;
+
 
 procedure SortInt (var lMin,lMax: int64); overload;
 var
@@ -795,9 +810,25 @@ begin
      UpdateView3d;
 end;
 
+
 procedure TDraw.voiFloodFill(Orient: int64; XYZfrac:  TVec3);
 begin
     voiMouseFloodFill(penColor, Orient,  XYZfrac.X, XYZfrac.Y, XYZfrac.Z);
+end;
+
+procedure TDraw.voiFloodFill(Orient: int64; XYZfrac:  TVec3; isInvertPenColor: boolean); overload;
+// https://bugs.freepascal.org/view.php?id=35480
+begin
+     if (isInvertPenColor) then begin
+        if PenColorOnRelease <> 0 then
+           voiMouseFloodFill(0, Orient,  XYZfrac.X, XYZfrac.Y, XYZfrac.Z)
+        else
+          voiMouseFloodFill(1, Orient,  XYZfrac.X, XYZfrac.Y, XYZfrac.Z);
+     end else
+         voiMouseFloodFill(penColor, Orient,  XYZfrac.X, XYZfrac.Y, XYZfrac.Z);
+
+
+
 end;
 
 procedure TDraw.drawPixel (x,y: int64);

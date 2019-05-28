@@ -8,7 +8,7 @@ MRIcroGL 1.2 requires OpenGL 3.3 (released in 2009) or later. If you only have O
 
 ## Installation
 
-Go to the [release](https://github.com/neurolabusc/MRIcroGL/releases) page and download the latest release for your operating system (MacOS, Linux, Windows). Extract the archive and run the executable.
+Get the latest release from [Github](https://github.com/neurolabusc/MRIcroGL/releases) or [NITRC](https://www.nitrc.org/projects/mricrogl). Download the latest release for your operating system (MacOS, Linux, Windows). Extract the archive and run the executable. Visit the [wiki](https://www.nitrc.org/plugins/mwiki/index.php/mricrogl:MainPage) for a full manual that includes troubleshooting.
 
 ## Compiling
 

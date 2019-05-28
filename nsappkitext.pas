@@ -32,6 +32,7 @@ const
   DefaultAppearance = macOSNSAppearanceNameAqua;
   macOSNSAppearanceNameVibrantDark = 'NSAppearanceNameVibrantDark';
   macOSNSAppearanceNameVibrantLight = 'NSAppearanceNameVibrantLight';
+  macOSNSAppearanceNameDarkAqua = 'NSAppearanceNameDarkAqua';
 
 
 function UpdateAppearance(Owner: TComponent; const AAppearance: String): Boolean;
@@ -63,14 +64,13 @@ begin
   end;
 end;
 
-
 procedure setThemeMode(Owner: TComponent; isDarkMode: boolean);
 begin
-  if (isDarkMode) then
-     UpdateAppearance(Owner, macOSNSAppearanceNameVibrantDark)
-  else
+  if (isDarkMode) then begin
+     if not UpdateAppearance(Owner, macOSNSAppearanceNameDarkAqua) then
+       UpdateAppearance(Owner, macOSNSAppearanceNameVibrantDark);
+  end else
       UpdateAppearance(Owner, DefaultAppearance);
-  //
 end;
 
 function isDarkModeSupported: boolean;

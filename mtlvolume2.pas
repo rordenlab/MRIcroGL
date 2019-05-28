@@ -24,7 +24,7 @@ type
         MeshRenderPassDescriptor: MTLRenderPassDescriptor;
         slices2D: TSlices2D;
         colorEditor: TColorEditor;
-        colorEditorVisible: boolean;
+        isSmooth2D, colorEditorVisible: boolean;
         txt: TGPUFont;
         drawVolTex, drawVolLut: MTLTextureProtocol;
         {$ENDIF}
@@ -50,6 +50,7 @@ type
         {$IFDEF VIEW2D}
         SelectionRect: TVec4;
         property ShowColorEditor: boolean read colorEditorVisible write colorEditorVisible;
+        property ShowSmooth2D: boolean read isSmooth2D write isSmooth2D;
         //function ColorEditorMouseDown(mouseX, mouseY: integer): boolean;
         function Slice2Dmm(var vol: TNIfTI; out vox: TVec3i): TVec3;
         //function FracVox: TVec3i;
@@ -232,6 +233,7 @@ begin
   //fClearColor.b := 255;
   vertexBuffer := nil;
   colorEditorVisible := false;
+  isSmooth2D := true;
   shaderPrefs.nUniform:= 0;
 end;
 
@@ -550,7 +552,8 @@ end;
 
 procedure TGPUVolume.SetSlice2DFrac(frac : TVec3);
 begin
-     slices2D.sliceFrac := frac;
+  if (frac.x < 0.0) or (frac.y < 0.0) or (frac.z < 0.0) then exit;
+  slices2D.sliceFrac := frac;
 end;
 
 (*function TGPUVolume.ColorEditorMouseDown(mouseX, mouseY: integer): boolean;

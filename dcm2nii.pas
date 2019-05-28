@@ -1,433 +1,92 @@
 unit dcm2nii;
 
-{$mode delphi}{$H+}
+{$mode objfpc}{$H+}
+{$IFDEF Darwin}
+  {$modeswitch objectivec1}
+{$ENDIF}
+
 interface
+
 uses
-    FileUtil, Process,LResources,
-    {$IFDEF UNIX} LCLIntf, {$ENDIF}
-  {$IFNDEF UNIX} Registry, {$ENDIF}
-  Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ExtCtrls,
-  StdCtrls, Menus, SimdUtils;
+  {$IFDEF Darwin} CocoaAll, MacOSAll, {$ENDIF}
+  lclintf, strutils, Process, Classes, SysUtils, Forms, Controls, Graphics,
+  Dialogs, ExtCtrls, StdCtrls, IniFiles, ComCtrls, Types;
 
 type
+
   { Tdcm2niiForm }
+
   Tdcm2niiForm = class(TForm)
-    CompressCheck: TCheckBox;
-    verboseCheck: TCheckBox;
-    bidsCheck: TCheckBox;
-    outnameEdit: TEdit;
-    outnameLabel: TLabel;
-    outputFolderLabel: TLabel;
-    outputFolderName: TButton;
-    Panel2: TPanel;
-    MainMenu1: TMainMenu;
-    FileMenu: TMenuItem;
-    EditMenu: TMenuItem;
-    CopyMenu: TMenuItem;
-    DicomMenu: TMenuItem;
-    ResetMenu: TMenuItem;
-    ParRecMenu: TMenuItem;
-    Memo1: TMemo;
-    OpenDialog1: TOpenDialog;
-    procedure compressCheckClick(Sender: TObject);
-    procedure DicomMenuClick(Sender: TObject);
-    procedure FormResize(Sender: TObject);
-    procedure FormShow(Sender: TObject);
-    function getOutputFolder: string;
-    procedure outnameEditKeyUp(Sender: TObject; var Key: Word;
-      Shift: TShiftState);
-    procedure ParRecMenuClick(Sender: TObject);
-    procedure ProcessFile(infilename: string);
+    BidsDrop: TComboBox;
+    BidsLabel: TLabel;
+    UpdateBtn: TButton;
+    CropCheck: TCheckBox;
+    FormatDrop: TComboBox;
+    FormatLabel: TLabel;
+    GeneralGroup: TGroupBox;
+    AdvancedGroup: TGroupBox;
+    IgnoreCheck: TCheckBox;
+    LosslessScaleCheck: TCheckBox;
+    MergeCheck: TCheckBox;
+    OutDirDrop: TComboBox;
+    OutDirLabel: TLabel;
+    OutNameEdit: TEdit;
+    OutNameExampleLabel: TLabel;
+    OutNameLabel: TLabel;
+    OutputDirDialog: TSelectDirectoryDialog;
+    InputDirDialog: TSelectDirectoryDialog;
+    PhilipsPreciseCheck: TCheckBox;
+    SelectFilesBtn: TButton;
+    ResetBtn: TButton;
+    OutputMemo: TMemo;
+    Panel1: TPanel;
+    StatusBar1: TStatusBar;
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
-    procedure FormCreate(Sender: TObject);
+    procedure ConvertDicomDir(DirName: string);
     procedure FormDropFiles(Sender: TObject; const FileNames: array of String);
-    procedure CopyMenuClick(Sender: TObject);
-    procedure outputFolderNameClick(Sender: TObject);
-    procedure ResetMenuClick(Sender: TObject);
-    function RunCmd (lCmd: string; isDemo: boolean; out line1: string): integer;
-    function getExeName : string; //return path for command line tool
-    procedure readIni (ForceReset: boolean); //load preferences
-    procedure writeIni; //save preferences
+    procedure FormShow(Sender: TObject);
+    procedure OutDirDropChange(Sender: TObject);
+    procedure ResetBtnClick(Sender: TObject);
+    procedure SelectFilesBtnClick(Sender: TObject);
+    procedure ShowPrefs;
+    procedure ReadPrefs;
+    function RunCmd (lCmd: string; isDemo: boolean): string;
+    procedure UpdateBtnClick(Sender: TObject);
+    procedure UpdateCommand(Sender: TObject);
+    function TerminalCommand: string;
     function getCustomDcm2niix(): string;
     procedure setCustomDcm2niix(fnm: string);
-    procedure findCustomDcm2niix();
+    //procedure findCustomDcm2niix();
+    procedure UpdateDialog(versionMsg: string);
 
   private
-    { private declarations }
+
   public
-    { public declarations }
+
   end;
 
 var
   dcm2niiForm: Tdcm2niiForm;
 
-
 implementation
-  {$R *.lfm}
-
-  {$IFDEF CPU64}
- const kExeName = 'dcm2niix';
- {$ELSE}
-        {$IFDEF Linux}
-        const kExeName = 'dcm2niix32';
-        {$ELSE}
-        const kExeName = 'dcm2niix';
-        {$ENDIF}
- {$ENDIF}
-
-  var
-    isAppDoneInitializing : boolean = false;
-    gCustomDcm2niix : string = '';
-
-function Tdcm2niiForm.getCustomDcm2niix(): string;
-begin
-      result := gCustomDcm2niix;
-end;
-
-procedure Tdcm2niiForm.setCustomDcm2niix(fnm: string);
-begin
-     gCustomDcm2niix := fnm;
-end;
-
-{$IFDEF UNIX}
-function FindDefaultExecutablePathX(const Executable: string): string;
-begin
-     {$IFDEF Darwin}
-     result := ResourceDir +pathdelim+ kExeName;
-     if fileexists(result) then exit;
-     {$ENDIF}
-     result := FindDefaultExecutablePath(kExeName);
-     if result = '' then
-        result := FindDefaultExecutablePath(ExtractFilePath  (paramstr(0)) +kExeName);
-     {$IFDEF Darwin}
-     if fileexists(result) then exit;
-     result := '/usr/local/bin/'+kExeName;
-     if fileexists(result) then exit;
-     result := ResourceDir +pathdelim+ kExeName;
-     {$ENDIF}
-end;
-{$ELSE}
-function FindDefaultExecutablePathX(const Executable: string): string;
-begin
-     result := extractfilepath(paramstr(0))+kExeName+'.exe';
-     if fileexists(result) then exit;
-     result := ResourceDir +pathdelim+ kExeName+'.exe';
-end;
-{$ENDIF}
-
-function Tdcm2niiForm.getExeName : string;
-var
-  lF: string;
-begin
-     if fileexists(gCustomDcm2niix) then
-        exit(gCustomDcm2niix);
-     result := FindDefaultExecutablePathX(kExeName);
-     if not fileexists(result) then begin
-        lF :=  ExtractFilePath (paramstr(0))+'Resources'+pathdelim;
-        if not DirectoryExists(lF) then
-           lF :=  ExtractFilePath (paramstr(0));
-        result := lF+kExeName;
-      {$IFNDEF UNIX}result := result + '.exe'; {$ENDIF}
-      if not fileexists(result) then begin
-           Memo1.Lines.Clear;
-           memo1.Lines.Add('Error: unable to find executable '+kExeName+' in path');
-           memo1.Lines.Add(' Solution: copy '+kExeName+' to '+lF);
-           result := '';
-        end;  //not in same folder as GUI
-     end; //not in path
-     {$IFNDEF UNIX} //strip .exe for Windows
-     //result := ChangeFileExt(result, '');
-     {$ENDIF}
-end; //exeName()
-
-{$IFDEF UNIX}
-function iniName : string;
-begin
-     result := GetEnvironmentVariable ('HOME')+PathDelim+'.dcm2nii.ini';
-end;
-
-procedure Tdcm2niiForm.writeIni;
-var
-   iniFile : TextFile;
- begin
-   FileMode := fmOpenWrite;
-   AssignFile(iniFile, iniName);
-   ReWrite(iniFile);
-   if (CompressCheck.checked) then
-      WriteLn(iniFile, 'isGZ=1')
-   else
-       WriteLn(iniFile, 'isGZ=0');
-   if (bidsCheck.checked) then
-      WriteLn(iniFile, 'isBIDS=1')
-   else
-       WriteLn(iniFile, 'isBIDS=0');
-   WriteLn(iniFile, 'filename='+outnameEdit.caption);
-   CloseFile(iniFile);
-   FileMode := fmOpenRead;
-end; //writeIni
-
-procedure Tdcm2niiForm.readIni (ForceReset: boolean);
-var
-  fileData, rowData : TStringList;
-  row, i: integer;
-  opts_isGz, opts_isBids: boolean;
-  opts_filename: string;
-begin
-     opts_isGz := true;
-     opts_isBids := true;
-     //opts_outdir := '';
-     opts_filename := '%t_%p_%s';
-     if FileExists( iniName) and (not (ForceReset )) then begin
-        fileData := TStringList.Create;
-        fileData.LoadFromFile(iniName);  // Load from Testing.txt file
-        if (fileData.Count > 0) then begin
-           rowData := TStringList.Create;
-           rowData.Delimiter := '=';
-           for row := 0 to (fileData.Count-1) do begin //for each row of file
-               rowData.DelimitedText:=fileData[row];
-               if ((rowData.Count > 1) and (CompareText(rowData[0] ,'isGZ')= 0)) then
-                  opts_isGz := (CompareText(rowData[1],'1') = 0);
-               if ((rowData.Count > 1) and (CompareText(rowData[0] ,'isBIDS')= 0)) then
-                  opts_isBids := (CompareText(rowData[1],'1') = 0);
-               if ((rowData.Count > 1) and (CompareText(rowData[0] ,'filename')= 0)) then begin
-                  opts_filename := '';
-                  if (rowData.Count > 2) then
-                     for i := 1 to (rowData.Count-2) do
-                         opts_filename := opts_filename+ rowData[i]+' ';
-                  opts_filename := opts_filename+ rowData[rowData.Count-1];
-               end;
-           end;
-          rowData.Free;
-        end;
-        fileData.Free;
-     end else
-         memo1.Lines.Add('Using default settings');
-     CompressCheck.Checked := opts_isGz;
-     bidsCheck.Checked := opts_isBids;
-     outnameEdit.Caption := opts_filename;
-     //getExeName;
-end; //readIni()
-{$ELSE}
-//For Windows we save preferences in the registry to ensure user has write access
-procedure Tdcm2niiForm.writeIni;
-var
-  ARegistry: TRegistry;
-begin
-     ARegistry := TRegistry.Create;
-     ARegistry.RootKey := HKEY_CURRENT_USER;//HKEY_LOCAL_MACHINE;
-     if ARegistry.OpenKey ('\Software\dcm2nii',true) then begin
-       	  ARegistry.WriteBool('isGZ', CompressCheck.Checked );
-          ARegistry.WriteBool('isBIDS', bidsCheck.Checked );
-       	  ARegistry.WriteString('filename', outnameEdit.text );
-     end;
-     ARegistry.Free;
-end; //writeIni()
-
-procedure Tdcm2niiForm.readIni (ForceReset: boolean);
-var
-  ARegistry: TRegistry;
-  opts_isGz, opts_isBids: boolean;
-  opts_filename: string;
-begin
-     opts_isBids := true;
-     opts_isGz := true;
-     opts_filename := '%t_%p_%s';
-     if not ForceReset then begin
-       ARegistry := TRegistry.Create;
-       ARegistry.RootKey := HKEY_CURRENT_USER;//HKEY_LOCAL_MACHINE;
-       if ARegistry.OpenKey ('\Software\dcm2nii',true) then begin
-       	    if ARegistry.ValueExists( 'isGZ' ) then
-          	   opts_isGz := ARegistry.ReadBool( 'isGZ' );
-       	    if ARegistry.ValueExists( 'isBIDS' ) then
-          	   opts_isBids := ARegistry.ReadBool( 'isBIDS' );
-            if ARegistry.ValueExists( 'isGZ' ) then
-          	   opts_filename := ARegistry.ReadString( 'filename' );
-       end;
-       ARegistry.Free;
-     end;
-     bidsCheck.Checked := opts_isBids;
-     CompressCheck.Checked := opts_isGz;
-     outnameEdit.text := opts_filename;
-end; //readIni()
-{$ENDIF}
-
-function Tdcm2niiForm.RunCmd (lCmd: string; isDemo: boolean; out line1: string): integer;
-//http://wiki.freepascal.org/Executing_External_Programs
-var
-  OutputLines: TStringList;
-  MemStream: TMemoryStream;
-  OurProcess: TProcess;
-  NumBytes: LongInt;
-  BytesRead: LongInt;
-const
-  READ_BYTES = 2048;
-  READ_BYTES_BIG = 32768;
-
-begin
-     result := 1; //EXIT_FAILURE
-   if (not isAppDoneInitializing) then exit;
-   if (getExeName = '') then exit;
-   Memo1.Lines.Clear;
-   dcm2niiForm.refresh; Memo1.refresh; Memo1.invalidate;
-   MemStream := TMemoryStream.Create;
-   BytesRead := 0;
-   OurProcess := TProcess.Create(nil);
-   {$IFDEF UNIX}
-   OurProcess.Environment.Add(GetEnvironmentVariable('PATH'));
-   {$ENDIF}
-   OurProcess.CommandLine := lCmd;
-  // We cannot use poWaitOnExit here since we don't
-  // know the size of the output. On Linux the size of the
-  // output pipe is 2 kB; if the output data is more, we
-  // need to read the data. This isn't possible since we are
-  // waiting. So we get a deadlock here if we use poWaitOnExit.
-  OurProcess.Options := [poUsePipes, poNoConsole];
-  OurProcess.Execute;
-  {$IFDEF TEXT_ON_TERMINATE} //otherwise show text as it is converted
-  while True do begin
-    // make sure we have room
-    MemStream.SetSize(BytesRead + READ_BYTES);
-    // try reading it
-    NumBytes := OurProcess.Output.Read((MemStream.Memory + BytesRead)^, READ_BYTES);
-    if NumBytes > 0 // All read() calls will block, except the final one.
-    then begin
-      Inc(BytesRead, NumBytes);
-      dcm2niiForm.Refresh;
-    end else
-      BREAK; // Program has finished execution.
-    Application.ProcessMessages;
-    Sleep(15);
-  end;
-  MemStream.SetSize(BytesRead);
-  OutputLines := TStringList.Create;
-  OutputLines.LoadFromStream(MemStream);
-  Memo1.Lines.AddStrings(OutputLines);
-  if OutputLines.Count > 0 then begin
-      Line1 := OutputLines[0];
-      //skip if line is "Compression will be faster with 'pigz'"
-      if (pos('Compression', Line1) = 1) and (OutputLines.Count > 0) then
-         Line1 := OutputLines[1];
-  end;
+{$R *.lfm}
+const kExeName = 'dcm2niix';
+  {$IFDEF Unix}
+  kDemoInputDir = ' "/home/user/DicomDir"';
   {$ELSE}
-  OutputLines := TStringList.Create;
-  MemStream.SetSize(READ_BYTES_BIG);
-  dcm2niiForm.Refresh;
-  while True do begin
-    // make sure we have room
-    // try reading it
-    NumBytes := OurProcess.Output.Read((MemStream.Memory)^, READ_BYTES_BIG);
-    if NumBytes > 0 then begin
-       MemStream.SetSize(NumBytes);
-       OutputLines.LoadFromStream(MemStream);
-       Memo1.Lines.AddStrings(OutputLines);
-       MemStream.SetSize(READ_BYTES_BIG);
-       MemStream.Position:=0;
-       //MemStream.Clear;
-       dcm2niiForm.Refresh;
-    end else
-      BREAK; // Program has finished execution.
-    Application.ProcessMessages;
-    Sleep(15);
-  end;
-  dcm2niiForm.Refresh;
+  kDemoInputDir = ' "c:\DicomDir"';
   {$ENDIF}
-  if isDemo then begin
-     Memo1.Lines.Add(lCmd+' "MyDicomFolder"');
-     Memo1.Lines.Add('');
-     Memo1.Lines.Add('');
-     Memo1.Lines.Add(' Drop DICOM folders here to convert');
-  end else
-      Memo1.Lines.Add(lCmd);
-  OutputLines.Free;
-  result := OurProcess.ExitCode;
-  OurProcess.Free;
-  MemStream.Free;
+Type
+TPrefs = record
+  UseOutDir, Ignore, LosslessScale,Merge,PhilipsPrecise, Crop: boolean;
+  Bids,Format: integer;
+  OutDir,OutName: String;
 end;
-
-function Tdcm2niiForm.getOutputFolder: string;
-begin
-     if (outputFolderName.Tag > 0) then
-        result := outputFolderName.Caption
-     else
-         result := '';
-end; //getOutputFolder
-
-procedure Tdcm2niiForm.ProcessFile(infilename: string);
 var
-  cmd, outputFolder, inFolder, line1: string;
-begin
-  inFolder := infilename;
-  (*if isTGZ(inFolder) then begin
-  	 infolder := deTGZ(infolder);
-     if infolder = '' then exit; //error
- end;*)
- cmd := '"'+getExeName +'" ';
- if bidsCheck.checked then
-    cmd := cmd + '-b y '
- else
-     cmd := cmd + '-b n ';
- if CompressCheck.checked then
-    cmd := cmd + '-z y '
- else
-     cmd := cmd + '-z n ';
- if verboseCheck.checked then
- cmd := cmd + '-v y ';
- outputFolder := getOutputFolder;
- if length(outputFolder) > 0 then
-     cmd := cmd + '-o '+outputFolder+' ';
- cmd := cmd + '-f "'+outnameEdit.Text+'" ';
- if length(inFolder) > 0 then
-     cmd := cmd +'"'+inFolder+'"';
-     //Caption := inttostr(length(inFolder));
- RunCmd(cmd, length(inFolder) = 0, line1);
-end; //ProcessFile()
+  gPrefs: TPrefs;
+  gCustomDcm2niix : string = '';
 
-procedure Tdcm2niiForm.outnameEditKeyUp(Sender: TObject; var Key: Word;
-  Shift: TShiftState);
-begin
-      ProcessFile('');
-end; //outnameEditKeyUp()
-
-procedure Tdcm2niiForm.ParRecMenuClick(Sender: TObject);
-var
-  lI: integer;
-begin
-  if not OpenDialog1.execute then exit;
-  //ProcessFile(OpenDialog1.filename);
-  if OpenDialog1.Files.count < 1 then exit;
-     for lI := 0 to (OpenDialog1.Files.count-1) do
-         ProcessFile(OpenDialog1.Files[lI]);
-end; //ParRecMenuClick()
-
-function getDirPrompt (lDefault: string): string;
-begin
-  result := lDefault;  // Set the starting directory
-  chdir(result); //start search from default dir...
-  if SelectDirectory(result, [sdAllowCreate,sdPerformCreate,sdPrompt], 0) then
-     chdir(result)
-  else
-      result := '';
-end;  //getDirPrompt()
-
-procedure Tdcm2niiForm.DicomMenuClick(Sender: TObject);
-var
-  dir: string;
-begin
-     dir := getDirPrompt('');
-     ProcessFile( dir);
-end; //DicomMenuClick()
-
-procedure Tdcm2niiForm.compressCheckClick(Sender: TObject);
-begin
-  ProcessFile('');
-end;
-
-procedure Tdcm2niiForm.FormResize(Sender: TObject);
-begin
-  outputFolderName.width := dcm2niiForm.Width-outputFolderName.left-2;
-end; //FormResize()
-
-procedure Tdcm2niiForm.findCustomDcm2niix();
+(*procedure Tdcm2niiForm.findCustomDcm2niix();
 const
      kStr = 'Find the dcm2niix executable (latest at https://github.com/rordenlab/dcm2niix/releases).';
 var
@@ -443,62 +102,476 @@ begin
      if openDialog.Execute then
         gCustomDcm2niix := openDialog.FileName;
      openDialog.Free;
+end;*)
+
+{$IFDEF Darwin}
+function ResourceDir (): string;
+begin
+	result := NSBundle.mainBundle.resourcePath.UTF8String;
+end;
+{$ELSE}
+function ResourceDir (): string;
+begin
+     result := extractfilepath(paramstr(0))+'Resources';
+end;
+{$ENDIF}
+
+function getDefaultDcm2niix(): string;
+begin
+  {$IFDEF UNIX}
+  result := ResourceDir + pathdelim + kExeName;
+  {$ELSE}
+  result := ResourceDir + pathdelim + kExeName+'.exe';
+  {$ENDIF}
+end;
+
+function Tdcm2niiForm.getCustomDcm2niix(): string;
+begin
+  if (gCustomDcm2niix  = '') or (not fileexists(gCustomDcm2niix)) then
+     gCustomDcm2niix := getDefaultDcm2niix();
+  result := gCustomDcm2niix;
+end;
+
+procedure Tdcm2niiForm.setCustomDcm2niix(fnm: string);
+begin
+   gCustomDcm2niix := fnm;
+end;
+
+function SetDefaultPrefs(): TPrefs;
+begin
+     with result do begin
+          Ignore := false;
+          LosslessScale := false;
+          Merge := false;
+          PhilipsPrecise := true;
+          Crop := false;
+          UseOutDir := false;
+          Bids := 1;
+          Format := 1;
+          OutDir := GetUserDir;
+          OutName := '%f_%p_%t_%s';
+     end;
+end;
+
+procedure Tdcm2niiForm.ShowPrefs;
+begin
+     with gPrefs do begin
+          IgnoreCheck.Checked := Ignore;
+          LosslessScaleCheck.Checked := LosslessScale;
+          MergeCheck.Checked := Merge;
+          PhilipsPreciseCheck.Checked := PhilipsPrecise;
+          CropCheck.Checked := Crop;
+          if (UseOutDir) then
+             OutDirDrop.ItemIndex := 2
+          else
+              OutDirDrop.ItemIndex:= 0;
+          OutDirDrop.Items[2] := OutDir;
+          FormatDrop.ItemIndex := Format;
+          OutNameEdit.Text:= OutName;
+          BidsDrop.ItemIndex := Bids;
+     end;
+end;
+
+procedure Tdcm2niiForm.ReadPrefs;
+begin
+     with gPrefs do begin
+          Ignore := IgnoreCheck.Checked;
+          LosslessScale := LosslessScaleCheck.Checked;
+          Merge := MergeCheck.Checked;
+          PhilipsPrecise := PhilipsPreciseCheck.Checked;
+          Crop := CropCheck.Checked;
+          UseOutDir := (OutDirDrop.ItemIndex = 2);
+          OutDir := OutDirDrop.Items[2];
+          Format := FormatDrop.ItemIndex;
+          OutName := OutNameEdit.Text;
+          Bids := BidsDrop.ItemIndex;
+     end;
+end;
+
+function IniName: string;
+begin
+  result := GetUserDir;
+  if result = '' then exit;
+  result := result + '.'+ChangeFileExt(ExtractFileName(ParamStr(0)),'')+'_dcm.ini';
+end;
+
+procedure IniInt(lRead: boolean; lIniFile: TIniFile; lIdent: string;  var lValue: integer);
+//read or write an integer value to the initialization file
+var
+	lStr: string;
+begin
+        if not lRead then begin
+           lIniFile.WriteString('INT',lIdent,IntToStr(lValue));
+           exit;
+        end;
+	lStr := lIniFile.ReadString('INT',lIdent, '');
+	if length(lStr) > 0 then
+		lValue := StrToInt(lStr);
+end; //IniInt
+
+function Bool2Char (lBool: boolean): char;
+begin
+	if lBool then
+		result := '1'
+	else
+		result := '0';
+end;
+
+function Char2Bool (lChar: char): boolean;
+begin
+	if lChar = '1' then
+		result := true
+	else
+		result := false;
+end;
+
+procedure IniBool(lRead: boolean; lIniFile: TIniFile; lIdent: string;  var lValue: boolean);
+//read or write a boolean value to the initialization file
+var
+	lStr: string;
+begin
+        if not lRead then begin
+           lIniFile.WriteString('BOOL',lIdent,Bool2Char(lValue));
+           exit;
+        end;
+	lStr := lIniFile.ReadString('BOOL',lIdent, '');
+	if length(lStr) > 0 then
+		lValue := Char2Bool(lStr[1]);
+end; //IniBool
+
+procedure IniStr(lRead: boolean; lIniFile: TIniFile; lIdent: string; var lValue: string);
+//read or write a string value to the initialization file
+begin
+  if not lRead then begin
+    lIniFile.WriteString('STR',lIdent,lValue);
+    exit;
+  end;
+  lValue := lIniFile.ReadString('STR',lIdent, '');
+end; //IniStr
+
+function IniFile(lRead: boolean;  var lPrefs: TPrefs): boolean;
+//Read or write initialization variables to disk
+var
+   lFilename: string;
+   lIniFile: TIniFile;
+begin
+  if (lRead) then
+     lPrefs := SetDefaultPrefs
+  else
+      dcm2niiForm.ReadPrefs;
+  lFilename := IniName;
+  if lFilename = '' then exit(true);
+  if (lRead) and (not Fileexists(lFilename)) then
+        exit(false);
+  {$IFDEF UNIX}if (lRead) then writeln('Loading preferences '+lFilename);{$ENDIF}
+  lIniFile := TIniFile.Create(lFilename);
+  IniBool(lRead,lIniFile, 'UseOutDir',lPrefs.UseOutDir);
+  IniBool(lRead,lIniFile, 'Ignore',lPrefs.Ignore);
+  IniBool(lRead,lIniFile, 'LosslessScale',lPrefs.LosslessScale);
+  IniBool(lRead,lIniFile, 'Merge',lPrefs.Merge);
+  IniBool(lRead,lIniFile, 'PhilipsPrecise',lPrefs.PhilipsPrecise);
+  IniBool(lRead,lIniFile, 'Crop',lPrefs.Crop);
+  IniInt(lRead,lIniFile, 'Bids', lPrefs.Bids);
+  IniInt(lRead,lIniFile, 'Format', lPrefs.Format);
+  IniStr(lRead, lIniFile, 'OutDir', lPrefs.OutDir);
+  IniStr(lRead, lIniFile, 'OutName', lPrefs.OutName  );
+  lIniFile.Free;
+  exit(true);
+end;
+
+function Tdcm2niiForm.TerminalCommand: string;
+begin
+    result := '';
+    if OutNameEdit.Text <> '' then
+       result := result + ' -f "'+OutNameEdit.Text+'"';
+    if IgnoreCheck.Checked then result := result + ' -i y';
+    if LosslessScaleCheck.Checked then result := result + ' -l y';
+    if MergeCheck.Checked then result := result + ' -m y';
+    if PhilipsPreciseCheck.Checked then
+       result := result + ' -p y'
+    else
+       result := result + ' -p n';
+    if CropCheck.Checked then result := result + ' -x y';
+    if odd(FormatDrop.ItemIndex) then
+       result := result + ' -z y'
+    else
+      result := result + ' -z n';
+    if (FormatDrop.ItemIndex > 1) then
+       result := result + ' -e y';
+    if BidsDrop.ItemIndex = 0 then
+       result := result + ' -b n';
+    if BidsDrop.ItemIndex = 2 then
+       result := result + ' -ba n';
+    if OutDirDrop.ItemIndex > 1 then
+       result := result + ' -o "'+OutDirDrop.Items[OutDirDrop.ItemIndex]+'"';
+end;
+
+procedure Tdcm2niiForm.UpdateCommand(Sender: TObject);
+var
+   cmd: string;
+begin
+  cmd := TerminalCommand();
+  StatusBar1.SimpleText:= kExeName+cmd+kDemoInputDir;
+  OutNameExampleLabel.Caption:= RunCmd(TerminalCommand,true);
+end;
+
+procedure Tdcm2niiForm.ResetBtnClick(Sender: TObject);
+begin
+    gPrefs := SetDefaultPrefs();
+    ShowPrefs;
+    UpdateCommand(Sender);
+end;
+
+procedure Tdcm2niiForm.SelectFilesBtnClick(Sender: TObject);
+begin
+  if not InputDirDialog.Execute then exit;
+  ConvertDicomDir(InputDirDialog.Filename);
 end;
 
 procedure Tdcm2niiForm.FormShow(Sender: TObject);
 begin
-     if not fileexists(getExeName) then
-        findCustomDcm2niix();
-     ProcessFile('');
-     inherited;
+  {$IFNDEF UNIX}
+  UpdateBtn.Caption := 'Set Executable Path';
+  {$ENDIF}
+  IniFile(true, gPrefs);
+  ShowPrefs;
+  UpdateCommand(Sender);
+  InputDirDialog.InitialDir := GetUserDir;
 end;
 
-procedure Tdcm2niiForm.FormDropFiles(Sender: TObject; const FileNames: array of String);
+procedure Tdcm2niiForm.OutDirDropChange(Sender: TObject);
 begin
-    ProcessFile( FileNames[0]);
-end; //FormDropFiles()
-
-procedure Tdcm2niiForm.CopyMenuClick(Sender: TObject);
-begin
-     Memo1.SelectAll;
-     Memo1.CopyToClipboard;
-end; //CopyMenuClick()
-
-procedure Tdcm2niiForm.outputFolderNameClick(Sender: TObject);
-var
-  lDir : string;
-begin
-     if (outputFolderName.Tag > 0) then //start search from prior location
-        lDir := outputFolderName.Caption
-     else
-         lDir := '';
-     lDir := getDirPrompt(lDir);
-     outputFolderName.Tag := length(lDir);
-     if length(lDir) > 0 then
-        outputFolderName.Caption := lDir
-     else
-         outputFolderName.Caption := 'input folder';
-end; //outputFolderNameClick()
-
-procedure Tdcm2niiForm.ResetMenuClick(Sender: TObject);
-begin
-  isAppDoneInitializing := false;
-     readIni(true);
-     isAppDoneInitializing := true;
-     ProcessFile('');
+  if OutDirDrop.ItemIndex <> 1 then begin
+    UpdateCommand(Sender);
+    exit;
+  end;
+  if not DirectoryExists(gPrefs.OutDir) then
+     gPrefs.OutDir := GetUserDir;
+  OutputDirDialog.InitialDir := gPrefs.OutDir;
+  if OutputDirDialog.Execute then
+     gPrefs.OutDir := OutputDirDialog.FileName;
+  OutDirDrop.Items[2] := gPrefs.OutDir;
+  OutDirDrop.ItemIndex := 2;
+  UpdateCommand(Sender);
 end;
-
-procedure Tdcm2niiForm.FormCreate(Sender: TObject);
-begin
-     readIni(false);
-     application.ShowButtonGlyphs:= sbgNever;
-     isAppDoneInitializing := true;
-end; //FormCreate()
 
 procedure Tdcm2niiForm.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
-     writeIni;
-end; //FormClose()
+  IniFile(false, gPrefs);
+end;
+
+procedure Tdcm2niiForm.ConvertDicomDir(DirName: string);
+var
+   cmd: string;
+begin
+     cmd := TerminalCommand()+' "'+DirName+'"';
+     RunCmd(cmd,false);
+end;
+
+procedure Tdcm2niiForm.FormDropFiles(Sender: TObject;
+  const FileNames: array of String);
+begin
+  ConvertDicomDir( FileNames[0]);
+end;
+
+function Tdcm2niiForm.RunCmd (lCmd: string; isDemo: boolean): string;
+//http://wiki.freepascal.org/Executing_External_Programs
+const
+  kKeyStr = 'Example output filename: ';
+var
+  OutputLines: TStringList;
+  MemStream: TMemoryStream;
+  OurProcess: TProcess;
+  NumBytes: LongInt;
+  i: integer;
+  exe: string;
+const
+  READ_BYTES_BIG = 32768;
+
+begin
+     result := ''; //EXIT_FAILURE
+   //if (not isAppDoneInitializing) then exit;
+   exe := getCustomDcm2niix();
+   if not fileexists(exe) then begin
+      OutputMemo.Lines.Clear;
+      OutputMemo.Lines.Add('Error: unable to find '+exe);
+      exit;
+   end;
+   OutputMemo.Lines.Clear;
+   if isDemo then
+      OutputMemo.Lines.Add(exe+lCmd+kDemoInputDir)
+   else
+       OutputMemo.Lines.Add(exe+lCmd);
+   MemStream := TMemoryStream.Create;
+   //BytesRead := 0;
+   OurProcess := TProcess.Create(nil);
+   {$IFDEF UNIX}
+   OurProcess.Environment.Add(GetEnvironmentVariable('PATH'));
+   {$ENDIF}
+   OurProcess.CommandLine := exe+lCmd;
+  OurProcess.Options := [poUsePipes, poNoConsole];
+  OurProcess.Execute;
+  OutputLines := TStringList.Create;
+  MemStream.SetSize(READ_BYTES_BIG);
+  dcm2niiForm.Refresh;
+  while True do begin
+    NumBytes := OurProcess.Output.Read((MemStream.Memory)^, READ_BYTES_BIG);
+    if NumBytes > 0 then begin
+       MemStream.SetSize(NumBytes);
+       OutputLines.LoadFromStream(MemStream);
+       if (isDemo) and (result = '') and (OutputLines.Count > 0) then begin
+         for i := 0 to OutputLines.Count - 1 do begin
+             if PosEx(kKeyStr,OutputLines[i]) > 0 then begin
+                result := OutputLines[i];
+                Delete(result, 1, length(kKeyStr));
+             end;
+         end;
+       end;
+       OutputMemo.Lines.AddStrings(OutputLines);
+       MemStream.SetSize(READ_BYTES_BIG);
+       MemStream.Position:=0;
+       dcm2niiForm.Refresh;
+       Application.ProcessMessages;
+       Sleep(15);
+    end else
+      BREAK; // Program has finished execution.
+  end;
+  if isDemo then begin
+     OutputMemo.Lines.Add('');
+     OutputMemo.Lines.Add('Drop files/folders to convert here');
+
+  end;
+  dcm2niiForm.Refresh;
+  OutputLines.Free;
+  OurProcess.Free;
+  MemStream.Free;
+end;
+
+procedure Tdcm2niiForm.UpdateDialog(versionMsg: string);
+const
+  kURL = 'https://github.com/rordenlab/dcm2niix/releases';
+var
+    PrefForm: TForm;
+    openDialog : TOpenDialog;
+    UrlBtn,OkBtn,UseDefaultBtn, CustomBtn: TButton;
+    promptLabel: TLabel;
+    defaultDcm2niix, currentDcm2niix: string;
+    isSetCustomPath,isGotoURL, isCurrentAlsoDefault: boolean;
+begin
+  PrefForm:=TForm.Create(nil);
+  //PrefForm.SetBounds(100, 100, 512, 212);
+  PrefForm.AutoSize := True;
+  PrefForm.BorderWidth := 8;
+  PrefForm.Caption:='dcm2niix Settings';
+  PrefForm.Position := poScreenCenter;
+  PrefForm.BorderStyle := bsDialog;
+  //Possible situations:
+  // if getDefaultDcm2niix is not set but exists
+  //label
+  promptLabel:=TLabel.create(PrefForm);
+  currentDcm2niix := getCustomDcm2niix();
+  defaultDcm2niix := getDefaultDcm2niix();
+  isCurrentAlsoDefault := CompareStr(currentDcm2niix, defaultDcm2niix) = 0;
+  if (not fileexists(defaultDcm2niix)) and (not isCurrentAlsoDefault) then
+     isCurrentAlsoDefault := true; //default does not exist: do not show "Select Default")
+  if versionMsg = '' then begin
+     if fileexists(currentDcm2niix) then
+        promptLabel.Caption:= format('dcm2niix path: "%s"', [gCustomDcm2niix])
+     else
+         promptLabel.Caption:= 'Unable to find dcm2niix';
+  end else
+      promptLabel.Caption:= versionMsg;
+  promptLabel.AutoSize := true;
+  promptLabel.AnchorSide[akTop].Side := asrTop;
+  promptLabel.AnchorSide[akTop].Control := PrefForm;
+  promptLabel.BorderSpacing.Top := 6;
+  promptLabel.AnchorSide[akLeft].Side := asrLeft;
+  promptLabel.AnchorSide[akLeft].Control := PrefForm;
+  promptLabel.BorderSpacing.Left := 6;
+  promptLabel.Parent:=PrefForm;
+  //UrlBtn Btn
+  UrlBtn:=TButton.create(PrefForm);
+  UrlBtn.Caption:='Visit '+kURL;
+  UrlBtn.AutoSize := true;
+  UrlBtn.AnchorSide[akTop].Side := asrBottom;
+  UrlBtn.AnchorSide[akTop].Control := promptLabel;
+  UrlBtn.BorderSpacing.Top := 6;
+  UrlBtn.AnchorSide[akLeft].Side := asrLeft;
+  UrlBtn.AnchorSide[akLeft].Control := PrefForm;
+  UrlBtn.BorderSpacing.Left := 6;
+  UrlBtn.Parent:=PrefForm;
+  UrlBtn.ModalResult:= mrCancel;
+  //CustomBtn
+  CustomBtn:=TButton.create(PrefForm);
+  CustomBtn.Caption:='Select custom dcm2niix path';
+  CustomBtn.AutoSize := true;
+  CustomBtn.AnchorSide[akTop].Side := asrBottom;
+  CustomBtn.BorderSpacing.Top := 6;
+  CustomBtn.AnchorSide[akLeft].Side := asrLeft;
+  CustomBtn.AnchorSide[akLeft].Control := PrefForm;
+  CustomBtn.BorderSpacing.Left := 6;
+  CustomBtn.Parent:=PrefForm;
+  CustomBtn.ModalResult:= mrIgnore;
+  //UseDefaultBtn
+  if not isCurrentAlsoDefault then begin
+    UseDefaultBtn:=TButton.create(PrefForm);
+    //UseDefaultBtn.Caption:= format('Reset default "%s"', [defaultDcm2niix]);
+    UseDefaultBtn.Caption:= 'Reset default dcm2niix path';
+    UseDefaultBtn.AutoSize := true;
+    UseDefaultBtn.AnchorSide[akTop].Side := asrBottom;
+    UseDefaultBtn.AnchorSide[akTop].Control := UrlBtn;
+    UseDefaultBtn.BorderSpacing.Top := 6;
+    UseDefaultBtn.AnchorSide[akLeft].Side := asrLeft;
+    UseDefaultBtn.AnchorSide[akLeft].Control := PrefForm;
+    UseDefaultBtn.BorderSpacing.Left := 6;
+    UseDefaultBtn.Parent:=PrefForm;
+    UseDefaultBtn.ModalResult:= mrAbort;
+    CustomBtn.AnchorSide[akTop].Control := UseDefaultBtn;
+  end else
+     CustomBtn.AnchorSide[akTop].Control := UrlBtn;
+  //OK button
+  OkBtn:=TButton.create(PrefForm);
+  OkBtn.Caption:='OK';
+  OkBtn.AutoSize := true;
+  OkBtn.AnchorSide[akTop].Side := asrBottom;
+  OkBtn.AnchorSide[akTop].Control := CustomBtn;
+  OkBtn.BorderSpacing.Top := 6;
+  OkBtn.AnchorSide[akLeft].Side := asrRight;
+  OkBtn.AnchorSide[akLeft].Control := UrlBtn;
+  OkBtn.BorderSpacing.Left := 6;
+  OkBtn.Parent:=PrefForm;
+  OkBtn.ModalResult:= mrOK;
+  //Display form
+  PrefForm.ActiveControl := OkBtn;
+  PrefForm.ShowModal;
+  isGotoURL := (PrefForm.ModalResult = mrCancel);
+  if (PrefForm.ModalResult = mrAbort) then //isResetDefault
+     gCustomDcm2niix := defaultDcm2niix;
+  isSetCustomPath := (PrefForm.ModalResult = mrIgnore);
+  FreeAndNil(PrefForm);
+  if (isGotoURL) then
+     OpenURL(kURL); //uses lclintf
+  if isSetCustomPath then begin
+    openDialog := TOpenDialog.Create(self);
+    openDialog.Title := 'Find dcm2niix executable';
+    openDialog.InitialDir := GetCurrentDir;
+    openDialog.Options := [ofFileMustExist];
+    if openDialog.Execute then
+       gCustomDcm2niix := openDialog.FileName;
+    openDialog.Free;
+  end;
+end; //GetFloat()
+
+procedure Tdcm2niiForm.UpdateBtnClick(Sender: TObject);
+begin
+  {$IFDEF UNIX}
+  RunCmd(' -u', false);
+  if OutputMemo.Lines.Count > 2 then
+     UpdateDialog(OutputMemo.Lines[2])
+  else
+  {$ENDIF}
+  UpdateDialog('');
+end;
 
 end.
 

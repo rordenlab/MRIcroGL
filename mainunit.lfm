@@ -1,5 +1,5 @@
 object GLForm1: TGLForm1
-  Left = 656
+  Left = 119
   Height = 756
   Top = 22
   Width = 1033
@@ -89,7 +89,7 @@ object GLForm1: TGLForm1
         BorderSpacing.Top = 4
         OnKeyUp = LayerContrastKeyUp
         ParentFont = False
-        TabOrder = 1
+        TabOrder = 3
         Text = '20'
       end
       object LayerBrightEdit: TEdit
@@ -105,7 +105,7 @@ object GLForm1: TGLForm1
         BorderSpacing.Top = 2
         OnKeyUp = LayerContrastKeyUp
         ParentFont = False
-        TabOrder = 2
+        TabOrder = 4
         Text = '80'
       end
       object LayerBrightLabel: TLabel
@@ -137,7 +137,7 @@ object GLForm1: TGLForm1
         OnChange = LayerWidgetChange
         ParentFont = False
         Style = csDropDownList
-        TabOrder = 3
+        TabOrder = 1
         Text = 'Grayscale'
       end
       object LayerAlphaLabel: TLabel
@@ -168,7 +168,7 @@ object GLForm1: TGLForm1
         BorderSpacing.Top = 2
         OnMouseUp = LayerAlphaTrackMouseUp
         ParentFont = False
-        TabOrder = 4
+        TabOrder = 5
       end
       object LayerOptionsBtn: TButton
         AnchorSideLeft.Control = LayerColorDrop
@@ -185,7 +185,7 @@ object GLForm1: TGLForm1
         Caption = 'Options'
         OnClick = LayerOptionsBtnClick
         ParentFont = False
-        TabOrder = 5
+        TabOrder = 2
       end
     end
     object ClipBox: TGroupBox
@@ -307,7 +307,7 @@ object GLForm1: TGLForm1
     object ShaderBox: TGroupBox
       Left = 0
       Height = 337
-      Top = 740
+      Top = 787
       Width = 253
       Align = alClient
       Caption = 'Shader'
@@ -427,7 +427,7 @@ object GLForm1: TGLForm1
         BorderSpacing.Top = 2
         BorderSpacing.Right = 2
         ParentFont = False
-        TabOrder = 4
+        TabOrder = 3
       end
       object S1Label: TLabel
         Tag = 1
@@ -464,7 +464,7 @@ object GLForm1: TGLForm1
         BorderSpacing.Top = 2
         BorderSpacing.Right = 2
         ParentFont = False
-        TabOrder = 3
+        TabOrder = 4
         Visible = False
       end
       object S2Label: TLabel
@@ -861,13 +861,13 @@ object GLForm1: TGLForm1
     end
     object SliceBox: TGroupBox
       Left = 0
-      Height = 135
+      Height = 182
       Top = 605
       Width = 253
       Align = alTop
       AutoSize = True
       Caption = '2D Slice Selection'
-      ClientHeight = 117
+      ClientHeight = 164
       ClientWidth = 245
       Constraints.MinWidth = 10
       ParentFont = False
@@ -886,7 +886,7 @@ object GLForm1: TGLForm1
         Caption = 'A'
         OnClick = OrientBtnClick
         ParentFont = False
-        TabOrder = 0
+        TabOrder = 1
       end
       object SlicePBtn: TButton
         Tag = 2
@@ -901,7 +901,7 @@ object GLForm1: TGLForm1
         Caption = 'P'
         OnClick = OrientBtnClick
         ParentFont = False
-        TabOrder = 1
+        TabOrder = 2
       end
       object SliceSBtn: TButton
         Tag = 5
@@ -917,7 +917,7 @@ object GLForm1: TGLForm1
         Caption = 'S'
         OnClick = OrientBtnClick
         ParentFont = False
-        TabOrder = 9
+        TabOrder = 4
       end
       object SliceIBtn: TButton
         Tag = 4
@@ -932,7 +932,7 @@ object GLForm1: TGLForm1
         Caption = 'I'
         OnClick = OrientBtnClick
         ParentFont = False
-        TabOrder = 3
+        TabOrder = 5
       end
       object SliceLBtn: TButton
         AnchorSideLeft.Control = SliceBox
@@ -946,7 +946,7 @@ object GLForm1: TGLForm1
         Caption = 'L'
         OnClick = OrientBtnClick
         ParentFont = False
-        TabOrder = 4
+        TabOrder = 0
       end
       object SliceRBtn: TButton
         Tag = 1
@@ -962,7 +962,7 @@ object GLForm1: TGLForm1
         Caption = 'R'
         OnClick = OrientBtnClick
         ParentFont = False
-        TabOrder = 5
+        TabOrder = 3
       end
       object XCoordEdit: TEdit
         AnchorSideLeft.Control = SliceBox
@@ -1036,8 +1036,63 @@ object GLForm1: TGLForm1
         ItemHeight = 26
         OnChange = AnatDropChange
         Style = csDropDownList
-        TabOrder = 2
+        TabOrder = 9
         Text = '0'
+      end
+      object SliceZoom: TTrackBar
+        AnchorSideLeft.Control = SliceBox
+        AnchorSideTop.Control = AnatDrop
+        AnchorSideTop.Side = asrBottom
+        Left = 122
+        Height = 25
+        Top = 119
+        Width = 116
+        Max = 600
+        Min = 100
+        OnChange = SliceZoomChange
+        Position = 100
+        TickStyle = tsNone
+        BorderSpacing.Left = 122
+        BorderSpacing.Top = 2
+        ParentFont = False
+        TabOrder = 11
+      end
+      object ZoomBtn: TButton
+        AnchorSideLeft.Control = SliceBox
+        AnchorSideTop.Control = SliceZoom
+        AnchorSideTop.Side = asrCenter
+        Left = 2
+        Height = 25
+        Hint = 'Slider adjusts scale factor. Control-drag to pan image. Click here to restore defaults.'
+        Top = 119
+        Width = 80
+        BorderSpacing.Left = 2
+        Caption = 'Zoom'
+        OnClick = ZoomBtnClick
+        ParentFont = False
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 10
+      end
+      object Smooth2DCheck: TCheckBox
+        AnchorSideLeft.Control = SliceBox
+        AnchorSideTop.Control = SliceZoom
+        AnchorSideTop.Side = asrBottom
+        Left = 2
+        Height = 18
+        Hint = 'Do enlarged images appear blurry or jagged'
+        Top = 146
+        Width = 66
+        BorderSpacing.Left = 2
+        BorderSpacing.Top = 2
+        Caption = 'Smooth'
+        Checked = True
+        OnChange = Smooth2DCheckChange
+        ParentFont = False
+        ParentShowHint = False
+        ShowHint = True
+        State = cbChecked
+        TabOrder = 12
       end
     end
     object CutoutBox: TGroupBox
@@ -1288,7 +1343,7 @@ object GLForm1: TGLForm1
         BorderSpacing.Top = 2
         OnChange = UpdateMosaic
         ParentFont = False
-        TabOrder = 1
+        TabOrder = 2
         Value = 2
       end
       object MosColOverlapTrack: TTrackBar
@@ -1307,7 +1362,7 @@ object GLForm1: TGLForm1
         TickStyle = tsNone
         BorderSpacing.Left = 2
         ParentFont = False
-        TabOrder = 2
+        TabOrder = 1
       end
       object MosRowOverlapTrack: TTrackBar
         AnchorSideLeft.Control = MosColEdit
@@ -1713,7 +1768,7 @@ object GLForm1: TGLForm1
           Checked = True
         end
         object DrawCloneMenu: TMenuItem
-          Caption = 'Clone slice'
+          Caption = 'Clone Slice'
           ShortCut = 16470
           OnClick = DrawCloneMenuClick
         end
@@ -1730,7 +1785,7 @@ object GLForm1: TGLForm1
           OnClick = DrawBinarizeMenuClick
         end
         object DrawInterpolateMenu: TMenuItem
-          Caption = 'Interpolate between slices'
+          Caption = 'Interpolate Between Slices'
           object DrawInterpolate2Menu: TMenuItem
             Caption = 'Last two slices'
             OnClick = InterpolateDrawMenuClick
@@ -1752,7 +1807,7 @@ object GLForm1: TGLForm1
           end
         end
         object MaskMenu: TMenuItem
-          Caption = 'Mask image'
+          Caption = 'Mask Image'
           object MaskDeleteMenu: TMenuItem
             Caption = 'Delete regions with VOI'
             OnClick = MaskMenuClick
@@ -1762,6 +1817,14 @@ object GLForm1: TGLForm1
             Caption = 'Preserve regions with VOI'
             OnClick = MaskMenuClick
           end
+        end
+        object CreateOverlapImageMenu: TMenuItem
+          Caption = 'Create Overlap Image'
+          OnClick = CreateOverlapImageMenuClick
+        end
+        object CreateSubtractionPlotMenu: TMenuItem
+          Caption = 'Subtraction Plots'
+          OnClick = CreateSubtractionPlotMenuClick
         end
         object DrawDescriptivesMenu: TMenuItem
           Caption = 'Descriptives'
@@ -2158,6 +2221,16 @@ object GLForm1: TGLForm1
       AutoCheck = True
       Caption = 'Hidden By Cutout'
       OnClick = LayerCutoutMenuClick
+    end
+    object LayerZeroIntensityInvisibleMenu: TMenuItem
+      AutoCheck = True
+      Caption = 'Hide voxels with zero intensity'
+      OnClick = LayerZeroIntensityInvisibleMenuClick
+    end
+    object LayerInvertColorMapMenu: TMenuItem
+      AutoCheck = True
+      Caption = 'Invert Color Map'
+      OnClick = LayerInvertColorMapMenuClick
     end
     object LayerShowHeaderMenu: TMenuItem
       Caption = 'Show Header'

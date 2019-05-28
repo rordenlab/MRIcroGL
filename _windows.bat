@@ -11,7 +11,7 @@ del /S *.ddp
 del /S *.mps
 del /S *.mpt
 del /S *.dsm
-MRIcroGL.exe
+del MRIcroGL.exe
 
 c:\Progra~1\7-Zip\7z a -tzip d:\pas\mricrogl12_source.zip d:\pas\MRIcroGL12
 

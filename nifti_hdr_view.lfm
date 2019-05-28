@@ -534,8 +534,8 @@ object HdrForm: THdrForm
     end
     object ReorientSheet: TTabSheet
       Caption = 'Reorient'
-      ClientHeight = 336
-      ClientWidth = 595
+      ClientHeight = 318
+      ClientWidth = 589
       object Label24: TLabel
         AnchorSideLeft.Control = Label46
         AnchorSideTop.Control = srow_x0Edit
@@ -642,9 +642,9 @@ object HdrForm: THdrForm
           'None'
           'Scanner Position'
           'Coregistrationon'
-          'Normalized Tal'
-          'Normalized mni152ach'
+          'Normalized Talairach'
           'Normalized mni152'
+          'Normalized other'
         )
         OnSelect = HeaderMagicDropSelect
         Style = csDropDownList
@@ -668,9 +668,9 @@ object HdrForm: THdrForm
           'None'
           'Scanner Position'
           'Coregistrationon'
-          'Normalized Tal'
-          'Normalized mni152ach'
+          'Normalized Talairach'
           'Normalized mni152'
+          'Normalized other'
         )
         OnSelect = HeaderMagicDropSelect
         Style = csDropDownList

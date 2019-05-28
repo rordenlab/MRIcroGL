@@ -1,178 +1,369 @@
 object dcm2niiForm: Tdcm2niiForm
-  Left = 355
-  Height = 511
-  Top = 131
-  Width = 925
+  Left = 315
+  Height = 525
+  Top = 93
+  Width = 965
+  ActiveControl = SelectFilesBtn
   AllowDropFiles = True
-  Caption = 'dcm2niix'
-  ClientHeight = 511
-  ClientWidth = 925
-  Constraints.MinHeight = 120
-  Constraints.MinWidth = 720
-  Menu = MainMenu1
+  Caption = 'dcm2niix DICOM to NIfTI conversion'
+  ClientHeight = 525
+  ClientWidth = 965
+  Constraints.MinHeight = 440
+  Constraints.MinWidth = 600
   OnClose = FormClose
-  OnCreate = FormCreate
   OnDropFiles = FormDropFiles
-  OnResize = FormResize
   OnShow = FormShow
   Position = poScreenCenter
   LCLVersion = '2.1.0.0'
-  object Memo1: TMemo
+  object Panel1: TPanel
     Left = 0
-    Height = 476
-    Top = 35
-    Width = 925
-    Align = alClient
-    Lines.Strings = (    )
-    ReadOnly = True
-    ScrollBars = ssAutoVertical
-    TabOrder = 0
-  end
-  object Panel2: TPanel
-    Left = 0
-    Height = 35
+    Height = 507
     Top = 0
-    Width = 925
-    Align = alTop
-    AutoSize = True
-    ClientHeight = 35
-    ClientWidth = 925
-    TabOrder = 1
-    object CompressCheck: TCheckBox
+    Width = 340
+    Align = alLeft
+    ClientHeight = 507
+    ClientWidth = 340
+    Constraints.MinHeight = 380
+    TabOrder = 0
+    object GeneralGroup: TGroupBox
       Left = 1
-      Height = 18
-      Hint = 'Create gz images (smaller but slower)'
-      Top = 8
-      Width = 80
-      Caption = 'Compress'
-      OnClick = compressCheckClick
+      Height = 215
+      Top = 1
+      Width = 338
+      Align = alTop
+      AutoSize = True
+      Caption = 'General'
+      ClientHeight = 197
+      ClientWidth = 330
       TabOrder = 0
+      object BidsLabel: TLabel
+        AnchorSideLeft.Control = OutNameLabel
+        AnchorSideTop.Control = FormatDrop
+        AnchorSideTop.Side = asrBottom
+        Left = 4
+        Height = 16
+        Top = 157
+        Width = 126
+        BorderSpacing.Top = 4
+        Caption = 'Create BIDS Sidecar:'
+        ParentColor = False
+      end
+      object BidsDrop: TComboBox
+        AnchorSideLeft.Control = OutNameLabel
+        AnchorSideTop.Control = BidsLabel
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Side = asrBottom
+        Left = 4
+        Height = 20
+        Top = 177
+        Width = 326
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Top = 4
+        BorderSpacing.Right = 4
+        ItemHeight = 26
+        ItemIndex = 1
+        Items.Strings = (
+          'None'
+          'Yes, Anonymized'
+          'Yes, with Personal Identifiers'
+        )
+        OnChange = UpdateCommand
+        Style = csDropDownList
+        TabOrder = 3
+        Text = 'Yes, Anonymized'
+      end
+      object FormatDrop: TComboBox
+        AnchorSideLeft.Control = OutNameLabel
+        AnchorSideTop.Control = FormatLabel
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Side = asrBottom
+        Left = 4
+        Height = 20
+        Top = 133
+        Width = 326
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Top = 4
+        BorderSpacing.Right = 4
+        ItemHeight = 26
+        ItemIndex = 1
+        Items.Strings = (
+          'Uncompressed NIfTI (.nii)'
+          'Compressed NIfTI (.nii.gz)'
+          'Uncompressed NRRD (.nrrd)'
+          'Compressed NRRD (.nhdr/.raw.gz)'
+        )
+        OnChange = UpdateCommand
+        Style = csDropDownList
+        TabOrder = 2
+        Text = 'Compressed NIfTI (.nii.gz)'
+      end
+      object FormatLabel: TLabel
+        AnchorSideLeft.Control = OutNameLabel
+        AnchorSideTop.Control = OutDirDrop
+        AnchorSideTop.Side = asrBottom
+        Left = 4
+        Height = 16
+        Top = 113
+        Width = 92
+        BorderSpacing.Top = 4
+        Caption = 'Output Format:'
+        ParentColor = False
+      end
+      object OutDirDrop: TComboBox
+        AnchorSideLeft.Control = OutNameLabel
+        AnchorSideTop.Control = OutDirLabel
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Side = asrBottom
+        Left = 4
+        Height = 20
+        Top = 89
+        Width = 326
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Top = 4
+        BorderSpacing.Right = 5
+        ItemHeight = 26
+        ItemIndex = 0
+        Items.Strings = (
+          'Save NIfTI images to the same folder as DICOM'
+          'Select custom folder ...'
+          '/usr/rorden'
+        )
+        OnChange = OutDirDropChange
+        Style = csDropDownList
+        TabOrder = 1
+        Text = 'Save NIfTI images to the same folder as DICOM'
+      end
+      object OutDirLabel: TLabel
+        AnchorSideLeft.Control = OutNameLabel
+        AnchorSideTop.Control = OutNameExampleLabel
+        AnchorSideTop.Side = asrBottom
+        Left = 4
+        Height = 16
+        Top = 69
+        Width = 105
+        BorderSpacing.Top = 4
+        Caption = 'Output Directory:'
+        ParentColor = False
+      end
+      object OutNameExampleLabel: TLabel
+        AnchorSideLeft.Control = OutNameEdit
+        AnchorSideTop.Control = OutNameEdit
+        AnchorSideTop.Side = asrBottom
+        Left = 12
+        Height = 16
+        Top = 49
+        Width = 132
+        BorderSpacing.Left = 4
+        BorderSpacing.Top = 4
+        Caption = 'Example: 4_T1mprage'
+        ParentColor = False
+      end
+      object OutNameEdit: TEdit
+        AnchorSideLeft.Control = OutNameLabel
+        AnchorSideTop.Control = OutNameLabel
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Side = asrBottom
+        Left = 8
+        Height = 21
+        Hint = 'Special values: %a=antenna (coil) name, %b=basename, %c=comments, %d=description, %e=echo number, %f=folder name, %i=ID of patient, %j=seriesInstanceUID, %k=studyInstanceUID, %m=manufacturer, %n=name of patient, %p=protocol, %r=instance number, %s=series number, %t=time, %u=acquisition number, %v=vendor, %x=study ID; %z=sequence name'
+        Top = 24
+        Width = 322
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Left = 4
+        BorderSpacing.Top = 4
+        BorderSpacing.Right = 4
+        OnChange = UpdateCommand
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 0
+        Text = '%f_%p_%t_%s'
+      end
+      object OutNameLabel: TLabel
+        Left = 4
+        Height = 16
+        Top = 4
+        Width = 104
+        BorderSpacing.Left = 4
+        BorderSpacing.Top = 4
+        Caption = 'Output Filename:'
+        ParentColor = False
+      end
     end
-    object verboseCheck: TCheckBox
-      AnchorSideLeft.Control = CompressCheck
-      AnchorSideLeft.Side = asrBottom
-      AnchorSideTop.Control = CompressCheck
-      Left = 85
-      Height = 18
-      Hint = 'Show detailed notes during conversion'
-      Top = 8
-      Width = 69
-      BorderSpacing.Left = 4
-      Caption = 'Verbose'
-      OnClick = compressCheckClick
+    object AdvancedGroup: TGroupBox
+      Left = 1
+      Height = 128
+      Top = 216
+      Width = 338
+      Align = alTop
+      AutoSize = True
+      Caption = 'Advanced'
+      ClientHeight = 110
+      ClientWidth = 330
       TabOrder = 1
+      object IgnoreCheck: TCheckBox
+        Left = 4
+        Height = 18
+        Hint = 'Do not convert derived, localizer and 2D images.'#10
+        Top = 4
+        Width = 193
+        BorderSpacing.Left = 4
+        BorderSpacing.Top = 4
+        Caption = 'Ignore Derived and 2D Images'
+        OnChange = UpdateCommand
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 0
+      end
+      object LosslessScaleCheck: TCheckBox
+        AnchorSideLeft.Control = IgnoreCheck
+        AnchorSideTop.Control = IgnoreCheck
+        AnchorSideTop.Side = asrBottom
+        Left = 4
+        Height = 18
+        Hint = 'Losslessly scale 16-bit integers to use full dynamic range. This can preserve precision for subsequent transforms.'#10
+        Top = 26
+        Width = 145
+        BorderSpacing.Top = 4
+        Caption = 'Scale Dynamic Range'
+        OnChange = UpdateCommand
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 1
+      end
+      object MergeCheck: TCheckBox
+        AnchorSideLeft.Control = IgnoreCheck
+        AnchorSideTop.Control = LosslessScaleCheck
+        AnchorSideTop.Side = asrBottom
+        Left = 4
+        Height = 18
+        Hint = 'Merge 2D slices from same series regardless of study time, echo, coil, orientation, etc.'#10
+        Top = 48
+        Width = 140
+        BorderSpacing.Top = 4
+        Caption = 'Always Merge Series'
+        OnChange = UpdateCommand
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 2
+      end
+      object PhilipsPreciseCheck: TCheckBox
+        AnchorSideLeft.Control = IgnoreCheck
+        AnchorSideTop.Control = MergeCheck
+        AnchorSideTop.Side = asrBottom
+        Left = 4
+        Height = 18
+        Hint = 'Use Philips precise float scaling (not display) scaling.'#10
+        Top = 70
+        Width = 149
+        BorderSpacing.Top = 4
+        Caption = 'Precise Philips Scaling'
+        OnChange = UpdateCommand
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 3
+      end
+      object CropCheck: TCheckBox
+        AnchorSideLeft.Control = IgnoreCheck
+        AnchorSideTop.Control = PhilipsPreciseCheck
+        AnchorSideTop.Side = asrBottom
+        Left = 4
+        Height = 18
+        Hint = 'Remove excess neck from anatomical (e.g. T1) scans. This can improve spatial registration.'
+        Top = 92
+        Width = 114
+        BorderSpacing.Top = 4
+        Caption = 'Crop 3D Images'
+        OnChange = UpdateCommand
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 4
+      end
     end
-    object bidsCheck: TCheckBox
-      AnchorSideLeft.Control = verboseCheck
-      AnchorSideLeft.Side = asrBottom
-      AnchorSideTop.Control = CompressCheck
-      Left = 158
-      Height = 18
-      Hint = 'Create BIDS format JSON text files that describe details.'
-      Top = 8
-      Width = 50
-      BorderSpacing.Left = 4
-      Caption = 'BIDS'
-      OnClick = compressCheckClick
-      ParentBidiMode = False
-      TabOrder = 2
-    end
-    object outnameLabel: TLabel
-      AnchorSideLeft.Control = bidsCheck
-      AnchorSideLeft.Side = asrBottom
-      AnchorSideTop.Control = CompressCheck
-      AnchorSideTop.Side = asrCenter
-      Left = 220
-      Height = 16
-      Top = 9
-      Width = 81
-      BorderSpacing.Left = 12
-      Caption = 'Output Name'
-      ParentColor = False
-      ParentShowHint = False
-      ShowHint = True
-    end
-    object outnameEdit: TEdit
-      AnchorSideLeft.Control = outnameLabel
-      AnchorSideLeft.Side = asrBottom
-      AnchorSideTop.Control = CompressCheck
-      AnchorSideTop.Side = asrCenter
-      Left = 305
-      Height = 21
-      Hint = 'Name for NIfTI images. Special characters are %f (Folder name) %i (ID) %n (patient Name) %p (Protocol name) %s (Series number) %t (Time)'
-      Top = 7
-      Width = 164
-      BorderSpacing.Left = 4
-      OnKeyUp = outnameEditKeyUp
-      ParentShowHint = False
-      ShowHint = True
-      TabOrder = 3
-      Text = '%p_%s'
-    end
-    object outputFolderLabel: TLabel
-      AnchorSideLeft.Control = outnameEdit
-      AnchorSideLeft.Side = asrBottom
-      AnchorSideTop.Control = CompressCheck
-      AnchorSideTop.Side = asrCenter
-      Left = 473
-      Height = 16
-      Top = 9
-      Width = 81
-      BorderSpacing.Left = 4
-      Caption = 'Output folder'
-      ParentColor = False
-    end
-    object outputFolderName: TButton
-      AnchorSideLeft.Control = outputFolderLabel
-      AnchorSideLeft.Side = asrBottom
-      AnchorSideTop.Control = CompressCheck
-      AnchorSideTop.Side = asrCenter
-      Left = 558
+    object UpdateBtn: TButton
+      AnchorSideLeft.Control = Panel1
+      AnchorSideTop.Control = AdvancedGroup
+      AnchorSideTop.Side = asrBottom
+      AnchorSideRight.Control = Panel1
+      AnchorSideRight.Side = asrBottom
+      Left = 5
       Height = 25
-      Hint = 'NIfTI files will be saved to this folder. Press this button and click Cancel if you want files NIfTI images saved to same folder as DICOM input'
-      Top = 5
-      Width = 156
+      Top = 348
+      Width = 330
+      Anchors = [akTop, akLeft, akRight]
       BorderSpacing.Left = 4
       BorderSpacing.Top = 4
-      BorderSpacing.Bottom = 4
-      Caption = 'input folder'
-      Constraints.MaxHeight = 64
-      OnClick = outputFolderNameClick
-      ParentShowHint = False
-      ShowHint = True
+      BorderSpacing.Right = 4
+      Caption = 'Check for Updates'
+      OnClick = UpdateBtnClick
+      TabOrder = 2
+    end
+    object ResetBtn: TButton
+      AnchorSideLeft.Control = Panel1
+      AnchorSideTop.Control = UpdateBtn
+      AnchorSideTop.Side = asrBottom
+      AnchorSideRight.Control = Panel1
+      AnchorSideRight.Side = asrBottom
+      Left = 5
+      Height = 25
+      Top = 377
+      Width = 330
+      Anchors = [akTop, akLeft, akRight]
+      BorderSpacing.Left = 4
+      BorderSpacing.Top = 4
+      BorderSpacing.Right = 4
+      Caption = 'Reset Defaults'
+      OnClick = ResetBtnClick
+      TabOrder = 3
+    end
+    object SelectFilesBtn: TButton
+      AnchorSideLeft.Control = Panel1
+      AnchorSideTop.Control = ResetBtn
+      AnchorSideTop.Side = asrBottom
+      AnchorSideRight.Control = Panel1
+      AnchorSideRight.Side = asrBottom
+      Left = 5
+      Height = 20
+      Top = 406
+      Width = 330
+      Anchors = [akTop, akLeft, akRight]
+      AutoSize = True
+      BorderSpacing.Left = 4
+      BorderSpacing.Top = 4
+      BorderSpacing.Right = 4
+      Caption = 'Select Folder To Convert...'
+      OnClick = SelectFilesBtnClick
       TabOrder = 4
     end
   end
-  object MainMenu1: TMainMenu
-    left = 96
-    top = 200
-    object FileMenu: TMenuItem
-      Caption = 'File'
-      object DicomMenu: TMenuItem
-        Caption = 'DICOM to NIfTI...'
-        OnClick = DicomMenuClick
-      end
-      object ParRecMenu: TMenuItem
-        Caption = 'PAR/REC to NIfTI...'
-        OnClick = ParRecMenuClick
-      end
-      object ResetMenu: TMenuItem
-        Caption = 'Reset defaults'
-        OnClick = ResetMenuClick
-      end
-    end
-    object EditMenu: TMenuItem
-      Caption = 'Edit'
-      object CopyMenu: TMenuItem
-        Caption = 'Copy'
-        OnClick = CopyMenuClick
-      end
-    end
+  object StatusBar1: TStatusBar
+    Left = 0
+    Height = 18
+    Top = 507
+    Width = 965
+    Panels = <>
   end
-  object OpenDialog1: TOpenDialog
-    Filter = 'Philips research (*.par)|*.PAR;*.par'
-    Options = [ofAllowMultiSelect, ofEnableSizing, ofViewDetail]
-    left = 168
-    top = 208
+  object OutputMemo: TMemo
+    Left = 343
+    Height = 501
+    Top = 3
+    Width = 619
+    Align = alClient
+    BorderSpacing.Around = 3
+    Lines.Strings = (
+      'To convert images, either drag and drop folders or press the ''Select Files'' button'
+    )
+    ReadOnly = True
+    ScrollBars = ssAutoBoth
+    TabOrder = 2
+    TabStop = False
+    WordWrap = False
+  end
+  object OutputDirDialog: TSelectDirectoryDialog
+    left = 272
+    top = 240
+  end
+  object InputDirDialog: TSelectDirectoryDialog
+    left = 272
+    top = 296
   end
 end

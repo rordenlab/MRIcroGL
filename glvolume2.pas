@@ -25,7 +25,7 @@ type
         uniform_drawTex, uniform_drawLUT, uniform_drawAlpha,
         uniform_viewportSizeLine, uniform_viewportSizeTex, uniform_backAlpha, uniform_tex, uniform_overlay: GLint;
         colorEditor: TColorEditor;
-        colorEditorVisible: boolean;
+        isSmooth2D, colorEditorVisible: boolean;
         txt: TGPUFont;
         {$ENDIF}
         shaderPrefs: TShaderPrefs;
@@ -55,6 +55,7 @@ type
         {$IFDEF VIEW2D}
         SelectionRect: TVec4;
         property ShowColorEditor: boolean read colorEditorVisible write colorEditorVisible;
+        property ShowSmooth2D: boolean read isSmooth2D write isSmooth2D;
         property CE: TColorEditor read colorEditor;
         property Slices: Tslices2D read slices2D;
         function Slice2Dmm(var vol: TNIfTI; out vox: TVec3i): TVec3;
@@ -138,6 +139,7 @@ kFragTex2D = '#version 330'
 +#10'void main() {'
 +#10'    color = texture(tex,texCoord.xyz);'
 +#10'    color.a = smoothstep(0.0, 0.1, color.a);'
++#10'    //color.a = smoothstep(0.0, 0.00001, color.a);'
 +#10'    color.a *= backAlpha;'
 +#10'    //if (color.a > 0.0) color.a = backAlpha;'
 +#10'    vec4 ocolor = texture(overlay, texCoord.xyz);'
@@ -715,6 +717,7 @@ begin
   gradientTexture3D := 0;
   intensityTexture3D := 0;
   colorEditorVisible := false;
+  isSmooth2D := true;
   shaderPrefs.nUniform:= 0;
 end;
 
@@ -867,17 +870,13 @@ begin
  glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
- (*if vol.IsLabels then begin
-   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-   glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
- end;
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
- glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER); *)
-
+ glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
+ (*  //CLAMP_TO_BORDER avoids pinochio nose when panning
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);   //GL_CLAMP_TO_EDGE
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
- glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+ glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE); *)
  glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE, @Vol.VolRGBA[0]);
  glPixelStorei(GL_UNPACK_ALIGNMENT,1);
  glGenTextures(1, @gradientTexture3D);
@@ -943,6 +942,7 @@ end;
 
 procedure TGPUVolume.SetSlice2DFrac(frac : TVec3);
 begin
+     if (frac.x < 0.0) or (frac.y < 0.0) or (frac.z < 0.0) then exit;
      slices2D.sliceFrac := frac;
 end;
 
@@ -1177,6 +1177,12 @@ begin
   if SelectionRect.x > 0 then
      slices2D.DrawOutLine(SelectionRect.X,h-SelectionRect.Y, SelectionRect.Z,h-SelectionRect.W);
   if slices2D.NumberOfVertices < 3 then exit; //nothing to do
+  //select nearest neighbor vs linear interpolation
+  if not isSmooth2D then begin
+    glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  end;
   //draw
   //glViewport(0, 0, glControl.ClientWidth, glControl.ClientHeight); //required for form resize
   glControl.SetViewport();
@@ -1240,6 +1246,13 @@ begin
   if clrbar <> nil then
    clrbar.Draw();
   glControl.SwapBuffers;
+  //reset linear interpolation - much better for rendering and mosaics
+  if not isSmooth2D then begin
+      glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
+      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  end;
+
 end;
 {$ENDIF}
 

@@ -98,6 +98,7 @@ kDT_UINT64               =1280;     // unsigned long long (64 bits)
 kDT_FLOAT128             =1536;     // long double (128 bits)
 kDT_COMPLEX128           =1792;     // double pair (128 bits)
 kDT_COMPLEX256           =2048;     // long double pair (256 bits)
+kDT_RGBA32               =2304;     // 4 byte RGBA (32 bits/voxel)
 //   slice_code values
  kNIFTI_SLICE_SEQ_UNKNOWN = 0;
  kNIFTI_SLICE_SEQ_INC = 1;
@@ -120,6 +121,7 @@ kDT_COMPLEX256           =2048;     // long double pair (256 bits)
  kNIFTI_XFORM_ALIGNED_ANAT = 2; //Coordinates aligned to another file e.g. EPI coregistered to T1
  kNIFTI_XFORM_TALAIRACH = 3; //Talairach-Tournoux Atlas; (0,0,0)=AC, etc.
  kNIFTI_XFORM_MNI_152 = 4; //MNI 152 normalized coordinates
+ kNIFTI_XFORM_OTHER_TEMPLATE = 5;
 {$IFDEF ENDIAN_BIG}
  //Magic values
  kswapNIFTI_MAGIC_SEPARATE_HDR = $0031696E;//$6E693100;

@@ -22,6 +22,7 @@ type
         fNeedsUpdate, fIsDrawing, fIsLabels, fIsFromZero: boolean;
         fBackColor: TRGBA;
     public
+      InvertColorMap: boolean;
       property FromZero: boolean read fIsFromZero write fIsFromZero;
       property BackColor: TRGBA read fBackColor write fBackColor;
       procedure GenerateLUT(saturation: float = 1.0; LabelAlpha: integer = -1);
@@ -224,6 +225,7 @@ var
   lSlope: single;
   lSpace,lI,lIprev,lS: integer;
   lMin,lMax: TCLUTnode;
+  lPreInvert: TLUT;
 begin
   if (fIsLabels) then begin
      //GLForm1.Caption := floattostr(saturation) +'+-->'+inttostr(random(888));
@@ -254,7 +256,8 @@ begin
   //clip values <= lMin to value of lMin
   for lI := 0 to lMin.Intensity do begin
     fLUT[lI] := lMin.rgba;
-    if (fLUT[lI].A= 0) then  fLUT[lI] := SetRGBA(fBackColor.r,fBackColor.g, fBackColor.b,0); //some clear nodes have RGB values to help interpolation
+    //render with white background
+    //if (fLUT[lI].A= 0) then  fLUT[lI] := SetRGBA(fBackColor.r,fBackColor.g, fBackColor.b,0); //some clear nodes have RGB values to help interpolation
   end;
   //clip values >= lMax to value of lMin
   for lI := lMax.Intensity to 255 do begin
@@ -278,6 +281,19 @@ begin
     lSlope := (CLUT.nodes[lI+1].rgba.A-CLUT.nodes[lI].rgba.A)/lSpace;
     for lS := 1 to lSpace do
       fLUT[CLUT.nodes[lI].Intensity+lS].A  :=CLUT.nodes[lI].rgba.A + round(lS * lSlope);
+  end;
+  if InvertColorMap then begin
+    for lS := 0 to 255 do
+      lPreInvert[lS] := fLUT[lS];
+    for lS := 0 to 255 do begin
+         fLUT[lS].R := lPreInvert[255-lS].R;
+         fLUT[lS].G := lPreInvert[255-lS].G;
+         fLUT[lS].B := lPreInvert[255-lS].B;
+    end;
+         fLUT[255].R := lPreInvert[1].R;
+         fLUT[255].G := lPreInvert[1].G;
+         fLUT[255].B := lPreInvert[1].B;
+
   end;
 end;
 
@@ -602,6 +618,7 @@ constructor TCLUT.Create(clutFileName: string; cTag: integer); overload;
 begin
   fBackColor := SetRGBA(0, 0, 0, 0);
   fIsLabels := false;
+  InvertColorMap := false;
   fLUTlabel := defaultLabelLut;
   fLUTlabel[0] := fBackColor;
   fIsDrawing := false;

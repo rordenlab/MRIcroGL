@@ -10,6 +10,7 @@ uses
 
 
 function dcm2Nifti(dcm2niixExe, dicomDir: string): string;
+function HomeDir(useTmp: boolean = true): string; //set path to home if not provided
 
 implementation
 

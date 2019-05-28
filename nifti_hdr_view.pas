@@ -366,6 +366,7 @@ begin
           QFormDrop.ItemIndex:= (qform_code);
           SFormDrop.ItemIndex :=(sform_code);
   {$ENDIF}
+          //caption := format('%d %d', [qform_code, sform_code]);
           //showmessage(format('%g %g %g', [lHdr.qoffset_x, lHdr.qoffset_y, lHdr.qoffset_z]));
           //showmessage(format('%g %g %g', [qoffset_x, qoffset_y, qoffset_z]));
 
@@ -576,7 +577,7 @@ begin
         lFileName+ kCR+' Bytes Required: '+inttostr(sizeof(TNIFTIhdr)) );
         exit;
      end;*)
-     if Fileexists(lFileName) then begin
+     (*if Fileexists(lFileName) then begin
          if lAllowOverwrite then begin
             case MessageDlg('Do you wish to modify the existing file '+lFilename+'?', mtConfirmation,[mbYes, mbNo], 0) of	{ produce the message dialog box }
              6: lOverwrite := true; //6= mrYes, 7=mrNo... not sure what this is for Linux. Hardcoded as we do not include Form values
@@ -584,7 +585,13 @@ begin
          end else
              showmessage('Error: the file '+lFileName+' already exists.');
          if not lOverwrite then Exit;
-	 end;
+     end;*)
+     if Fileexists(lFileName) and (not lAllowOverwrite) then begin
+    	showmessage('Error: the file '+lFileName+' already exists.');
+        exit;
+     end;
+     if Fileexists(lFileName) then
+        lOverwrite := true;
      if lHdr.magic = kNIFTI_MAGIC_EMBEDDED_HDR then
         if lHdr.vox_offset < sizeof(TNIFTIHdr) then
            lHdr.vox_offset := sizeof(TNIFTIHdr); //embedded images MUST start after header

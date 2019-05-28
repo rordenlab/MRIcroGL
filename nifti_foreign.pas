@@ -2597,8 +2597,22 @@ end; //readICSHeader
 function readNRRDHeader (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean): boolean;
 //http://www.sci.utah.edu/~gk/DTI-data/
 //http://teem.sourceforge.net/nrrd/format.html
+FUNCTION specialdouble (d:double): boolean;
+//returns true if s is Infinity, NAN or Indeterminate
+//8byte IEEE: msb[63] = signbit, bits[52-62] exponent, bits[0..51] mantissa
+//exponent of all 1s =   Infinity, NAN or Indeterminate
+CONST kSpecialExponent = 2047 shl 20;
+VAR Overlay: ARRAY[1..2] OF LongInt ABSOLUTE d;
+BEGIN
+  IF ((Overlay[2] AND kSpecialExponent) = kSpecialExponent) THEN
+     RESULT := true
+  ELSE
+      RESULT := false;
+END;
 label
   666;
+const
+  NaN : double = 1/0;
 var
   FP: TextFile;
   ch: char;
@@ -2611,10 +2625,13 @@ var
   offset: array[0..3] of single;
   vSqr, flt: single;
   transformMatrix: array [0..11] of single;
+  dtMin, dtMax, dtRange, dtScale, oldRange, oldMin, oldMax: double;
 begin
   //gX := gX + 1; GLForm1.caption := inttostr(gX);
   //LOAD_MAT33(rot33, 1,0,0, 0,1,0, 0,0,1);
   LOAD_MAT33(rot33, -1,0,0, 0,-1,0, 0,0,1);
+  oldMin := NaN;
+  oldMax := NaN;
   isDimPermute2341 := false;
   pth := ExtractFilePath(fname);
   isOK := true;
@@ -2674,6 +2691,10 @@ begin
       if (nItems > 6) then nItems :=6;
       for i:=0 to (nItems-1) do
         nhdr.pixdim[i+1] :=strtofloat(mArray.Strings[i]);
+    end else if (AnsiStartsText( 'oldmin', tagName)) or (AnsiStartsText( 'old min', tagName)) then begin
+          oldMin :=strtofloat(mArray.Strings[i]);
+    end else if (AnsiStartsText( 'oldmax', tagName)) or (AnsiStartsText( 'old max', tagName)) then begin
+          oldMax :=strtofloat(mArray.Strings[i]);
     end else if AnsiStartsText('sizes', tagName) then begin
       if (nItems > 6) then nItems :=6;
       //for i:=1 to 6 do
@@ -2820,6 +2841,21 @@ begin
     headerSize := headerSize + byteskip;
     //NSLog('Unsupported NRRD feature: byteskip');
     //result := false;
+  end;
+  if (nhdr.datatype <> kDT_FLOAT32) and (nhdr.datatype <> kDT_DOUBLE) and (not specialdouble(oldMin)) and (not specialdouble(oldMax)) then begin
+     oldRange := oldMax - oldMin;
+     dtMin := 0; //DT_UINT8, DT_RGB24, DT_UINT16
+     if (nhdr.datatype = kDT_INT16) then dtMin := -32768.0;
+     if (nhdr.datatype = kDT_INT32) then dtMin := -2147483648;
+     dtMax := 255.00; //DT_UINT8, DT_RGB24
+     if (nhdr.datatype = kDT_INT16) then dtMax := 32767;
+     if (nhdr.datatype = kDT_UINT16) then dtMax := 65535.0;
+     if (nhdr.datatype = kDT_INT32) then dtMax := 2147483647.0;
+     dtRange := dtMax - dtMin;
+     dtScale := oldRange/dtRange;
+     nhdr.scl_slope := dtScale;
+     nhdr.scl_inter := oldMin - (dtMin*dtScale);
+     //showmessage(format('%g..%g', [oldMin,oldMax]));
   end;
   if (isDetachedFile) then
      headerSize := byteskip;

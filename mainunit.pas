@@ -22,18 +22,28 @@ uses
   {$IFDEF MATT1}umat, {$ENDIF}
   {$IFDEF COMPILEYOKE} yokesharemem, {$ENDIF}
   {$IFDEF MYPY}PythonEngine,  {$ENDIF}
-  {$IFDEF LCLCocoa} {$IFDEF NewCocoa}nsappkitext, UserNotification,{$ENDIF} {$ENDIF}
+  //CocoaMore,
+  {$IFDEF LCLCocoa} {$IFDEF NewCocoa} nsappkitext, UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
   lcltype, GraphType, Graphics, dcm_load, nifti_tiff,
   LCLIntf, slices2D, StdCtrls, SimdUtils, Classes, SysUtils, Forms, Controls,clipbrd,
-  Dialogs, Menus, ExtCtrls, CheckLst, ComCtrls, Spin, Types, fileutil, ulandmarks,
+  Dialogs, Menus, ExtCtrls, CheckLst, ComCtrls, Spin, Types, fileutil, ulandmarks, nifti_types,
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20190127'; //+fixes Metal memory leak
+  kVers = '1.2.20190410'; //+fixes Metal memory leak
 type
+
+  { TGLForm1 }
+
   TGLForm1 = class(TForm)
     AnatDrop: TComboBox;
+    CreateOverlapImageMenu: TMenuItem;
+    CreateSubtractionPlotMenu: TMenuItem;
+    LayerZeroIntensityInvisibleMenu: TMenuItem;
+    LayerInvertColorMapMenu: TMenuItem;
+    Smooth2DCheck: TCheckBox;
+    ZoomBtn: TButton;
     LayerOptionsBtn: TButton;
     ImportMenu: TMenuItem;
     ImportDicomMenu: TMenuItem;
@@ -145,6 +155,7 @@ type
     Y2TrackBar: TTrackBar;
     Z2TrackBar: TTrackBar;
     YLabel: TLabel;
+    SliceZoom: TTrackBar;
     ZLabel: TLabel;
     XTrackBar: TTrackBar;
     XLabel: TLabel;
@@ -261,12 +272,22 @@ type
     X2TrackBar: TTrackBar;
     YTrackBar: TTrackBar;
     ZTrackBar: TTrackBar;
+    procedure CreateOverlapImageMenuClick(Sender: TObject);
+    procedure CreateSubtractionPlotMenuClick(Sender: TObject);
+    procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure FormKeyPress(Sender: TObject; var Key: char);
+    procedure FormMouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure LayerInvertColorMapMenuClick(Sender: TObject);
+    procedure LayerZeroIntensityInvisibleMenuClick(Sender: TObject);
     procedure ReportPositionXYZ(isUpdateYoke: boolean = false);
     procedure AnatAddBtnClick(Sender: TObject);
     procedure AnatDeleteBtnClick(Sender: TObject);
     procedure AnatDropChange(Sender: TObject);
     procedure AnatSaveBtnClick(Sender: TObject);
     procedure AnatUpdate();
+    function OpenDialogExecute (lFilter,lCaption: string): TStringList;
+    function OpenDialogExecute1 (lFilter,lCaption: string): String;
     procedure AnatOpenBtnClick(Sender: TObject);
     procedure AnatUpdateBtnClick(Sender: TObject);
     procedure AnimateTimerTimer(Sender: TObject);
@@ -325,6 +346,8 @@ type
     procedure ScriptMemoKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure ScriptPanelDblClick(Sender: TObject);
     procedure SetColorBarPosition;
+    procedure SliceZoomChange(Sender: TObject);
+    procedure Smooth2DCheckChange(Sender: TObject);
     procedure SmoothMenuClick(Sender: TObject);
     procedure StoreFMRIMenuClick(Sender: TObject);
     procedure TextAndCubeMenuClick(Sender: TObject);
@@ -399,6 +422,9 @@ type
     procedure ViewGPUPrepare(Sender: TObject);
     procedure ViewGPUPaint(Sender: TObject);
     procedure ViewGPUDblClick(Sender: TObject);
+    procedure ViewGPUKeyPress(Sender: TObject; var Key: char);
+    procedure ViewGPUKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+
     procedure setShaderSliders;
     procedure SetDarkMode();
     procedure CutoutChange(Sender: TObject);
@@ -422,11 +448,12 @@ type
     procedure voiUndo(isRefresh: boolean = false);
     procedure MorphologyFill(Origin: TVec3; dxOrigin, radiusMM: int64; drawMode: int64);
     procedure ForceOverlayUpdate();
+    procedure ZoomBtnClick(Sender: TObject);
   private
     //
   end;
 
-var
+  var
   GLForm1: TGLForm1;
 
 implementation
@@ -472,6 +499,14 @@ begin
   if (i < 0) then exit;
   if not vols.Layer(i,niftiVol) then exit;
   niftiVol.CX.NeedsUpdate := true;
+end;
+
+procedure TGLForm1.ZoomBtnClick(Sender: TObject);
+begin
+  Vol1.Slices.ZoomCenter := Vec3(0.5, 0.5, 0.5);
+  SliceZoom.Position :=  SliceZoom.min;
+  //Vol1.Slices.ZoomScale := 1;
+  ViewGPU1.Invalidate;
 end;
 
 procedure TGLForm1.voiUndo(isRefresh: boolean = false);
@@ -1081,6 +1116,7 @@ end;
 function PyRESETDEFAULTS(Self, Args : PPyObject): PPyObject; cdecl;
 begin
   Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  gPrefs.DisplayOrient := kRenderOrient;
   GLForm1.ResetDefaultsClick(nil);
 end;
 
@@ -1391,6 +1427,23 @@ begin
     end;
 end;
 
+//AddMethod('zerointensityinvisible', @PyZEROINTENSITYVISIBLE, ' zerointensityinvisible(layer, bool) ->  For specified layer (0 = background) should voxels with intensity 0 be opaque (bool= 0) or transparent (bool = 1).');
+function PyZEROINTENSITYINVISIBLE(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  layer, vol: integer;
+  v: TNIfTI;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  with GetPythonEngine do
+    if Bool(PyArg_ParseTuple(Args, 'ii:zerointensityinvisible', @layer, @vol)) then begin
+       if not vols.Layer(layer,v) then exit;
+       v.ZeroIntensityInvisible:= (vol = 1);
+       v.ForceUpdate(); //defer time consuming work
+       GLForm1.UpdateTimer.Enabled := true;
+    end;
+end;
+
+
 function PyBMPZOOM(Self, Args : PPyObject): PPyObject; cdecl;
 var
   Z: integer;
@@ -1403,6 +1456,19 @@ begin
       {$IFDEF METALAPI}
       //GLForm1.ScriptOutputMemo.lines.Add('warning: Metal does not yet support bmpzoom()');
       {$ENDIF}
+    end;
+end;
+
+function PyVIEW(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  A: integer;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, 'i:view', @A)) then begin
+      gPrefs.DisplayOrient := A;
+      GLForm1.UpdateVisibleBoxes();
+      ViewGPU1.Invalidate;
     end;
 end;
 
@@ -1472,6 +1538,48 @@ begin
        until (GetTickCount64 >= endTime);
        while (isBusy) or (GLForm1.Updatetimer.enabled) do
              Application.ProcessMessages;
+    end;
+end;
+
+function PyZOOMSCALE2D(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  zoom: integer;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, 'i:zoomscale', @zoom)) then begin
+       if zoom < 1 then zoom := 1;
+       if zoom > 6 then zoom := 6;
+       GLForm1.sliceZoom.position := round(zoom * 100);
+    end;
+end;
+
+function PyZOOMCENTER(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  X,Y,Z: single;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, 'fff:zoomcenter', @X,@Y,@Z)) then begin
+      if (X < 0) then X := 0;
+      if (X > 1) then X := 1;
+      if (Y < 0) then Y := 0;
+      if (Y > 0) then Y := 1;
+      if (Z < 0) then Z := 0;
+      if (Z > 0) then Z := 1;
+      Vol1.Slices.ZoomCenter := Vec3(X,Y,Z);
+      ViewGPU1.Invalidate;
+    end;
+end;
+
+function PySMOOTH2D(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  smooth: integer;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, 'i:smooth', @smooth)) then begin
+       GLForm1.smooth2DCheck.checked := (smooth = 1);
     end;
 end;
 
@@ -1656,11 +1764,17 @@ begin
     AddMethod('shaderupdategradients', @PySHADERUPDATEGRADIENTS, ' shaderupdategradients() -> Recalculate volume properties.');
     AddMethod('sharpen', @PySHARPEN, ' sharpen() -> apply unsharp mask to background volume to enhance edges');
     AddMethod('version', @PyVERSION, ' version() -> Return the version of MRIcroGL.');
+    AddMethod('view', @PyVIEW, ' view(v) -> Display Axial (1), Coronal (2), Sagittal (4), Flipped Sagittal (8), MPR (16), Mosaic (32) or Rendering (64)');
     AddMethod('viewaxial', @PyVIEWAXIAL, ' viewaxial(SI) -> Show rendering with camera superior (1) or inferior (0) of volume.');
     AddMethod('viewcoronal', @PyVIEWCORONAL, ' viewcoronal(AP) -> Show rendering with camera posterior (1) or anterior (0) of volume.');
     AddMethod('viewsagittal', @PyVIEWSAGITTAL, ' viewsagittal(LR) -> Show rendering with camera left (1) or right (0) of volume.');
     AddMethod('volume', @PyVOLUME, ' volume(layer, vol) -> For 4D images, set displayed volume (layer 0 = background; volume 0 = first volume in layer).');
     AddMethod('wait', @PyWAIT, ' wait(ms) -> Pause script for (at least) the desired milliseconds.');
+    AddMethod('zoomscale', @PyZOOMSCALE2D, ' zoomscale2D(z) -> Enlarge 2D image (range 1..6).');
+    AddMethod('smooth', @PySMOOTH2D, ' smooth2D(s) -> make 2D images blurry (linear interpolation, 1) or jagged (nearest neightbor, 0).');
+    AddMethod('zerointensityinvisible', @PyZEROINTENSITYINVISIBLE, ' zerointensityinvisible(layer, bool) ->  For specified layer (0 = background) should voxels with intensity 0 be opaque (bool= 0) or transparent (bool = 1).');
+    AddMethod('zoomcenter', @PyZOOMCENTER, ' zoomcenter(x,y,z) -> Set center of expansion for zoom scale (values in range 0..1 with 0.5 in volume center).');
+
     {$IFDEF PYOBSOLETE}
     AddMethod('azimuth', @PyAZIMUTH, ' azimuth(degrees) -> Rotates the rendering.');
     AddMethod('clip', @PyCLIP, ' clip(depth) -> Creates a clip plane that hides information close to the viewer.');
@@ -1997,6 +2111,208 @@ begin
      CoordEditChange(Sender);
 end;
 
+
+function TGLForm1.OpenDialogExecute (lFilter,lCaption: string): TStringList;
+var
+   openDlg : TOpenDialog;
+begin
+  openDlg := TOpenDialog.Create(self);
+  openDlg.InitialDir := GetCurrentDir;
+  OpenDlg.Filter := lFilter;
+  OpenDlg.FilterIndex := 1;
+  OpenDlg.Title := lCaption;
+  OpenDlg.Options := [ofAllowMultiSelect,ofFileMustExist];
+  result := TStringList.Create();
+  if OpenDlg.Execute then
+     result.AddStrings(OpenDlg.Files);
+  openDlg.Free;
+end;
+
+function TGLForm1.OpenDialogExecute1 (lFilter,lCaption: string): String;
+var
+   openDlg : TOpenDialog;
+begin
+  openDlg := TOpenDialog.Create(self);
+  openDlg.InitialDir := GetCurrentDir;
+  openDlg.Options := [ofFileMustExist];
+  OpenDlg.Filter := lFilter;
+  OpenDlg.FilterIndex := 1;
+  OpenDlg.Title := lCaption;
+  result := '';
+  if OpenDlg.Execute then
+     result := OpenDlg.FileName;
+  openDlg.Free;
+end;
+
+
+procedure TGLForm1.CreateOverlapImageMenuClick(Sender: TObject);
+var
+   fnms: TStrings;
+   nii1, niiI: TNIfTI;
+   sum16, newI: TInt16s;
+   sum8: TUInt8s;
+   isOK: boolean;
+   mx,i,j, vox: integer;
+   dlg : TSaveDialog;
+label
+  123, 124, 125;
+begin
+    fnms := OpenDialogExecute(OpenDialog1.Filter, 'Select files to combine');
+    if fnms.count < 1 then begin
+       ShowMessage('Please select at least 2 images');
+       goto 123;
+     end;
+    sum16 := nil;
+    newI := nil;
+    niiI := TNIfTI.Create();
+    nii1 := TNIfTI.Create(fnms[0], gPrefs.ClearColor, true, gPrefs.MaxVox, isOK);
+    if not isOK then goto 124;
+    vox := nii1.Header.dim[1] * nii1.Header.dim[2] * nii1.Header.dim[3];
+    if (vox < 1) then goto 124;
+    sum16 := nii1.NotZero();
+    for i := 2 to fnms.count do begin
+        niiI := TNIfTI.Create(fnms[i-1], gPrefs.ClearColor, true, gPrefs.MaxVox, isOK);
+        if not isOK then goto 124;
+        newI := niiI.NotZero();
+        for j := 0 to (vox-1) do
+            sum16[j] := sum16[j] + newI[j];
+    end;
+    mx := 0;
+    for j := 0 to (vox-1) do
+        if (sum16[j] > mx) then mx := sum16[j];
+    if mx = 0 then begin
+       showmessage('No non-zero voxels found');
+       goto 125;
+    end;
+    if (mx > 32767) then begin
+       showmessage('Error: maximum density exceeds 32767');
+       goto 125;
+    end;
+    dlg := TSaveDialog.Create(self);
+    dlg.Title := 'Save sum map as NIfTI volume';
+    dlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+    {$IFDEF Darwin}
+    if PosEx('.app', dlg.InitialDir) > 0 then
+       dlg.InitialDir := HomeDir(false);
+    {$ENDIF}
+    dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
+    dlg.DefaultExt := '*.nii';
+    dlg.FilterIndex := 0;
+    if not dlg.Execute then
+       goto 125;
+    if (mx < 256) then begin
+       setlength(sum8, vox);
+       for j := 0 to (vox-1) do
+           sum8[j] := sum16[j];
+       nii1.SaveAsSourceOrient(dlg.FileName, '', 'N'+inttostr(fnms.count), sum8, kDT_UINT8, kNIFTI_INTENT_ESTIMATE);
+       sum8 := nil;
+    end else
+        nii1.SaveAsSourceOrient(dlg.FileName, '', 'N'+inttostr(fnms.count), TUInt8s(sum16), kDT_INT16, kNIFTI_INTENT_ESTIMATE);
+    goto 125; //success - go to cleanup
+    124: //report error, then cleanup
+    showmessage('Error: make sure all images have the same dimensions');
+    125:
+    nii1.Free;
+    niiI.Free;
+    sum16 := nil;
+    newI := nil;
+    123:
+    fnms.Free;
+end;
+
+function parseIntentCode(nii: TNIfTI): integer;
+var
+   s: string;
+begin
+     result := -1; //error;
+     if (nii.Header.intent_code <> kNIFTI_INTENT_ESTIMATE) or (length(nii.Header.intent_name) < 2) or (nii.Header.intent_name[1] <> 'N')  then exit;
+     s := copy(nii.Header.intent_name,2, length(nii.Header.intent_name)-1);
+     result := StrToIntDef(s, -1);
+
+end;
+
+procedure TGLForm1.CreateSubtractionPlotMenuClick(Sender: TObject);
+var
+   fnm: string;
+   niiPos, niiNeg: TNIfTI;
+   nPos, nNeg, vox, i: integer;
+   isOK: boolean;
+   pct32, neg32 : TFloat32s;
+      dlg : TSaveDialog;
+   //dlg : TSaveDialog;
+label
+  123, 124, 125;
+begin
+    {$IFDEF Darwin}
+    //showmessage('Select positive image (made with "Create Overlap Image")');
+    {$ENDIF}
+    fnm := OpenDialogExecute1(OpenDialog1.Filter, 'Select positive image (made with "Create Overlap Image")');
+    niiPos := TNIfTI.Create(fnm, gPrefs.ClearColor, true, gPrefs.MaxVox, isOK);
+    if not isOK then
+       nPos := -1
+    else
+        nPos := parseIntentCode(niiPos);
+    if (nPos < 1)  then begin
+       niiPos.Free;
+       showmessage('Expected NIfTI image created with "Create Overlap Image")');
+       exit;
+
+    end;
+
+    {$IFDEF Darwin}
+    //showmessage('Select negative image (made with "Create Overlap Image")');
+    {$ENDIF}
+    fnm := OpenDialogExecute1(OpenDialog1.Filter, 'Select negative image (made with "Create Overlap Image")');
+    niiNeg := TNIfTI.Create(fnm, gPrefs.ClearColor, true, gPrefs.MaxVox, isOK);
+    if not isOK then
+       nNeg := -1
+    else
+        nNeg := parseIntentCode(niiNeg);
+    if (nNeg < 1)  then begin
+       niiNeg.Free;
+       niiPos.Free;
+       showmessage('Expected NIfTI image created with "Create Overlap Image")');
+       exit;
+    end;
+    vox := niiPos.Header.dim[1] * niiPos.Header.dim[2] * niiPos.Header.dim[3];
+    i   := niiNeg.Header.dim[1] * niiNeg.Header.dim[2] * niiNeg.Header.dim[3];
+    if (vox < 1) or (vox <> i) then begin
+       niiNeg.Free;
+       niiPos.Free;
+       showmessage('Images should have same number of voxels');
+       exit;
+    end;
+
+
+
+    dlg := TSaveDialog.Create(self);
+    dlg.Title := 'Save sum map as NIfTI volume';
+    dlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+    {$IFDEF Darwin}
+    if PosEx('.app', dlg.InitialDir) > 0 then
+       dlg.InitialDir := HomeDir(false);
+    {$ENDIF}
+    dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
+    dlg.DefaultExt := '*.nii';
+    dlg.FilterIndex := 0;
+
+    pct32 := niiPos.AsFloats();
+    neg32 := niiNeg.AsFloats();
+    for i := 0 to (vox -1) do
+        pct32[i] := ((pct32[i] / nPos) - (neg32[i] / nNeg)) * 100;
+    if dlg.Execute then
+       niiPos.SaveAsSourceOrient(dlg.FileName, '', '%'+inttostr(nPos)+':'+inttostr(nNeg), TUInt8s(pct32), kDT_FLOAT32, kNIFTI_INTENT_ESTIMATE, -100, 100);
+
+    pct32 := nil;
+    neg32 := nil;
+
+
+
+    niiNeg.Free;
+    niiPos.Free;
+
+end;
+
 procedure TGLForm1.AnatOpenBtnClick(Sender: TObject);
 const
      kAnatFilter = 'AnatomyFile|*.anat';
@@ -2121,6 +2437,12 @@ var
  i: integer;
 begin
      i := (Sender as TMenuItem).Tag;
+     (*if i = 0 then begin
+        gPrefs.FlipLR_Radiological := not gPrefs.FlipLR_Radiological;
+        Vol1.Slices.RadiologicalConvention := gPrefs.FlipLR_Radiological;
+        ViewGPU1.Invalidate;
+        exit;
+     end;*)
      if (gPrefs.DisplayOrient <> kRenderOrient) then begin
         case i of
              0: SliceLBtn.Click;
@@ -2497,6 +2819,7 @@ begin
  vFrac := niftiVol.FracShiftSlice(vol1.Slices.SliceFrac, sliceMove); //move a desired number of slices
  vol1.SetSlice2DFrac(vFrac);
  ViewGPU1.Invalidate;
+ ReportPositionXYZ(true);
 end;
 
 procedure TGLForm1.RemoveHazeMenuClick(Sender: TObject);
@@ -2863,6 +3186,8 @@ begin
   LayerDownMenu.Enabled := (i > 0) and (i < (LayerList.Count-1));
   if not vols.Layer(LayerList.ItemIndex,niftiVol) then exit;
   LayerCutoutMenu.Checked := niftiVol.HiddenByCutout;
+  LayerZeroIntensityInvisibleMenu.Checked := niftiVol.ZeroIntensityInvisible;
+  LayerInvertColorMapMenu.Checked := niftiVol.CX.InvertColorMap;
   LayerPrevVolumeMenu.Enabled := (niftiVol.Header.dim[4] > 1);
   LayerNextVolumeMenu.Enabled := LayerPrevVolumeMenu.Enabled;
   LayerShowBidsMenu.Enabled := (niftiVol.BidsName <> '');
@@ -2949,10 +3274,10 @@ var
   bmpEdit: TEdit;
   LoadFewVolumesCheck, LandMarkCheck,
   {$IFDEF LCLCocoa} DarkModeCheck, RetinaCheck,{$ENDIF} RadiologicalCheck: TCheckBox;
-  OkBtn, dcm2niixBtn, AdvancedBtn: TButton;
+  OkBtn, AdvancedBtn: TButton;
   bmpLabel: TLabel;
   WindowCombo : TComboBox;
-  isDcm2niix, isAdvancedPrefs  {$IFDEF LCLCocoa}, isDarkModeChanged, isRetinaChanged {$ENDIF}: boolean;
+  isAdvancedPrefs  {$IFDEF LCLCocoa}, isDarkModeChanged, isRetinaChanged {$ENDIF}: boolean;
 begin
   PrefForm:=TForm.Create(GLForm1);
   PrefForm.AutoSize := true;
@@ -3087,22 +3412,6 @@ begin
   OkBtn.Anchors := [akTop, akLeft];
   OkBtn.Parent:=PrefForm;
   OkBtn.ModalResult:= mrOK;
-  //dcm2niix button
-  dcm2niixBtn :=TButton.create(PrefForm);
-  dcm2niixBtn.Caption:='dcm2niix path';
-  dcm2niixBtn.Hint := 'Specify the location of the DICOM importer (allows you to select custom version)';
-  dcm2niixBtn.ShowHint := true;
-  dcm2niixBtn.Width:= 100;
-  dcm2niixBtn.AutoSize := true;
-  dcm2niixBtn.AnchorSide[akTop].Side := asrCenter;
-  dcm2niixBtn.AnchorSide[akTop].Control := OkBtn;
-  dcm2niixBtn.BorderSpacing.Top := 6;
-  dcm2niixBtn.AnchorSide[akLeft].Side := asrCenter;
-  dcm2niixBtn.AnchorSide[akLeft].Control := PrefForm;
-  dcm2niixBtn.BorderSpacing.Left := 0;
-  dcm2niixBtn.Anchors := [akTop, akLeft];
-  dcm2niixBtn.Parent:=PrefForm;
-  dcm2niixBtn.ModalResult:= mrCancel;
   //Advanced button
   AdvancedBtn:=TButton.create(PrefForm);
   AdvancedBtn.Caption:='Advanced';
@@ -3133,7 +3442,6 @@ begin
   if gPrefs.BitmapZoom < 1 then gPrefs.BitmapZoom := 1;
   if gPrefs.BitmapZoom > 10 then gPrefs.BitmapZoom := 10;
   isAdvancedPrefs := (PrefForm.ModalResult = mrYesToAll);
-  isDcm2niix := (PrefForm.ModalResult = mrCancel);
   if (gPrefs.LandmarkPanel <> LandmarkCheck.Checked) then begin
      gPrefs.LandmarkPanel := LandmarkCheck.Checked;
      UpdateVisibleBoxes();
@@ -3158,8 +3466,6 @@ begin
   end;
   {$ENDIF}
   ViewGPU1.Invalidate;
-  if (isDcm2niix) then
-     dcm2niiForm.findCustomDcm2niix;
 end; // PrefMenuClick()
 
 procedure TGLForm1.LayerColorFromZero(Layer: integer; IsFromZero: boolean);
@@ -3242,6 +3548,10 @@ begin
  dlg := TSaveDialog.Create(self);
  dlg.Title := 'Save NIfTI volume';
  dlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+ {$IFDEF Darwin}
+ if PosEx('.app', dlg.InitialDir) > 0  then
+       dlg.InitialDir := HomeDir(false);
+ {$ENDIF}
  dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
  dlg.DefaultExt := '*.nii';
  dlg.FilterIndex := 0;
@@ -3317,6 +3627,21 @@ begin
    //gClrbar.isTopOrRight := true; gClrbar.isVertical:=false;
 end;
 
+procedure TGLForm1.SliceZoomChange(Sender: TObject);
+begin
+  //Vol1.SetSlice2DFrac(X,Y,i); ccc
+  Vol1.Slices.ZoomScale := SliceZoom.position/100;
+  ViewGPU1.Invalidate;
+end;
+
+procedure TGLForm1.Smooth2DCheckChange(Sender: TObject);
+begin
+ if vols = nil then exit; //mungo : mosaic selected before image is loaded
+
+ Vol1.ShowSmooth2D:= Smooth2DCheck.checked;
+ ViewGPU1.Invalidate;
+end;
+
 procedure TGLForm1.SmoothMenuClick(Sender: TObject);
 var
     niftiVol: TNIfTI;
@@ -3360,7 +3685,6 @@ procedure TGLForm1.ToolPanelDblClick(Sender: TObject);
 begin
   ToolPanel.Width := 4;
 end;
-
 
 procedure TGLForm1.ReportPositionXYZ(isUpdateYoke: boolean = false);
 var
@@ -3457,7 +3781,7 @@ end;
 procedure TGLForm1.ScriptingSaveMenuClick(Sender: TObject);
 begin
    if not ScriptSaveDialog.Execute then exit;
-     ScriptSaveDialog.Filename := ChangeFileExt(ScriptSaveDialog.Filename,'py');
+     ScriptSaveDialog.Filename := ChangeFileExt(ScriptSaveDialog.Filename,'.py');
      ScriptMemo.Lines.SaveToFile(ScriptSaveDialog.Filename);
 end;
 
@@ -3592,7 +3916,7 @@ begin
   if (not fileexists(fnm)) and (not DirectoryExists(fnm)) then exit;
   if (isDICOM(fnm)) then begin
   //if (not isNifti(Filenames[0])) then begin
-     fnm := dcm2Nifti(dcm2niiForm.getExeName, fnm);
+     fnm := dcm2Nifti(dcm2niiForm.getCustomDcm2niix, fnm);
      if fnm = '' then exit;
      AddBackground(fnm, false);
      if fnm <> Filenames[0] then
@@ -3664,12 +3988,135 @@ end;
    end;
 end;
 
+procedure TGLForm1.FormKeyPress(Sender: TObject; var Key: char);
+begin
+  //LayerBox.caption := 'x' +inttostr(random(888));
+
+end;
+
+procedure TGLForm1.FormKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  //if (VK_UP = Key) then LayerBox.caption := 'F'+inttostr(random(888));
+
+  //if (VK_UP <> Key) then LayerBox.caption := 'F-'+inttostr(random(888));     //LayerBox.caption := inttostr(random(888));
+
+end;
+
+
+
+procedure TGLForm1.FormMouseDown(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+begin
+//
+end;
+
+procedure TGLForm1.LayerInvertColorMapMenuClick(Sender: TObject);
+ var
+     i: integer;
+     niftiVol: TNIfTI;
+ begin
+   i := LayerList.ItemIndex;
+   if (i < 0) or (i >= LayerList.Count) then exit;
+   if not vols.Layer(LayerList.ItemIndex,niftiVol) then exit;
+   //niftiVol.SetInvertColorMap(LayerInvertColorMapMenu.Checked);
+   //GenerateLUT
+   //.InvertColorMap := LayerInvertColorMapMenu.Checked;
+   //niftiVol.InvertColorMap:= LayerInvertColorMapMenu.Checked;
+   niftiVol.CX.InvertColorMap:= LayerInvertColorMapMenu.Checked;
+   niftiVol.CX.NeedsUpdate := true;
+   niftiVol.CX.GenerateLUT();
+   niftiVol.ForceUpdate();
+   updateTimer.Enabled := true;
+   //niftiVol.ForceUpdate(); //defer time consuming work
+   //updateTimer.enabled := true;
+  //
+end;
+
+procedure TGLForm1.LayerZeroIntensityInvisibleMenuClick(Sender: TObject);
+ var
+     i: integer;
+     niftiVol: TNIfTI;
+ begin
+   i := LayerList.ItemIndex;
+   if (i < 0) or (i >= LayerList.Count) then exit;
+   if not vols.Layer(LayerList.ItemIndex,niftiVol) then exit;
+   niftiVol.ZeroIntensityInvisible:= LayerZeroIntensityInvisibleMenu.Checked;
+   niftiVol.ForceUpdate(); //defer time consuming work
+   updateTimer.enabled := true;
+end;
+
+procedure TGLForm1.ViewGPUKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+ var
+  sliceMove: TVec3i;
+  vFrac: TVec3;
+  niftiVol: TNIfTI;
+ begin
+  if not vols.Layer(0,niftiVol) then exit;
+  sliceMove:= pti(0,0,0);
+   Case Key of
+      VK_LEFT: sliceMove.X := -1; //LEFT
+      VK_RIGHT: sliceMove.X := +1; //RIGHT
+      VK_DOWN: sliceMove.Y := -1; //POSTERIOR
+      VK_UP: sliceMove.Y := +1; //ANTERIOR
+      VK_NEXT: sliceMove.Z := -1; //INFERIOR
+      VK_PRIOR: sliceMove.Z := +1; //SUPERIOR
+  end;
+  vFrac := niftiVol.FracShiftSlice(vol1.Slices.SliceFrac, sliceMove); //move a desired number of slices
+  vol1.SetSlice2DFrac(vFrac);
+  ViewGPU1.Invalidate;
+  ReportPositionXYZ(true);
+ end;
+(*begin
+ case Key of
+              VK_LEFT: SliceLBtn.Click;
+              VK_RIGHT: SliceRBtn.Click;
+              VK_UP: SlicePBtn.Click;
+              VK_DOWN: SliceABtn.Click; xxx
+              //VK_DOWN: SliceIBtn.Click;
+              //VK_UP: SliceSBtn.Click;
+         end;
+
+end;*)
+
+procedure TGLForm1.ViewGPUKeyPress(Sender: TObject; var Key: char);
+begin
+ //LayerBox.caption := 'z'+inttostr(random(888));
+  // if (VK_UP = Key) then caption := inttostr(random(888));
+  //if (VK_UP <> Key) then caption := '-'+inttostr(random(888));
+
+
+end;
+
 procedure TGLForm1.ViewGPUDblClick(Sender: TObject);
 var
 niftiVol: TNIfTI;
+ ss: TShiftState;
+ //fracXYZ: TVec3;
+ i: integer;
 begin
 	if not vols.Layer(0,niftiVol) then exit;
 	if Vol1.CE.ColorEditorDblClick(niftiVol) then exit;
+        ss := getKeyshiftstate;
+        if (Sender <> nil) and (ssCtrl in ss) and (gPrefs.DisplayOrient <= kMax2DOrient) then begin
+           //fracXYZ := Vol1.GetSlice2DFrac(X,Y,i);
+           //LayerBox.Caption := format('%f %f %f', [Vol1.Slices.ZoomCenter.x, Vol1.Slices.ZoomCenter.y, Vol1.Slices.ZoomCenter.z]);
+           if (ssShift in ss) then begin
+              Vol1.SetSlice2DFrac(Vec3(0.5,0.5,0.5));
+              //Vol1.Slices.ZoomScale := 1.0;
+              SliceZoom.Position := SliceZoom.min;
+           end else
+               Vol1.SetSlice2DFrac(Vol1.GetSlice2DFrac(gMouse.X,gMouse.Y,i)); //
+
+
+           Vol1.Slices.ZoomCenter := 1.0 - Vol1.Slices.SliceFrac;
+           //Vol1.Slices.ZoomCenter := 1.0 - fracXYZ;
+           //SliceBox.Caption := format('%f %f %f', [Vol1.Slices.ZoomCenter.x, Vol1.Slices.ZoomCenter.y, Vol1.Slices.ZoomCenter.z]);
+           //Vol1.Slices.ZoomCenter := Vol1.Slices.ZoomCenter - 0.5;
+           ViewGPU1.invalidate;
+           exit;
+        end;
+
 	if true then begin//(not (gPrefs.ColorEditor)) or (not InColorBox(abs(MousePt.X),abs(MousePt.Y))) then begin
 		if not gPrefs.ColorbarVisible then
 		exit;
@@ -3688,7 +4135,6 @@ begin
   GLForm1.RenderMenu.Checked := true;
   //gPrefs.LabelOrient := TextAndCubeMenu.Checked;
   //Vol1.Slices.LabelOrient := gPrefs.LabelOrient;
-  gPrefs.DisplayOrient := kRenderOrient;
   Vols.AdditiveOverlayBlending := false;
   LayerAdditiveMenu.Checked := Vols.AdditiveOverlayBlending;
   LayerMaskWithBackgroundMenu.Checked := Vols.MaskWithBackground;
@@ -3698,6 +4144,7 @@ begin
   SetDefaultPrefs(gPrefs, false);
   //gPrefs.colorbar := gClrbar.isVisible;
   VisibleClrbarMenu.Checked := gPrefs.ColorbarVisible;
+  Smooth2DCheck.Checked := gPrefs.Smooth2D;
   gClrbar.isVisible := VisibleClrbarMenu.checked;
   TransBlackClrbarMenu.Checked := true;
   ClrbarClr(4);
@@ -3712,9 +4159,13 @@ begin
   LightAziTrack.Position := 0;
   ShaderDrop.ItemIndex := 0;
   ShaderDropChange(Sender);
+  Vol1.Slices.ZoomCenter := Vec3(0.5,0.5,0.5);
+  sliceZoom.position := 100;
   ss := getKeyshiftstate;
   if (Sender <> nil) and (ssShift in ss) then begin
     LineWidthEdit.value := 1;
+    gPrefs.DisplayOrient := kRenderOrient;
+
     gPrefs.LineWidth := 1;
     Vol1.Slices.LineWidth := 1;
     Vol1.Slices.LineColor := Vec4(0.5, 0.5, 0.7, 1.0);
@@ -3727,6 +4178,7 @@ end;
 procedure TGLForm1.DisplayMenuClick(Sender: TObject);
 begin
      gPrefs.DisplayOrient := (sender as TMenuItem).tag;
+     //gPrefs.StartupDisplayOrient:= gPrefs.DisplayOrient; //set so program remembers preferred view
      UpdateVisibleBoxes();
      if gPrefs.DisplayOrient = kMosaicOrient then
        UpdateMosaic(Sender)
@@ -3905,6 +4357,7 @@ begin
  w := GLBox.ClientWidth;
  h := GLBox.ClientHeight;
  GLForm1.OptimalMosaicPixels(wOut,hOut);
+ //showmessage(format('%d %d', [wOut, hOut])); exit;
  wOut := wOut * gPrefs.BitmapZoom;
  hOut := hOut * gPrefs.BitmapZoom;
  if (wOut <= 0) or (hOut <= 0) or (w <= 0) or (h <= 0) then exit(nil);
@@ -4104,7 +4557,11 @@ begin
     +kEOLN+'Display 2D Slices'
     +kEOLN+'  Click: Move crosshair'
     +kEOLN+'  Shift-Drag: Adjust contrast'
-    +kEOLN+'  Mouse-wheel: Change slice'
+    +kEOLN+'  Mouse-Wheel: Change slice'
+    +kEOLN+'  Control-Mouse-Wheel: Change zoom'
+    +kEOLN+'  Control-Shift-Drag: Pan image'
+    +kEOLN+'  Control-Double-Click: Pan to center clicked location'
+    +kEOLN+'  Control-Shift-Double-Click: Reset pan and zoom'
     +kEOLN+'Colorbar'
     +kEOLN+'  Double-Click: Change position'
     +kEOLN+'Color Editor'
@@ -4348,6 +4805,8 @@ procedure TGLForm1.UpdateShaderSettings(Sender: TObject);
 begin
  Vol1.Quality1to10:=QualityTrack.Position;
  Vol1.LightPosition := sph2cartDeg90Light(LightAziTrack.Position, LightElevTrack.Position);
+ //Caption := format('%g %g %g', [Vol1.LightPosition.X, Vol1.LightPosition.Y, Vol1.LightPosition.Z]);
+
  Vol1.clipPlane := sph2cartDeg90clip(ClipAziTrack.Position, ClipElevTrack.Position, ClipDepthTrack.Position/ClipDepthTrack.Max );
  ViewGPU1.Invalidate;
 end;
@@ -4514,23 +4973,37 @@ begin
   dlg.Free;
 end;
 
+{$IFDEF LCLCocoa}{$IFNDEF METALAPI}
+{$DEFINE isCocoaOpenGL}
+{$ENDIF}{$ENDIF}
+
+{$IFDEF isCocoaOpenGL}
+var
+gIsMouseDown: boolean = false;      // https://bugs.freepascal.org/view.php?id=35480
+{$ENDIF}
+
 procedure TGLForm1.ViewGPUMouseDown(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
 var
    niftiVol: TNIfTI;
    xIn, yIn, i: integer;
-   {$IFDEF LCLCocoa}{$IFNDEF METALAPI}
+   {$IFDEF isCocoaOpenGL}
    f: single;
-   {$ENDIF}{$ENDIF}
+   {$ENDIF}
    fracXYZ: TVec3;
 begin
  xIn := X;
  yIn := Y;
- {$IFDEF LCLCocoa}{$IFNDEF METALAPI}
+ ViewGPU1.SetFocus;
+ {$IFDEF isCocoaOpenGL}
+ //LayerBox.Caption := inttostr(random(222));
  f := ViewGPU1.retinaScale;
  X := round(X * f);
  Y := round(Y * f);
- {$ENDIF}{$ENDIF}
+ //ss := getKeyshiftstate;
+ //if  (ssShift in ss) then
+
+ {$ENDIF}
  gMouseDrag := false;
   if (ssAlt in Shift) and (ColorEditorMenu.Checked) then begin
      SaveColorTable;
@@ -4550,18 +5023,26 @@ begin
     EnsureOpenVoi();
     fracXYZ := Vol1.GetSlice2DFrac(X,Y,i);
     gMouseLimitHi := Vol1.GetSlice2DMaxXY(X,Y, gMouseLimitLo);
-    if (ssShift in Shift) then begin
+    //if (ssShift in Shift) then
+    //     SliceBox.Caption := 'SHIFT:'+inttostr(Vols.Drawing.ActivePenColor)
+    //else
+    //    SliceBox.Caption := 'no shift:'+inttostr(Vols.Drawing.ActivePenColor);
+    (*if (ssShift in Shift) then begin
        if Vols.Drawing.ActivePenColor <> 0 then
            Vols.Drawing.ActivePenColor := 0
         else
           Vols.Drawing.ActivePenColor := 1;
-     end;
+     end; *) // https://bugs.freepascal.org/view.php?id=35480
     if (i > 0) then begin
        if (ssAlt in Shift) then begin
-          Vols.Drawing.voiFloodFill(i, fracXYZ);
+          {$IFDEF isCocoaOpenGL}
+          if gIsMouseDown then exit;
+          gIsMouseDown := true;
+          {$ENDIF}
+          Vols.Drawing.voiFloodFill(i, fracXYZ, (ssShift in Shift));
           ViewGPU1.Invalidate;
        end else
-           Vols.Drawing.voiMouseDown(i, fracXYZ);
+           Vols.Drawing.voiMouseDown(i, fracXYZ, (ssShift in Shift));
     end;
     exit;
  end;
@@ -4572,16 +5053,17 @@ end;
 
 procedure TGLForm1.ViewGPUMouseUp(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
-{$IFDEF LCLCocoa}{$IFNDEF METALAPI}
+{$IFDEF isCocoaOpenGL}
 var
  f: single;
- {$ENDIF}{$ENDIF}
+ {$ENDIF}
 begin
- {$IFDEF LCLCocoa}{$IFNDEF METALAPI}
+ {$IFDEF isCocoaOpenGL}
+ gIsMouseDown := false;
  f := ViewGPU1.retinaScale;
  X := round(X * f);
  Y := round(Y * f);
- {$ENDIF}{$ENDIF}
+ {$ENDIF}
  vol1.SelectionRect.x := -1;
  if Vol1.CE.ColorEditorMouseUp() then
     UpdateTimer.Enabled := true;
@@ -4599,13 +5081,21 @@ begin
  gMouse.Y := -1; //released
 end;
 
+function limit(val,min,max: TScalar): TScalar;
+begin
+     if (val < min) then exit(min);
+     if (val > max) then exit(max);
+     exit(val);
+end;
+
 procedure TGLForm1.ViewGPUMouseMove(Sender: TObject; Shift: TShiftState; X,
   Y: Integer);
 var
- sliceMM, fracXYZ: TVec3;
- i: integer;
- vox: TVec3i;
- str : string;
+ //sliceMM,
+ fracXYZdown, fracXYZ, diff: TVec3;
+ i, j: integer;
+ //vox: TVec3i;
+ //str : string;
  niftiVol: TNIfTI;
  {$IFDEF LCLCocoa}{$IFNDEF METALAPI}
  f:single;
@@ -4650,13 +5140,30 @@ begin
        end;
        exit;
     end;
-    Vol1.SetSlice2DFrac(Vol1.GetSlice2DFrac(X,Y,i));
+    if (ssCtrl in Shift)  then begin //pan image
+       fracXYZdown := Vol1.GetSlice2DFrac(gMouse.X,gMouse.Y,j);
+       fracXYZ := Vol1.GetSlice2DFrac(X,Y,i);
+       if (j <> i) then exit;
+       diff :=  (fracXYZdown-fracXYZ);
+       //if Vol1.Slices.RadiologicalConvention then
+       //   diff.x := -diff.x;
+       diff := Vol1.Slices.ZoomCenter - diff;
+       diff.x := limit(diff.x, -0.8, 1.8);
+       diff.y := limit(diff.y, -0.8, 1.8);
+       diff.z := limit(diff.z, -0.8, 1.8);
+       Vol1.Slices.ZoomCenter := diff;
+       ViewGPU1.Invalidate;
+       gMouse.X := X;
+       gMouse.Y := Y;
+       exit;
+    end;
+    Vol1.SetSlice2DFrac(Vol1.GetSlice2DFrac(X,Y,i)); //
     if (Vols.Drawing.IsOpen) then //set crosshair to voxel center
        Vol1.SetSlice2DFrac(niftiVol.FracShiftSlice(vol1.Slices.SliceFrac, pti(0,0,0)));
-     sliceMM := Vol1.Slice2Dmm(niftiVol, vox);
-     ReportPositionXYZ(true);
-     ViewGPU1.Invalidate;
-     exit;
+    //sliceMM := Vol1.Slice2Dmm(niftiVol, vox);
+    ReportPositionXYZ(true);
+    ViewGPU1.Invalidate;
+    exit;
   end;
   if gPrefs.DisplayOrient <> kRenderOrient then exit; //e.g. mosaics
   Vol1.Azimuth := Vol1.Azimuth + (X - gMouse.X);
@@ -4717,36 +5224,63 @@ procedure TGLForm1.ViewGPUMouseWheel(Sender: TObject; Shift: TShiftState;
 var
    niftiVol: TNIfTI;
    isUp: boolean;
-begin
+   ss: TShiftState;
+   x,y,orient: integer;
+   f: single;
+ begin
+
   if gPrefs.DisplayOrient = kMosaicOrient then exit;
   if gPrefs.DisplayOrient <> kRenderOrient then begin
      if not vols.Layer(0,niftiVol) then exit;
      //if niftiVol.VolumesLoaded > 1 then
      //   niftiVol.SetDisplayVolume(niftiVol.VolumeDisplayed + 1)
      //else
-         begin
+     begin
         if WheelDelta = 0 then exit;
         isUp := (WheelDelta > 0);
-        if gPrefs.DisplayOrient = kCoronalOrient then begin
+        ss := getKeyshiftstate;
+        if  (ssCtrl in ss) then begin
+        //if not (ssCtrl in Shift) then begin
+           if isUp then
+              SliceZoom.Position:= SliceZoom.Position - 20
+           else
+               SliceZoom.Position:= SliceZoom.Position + 20;
+           exit;
+        end;
+        orient := gPrefs.DisplayOrient;
+        if orient = kAxCorSagOrient then begin
+           f := 1;
+           {$IFDEF LCLCocoa}{$IFNDEF METALAPI}
+           f := ViewGPU1.retinaScale;
+           {$ENDIF}{$ENDIF}
+           X := round(MousePos.X * f);
+           Y := round(MousePos.Y * f);
+           Vol1.GetSlice2DFrac(X,Y,orient);
+           //LayerBox.Caption := format('%f %f %d', [MousePos.X,MousePos.Y, orient]);
+        end;
+        if orient = kCoronalOrient then begin
              if (isUp) then
                 SliceABtn.Click
              else
                  SlicePBtn.Click;
-        end else if (gPrefs.DisplayOrient = kSagRightOrient) or (gPrefs.DisplayOrient =  kSagLeftOrient) then begin
-
+        end else if (orient = kSagRightOrient) or (orient =  kSagLeftOrient) then begin
              if (isUp) then
                 SliceRBtn.Click
              else
                  SliceLBtn.Click;
-        end else begin
+        end else if (orient = kAxialOrient) then begin
             if (isUp) then
                SliceSBtn.Click
             else
                 SliceIBtn.Click;
-
+        //end else if (DisplayNextMenu.Enabled) and (gPrefs.DisplayOrient = kAxCorSagOrient ) then begin //scroll wheel in empty space, can we change volume?
+        end else if (DisplayNextMenu.Enabled) then begin //scroll wheel in empty space, can we change volume?
+           if (isUp) then
+              DisplayNextMenu.Click
+           else
+               DisplayPrevMenu.Click;
         end;
         exit;
-
      end;
      UpdateTimer.Enabled := true;
      exit;
@@ -4806,9 +5340,10 @@ begin
       if (gPrefs.InitScript = '') and (fileexists(ScriptDir+pathdelim+'startup.py')) then
          gPrefs.InitScript := ScriptDir+pathdelim+'startup.py';
       IniFile(true,  gPrefs);
+      gPrefs.DisplayOrient := gPrefs.StartupDisplayOrient;
       dcm2niiForm.setCustomDcm2niix(gPrefs.CustomDcm2niix);
       if (gPrefs.DisplayOrient = kMosaicOrient) then
-         gPrefs.DisplayOrient := kRenderOrient;
+         gPrefs.DisplayOrient := kAxCorSagOrient;//kRenderOrient;
   end;
   AnimateTimer.Interval:= gPrefs.AnimationIntervalMsec;
   if gPrefs.StartupWindowMode = 1 then begin
@@ -4869,6 +5404,11 @@ begin
   ViewGPU1 :=  TMetalControl.Create(CenterPanel);
   //ViewGPU1.OnPrepare := @ViewGPUPrepare;
   EditMenu.Visible := false; //to do: copy bitmap
+  Smooth2DCheck.Visible := false; //to do: Metal nearest neighbor must change shader
+  //To do: variant of _Texture2D.metal e.g. _Texture2DFlat.metal with nearest neighbor :
+  // constexpr sampler texSampL (mag_filter::linear,min_filter::linear);
+  // constexpr sampler texSampN (mag_filter::nearest,min_filter::nearest);
+
   {$ELSE}
   ViewGPU1 :=  TOpenGLControl.Create(GLForm1);
   ViewGPU1.OpenGLMajorVersion := 3;
@@ -4878,6 +5418,8 @@ begin
   ViewGPU1.Parent := GLForm1;
   {$IFDEF METALAPI}ViewGPU1.renderView.setSampleCount(4);{$ENDIF}
   ViewGPU1.Align:= alClient;
+  ViewGPU1.OnKeyPress:=@ViewGPUKeyPress;
+  ViewGPU1.OnKeyDown := @ViewGPUKeyDown;
   ViewGPU1.OnDblClick :=  @ViewGPUDblClick;
   ViewGPU1.OnMouseDown := @ViewGPUMouseDown;
   ViewGPU1.OnMouseMove := @ViewGPUMouseMove;
@@ -4952,7 +5494,7 @@ begin
   ScriptingRunMenu.ShortCut := ShortCut(Word('R'), [ssModifier]); //ssCtrl -> ssMeta
   OpenMenu.ShortCut := ShortCut(Word('O'), [ssModifier]); //ssCtrl -> ssMeta
   AddOverlayMenu.ShortCut := ShortCut(Word('A'), [ssModifier]); //ssCtrl -> ssMeta
-  DrawHideMenu.ShortCut := ShortCut(Word('H'), [ssModifier]); //ssCtrl -> ssMeta
+  DrawHideMenu.ShortCut := ShortCut(Word('T'), [ssModifier]); //ssCtrl -> ssMeta used to be meta-H but used by Apple to Hide program
   ScriptingNewMenu.ShortCut  := ShortCut(Word('N'), [ssModifier]); //ssCtrl -> ssMeta
   DrawUndoMenu.ShortCut  := ShortCut(Word('U'), [ssModifier]);
   DrawCloneMenu.ShortCut  := ShortCut(Word('Z'), [ssModifier]);
@@ -4962,7 +5504,8 @@ begin
   DrawRedMenu.ShortCut  := ShortCut(Word('1'), [ssModifier]);
   DrawGreenMenu.ShortCut  := ShortCut(Word('2'), [ssModifier]);
   DrawBlueMenu.ShortCut  := ShortCut(Word('3'), [ssModifier]);
-  YokeMenu.ShortCut:= ShortCut(Word('Y'), [ssModifier]); ;
+  YokeMenu.ShortCut:= ShortCut(Word('Y'), [ssModifier]);
+  //MakePullDownButton(LayerOptionsBtn, LayerPopup, false, 0, 2, 0, 0);
   {$ELSE}
   AppleMenu.Visible := false;
   {$ENDIF}
@@ -5003,6 +5546,7 @@ begin
   Vol1.SetColorBar(gClrBar);
   gClrbar.isVisible := gPrefs.ColorbarVisible;
   VisibleClrbarMenu.checked := gPrefs.ColorbarVisible;
+  Smooth2DCheck.Checked := gPrefs.Smooth2D;
   TextAndCubeMenu.Checked := gPrefs.LabelOrient;
   SetColorBarPosition;
   gClrbar.SizeFraction := gPrefs.ColorbarSize/1000;

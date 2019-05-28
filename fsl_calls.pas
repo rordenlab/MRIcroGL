@@ -17,6 +17,8 @@ function GetFSLdir: string;
 var gFSLbase: string;
 implementation
 
+uses dcm_load, strutils;
+
 function ChangeFilePrefix(lInName,lPrefix: string): string;
 begin
      result := extractfilepath(lInName)+lPrefix+extractfilename(lInName);
@@ -181,6 +183,12 @@ var
    lCmd: string;
 begin
     result := ChangeFilePrefix(lFilename,'b');
+    {$IFDEF Darwin}
+    if PosEx('.app', result) > 0 then begin
+       result := extractfilename(result);
+       result := HomeDir(false) + result;
+    end;
+    {$ENDIF}
     lCmd := 'bet "'+lFilename+'" "'+result +'" -S -B -R -f '+floattostr(lFrac);
     FSLCmd (lCmd);
 end;
