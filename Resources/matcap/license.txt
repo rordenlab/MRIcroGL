@@ -1,0 +1,7 @@
+with regards to mc01.jpg...mc24.jpg
+ https://github.com/martijnberger/blender/tree/master/release/datafiles/matcaps
+ These matcap images are licensed as GNU GPL 2 or later, like the rest of Blender's code.
+ Thanks to Kent Trammell, Aidy Burrows, John Herreno , Terry Wallwork and David Silverman for making the pictures.
+
+with regards to fubax.jpg
+ https://github.com/Fubaxiusz/fubax-shaders/blob/master/Textures/matcap.png

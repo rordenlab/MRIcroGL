@@ -279,6 +279,7 @@ procedure THdrForm.WriteHdrForm (lHdr: TNIFTIhdr; IsNativeEndian: boolean; filen
 var //lCStr: string[80];
     lInc: Integer;
 begin
+     //caption := 'xx'+inttostr(lHdr.intent_code);
      if (DisplayDims.X <> lHdr.dim[1]) or (DisplayDims.Y <> lHdr.dim[2]) or (DisplayDims.Z <> lHdr.dim[3]) then
         StatusBar1.Panels[0].text := format('Resliced: %dx%dx%d', [DisplayDims.X,DisplayDims.Y,DisplayDims.Z]) ;
      StatusBar1.Panels[1].text := filename;

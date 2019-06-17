@@ -1,12 +1,12 @@
 object GLForm1: TGLForm1
-  Left = 119
-  Height = 756
+  Left = 519
+  Height = 653
   Top = 22
-  Width = 1033
+  Width = 761
   AllowDropFiles = True
   Caption = 'MRIcroGL'
-  ClientHeight = 756
-  ClientWidth = 1033
+  ClientHeight = 653
+  ClientWidth = 761
   Constraints.MinHeight = 20
   Constraints.MinWidth = 20
   Menu = MainMenu
@@ -17,1560 +17,1604 @@ object GLForm1: TGLForm1
   OnShow = FormShow
   Position = poScreenCenter
   LCLVersion = '2.1.0.0'
-  object ToolPanel: TScrollBox
+  object TopPanel: TPanel
     Left = 0
-    Height = 756
+    Height = 643
     Top = 0
-    Width = 268
-    HorzScrollBar.Page = 1
-    HorzScrollBar.Visible = False
-    VertScrollBar.Page = 756
-    Align = alLeft
-    BorderStyle = bsNone
-    ClientHeight = 756
-    ClientWidth = 253
-    Constraints.MaxWidth = 268
-    ParentFont = False
+    Width = 761
+    Align = alClient
+    ClientHeight = 643
+    ClientWidth = 761
     TabOrder = 0
-    OnDblClick = ToolPanelDblClick
-    object LayerBox: TGroupBox
-      Left = 0
-      Height = 189
-      Top = 0
-      Width = 253
-      Align = alTop
-      AutoSize = True
-      Caption = 'Layers'
-      ClientHeight = 171
-      ClientWidth = 245
-      Constraints.MinWidth = 10
+    object ToolPanel: TScrollBox
+      Left = 1
+      Height = 641
+      Top = 1
+      Width = 268
+      HorzScrollBar.Page = 1
+      HorzScrollBar.Visible = False
+      VertScrollBar.Page = 641
+      Align = alLeft
+      BorderStyle = bsNone
+      ClientHeight = 641
+      ClientWidth = 253
+      Constraints.MaxWidth = 268
       ParentFont = False
       TabOrder = 0
-      object LayerList: TCheckListBox
+      OnDblClick = ToolPanelDblClick
+      object LayerBox: TGroupBox
         Left = 0
-        Height = 72
-        Hint = 'Right-click for options'
+        Height = 189
         Top = 0
-        Width = 245
+        Width = 253
         Align = alTop
-        Constraints.MaxHeight = 72
-        ItemHeight = 0
-        OnClickCheck = LayerListClickCheck
-        OnSelectionChange = LayerListSelectionChange
-        OnShowHint = LayerListShowHint
+        AutoSize = True
+        Caption = 'Layers'
+        ClientHeight = 171
+        ClientWidth = 245
+        Constraints.MinWidth = 10
         ParentFont = False
-        ParentShowHint = False
-        PopupMenu = LayerPopup
-        ShowHint = True
         TabOrder = 0
+        object LayerList: TCheckListBox
+          Left = 0
+          Height = 72
+          Hint = 'Right-click for options'
+          Top = 0
+          Width = 245
+          Align = alTop
+          Constraints.MaxHeight = 72
+          ItemHeight = 0
+          OnClickCheck = LayerListClickCheck
+          OnSelectionChange = LayerListSelectionChange
+          OnShowHint = LayerListShowHint
+          ParentFont = False
+          ParentShowHint = False
+          PopupMenu = LayerPopup
+          ShowHint = True
+          TabOrder = 0
+        end
+        object LayerDarkLabel: TLabel
+          AnchorSideLeft.Control = LayerList
+          AnchorSideTop.Control = LayerDarkEdit
+          AnchorSideTop.Side = asrCenter
+          Left = 0
+          Height = 16
+          Top = 102
+          Width = 47
+          Caption = 'Darkest'
+          ParentColor = False
+          ParentFont = False
+        end
+        object LayerDarkEdit: TEdit
+          AnchorSideLeft.Control = LayerBox
+          AnchorSideTop.Control = LayerColorDrop
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 21
+          Top = 100
+          Width = 116
+          BorderSpacing.Left = 122
+          BorderSpacing.Top = 4
+          OnKeyUp = LayerContrastKeyUp
+          ParentFont = False
+          TabOrder = 3
+          Text = '20'
+        end
+        object LayerBrightEdit: TEdit
+          AnchorSideLeft.Control = LayerBox
+          AnchorSideTop.Control = LayerDarkEdit
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 21
+          Top = 123
+          Width = 116
+          BorderSpacing.Left = 122
+          BorderSpacing.Top = 2
+          OnKeyUp = LayerContrastKeyUp
+          ParentFont = False
+          TabOrder = 4
+          Text = '80'
+        end
+        object LayerBrightLabel: TLabel
+          AnchorSideLeft.Control = LayerList
+          AnchorSideTop.Control = LayerBrightEdit
+          AnchorSideTop.Side = asrCenter
+          Left = 0
+          Height = 16
+          Top = 125
+          Width = 55
+          Caption = 'Brightest'
+          ParentColor = False
+          ParentFont = False
+        end
+        object LayerColorDrop: TComboBox
+          AnchorSideLeft.Control = LayerList
+          AnchorSideTop.Control = LayerList
+          AnchorSideTop.Side = asrBottom
+          Left = 0
+          Height = 20
+          Top = 76
+          Width = 137
+          BorderSpacing.Top = 4
+          ItemHeight = 26
+          ItemIndex = 0
+          Items.Strings = (
+            'Grayscale'
+          )
+          OnChange = LayerWidgetChange
+          ParentFont = False
+          Style = csDropDownList
+          TabOrder = 1
+          Text = 'Grayscale'
+        end
+        object LayerAlphaLabel: TLabel
+          AnchorSideLeft.Control = LayerList
+          AnchorSideTop.Control = LayerAlphaTrack
+          AnchorSideTop.Side = asrCenter
+          Left = 0
+          Height = 16
+          Top = 150
+          Width = 47
+          Caption = 'Opacity'
+          ParentColor = False
+          ParentFont = False
+        end
+        object LayerAlphaTrack: TTrackBar
+          AnchorSideLeft.Control = LayerBox
+          AnchorSideTop.Control = LayerBrightEdit
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 25
+          Top = 146
+          Width = 116
+          Max = 100
+          Position = 100
+          TickStyle = tsNone
+          BorderSpacing.Left = 122
+          BorderSpacing.Top = 2
+          OnMouseUp = LayerAlphaTrackMouseUp
+          ParentFont = False
+          TabOrder = 5
+        end
+        object LayerOptionsBtn: TButton
+          AnchorSideLeft.Control = LayerColorDrop
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = LayerColorDrop
+          AnchorSideTop.Side = asrCenter
+          AnchorSideRight.Control = LayerList
+          AnchorSideRight.Side = asrBottom
+          Left = 143
+          Height = 25
+          Top = 74
+          Width = 88
+          BorderSpacing.Left = 6
+          Caption = 'Options'
+          OnClick = LayerOptionsBtnClick
+          ParentFont = False
+          TabOrder = 2
+        end
       end
-      object LayerDarkLabel: TLabel
-        AnchorSideLeft.Control = LayerList
-        AnchorSideTop.Control = LayerDarkEdit
-        AnchorSideTop.Side = asrCenter
+      object ClipBox: TGroupBox
         Left = 0
-        Height = 16
-        Top = 102
-        Width = 47
-        Caption = 'Darkest'
-        ParentColor = False
+        Height = 97
+        Top = 189
+        Width = 253
+        Align = alTop
+        AutoSize = True
+        Caption = 'Clipping'
+        ClientHeight = 79
+        ClientWidth = 245
+        Constraints.MinWidth = 10
         ParentFont = False
-      end
-      object LayerDarkEdit: TEdit
-        AnchorSideLeft.Control = LayerBox
-        AnchorSideTop.Control = LayerColorDrop
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Side = asrBottom
-        Left = 122
-        Height = 21
-        Top = 100
-        Width = 116
-        BorderSpacing.Left = 122
-        BorderSpacing.Top = 4
-        OnKeyUp = LayerContrastKeyUp
-        ParentFont = False
-        TabOrder = 3
-        Text = '20'
-      end
-      object LayerBrightEdit: TEdit
-        AnchorSideLeft.Control = LayerBox
-        AnchorSideTop.Control = LayerDarkEdit
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Side = asrBottom
-        Left = 122
-        Height = 21
-        Top = 123
-        Width = 116
-        BorderSpacing.Left = 122
-        BorderSpacing.Top = 2
-        OnKeyUp = LayerContrastKeyUp
-        ParentFont = False
-        TabOrder = 4
-        Text = '80'
-      end
-      object LayerBrightLabel: TLabel
-        AnchorSideLeft.Control = LayerList
-        AnchorSideTop.Control = LayerBrightEdit
-        AnchorSideTop.Side = asrCenter
-        Left = 0
-        Height = 16
-        Top = 125
-        Width = 55
-        Caption = 'Brightest'
-        ParentColor = False
-        ParentFont = False
-      end
-      object LayerColorDrop: TComboBox
-        AnchorSideLeft.Control = LayerList
-        AnchorSideTop.Control = LayerList
-        AnchorSideTop.Side = asrBottom
-        Left = 0
-        Height = 20
-        Top = 76
-        Width = 137
-        BorderSpacing.Top = 4
-        ItemHeight = 26
-        ItemIndex = 0
-        Items.Strings = (
-          'Grayscale'
-        )
-        OnChange = LayerWidgetChange
-        ParentFont = False
-        Style = csDropDownList
         TabOrder = 1
-        Text = 'Grayscale'
+        object ClipDepthLabel: TLabel
+          AnchorSideLeft.Control = ClipBox
+          AnchorSideTop.Control = ClipDepthTrack
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 4
+          Width = 37
+          BorderSpacing.Left = 2
+          Caption = 'Depth'
+          ParentColor = False
+          ParentFont = False
+          OnClick = ClipLabelClick
+        end
+        object ClipDepthTrack: TTrackBar
+          AnchorSideLeft.Control = ClipBox
+          AnchorSideRight.Control = ClipBox
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 25
+          Top = 0
+          Width = 116
+          Max = 1000
+          OnChange = UpdateShaderSettings
+          Position = 0
+          TickStyle = tsNone
+          BorderSpacing.Left = 122
+          BorderSpacing.Right = 2
+          ParentFont = False
+          TabOrder = 0
+        end
+        object ClipAziTrack: TTrackBar
+          AnchorSideLeft.Control = ClipDepthTrack
+          AnchorSideTop.Control = ClipDepthTrack
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Control = ClipDepthTrack
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 25
+          Top = 27
+          Width = 114
+          Max = 360
+          OnChange = UpdateShaderSettings
+          Position = 180
+          TickStyle = tsNone
+          Anchors = [akTop, akLeft, akRight]
+          BorderSpacing.Top = 2
+          BorderSpacing.Right = 2
+          ParentFont = False
+          TabOrder = 1
+        end
+        object ClipAziLabel: TLabel
+          Tag = 1
+          AnchorSideLeft.Control = ClipBox
+          AnchorSideTop.Control = ClipAziTrack
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 31
+          Width = 50
+          BorderSpacing.Left = 2
+          Caption = 'Azimuth'
+          ParentColor = False
+          ParentFont = False
+          OnClick = ClipLabelClick
+        end
+        object ClipElevTrack: TTrackBar
+          AnchorSideLeft.Control = ClipDepthTrack
+          AnchorSideTop.Control = ClipAziTrack
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Control = ClipDepthTrack
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 25
+          Top = 54
+          Width = 114
+          Max = 180
+          Min = -180
+          OnChange = UpdateShaderSettings
+          Position = 0
+          TickStyle = tsNone
+          Anchors = [akTop, akLeft, akRight]
+          BorderSpacing.Top = 2
+          BorderSpacing.Right = 2
+          ParentFont = False
+          TabOrder = 2
+        end
+        object ClipElevLabel: TLabel
+          Tag = 2
+          AnchorSideLeft.Control = ClipBox
+          AnchorSideTop.Control = ClipElevTrack
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 58
+          Width = 55
+          BorderSpacing.Left = 2
+          Caption = 'Elevation'
+          ParentColor = False
+          ParentFont = False
+          OnClick = ClipLabelClick
+        end
       end
-      object LayerAlphaLabel: TLabel
-        AnchorSideLeft.Control = LayerList
-        AnchorSideTop.Control = LayerAlphaTrack
-        AnchorSideTop.Side = asrCenter
+      object ShaderBox: TGroupBox
         Left = 0
-        Height = 16
-        Top = 150
-        Width = 47
-        Caption = 'Opacity'
-        ParentColor = False
-        ParentFont = False
-      end
-      object LayerAlphaTrack: TTrackBar
-        AnchorSideLeft.Control = LayerBox
-        AnchorSideTop.Control = LayerBrightEdit
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Side = asrBottom
-        Left = 122
-        Height = 25
-        Top = 146
-        Width = 116
-        Max = 100
-        Position = 100
-        TickStyle = tsNone
-        BorderSpacing.Left = 122
-        BorderSpacing.Top = 2
-        OnMouseUp = LayerAlphaTrackMouseUp
-        ParentFont = False
-        TabOrder = 5
-      end
-      object LayerOptionsBtn: TButton
-        AnchorSideLeft.Control = LayerColorDrop
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = LayerColorDrop
-        AnchorSideTop.Side = asrCenter
-        AnchorSideRight.Control = LayerList
-        AnchorSideRight.Side = asrBottom
-        Left = 143
-        Height = 25
-        Top = 74
-        Width = 88
-        BorderSpacing.Left = 6
-        Caption = 'Options'
-        OnClick = LayerOptionsBtnClick
+        Height = 336
+        Top = 787
+        Width = 253
+        Align = alClient
+        Caption = 'Render'
+        ClientHeight = 318
+        ClientWidth = 245
+        Constraints.MinWidth = 10
         ParentFont = False
         TabOrder = 2
+        object ShaderDrop: TComboBox
+          AnchorSideLeft.Control = ShaderBox
+          AnchorSideTop.Control = ShaderBox
+          Left = 2
+          Height = 20
+          Top = 2
+          Width = 132
+          BorderSpacing.Left = 2
+          BorderSpacing.Top = 2
+          ItemHeight = 26
+          OnChange = ShaderDropChange
+          ParentFont = False
+          Style = csDropDownList
+          TabOrder = 0
+          Text = '0'
+        end
+        object QLabel: TLabel
+          AnchorSideLeft.Control = ShaderDrop
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = QualityTrack
+          AnchorSideTop.Side = asrCenter
+          Left = 142
+          Height = 16
+          Hint = 'Render quality: higher values are slower but look better'
+          Top = 6
+          Width = 10
+          BorderSpacing.Left = 8
+          BorderSpacing.Right = 4
+          Caption = 'Q'
+          ParentColor = False
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+        end
+        object QualityTrack: TTrackBar
+          AnchorSideLeft.Control = QLabel
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = ShaderBox
+          AnchorSideRight.Side = asrBottom
+          Left = 156
+          Height = 25
+          Hint = 'Render quality: higher values are slower but look better'
+          Top = 2
+          Width = 80
+          Min = 1
+          OnChange = UpdateShaderSettings
+          Position = 6
+          TickStyle = tsNone
+          BorderSpacing.Left = 4
+          BorderSpacing.Top = 2
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+          TabOrder = 1
+        end
+        object LightLabel: TLabel
+          AnchorSideLeft.Control = ShaderBox
+          AnchorSideTop.Control = ShaderDrop
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Control = LightElevTrack
+          Left = 2
+          Height = 16
+          Hint = 'Set location of light source (e.g. above, below, left, right)'
+          Top = 28
+          Width = 31
+          BorderSpacing.Left = 2
+          BorderSpacing.Top = 6
+          Caption = 'Light'
+          ParentColor = False
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+        end
+        object LightElevTrack: TTrackBar
+          AnchorSideLeft.Control = LightLabel
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = LightLabel
+          AnchorSideTop.Side = asrCenter
+          AnchorSideRight.Control = LightAziTrack
+          Left = 37
+          Height = 25
+          Top = 24
+          Width = 80
+          Max = 90
+          Min = -90
+          OnChange = UpdateShaderSettings
+          Position = 45
+          TickStyle = tsNone
+          BorderSpacing.Left = 4
+          BorderSpacing.Right = 4
+          ParentFont = False
+          TabOrder = 2
+        end
+        object LightAziTrack: TTrackBar
+          AnchorSideLeft.Control = LightElevTrack
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = LightLabel
+          AnchorSideTop.Side = asrCenter
+          AnchorSideRight.Control = ShaderBox
+          AnchorSideRight.Side = asrBottom
+          Left = 123
+          Height = 25
+          Top = 24
+          Width = 80
+          Max = 180
+          Min = -180
+          OnChange = UpdateShaderSettings
+          Position = 0
+          TickStyle = tsNone
+          BorderSpacing.Left = 6
+          BorderSpacing.Right = 2
+          ParentFont = False
+          TabOrder = 3
+        end
+        object S1Label: TLabel
+          Tag = 1
+          AnchorSideLeft.Control = ShaderBox
+          AnchorSideTop.Control = S1Track
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 54
+          Width = 13
+          BorderSpacing.Left = 2
+          Caption = 'o1'
+          ParentColor = False
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+        end
+        object S1Track: TTrackBar
+          Tag = 1
+          AnchorSideLeft.Control = ShaderBox
+          AnchorSideTop.Control = LightLabel
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Control = ShaderBox
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 25
+          Top = 50
+          Width = 116
+          Max = 100
+          OnChange = PrefTrackChange
+          Position = 0
+          TickStyle = tsNone
+          BorderSpacing.Left = 122
+          BorderSpacing.Top = 6
+          BorderSpacing.Right = 2
+          ParentFont = False
+          TabOrder = 4
+          Visible = False
+        end
+        object S2Label: TLabel
+          Tag = 2
+          AnchorSideLeft.Control = ShaderBox
+          AnchorSideTop.Control = S2Track
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 81
+          Width = 15
+          BorderSpacing.Left = 2
+          Caption = 'o2'
+          ParentColor = False
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+        end
+        object S2Track: TTrackBar
+          Tag = 2
+          AnchorSideLeft.Control = S1Track
+          AnchorSideTop.Control = S1Track
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Control = ShaderBox
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 25
+          Top = 77
+          Width = 116
+          Max = 100
+          OnChange = PrefTrackChange
+          Position = 0
+          TickStyle = tsNone
+          BorderSpacing.Top = 2
+          BorderSpacing.Right = 2
+          ParentFont = False
+          TabOrder = 5
+          Visible = False
+        end
+        object S3Label: TLabel
+          Tag = 3
+          AnchorSideLeft.Control = ShaderBox
+          AnchorSideTop.Control = S3Track
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 108
+          Width = 16
+          BorderSpacing.Left = 2
+          Caption = 'o3'
+          ParentColor = False
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+        end
+        object S3Track: TTrackBar
+          Tag = 3
+          AnchorSideLeft.Control = S1Track
+          AnchorSideTop.Control = S2Track
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Control = ShaderBox
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 25
+          Top = 104
+          Width = 118
+          Max = 100
+          OnChange = PrefTrackChange
+          Position = 0
+          TickStyle = tsNone
+          BorderSpacing.Top = 2
+          BorderSpacing.Right = 2
+          ParentFont = False
+          TabOrder = 6
+          Visible = False
+        end
+        object S4Label: TLabel
+          Tag = 4
+          AnchorSideLeft.Control = ShaderBox
+          AnchorSideTop.Control = S4Track
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 135
+          Width = 16
+          BorderSpacing.Left = 2
+          Caption = 'o4'
+          ParentColor = False
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+        end
+        object S4Track: TTrackBar
+          Tag = 4
+          AnchorSideLeft.Control = S1Track
+          AnchorSideTop.Control = S3Track
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Control = ShaderBox
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 25
+          Top = 131
+          Width = 118
+          Max = 100
+          OnChange = PrefTrackChange
+          Position = 0
+          TickStyle = tsNone
+          BorderSpacing.Top = 2
+          BorderSpacing.Right = 2
+          ParentFont = False
+          TabOrder = 7
+          Visible = False
+        end
+        object S5Label: TLabel
+          Tag = 5
+          AnchorSideLeft.Control = ShaderBox
+          AnchorSideTop.Control = S5Track
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 162
+          Width = 16
+          BorderSpacing.Left = 2
+          Caption = 'o5'
+          ParentColor = False
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+        end
+        object S5Track: TTrackBar
+          Tag = 5
+          AnchorSideLeft.Control = S1Track
+          AnchorSideTop.Control = S4Track
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Control = ShaderBox
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 25
+          Top = 158
+          Width = 118
+          Max = 100
+          OnChange = PrefTrackChange
+          Position = 0
+          TickStyle = tsNone
+          BorderSpacing.Top = 2
+          BorderSpacing.Right = 2
+          ParentFont = False
+          TabOrder = 8
+          Visible = False
+        end
+        object S6Label: TLabel
+          Tag = 6
+          AnchorSideLeft.Control = ShaderBox
+          AnchorSideTop.Control = S6Track
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 189
+          Width = 16
+          BorderSpacing.Left = 2
+          Caption = 'o6'
+          ParentColor = False
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+        end
+        object S6Track: TTrackBar
+          Tag = 6
+          AnchorSideLeft.Control = S1Track
+          AnchorSideTop.Control = S5Track
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Control = ShaderBox
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 25
+          Top = 185
+          Width = 118
+          Max = 100
+          OnChange = PrefTrackChange
+          Position = 0
+          TickStyle = tsNone
+          BorderSpacing.Top = 2
+          BorderSpacing.Right = 2
+          ParentFont = False
+          TabOrder = 9
+          Visible = False
+        end
+        object S7Label: TLabel
+          Tag = 7
+          AnchorSideLeft.Control = ShaderBox
+          AnchorSideTop.Control = S7Track
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 216
+          Width = 15
+          BorderSpacing.Left = 2
+          Caption = 'o7'
+          ParentColor = False
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+        end
+        object S7Track: TTrackBar
+          Tag = 7
+          AnchorSideLeft.Control = S1Track
+          AnchorSideTop.Control = S6Track
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Control = ShaderBox
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 25
+          Top = 212
+          Width = 118
+          Max = 100
+          OnChange = PrefTrackChange
+          Position = 0
+          TickStyle = tsNone
+          BorderSpacing.Top = 2
+          BorderSpacing.Right = 2
+          ParentFont = False
+          TabOrder = 10
+          Visible = False
+        end
+        object S8Label: TLabel
+          Tag = 8
+          AnchorSideLeft.Control = ShaderBox
+          AnchorSideTop.Control = S8Track
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 243
+          Width = 16
+          BorderSpacing.Left = 2
+          Caption = 'o8'
+          ParentColor = False
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+        end
+        object S8Track: TTrackBar
+          Tag = 8
+          AnchorSideLeft.Control = S1Track
+          AnchorSideTop.Control = S7Track
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Control = ShaderBox
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 25
+          Top = 239
+          Width = 118
+          Max = 100
+          OnChange = PrefTrackChange
+          Position = 0
+          TickStyle = tsNone
+          BorderSpacing.Top = 2
+          BorderSpacing.Right = 2
+          ParentFont = False
+          TabOrder = 11
+          Visible = False
+        end
+        object S9Label: TLabel
+          Tag = 9
+          AnchorSideLeft.Control = ShaderBox
+          AnchorSideTop.Control = S9Track
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 270
+          Width = 16
+          BorderSpacing.Left = 2
+          Caption = 'o9'
+          ParentColor = False
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+        end
+        object S9Track: TTrackBar
+          Tag = 9
+          AnchorSideLeft.Control = S1Track
+          AnchorSideTop.Control = S8Track
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Control = ShaderBox
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 25
+          Top = 266
+          Width = 118
+          Max = 100
+          OnChange = PrefTrackChange
+          Position = 0
+          TickStyle = tsNone
+          BorderSpacing.Top = 2
+          BorderSpacing.Right = 2
+          ParentFont = False
+          TabOrder = 12
+          Visible = False
+        end
+        object S10Label: TLabel
+          Tag = 10
+          AnchorSideLeft.Control = ShaderBox
+          AnchorSideTop.Control = S10Track
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 297
+          Width = 21
+          BorderSpacing.Left = 2
+          Caption = 'o10'
+          ParentColor = False
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+        end
+        object S10Track: TTrackBar
+          Tag = 10
+          AnchorSideLeft.Control = S1Track
+          AnchorSideTop.Control = S9Track
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Control = ShaderBox
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 25
+          Top = 293
+          Width = 118
+          Max = 100
+          OnChange = PrefTrackChange
+          Position = 0
+          TickStyle = tsNone
+          BorderSpacing.Top = 2
+          BorderSpacing.Right = 2
+          ParentFont = False
+          TabOrder = 13
+          Visible = False
+        end
+        object MatCapDrop: TComboBox
+          AnchorSideLeft.Control = LightLabel
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = LightLabel
+          AnchorSideTop.Side = asrCenter
+          Left = 41
+          Height = 20
+          Top = 26
+          Width = 132
+          BorderSpacing.Left = 8
+          ItemHeight = 26
+          OnChange = MatCapDropChange
+          ParentFont = False
+          Style = csDropDownList
+          TabOrder = 14
+          Text = '0'
+          Visible = False
+        end
+      end
+      object LineBox: TGroupBox
+        Left = 0
+        Height = 44
+        Top = 286
+        Width = 253
+        Align = alTop
+        AutoSize = True
+        Caption = 'Lines'
+        ClientHeight = 26
+        ClientWidth = 245
+        Constraints.MinWidth = 10
+        ParentFont = False
+        TabOrder = 3
+        object LineWidthLabel: TLabel
+          AnchorSideLeft.Control = LineBox
+          AnchorSideTop.Control = LineWidthEdit
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 4
+          Width = 36
+          BorderSpacing.Left = 2
+          Caption = 'Width'
+          ParentColor = False
+          ParentFont = False
+        end
+        object LineWidthEdit: TSpinEdit
+          AnchorSideLeft.Control = LineWidthLabel
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = LineBox
+          Left = 40
+          Height = 21
+          Top = 2
+          Width = 82
+          BorderSpacing.Left = 2
+          BorderSpacing.Top = 2
+          MaxValue = 9
+          OnChange = LineWidthEditChange
+          ParentFont = False
+          TabOrder = 0
+          Value = 1
+        end
+        object LineColorBtn: TButton
+          AnchorSideLeft.Control = LineWidthEdit
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = LineWidthEdit
+          AnchorSideTop.Side = asrCenter
+          Left = 124
+          Height = 28
+          Top = -2
+          Width = 82
+          BorderSpacing.Left = 2
+          Caption = 'Color'
+          OnClick = LineColorBtnClick
+          ParentFont = False
+          TabOrder = 1
+        end
+      end
+      object SliceBox: TGroupBox
+        Left = 0
+        Height = 182
+        Top = 605
+        Width = 253
+        Align = alTop
+        AutoSize = True
+        Caption = '2D Slice Selection'
+        ClientHeight = 164
+        ClientWidth = 245
+        Constraints.MinWidth = 10
+        ParentFont = False
+        TabOrder = 6
+        object SliceABtn: TButton
+          Tag = 3
+          AnchorSideLeft.Control = SliceLBtn
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = SliceBox
+          Left = 46
+          Height = 25
+          Top = 2
+          Width = 42
+          BorderSpacing.Left = 2
+          BorderSpacing.Top = 2
+          Caption = 'A'
+          OnClick = OrientBtnClick
+          ParentFont = False
+          TabOrder = 1
+        end
+        object SlicePBtn: TButton
+          Tag = 2
+          AnchorSideLeft.Control = SliceABtn
+          AnchorSideTop.Control = SliceABtn
+          AnchorSideTop.Side = asrBottom
+          Left = 46
+          Height = 25
+          Top = 29
+          Width = 42
+          BorderSpacing.Top = 2
+          Caption = 'P'
+          OnClick = OrientBtnClick
+          ParentFont = False
+          TabOrder = 2
+        end
+        object SliceSBtn: TButton
+          Tag = 5
+          AnchorSideLeft.Control = SliceRBtn
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = SliceBox
+          Left = 162
+          Height = 25
+          Top = 2
+          Width = 42
+          BorderSpacing.Left = 30
+          BorderSpacing.Top = 2
+          Caption = 'S'
+          OnClick = OrientBtnClick
+          ParentFont = False
+          TabOrder = 4
+        end
+        object SliceIBtn: TButton
+          Tag = 4
+          AnchorSideLeft.Control = SliceSBtn
+          AnchorSideTop.Control = SliceSBtn
+          AnchorSideTop.Side = asrBottom
+          Left = 162
+          Height = 25
+          Top = 29
+          Width = 42
+          BorderSpacing.Top = 2
+          Caption = 'I'
+          OnClick = OrientBtnClick
+          ParentFont = False
+          TabOrder = 5
+        end
+        object SliceLBtn: TButton
+          AnchorSideLeft.Control = SliceBox
+          AnchorSideTop.Control = SliceABtn
+          Left = 2
+          Height = 25
+          Top = 16
+          Width = 42
+          BorderSpacing.Left = 2
+          BorderSpacing.Top = 14
+          Caption = 'L'
+          OnClick = OrientBtnClick
+          ParentFont = False
+          TabOrder = 0
+        end
+        object SliceRBtn: TButton
+          Tag = 1
+          AnchorSideLeft.Control = SliceABtn
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = SliceLBtn
+          AnchorSideTop.Side = asrCenter
+          Left = 90
+          Height = 25
+          Top = 16
+          Width = 42
+          BorderSpacing.Left = 2
+          Caption = 'R'
+          OnClick = OrientBtnClick
+          ParentFont = False
+          TabOrder = 3
+        end
+        object XCoordEdit: TEdit
+          AnchorSideLeft.Control = SliceBox
+          AnchorSideTop.Control = CoordLabel
+          AnchorSideTop.Side = asrBottom
+          Left = 2
+          Height = 21
+          Top = 74
+          Width = 80
+          BorderSpacing.Left = 2
+          BorderSpacing.Top = 2
+          OnChange = CoordEditChange
+          ParentFont = False
+          TabOrder = 6
+          Text = '0'
+        end
+        object CoordLabel: TLabel
+          AnchorSideLeft.Control = SliceBox
+          AnchorSideTop.Control = SlicePBtn
+          AnchorSideTop.Side = asrBottom
+          Left = 2
+          Height = 16
+          Top = 56
+          Width = 118
+          BorderSpacing.Left = 2
+          BorderSpacing.Top = 2
+          Caption = 'Coordinates (X,Y,Z)'
+          ParentColor = False
+          ParentFont = False
+        end
+        object YCoordEdit: TEdit
+          AnchorSideLeft.Control = XCoordEdit
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = XCoordEdit
+          AnchorSideTop.Side = asrCenter
+          Left = 84
+          Height = 21
+          Top = 74
+          Width = 80
+          BorderSpacing.Left = 2
+          OnChange = CoordEditChange
+          ParentFont = False
+          TabOrder = 7
+          Text = '0'
+        end
+        object ZCoordEdit: TEdit
+          AnchorSideLeft.Control = YCoordEdit
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = XCoordEdit
+          AnchorSideTop.Side = asrCenter
+          Left = 166
+          Height = 21
+          Top = 74
+          Width = 80
+          BorderSpacing.Left = 2
+          OnChange = CoordEditChange
+          ParentFont = False
+          TabOrder = 8
+          Text = '0'
+        end
+        object AnatDrop: TComboBox
+          AnchorSideLeft.Control = SliceBox
+          AnchorSideTop.Control = XCoordEdit
+          AnchorSideTop.Side = asrBottom
+          Left = 2
+          Height = 20
+          Top = 97
+          Width = 244
+          BorderSpacing.Left = 2
+          BorderSpacing.Top = 2
+          ItemHeight = 26
+          OnChange = AnatDropChange
+          Style = csDropDownList
+          TabOrder = 9
+          Text = '0'
+        end
+        object SliceZoom: TTrackBar
+          AnchorSideLeft.Control = SliceBox
+          AnchorSideTop.Control = AnatDrop
+          AnchorSideTop.Side = asrBottom
+          Left = 122
+          Height = 25
+          Top = 119
+          Width = 116
+          Max = 600
+          Min = 100
+          OnChange = SliceZoomChange
+          Position = 100
+          TickStyle = tsNone
+          BorderSpacing.Left = 122
+          BorderSpacing.Top = 2
+          ParentFont = False
+          TabOrder = 11
+        end
+        object ZoomBtn: TButton
+          AnchorSideLeft.Control = SliceBox
+          AnchorSideTop.Control = SliceZoom
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 25
+          Hint = 'Slider adjusts scale factor. Control-drag to pan image. Click here to restore defaults.'
+          Top = 119
+          Width = 80
+          BorderSpacing.Left = 2
+          Caption = 'Zoom'
+          OnClick = ZoomBtnClick
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+          TabOrder = 10
+        end
+        object Smooth2DCheck: TCheckBox
+          AnchorSideLeft.Control = SliceBox
+          AnchorSideTop.Control = SliceZoom
+          AnchorSideTop.Side = asrBottom
+          Left = 2
+          Height = 18
+          Hint = 'Do enlarged images appear blurry or jagged'
+          Top = 146
+          Width = 66
+          BorderSpacing.Left = 2
+          BorderSpacing.Top = 2
+          Caption = 'Smooth'
+          Checked = True
+          OnChange = Smooth2DCheckChange
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+          State = cbChecked
+          TabOrder = 12
+        end
+      end
+      object CutoutBox: TGroupBox
+        Left = 0
+        Height = 99
+        Top = 506
+        Width = 253
+        Align = alTop
+        AutoSize = True
+        Caption = 'Cutout'
+        ClientHeight = 81
+        ClientWidth = 245
+        Constraints.MinWidth = 10
+        ParentFont = False
+        TabOrder = 4
+        object XLabel: TLabel
+          AnchorSideLeft.Control = CutoutBox
+          AnchorSideTop.Control = XTrackBar
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 6
+          Width = 9
+          BorderSpacing.Left = 2
+          Caption = 'X'
+          ParentColor = False
+          ParentFont = False
+        end
+        object XTrackBar: TTrackBar
+          AnchorSideLeft.Control = XLabel
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = CutoutBox
+          Left = 13
+          Height = 25
+          Top = 2
+          Width = 80
+          Max = 1000
+          Position = 1000
+          TickStyle = tsNone
+          BorderSpacing.Left = 2
+          BorderSpacing.Top = 2
+          OnMouseUp = CutoutMouseUp
+          ParentFont = False
+          TabOrder = 0
+        end
+        object X2TrackBar: TTrackBar
+          AnchorSideLeft.Control = XTrackBar
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = XTrackBar
+          AnchorSideTop.Side = asrCenter
+          Left = 95
+          Height = 25
+          Top = 2
+          Width = 80
+          Max = 1000
+          Position = 1000
+          TickStyle = tsNone
+          BorderSpacing.Left = 2
+          OnMouseUp = CutoutMouseUp
+          ParentFont = False
+          TabOrder = 1
+        end
+        object YLabel: TLabel
+          AnchorSideLeft.Control = CutoutBox
+          AnchorSideTop.Control = YTrackBar
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 33
+          Width = 8
+          BorderSpacing.Left = 2
+          Caption = 'Y'
+          ParentColor = False
+          ParentFont = False
+        end
+        object YTrackBar: TTrackBar
+          AnchorSideLeft.Control = XTrackBar
+          AnchorSideTop.Control = XTrackBar
+          AnchorSideTop.Side = asrBottom
+          Left = 13
+          Height = 25
+          Top = 29
+          Width = 80
+          Max = 1000
+          Position = 1000
+          TickStyle = tsNone
+          BorderSpacing.Top = 2
+          OnMouseUp = CutoutMouseUp
+          ParentFont = False
+          TabOrder = 2
+        end
+        object Y2TrackBar: TTrackBar
+          AnchorSideLeft.Control = YTrackBar
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = YTrackBar
+          AnchorSideTop.Side = asrCenter
+          Left = 95
+          Height = 25
+          Top = 29
+          Width = 80
+          Max = 1000
+          Position = 1000
+          TickStyle = tsNone
+          BorderSpacing.Left = 2
+          OnMouseUp = CutoutMouseUp
+          ParentFont = False
+          TabOrder = 3
+        end
+        object ZLabel: TLabel
+          AnchorSideLeft.Control = CutoutBox
+          AnchorSideTop.Control = ZTrackBar
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 60
+          Width = 9
+          BorderSpacing.Left = 2
+          Caption = 'Z'
+          ParentColor = False
+          ParentFont = False
+        end
+        object ZTrackBar: TTrackBar
+          AnchorSideLeft.Control = XTrackBar
+          AnchorSideTop.Control = YTrackBar
+          AnchorSideTop.Side = asrBottom
+          Left = 13
+          Height = 25
+          Top = 56
+          Width = 80
+          Max = 1000
+          Position = 1000
+          TickStyle = tsNone
+          BorderSpacing.Top = 2
+          OnMouseUp = CutoutMouseUp
+          ParentFont = False
+          TabOrder = 4
+        end
+        object Z2TrackBar: TTrackBar
+          AnchorSideLeft.Control = ZTrackBar
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = ZTrackBar
+          AnchorSideTop.Side = asrCenter
+          Left = 95
+          Height = 25
+          Top = 56
+          Width = 80
+          Max = 1000
+          Position = 1000
+          TickStyle = tsNone
+          BorderSpacing.Left = 2
+          OnMouseUp = CutoutMouseUp
+          ParentFont = False
+          TabOrder = 5
+        end
+        object CutNearBtn: TButton
+          AnchorSideLeft.Control = X2TrackBar
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = CutoutBox
+          Left = 177
+          Height = 25
+          Top = 4
+          Width = 72
+          BorderSpacing.Left = 2
+          BorderSpacing.Top = 4
+          Caption = 'Near'
+          OnClick = CutNearBtnClick
+          ParentFont = False
+          TabOrder = 6
+        end
+        object CutNoneBtn: TButton
+          AnchorSideLeft.Control = X2TrackBar
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = CutNearBtn
+          AnchorSideTop.Side = asrBottom
+          Left = 177
+          Height = 25
+          Top = 33
+          Width = 72
+          BorderSpacing.Left = 2
+          BorderSpacing.Top = 4
+          Caption = 'None'
+          OnClick = CutNoneBtnClick
+          ParentFont = False
+          TabOrder = 7
+        end
+      end
+      object MosaicBox: TGroupBox
+        Left = 0
+        Height = 176
+        Top = 330
+        Width = 253
+        Align = alTop
+        AutoSize = True
+        Caption = 'Mosaic'
+        ClientHeight = 158
+        ClientWidth = 245
+        Constraints.MinWidth = 10
+        ParentFont = False
+        TabOrder = 5
+        object MosColLabel: TLabel
+          AnchorSideLeft.Control = MosaicBox
+          AnchorSideTop.Control = MosColEdit
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 4
+          Width = 53
+          BorderSpacing.Left = 2
+          Caption = 'Columns'
+          ParentColor = False
+          ParentFont = False
+        end
+        object MosRowLabel: TLabel
+          AnchorSideLeft.Control = MosColLabel
+          AnchorSideTop.Control = MosRowEdit
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 27
+          Width = 32
+          Caption = 'Rows'
+          ParentColor = False
+          ParentFont = False
+        end
+        object MosColEdit: TSpinEdit
+          AnchorSideLeft.Control = MosColLabel
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = MosaicBox
+          Left = 57
+          Height = 21
+          Top = 2
+          Width = 80
+          BorderSpacing.Left = 2
+          BorderSpacing.Top = 2
+          OnChange = UpdateMosaic
+          ParentFont = False
+          TabOrder = 0
+          Value = 4
+        end
+        object MosRowEdit: TSpinEdit
+          AnchorSideLeft.Control = MosColEdit
+          AnchorSideTop.Control = MosColEdit
+          AnchorSideTop.Side = asrBottom
+          Left = 57
+          Height = 21
+          Top = 25
+          Width = 80
+          BorderSpacing.Top = 2
+          OnChange = UpdateMosaic
+          ParentFont = False
+          TabOrder = 2
+          Value = 2
+        end
+        object MosColOverlapTrack: TTrackBar
+          AnchorSideLeft.Control = MosColEdit
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = MosColEdit
+          AnchorSideTop.Side = asrCenter
+          Left = 139
+          Height = 25
+          Top = 0
+          Width = 92
+          Max = 9
+          Min = -9
+          OnChange = UpdateMosaic
+          Position = -1
+          TickStyle = tsNone
+          BorderSpacing.Left = 2
+          ParentFont = False
+          TabOrder = 1
+        end
+        object MosRowOverlapTrack: TTrackBar
+          AnchorSideLeft.Control = MosColEdit
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = MosRowEdit
+          AnchorSideTop.Side = asrCenter
+          Left = 139
+          Height = 25
+          Top = 23
+          Width = 92
+          Max = 9
+          Min = -9
+          OnChange = UpdateMosaic
+          Position = -1
+          TickStyle = tsNone
+          BorderSpacing.Left = 2
+          ParentFont = False
+          TabOrder = 3
+        end
+        object MosOrientLabel: TLabel
+          AnchorSideLeft.Control = MosColLabel
+          AnchorSideTop.Control = MosOrientDrop
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 52
+          Width = 67
+          Caption = 'Orientation'
+          ParentColor = False
+          ParentFont = False
+        end
+        object MosOrientDrop: TComboBox
+          AnchorSideLeft.Control = MosOrientLabel
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = MosRowOverlapTrack
+          AnchorSideTop.Side = asrBottom
+          Left = 71
+          Height = 20
+          Top = 50
+          Width = 100
+          BorderSpacing.Left = 2
+          BorderSpacing.Top = 2
+          ItemHeight = 26
+          ItemIndex = 0
+          Items.Strings = (
+            'Axial'
+            'Coronal'
+            'Sagittal+'
+            'Sagittal-'
+          )
+          OnChange = UpdateMosaic
+          ParentFont = False
+          Style = csDropDownList
+          TabOrder = 4
+          Text = 'Axial'
+        end
+        object MosCrossCheck: TCheckBox
+          AnchorSideLeft.Control = MosColLabel
+          AnchorSideTop.Control = MosOrientDrop
+          AnchorSideTop.Side = asrBottom
+          Left = 2
+          Height = 18
+          Top = 72
+          Width = 86
+          BorderSpacing.Top = 2
+          Caption = 'Cross Slice'
+          Checked = True
+          OnChange = UpdateMosaic
+          ParentFont = False
+          State = cbChecked
+          TabOrder = 5
+        end
+        object MosLabelCheck: TCheckBox
+          AnchorSideLeft.Control = MosCrossCheck
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = MosCrossCheck
+          AnchorSideTop.Side = asrCenter
+          Left = 98
+          Height = 18
+          Top = 72
+          Width = 90
+          BorderSpacing.Left = 10
+          Caption = 'Label Slices'
+          Checked = True
+          OnChange = UpdateMosaic
+          ParentFont = False
+          State = cbChecked
+          TabOrder = 6
+        end
+        object MosaicText: TMemo
+          AnchorSideLeft.Control = MosaicBox
+          AnchorSideTop.Control = MosCrossCheck
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Control = MosaicBox
+          AnchorSideRight.Side = asrBottom
+          Left = 0
+          Height = 66
+          Top = 92
+          Width = 245
+          Anchors = [akTop, akLeft, akRight]
+          BorderSpacing.Top = 2
+          Constraints.MaxHeight = 66
+          Lines.Strings = (          )
+          OnChange = MosaicTextChange
+          ParentFont = False
+          TabOrder = 7
+        end
       end
     end
-    object ClipBox: TGroupBox
-      Left = 0
-      Height = 97
-      Top = 189
-      Width = 253
-      Align = alTop
-      AutoSize = True
-      Caption = 'Clipping'
-      ClientHeight = 79
-      ClientWidth = 245
-      Constraints.MinWidth = 10
+    object ScriptPanel: TPanel
+      Left = 758
+      Height = 641
+      Top = 1
+      Width = 2
+      Align = alRight
+      BevelOuter = bvNone
+      ClientHeight = 641
+      ClientWidth = 2
+      Constraints.MinWidth = 2
       ParentFont = False
       TabOrder = 1
-      object ClipDepthLabel: TLabel
-        AnchorSideLeft.Control = ClipBox
-        AnchorSideTop.Control = ClipDepthTrack
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 4
-        Width = 37
-        BorderSpacing.Left = 2
-        Caption = 'Depth'
-        ParentColor = False
-        ParentFont = False
-        OnClick = ClipLabelClick
-      end
-      object ClipDepthTrack: TTrackBar
-        AnchorSideLeft.Control = ClipBox
-        AnchorSideRight.Control = ClipBox
-        AnchorSideRight.Side = asrBottom
-        Left = 122
-        Height = 25
-        Top = 0
-        Width = 116
-        Max = 1000
-        OnChange = UpdateShaderSettings
-        Position = 0
-        TickStyle = tsNone
-        BorderSpacing.Left = 122
-        BorderSpacing.Right = 2
-        ParentFont = False
-        TabOrder = 0
-      end
-      object ClipAziTrack: TTrackBar
-        AnchorSideLeft.Control = ClipDepthTrack
-        AnchorSideTop.Control = ClipDepthTrack
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = ClipDepthTrack
-        AnchorSideRight.Side = asrBottom
-        Left = 122
-        Height = 25
-        Top = 27
-        Width = 114
-        Max = 360
-        OnChange = UpdateShaderSettings
-        Position = 180
-        TickStyle = tsNone
-        Anchors = [akTop, akLeft, akRight]
-        BorderSpacing.Top = 2
-        BorderSpacing.Right = 2
-        ParentFont = False
-        TabOrder = 1
-      end
-      object ClipAziLabel: TLabel
-        Tag = 1
-        AnchorSideLeft.Control = ClipBox
-        AnchorSideTop.Control = ClipAziTrack
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 31
-        Width = 50
-        BorderSpacing.Left = 2
-        Caption = 'Azimuth'
-        ParentColor = False
-        ParentFont = False
-        OnClick = ClipLabelClick
-      end
-      object ClipElevTrack: TTrackBar
-        AnchorSideLeft.Control = ClipDepthTrack
-        AnchorSideTop.Control = ClipAziTrack
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = ClipDepthTrack
-        AnchorSideRight.Side = asrBottom
-        Left = 122
-        Height = 25
-        Top = 54
-        Width = 114
-        Max = 180
-        Min = -180
-        OnChange = UpdateShaderSettings
-        Position = 0
-        TickStyle = tsNone
-        Anchors = [akTop, akLeft, akRight]
-        BorderSpacing.Top = 2
-        BorderSpacing.Right = 2
-        ParentFont = False
-        TabOrder = 2
-      end
-      object ClipElevLabel: TLabel
-        Tag = 2
-        AnchorSideLeft.Control = ClipBox
-        AnchorSideTop.Control = ClipElevTrack
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 58
-        Width = 55
-        BorderSpacing.Left = 2
-        Caption = 'Elevation'
-        ParentColor = False
-        ParentFont = False
-        OnClick = ClipLabelClick
-      end
-    end
-    object ShaderBox: TGroupBox
-      Left = 0
-      Height = 337
-      Top = 787
-      Width = 253
-      Align = alClient
-      Caption = 'Shader'
-      ClientHeight = 319
-      ClientWidth = 245
-      Constraints.MinWidth = 10
-      ParentFont = False
-      TabOrder = 2
-      object ShaderDrop: TComboBox
-        AnchorSideLeft.Control = ShaderBox
-        AnchorSideTop.Control = ShaderBox
-        Left = 2
-        Height = 20
-        Top = 2
-        Width = 132
-        BorderSpacing.Left = 2
-        BorderSpacing.Top = 2
-        ItemHeight = 26
-        OnChange = ShaderDropChange
-        ParentFont = False
-        Style = csDropDownList
-        TabOrder = 0
-        Text = '0'
-      end
-      object QLabel: TLabel
-        AnchorSideLeft.Control = ShaderDrop
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = QualityTrack
-        AnchorSideTop.Side = asrCenter
-        Left = 142
-        Height = 16
-        Hint = 'Render quality: higher values are slower but look better'
-        Top = 6
-        Width = 10
-        BorderSpacing.Left = 8
-        BorderSpacing.Right = 4
-        Caption = 'Q'
-        ParentColor = False
-        ParentFont = False
-        ParentShowHint = False
-        ShowHint = True
-      end
-      object QualityTrack: TTrackBar
-        AnchorSideLeft.Control = QLabel
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = ShaderBox
-        AnchorSideRight.Side = asrBottom
-        Left = 156
-        Height = 25
-        Hint = 'Render quality: higher values are slower but look better'
-        Top = 2
-        Width = 80
-        Min = 1
-        OnChange = UpdateShaderSettings
-        Position = 6
-        TickStyle = tsNone
-        BorderSpacing.Left = 4
-        BorderSpacing.Top = 2
-        ParentFont = False
-        ParentShowHint = False
-        ShowHint = True
-        TabOrder = 1
-      end
-      object LightLabel: TLabel
-        AnchorSideLeft.Control = ShaderBox
-        AnchorSideTop.Control = LightElevTrack
-        AnchorSideTop.Side = asrCenter
-        AnchorSideRight.Control = LightElevTrack
-        Left = 2
-        Height = 16
-        Hint = 'Set location of light source (e.g. above, below, left, right)'
-        Top = 28
-        Width = 31
-        BorderSpacing.Left = 2
-        Caption = 'Light'
-        ParentColor = False
-        ParentFont = False
-        ParentShowHint = False
-        ShowHint = True
-      end
-      object LightElevTrack: TTrackBar
-        AnchorSideLeft.Control = LightLabel
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = LightAziTrack
-        AnchorSideRight.Control = LightAziTrack
-        Left = 37
-        Height = 25
-        Top = 24
-        Width = 80
-        Max = 90
-        Min = -90
-        OnChange = UpdateShaderSettings
-        Position = 45
-        TickStyle = tsNone
-        BorderSpacing.Left = 4
-        BorderSpacing.Right = 4
-        ParentFont = False
-        TabOrder = 2
-      end
-      object LightAziTrack: TTrackBar
-        AnchorSideLeft.Control = LightElevTrack
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = ShaderDrop
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = ShaderBox
-        AnchorSideRight.Side = asrBottom
-        Left = 123
-        Height = 25
-        Top = 24
-        Width = 80
-        Max = 180
-        Min = -180
-        OnChange = UpdateShaderSettings
-        Position = 0
-        TickStyle = tsNone
-        BorderSpacing.Left = 6
-        BorderSpacing.Top = 2
-        BorderSpacing.Right = 2
-        ParentFont = False
-        TabOrder = 3
-      end
-      object S1Label: TLabel
-        Tag = 1
-        AnchorSideLeft.Control = ShaderBox
-        AnchorSideTop.Control = S1Track
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 55
-        Width = 13
-        BorderSpacing.Left = 2
-        Caption = 'o1'
-        ParentColor = False
-        ParentFont = False
-        ParentShowHint = False
-        ShowHint = True
-      end
-      object S1Track: TTrackBar
-        Tag = 1
-        AnchorSideLeft.Control = ShaderBox
-        AnchorSideTop.Control = LightElevTrack
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = ShaderBox
-        AnchorSideRight.Side = asrBottom
-        Left = 122
-        Height = 25
-        Top = 51
-        Width = 116
-        Max = 100
-        OnChange = PrefTrackChange
-        Position = 0
-        TickStyle = tsNone
-        BorderSpacing.Left = 122
-        BorderSpacing.Top = 2
-        BorderSpacing.Right = 2
-        ParentFont = False
-        TabOrder = 4
-        Visible = False
-      end
-      object S2Label: TLabel
-        Tag = 2
-        AnchorSideLeft.Control = ShaderBox
-        AnchorSideTop.Control = S2Track
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 82
-        Width = 15
-        BorderSpacing.Left = 2
-        Caption = 'o2'
-        ParentColor = False
-        ParentFont = False
-        ParentShowHint = False
-        ShowHint = True
-      end
-      object S2Track: TTrackBar
-        Tag = 2
-        AnchorSideLeft.Control = S1Track
-        AnchorSideTop.Control = S1Track
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = ShaderBox
-        AnchorSideRight.Side = asrBottom
-        Left = 122
-        Height = 25
-        Top = 78
-        Width = 116
-        Max = 100
-        OnChange = PrefTrackChange
-        Position = 0
-        TickStyle = tsNone
-        BorderSpacing.Top = 2
-        BorderSpacing.Right = 2
-        ParentFont = False
-        TabOrder = 5
-        Visible = False
-      end
-      object S3Label: TLabel
-        Tag = 3
-        AnchorSideLeft.Control = ShaderBox
-        AnchorSideTop.Control = S3Track
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 109
-        Width = 16
-        BorderSpacing.Left = 2
-        Caption = 'o3'
-        ParentColor = False
-        ParentFont = False
-        ParentShowHint = False
-        ShowHint = True
-      end
-      object S3Track: TTrackBar
-        Tag = 3
-        AnchorSideLeft.Control = S1Track
-        AnchorSideTop.Control = S2Track
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = ShaderBox
-        AnchorSideRight.Side = asrBottom
-        Left = 122
-        Height = 25
-        Top = 105
-        Width = 118
-        Max = 100
-        OnChange = PrefTrackChange
-        Position = 0
-        TickStyle = tsNone
-        BorderSpacing.Top = 2
-        BorderSpacing.Right = 2
-        ParentFont = False
-        TabOrder = 6
-        Visible = False
-      end
-      object S4Label: TLabel
-        Tag = 4
-        AnchorSideLeft.Control = ShaderBox
-        AnchorSideTop.Control = S4Track
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 136
-        Width = 16
-        BorderSpacing.Left = 2
-        Caption = 'o4'
-        ParentColor = False
-        ParentFont = False
-        ParentShowHint = False
-        ShowHint = True
-      end
-      object S4Track: TTrackBar
-        Tag = 4
-        AnchorSideLeft.Control = S1Track
-        AnchorSideTop.Control = S3Track
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = ShaderBox
-        AnchorSideRight.Side = asrBottom
-        Left = 122
-        Height = 25
-        Top = 132
-        Width = 118
-        Max = 100
-        OnChange = PrefTrackChange
-        Position = 0
-        TickStyle = tsNone
-        BorderSpacing.Top = 2
-        BorderSpacing.Right = 2
-        ParentFont = False
-        TabOrder = 7
-        Visible = False
-      end
-      object S5Label: TLabel
-        Tag = 5
-        AnchorSideLeft.Control = ShaderBox
-        AnchorSideTop.Control = S5Track
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 163
-        Width = 16
-        BorderSpacing.Left = 2
-        Caption = 'o5'
-        ParentColor = False
-        ParentFont = False
-        ParentShowHint = False
-        ShowHint = True
-      end
-      object S5Track: TTrackBar
-        Tag = 5
-        AnchorSideLeft.Control = S1Track
-        AnchorSideTop.Control = S4Track
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = ShaderBox
-        AnchorSideRight.Side = asrBottom
-        Left = 122
-        Height = 25
-        Top = 159
-        Width = 118
-        Max = 100
-        OnChange = PrefTrackChange
-        Position = 0
-        TickStyle = tsNone
-        BorderSpacing.Top = 2
-        BorderSpacing.Right = 2
-        ParentFont = False
-        TabOrder = 8
-        Visible = False
-      end
-      object S6Label: TLabel
-        Tag = 6
-        AnchorSideLeft.Control = ShaderBox
-        AnchorSideTop.Control = S6Track
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 190
-        Width = 16
-        BorderSpacing.Left = 2
-        Caption = 'o6'
-        ParentColor = False
-        ParentFont = False
-        ParentShowHint = False
-        ShowHint = True
-      end
-      object S6Track: TTrackBar
-        Tag = 6
-        AnchorSideLeft.Control = S1Track
-        AnchorSideTop.Control = S5Track
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = ShaderBox
-        AnchorSideRight.Side = asrBottom
-        Left = 122
-        Height = 25
-        Top = 186
-        Width = 118
-        Max = 100
-        OnChange = PrefTrackChange
-        Position = 0
-        TickStyle = tsNone
-        BorderSpacing.Top = 2
-        BorderSpacing.Right = 2
-        ParentFont = False
-        TabOrder = 9
-        Visible = False
-      end
-      object S7Label: TLabel
-        Tag = 7
-        AnchorSideLeft.Control = ShaderBox
-        AnchorSideTop.Control = S7Track
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 217
-        Width = 15
-        BorderSpacing.Left = 2
-        Caption = 'o7'
-        ParentColor = False
-        ParentFont = False
-        ParentShowHint = False
-        ShowHint = True
-      end
-      object S7Track: TTrackBar
-        Tag = 7
-        AnchorSideLeft.Control = S1Track
-        AnchorSideTop.Control = S6Track
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = ShaderBox
-        AnchorSideRight.Side = asrBottom
-        Left = 122
-        Height = 25
-        Top = 213
-        Width = 118
-        Max = 100
-        OnChange = PrefTrackChange
-        Position = 0
-        TickStyle = tsNone
-        BorderSpacing.Top = 2
-        BorderSpacing.Right = 2
-        ParentFont = False
-        TabOrder = 10
-        Visible = False
-      end
-      object S8Label: TLabel
-        Tag = 8
-        AnchorSideLeft.Control = ShaderBox
-        AnchorSideTop.Control = S8Track
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 244
-        Width = 16
-        BorderSpacing.Left = 2
-        Caption = 'o8'
-        ParentColor = False
-        ParentFont = False
-        ParentShowHint = False
-        ShowHint = True
-      end
-      object S8Track: TTrackBar
-        Tag = 8
-        AnchorSideLeft.Control = S1Track
-        AnchorSideTop.Control = S7Track
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = ShaderBox
-        AnchorSideRight.Side = asrBottom
-        Left = 122
-        Height = 25
-        Top = 240
-        Width = 118
-        Max = 100
-        OnChange = PrefTrackChange
-        Position = 0
-        TickStyle = tsNone
-        BorderSpacing.Top = 2
-        BorderSpacing.Right = 2
-        ParentFont = False
-        TabOrder = 11
-        Visible = False
-      end
-      object S9Label: TLabel
-        Tag = 9
-        AnchorSideLeft.Control = ShaderBox
-        AnchorSideTop.Control = S9Track
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 271
-        Width = 16
-        BorderSpacing.Left = 2
-        Caption = 'o9'
-        ParentColor = False
-        ParentFont = False
-        ParentShowHint = False
-        ShowHint = True
-      end
-      object S9Track: TTrackBar
-        Tag = 9
-        AnchorSideLeft.Control = S1Track
-        AnchorSideTop.Control = S8Track
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = ShaderBox
-        AnchorSideRight.Side = asrBottom
-        Left = 122
-        Height = 25
-        Top = 267
-        Width = 118
-        Max = 100
-        OnChange = PrefTrackChange
-        Position = 0
-        TickStyle = tsNone
-        BorderSpacing.Top = 2
-        BorderSpacing.Right = 2
-        ParentFont = False
-        TabOrder = 12
-        Visible = False
-      end
-      object S10Label: TLabel
-        Tag = 10
-        AnchorSideLeft.Control = ShaderBox
-        AnchorSideTop.Control = S10Track
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 298
-        Width = 21
-        BorderSpacing.Left = 2
-        Caption = 'o10'
-        ParentColor = False
-        ParentFont = False
-        ParentShowHint = False
-        ShowHint = True
-      end
-      object S10Track: TTrackBar
-        Tag = 10
-        AnchorSideLeft.Control = S1Track
-        AnchorSideTop.Control = S9Track
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = ShaderBox
-        AnchorSideRight.Side = asrBottom
-        Left = 122
-        Height = 25
-        Top = 294
-        Width = 118
-        Max = 100
-        OnChange = PrefTrackChange
-        Position = 0
-        TickStyle = tsNone
-        BorderSpacing.Top = 2
-        BorderSpacing.Right = 2
-        ParentFont = False
-        TabOrder = 13
-        Visible = False
-      end
-    end
-    object LineBox: TGroupBox
-      Left = 0
-      Height = 44
-      Top = 286
-      Width = 253
-      Align = alTop
-      AutoSize = True
-      Caption = 'Lines'
-      ClientHeight = 26
-      ClientWidth = 245
-      Constraints.MinWidth = 10
-      ParentFont = False
-      TabOrder = 3
-      object LineWidthLabel: TLabel
-        AnchorSideLeft.Control = LineBox
-        AnchorSideTop.Control = LineWidthEdit
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 4
-        Width = 36
-        BorderSpacing.Left = 2
-        Caption = 'Width'
-        ParentColor = False
-        ParentFont = False
-      end
-      object LineWidthEdit: TSpinEdit
-        AnchorSideLeft.Control = LineWidthLabel
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = LineBox
-        Left = 40
-        Height = 21
-        Top = 2
-        Width = 82
-        BorderSpacing.Left = 2
-        BorderSpacing.Top = 2
-        MaxValue = 9
-        OnChange = LineWidthEditChange
-        ParentFont = False
-        TabOrder = 0
-        Value = 1
-      end
-      object LineColorBtn: TButton
-        AnchorSideLeft.Control = LineWidthEdit
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = LineWidthEdit
-        AnchorSideTop.Side = asrCenter
-        Left = 124
-        Height = 28
-        Top = -2
-        Width = 82
-        BorderSpacing.Left = 2
-        Caption = 'Color'
-        OnClick = LineColorBtnClick
-        ParentFont = False
-        TabOrder = 1
-      end
-    end
-    object SliceBox: TGroupBox
-      Left = 0
-      Height = 182
-      Top = 605
-      Width = 253
-      Align = alTop
-      AutoSize = True
-      Caption = '2D Slice Selection'
-      ClientHeight = 164
-      ClientWidth = 245
-      Constraints.MinWidth = 10
-      ParentFont = False
-      TabOrder = 6
-      object SliceABtn: TButton
-        Tag = 3
-        AnchorSideLeft.Control = SliceLBtn
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = SliceBox
-        Left = 46
-        Height = 25
-        Top = 2
-        Width = 42
-        BorderSpacing.Left = 2
-        BorderSpacing.Top = 2
-        Caption = 'A'
-        OnClick = OrientBtnClick
-        ParentFont = False
-        TabOrder = 1
-      end
-      object SlicePBtn: TButton
-        Tag = 2
-        AnchorSideLeft.Control = SliceABtn
-        AnchorSideTop.Control = SliceABtn
-        AnchorSideTop.Side = asrBottom
-        Left = 46
-        Height = 25
-        Top = 29
-        Width = 42
-        BorderSpacing.Top = 2
-        Caption = 'P'
-        OnClick = OrientBtnClick
-        ParentFont = False
-        TabOrder = 2
-      end
-      object SliceSBtn: TButton
-        Tag = 5
-        AnchorSideLeft.Control = SliceRBtn
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = SliceBox
-        Left = 162
-        Height = 25
-        Top = 2
-        Width = 42
-        BorderSpacing.Left = 30
-        BorderSpacing.Top = 2
-        Caption = 'S'
-        OnClick = OrientBtnClick
-        ParentFont = False
-        TabOrder = 4
-      end
-      object SliceIBtn: TButton
-        Tag = 4
-        AnchorSideLeft.Control = SliceSBtn
-        AnchorSideTop.Control = SliceSBtn
-        AnchorSideTop.Side = asrBottom
-        Left = 162
-        Height = 25
-        Top = 29
-        Width = 42
-        BorderSpacing.Top = 2
-        Caption = 'I'
-        OnClick = OrientBtnClick
-        ParentFont = False
-        TabOrder = 5
-      end
-      object SliceLBtn: TButton
-        AnchorSideLeft.Control = SliceBox
-        AnchorSideTop.Control = SliceABtn
-        Left = 2
-        Height = 25
-        Top = 16
-        Width = 42
-        BorderSpacing.Left = 2
-        BorderSpacing.Top = 14
-        Caption = 'L'
-        OnClick = OrientBtnClick
-        ParentFont = False
-        TabOrder = 0
-      end
-      object SliceRBtn: TButton
-        Tag = 1
-        AnchorSideLeft.Control = SliceABtn
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = SliceLBtn
-        AnchorSideTop.Side = asrCenter
-        Left = 90
-        Height = 25
-        Top = 16
-        Width = 42
-        BorderSpacing.Left = 2
-        Caption = 'R'
-        OnClick = OrientBtnClick
-        ParentFont = False
-        TabOrder = 3
-      end
-      object XCoordEdit: TEdit
-        AnchorSideLeft.Control = SliceBox
-        AnchorSideTop.Control = CoordLabel
-        AnchorSideTop.Side = asrBottom
-        Left = 2
-        Height = 21
-        Top = 74
-        Width = 80
-        BorderSpacing.Left = 2
-        BorderSpacing.Top = 2
-        OnChange = CoordEditChange
-        ParentFont = False
-        TabOrder = 6
-        Text = '0'
-      end
-      object CoordLabel: TLabel
-        AnchorSideLeft.Control = SliceBox
-        AnchorSideTop.Control = SlicePBtn
-        AnchorSideTop.Side = asrBottom
-        Left = 2
-        Height = 16
-        Top = 56
-        Width = 118
-        BorderSpacing.Left = 2
-        BorderSpacing.Top = 2
-        Caption = 'Coordinates (X,Y,Z)'
-        ParentColor = False
-        ParentFont = False
-      end
-      object YCoordEdit: TEdit
-        AnchorSideLeft.Control = XCoordEdit
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = XCoordEdit
-        AnchorSideTop.Side = asrCenter
-        Left = 84
-        Height = 21
-        Top = 74
-        Width = 80
-        BorderSpacing.Left = 2
-        OnChange = CoordEditChange
-        ParentFont = False
-        TabOrder = 7
-        Text = '0'
-      end
-      object ZCoordEdit: TEdit
-        AnchorSideLeft.Control = YCoordEdit
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = XCoordEdit
-        AnchorSideTop.Side = asrCenter
-        Left = 166
-        Height = 21
-        Top = 74
-        Width = 80
-        BorderSpacing.Left = 2
-        OnChange = CoordEditChange
-        ParentFont = False
-        TabOrder = 8
-        Text = '0'
-      end
-      object AnatDrop: TComboBox
-        AnchorSideLeft.Control = SliceBox
-        AnchorSideTop.Control = XCoordEdit
-        AnchorSideTop.Side = asrBottom
-        Left = 2
-        Height = 20
-        Top = 97
-        Width = 244
-        BorderSpacing.Left = 2
-        BorderSpacing.Top = 2
-        ItemHeight = 26
-        OnChange = AnatDropChange
-        Style = csDropDownList
-        TabOrder = 9
-        Text = '0'
-      end
-      object SliceZoom: TTrackBar
-        AnchorSideLeft.Control = SliceBox
-        AnchorSideTop.Control = AnatDrop
-        AnchorSideTop.Side = asrBottom
-        Left = 122
-        Height = 25
-        Top = 119
-        Width = 116
-        Max = 600
-        Min = 100
-        OnChange = SliceZoomChange
-        Position = 100
-        TickStyle = tsNone
-        BorderSpacing.Left = 122
-        BorderSpacing.Top = 2
-        ParentFont = False
-        TabOrder = 11
-      end
-      object ZoomBtn: TButton
-        AnchorSideLeft.Control = SliceBox
-        AnchorSideTop.Control = SliceZoom
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 25
-        Hint = 'Slider adjusts scale factor. Control-drag to pan image. Click here to restore defaults.'
-        Top = 119
-        Width = 80
-        BorderSpacing.Left = 2
-        Caption = 'Zoom'
-        OnClick = ZoomBtnClick
-        ParentFont = False
-        ParentShowHint = False
-        ShowHint = True
-        TabOrder = 10
-      end
-      object Smooth2DCheck: TCheckBox
-        AnchorSideLeft.Control = SliceBox
-        AnchorSideTop.Control = SliceZoom
-        AnchorSideTop.Side = asrBottom
-        Left = 2
-        Height = 18
-        Hint = 'Do enlarged images appear blurry or jagged'
-        Top = 146
-        Width = 66
-        BorderSpacing.Left = 2
-        BorderSpacing.Top = 2
-        Caption = 'Smooth'
-        Checked = True
-        OnChange = Smooth2DCheckChange
-        ParentFont = False
-        ParentShowHint = False
-        ShowHint = True
-        State = cbChecked
-        TabOrder = 12
-      end
-    end
-    object CutoutBox: TGroupBox
-      Left = 0
-      Height = 99
-      Top = 506
-      Width = 253
-      Align = alTop
-      AutoSize = True
-      Caption = 'Cutout'
-      ClientHeight = 81
-      ClientWidth = 245
-      Constraints.MinWidth = 10
-      ParentFont = False
-      TabOrder = 4
-      object XLabel: TLabel
-        AnchorSideLeft.Control = CutoutBox
-        AnchorSideTop.Control = XTrackBar
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 6
-        Width = 9
-        BorderSpacing.Left = 2
-        Caption = 'X'
-        ParentColor = False
-        ParentFont = False
-      end
-      object XTrackBar: TTrackBar
-        AnchorSideLeft.Control = XLabel
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = CutoutBox
-        Left = 13
-        Height = 25
-        Top = 2
-        Width = 80
-        Max = 1000
-        Position = 1000
-        TickStyle = tsNone
-        BorderSpacing.Left = 2
-        BorderSpacing.Top = 2
-        OnMouseUp = CutoutMouseUp
-        ParentFont = False
-        TabOrder = 0
-      end
-      object X2TrackBar: TTrackBar
-        AnchorSideLeft.Control = XTrackBar
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = XTrackBar
-        AnchorSideTop.Side = asrCenter
-        Left = 95
-        Height = 25
-        Top = 2
-        Width = 80
-        Max = 1000
-        Position = 1000
-        TickStyle = tsNone
-        BorderSpacing.Left = 2
-        OnMouseUp = CutoutMouseUp
-        ParentFont = False
-        TabOrder = 1
-      end
-      object YLabel: TLabel
-        AnchorSideLeft.Control = CutoutBox
-        AnchorSideTop.Control = YTrackBar
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 33
-        Width = 8
-        BorderSpacing.Left = 2
-        Caption = 'Y'
-        ParentColor = False
-        ParentFont = False
-      end
-      object YTrackBar: TTrackBar
-        AnchorSideLeft.Control = XTrackBar
-        AnchorSideTop.Control = XTrackBar
-        AnchorSideTop.Side = asrBottom
-        Left = 13
-        Height = 25
-        Top = 29
-        Width = 80
-        Max = 1000
-        Position = 1000
-        TickStyle = tsNone
-        BorderSpacing.Top = 2
-        OnMouseUp = CutoutMouseUp
-        ParentFont = False
-        TabOrder = 2
-      end
-      object Y2TrackBar: TTrackBar
-        AnchorSideLeft.Control = YTrackBar
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = YTrackBar
-        AnchorSideTop.Side = asrCenter
-        Left = 95
-        Height = 25
-        Top = 29
-        Width = 80
-        Max = 1000
-        Position = 1000
-        TickStyle = tsNone
-        BorderSpacing.Left = 2
-        OnMouseUp = CutoutMouseUp
-        ParentFont = False
-        TabOrder = 3
-      end
-      object ZLabel: TLabel
-        AnchorSideLeft.Control = CutoutBox
-        AnchorSideTop.Control = ZTrackBar
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 60
-        Width = 9
-        BorderSpacing.Left = 2
-        Caption = 'Z'
-        ParentColor = False
-        ParentFont = False
-      end
-      object ZTrackBar: TTrackBar
-        AnchorSideLeft.Control = XTrackBar
-        AnchorSideTop.Control = YTrackBar
-        AnchorSideTop.Side = asrBottom
-        Left = 13
-        Height = 25
-        Top = 56
-        Width = 80
-        Max = 1000
-        Position = 1000
-        TickStyle = tsNone
-        BorderSpacing.Top = 2
-        OnMouseUp = CutoutMouseUp
-        ParentFont = False
-        TabOrder = 4
-      end
-      object Z2TrackBar: TTrackBar
-        AnchorSideLeft.Control = ZTrackBar
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = ZTrackBar
-        AnchorSideTop.Side = asrCenter
-        Left = 95
-        Height = 25
-        Top = 56
-        Width = 80
-        Max = 1000
-        Position = 1000
-        TickStyle = tsNone
-        BorderSpacing.Left = 2
-        OnMouseUp = CutoutMouseUp
-        ParentFont = False
-        TabOrder = 5
-      end
-      object CutNearBtn: TButton
-        AnchorSideLeft.Control = X2TrackBar
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = CutoutBox
-        Left = 177
-        Height = 25
-        Top = 4
-        Width = 72
-        BorderSpacing.Left = 2
-        BorderSpacing.Top = 4
-        Caption = 'Near'
-        OnClick = CutNearBtnClick
-        ParentFont = False
-        TabOrder = 6
-      end
-      object CutNoneBtn: TButton
-        AnchorSideLeft.Control = X2TrackBar
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = CutNearBtn
-        AnchorSideTop.Side = asrBottom
-        Left = 177
-        Height = 25
-        Top = 33
-        Width = 72
-        BorderSpacing.Left = 2
-        BorderSpacing.Top = 4
-        Caption = 'None'
-        OnClick = CutNoneBtnClick
-        ParentFont = False
-        TabOrder = 7
-      end
-    end
-    object MosaicBox: TGroupBox
-      Left = 0
-      Height = 176
-      Top = 330
-      Width = 253
-      Align = alTop
-      AutoSize = True
-      Caption = 'Mosaic'
-      ClientHeight = 158
-      ClientWidth = 245
-      Constraints.MinWidth = 10
-      ParentFont = False
-      TabOrder = 5
-      object MosColLabel: TLabel
-        AnchorSideLeft.Control = MosaicBox
-        AnchorSideTop.Control = MosColEdit
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 4
-        Width = 53
-        BorderSpacing.Left = 2
-        Caption = 'Columns'
-        ParentColor = False
-        ParentFont = False
-      end
-      object MosRowLabel: TLabel
-        AnchorSideLeft.Control = MosColLabel
-        AnchorSideTop.Control = MosRowEdit
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 27
-        Width = 32
-        Caption = 'Rows'
-        ParentColor = False
-        ParentFont = False
-      end
-      object MosColEdit: TSpinEdit
-        AnchorSideLeft.Control = MosColLabel
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = MosaicBox
-        Left = 57
-        Height = 21
-        Top = 2
-        Width = 80
-        BorderSpacing.Left = 2
-        BorderSpacing.Top = 2
-        OnChange = UpdateMosaic
-        ParentFont = False
-        TabOrder = 0
-        Value = 4
-      end
-      object MosRowEdit: TSpinEdit
-        AnchorSideLeft.Control = MosColEdit
-        AnchorSideTop.Control = MosColEdit
-        AnchorSideTop.Side = asrBottom
-        Left = 57
-        Height = 21
-        Top = 25
-        Width = 80
-        BorderSpacing.Top = 2
-        OnChange = UpdateMosaic
-        ParentFont = False
-        TabOrder = 2
-        Value = 2
-      end
-      object MosColOverlapTrack: TTrackBar
-        AnchorSideLeft.Control = MosColEdit
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = MosColEdit
-        AnchorSideTop.Side = asrCenter
-        Left = 139
-        Height = 25
-        Top = 0
-        Width = 92
-        Max = 9
-        Min = -9
-        OnChange = UpdateMosaic
-        Position = -1
-        TickStyle = tsNone
-        BorderSpacing.Left = 2
-        ParentFont = False
-        TabOrder = 1
-      end
-      object MosRowOverlapTrack: TTrackBar
-        AnchorSideLeft.Control = MosColEdit
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = MosRowEdit
-        AnchorSideTop.Side = asrCenter
-        Left = 139
-        Height = 25
-        Top = 23
-        Width = 92
-        Max = 9
-        Min = -9
-        OnChange = UpdateMosaic
-        Position = -1
-        TickStyle = tsNone
-        BorderSpacing.Left = 2
-        ParentFont = False
-        TabOrder = 3
-      end
-      object MosOrientLabel: TLabel
-        AnchorSideLeft.Control = MosColLabel
-        AnchorSideTop.Control = MosOrientDrop
-        AnchorSideTop.Side = asrCenter
-        Left = 2
-        Height = 16
-        Top = 52
-        Width = 67
-        Caption = 'Orientation'
-        ParentColor = False
-        ParentFont = False
-      end
-      object MosOrientDrop: TComboBox
-        AnchorSideLeft.Control = MosOrientLabel
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = MosRowOverlapTrack
-        AnchorSideTop.Side = asrBottom
-        Left = 71
-        Height = 20
-        Top = 50
-        Width = 100
-        BorderSpacing.Left = 2
-        BorderSpacing.Top = 2
-        ItemHeight = 26
-        ItemIndex = 0
-        Items.Strings = (
-          'Axial'
-          'Coronal'
-          'Sagittal+'
-          'Sagittal-'
-        )
-        OnChange = UpdateMosaic
-        ParentFont = False
-        Style = csDropDownList
-        TabOrder = 4
-        Text = 'Axial'
-      end
-      object MosCrossCheck: TCheckBox
-        AnchorSideLeft.Control = MosColLabel
-        AnchorSideTop.Control = MosOrientDrop
-        AnchorSideTop.Side = asrBottom
-        Left = 2
-        Height = 18
-        Top = 72
-        Width = 86
-        BorderSpacing.Top = 2
-        Caption = 'Cross Slice'
-        Checked = True
-        OnChange = UpdateMosaic
-        ParentFont = False
-        State = cbChecked
-        TabOrder = 5
-      end
-      object MosLabelCheck: TCheckBox
-        AnchorSideLeft.Control = MosCrossCheck
-        AnchorSideLeft.Side = asrBottom
-        AnchorSideTop.Control = MosCrossCheck
-        AnchorSideTop.Side = asrCenter
-        Left = 98
-        Height = 18
-        Top = 72
-        Width = 90
-        BorderSpacing.Left = 10
-        Caption = 'Label Slices'
-        Checked = True
-        OnChange = UpdateMosaic
-        ParentFont = False
-        State = cbChecked
-        TabOrder = 6
-      end
-      object MosaicText: TMemo
-        AnchorSideLeft.Control = MosaicBox
-        AnchorSideTop.Control = MosCrossCheck
-        AnchorSideTop.Side = asrBottom
-        AnchorSideRight.Control = MosaicBox
-        AnchorSideRight.Side = asrBottom
-        Left = 0
-        Height = 66
-        Top = 92
-        Width = 245
-        Anchors = [akTop, akLeft, akRight]
-        BorderSpacing.Top = 2
-        Constraints.MaxHeight = 66
-        Lines.Strings = (        )
-        OnChange = MosaicTextChange
-        ParentFont = False
-        TabOrder = 7
-      end
-    end
-  end
-  object ScriptPanel: TPanel
-    Left = 1031
-    Height = 756
-    Top = 0
-    Width = 2
-    Align = alRight
-    BevelOuter = bvNone
-    ClientHeight = 756
-    ClientWidth = 2
-    Constraints.MinWidth = 2
-    ParentFont = False
-    TabOrder = 1
-    OnDblClick = ScriptPanelDblClick
-    object ScriptBox: TGroupBox
-      Left = -8
-      Height = 756
-      Top = 0
-      Width = 10
-      Align = alClient
-      Caption = 'Scripting'
-      ClientHeight = 738
-      ClientWidth = 2
-      Constraints.MinWidth = 10
-      ParentFont = False
-      TabOrder = 0
       OnDblClick = ScriptPanelDblClick
-      object ScriptMemo: TMemo
-        Left = 0
-        Height = 532
+      object ScriptBox: TGroupBox
+        Left = -8
+        Height = 641
         Top = 0
-        Width = 2
+        Width = 10
         Align = alClient
-        BorderStyle = bsNone
-        Lines.Strings = (
-          'import gl'
-          'import sys'
-          'print(sys.version)'
-          'print(gl.version())'
-          'gl.resetdefaults()'
-          'gl.loadimage(''mni152_2009_256'')'
-        )
-        OnKeyUp = ScriptMemoKeyUp
+        Caption = 'Scripting'
+        ClientHeight = 623
+        ClientWidth = 2
+        Constraints.MinWidth = 10
         ParentFont = False
-        ScrollBars = ssAutoBoth
         TabOrder = 0
-        WantTabs = True
-        WordWrap = False
-      end
-      object ScriptOutputMemo: TMemo
-        Left = 0
-        Height = 200
-        Top = 538
-        Width = 2
-        Align = alBottom
-        BorderStyle = bsNone
-        Lines.Strings = (
-          ''
-        )
-        ParentFont = False
-        ReadOnly = True
-        ScrollBars = ssAutoBoth
-        TabOrder = 1
-        WordWrap = False
-      end
-      object ScriptSplitter: TSplitter
-        Cursor = crVSplit
-        Left = 0
-        Height = 6
-        Top = 532
-        Width = 2
-        Align = alBottom
-        ResizeAnchor = akBottom
+        OnDblClick = ScriptPanelDblClick
+        object ScriptMemo: TMemo
+          Left = 0
+          Height = 417
+          Top = 0
+          Width = 2
+          Align = alClient
+          BorderStyle = bsNone
+          Lines.Strings = (
+            'import gl'
+            'import sys'
+            'print(sys.version)'
+            'print(gl.version())'
+            'gl.resetdefaults()'
+            'gl.loadimage(''mni152_2009_256'')'
+          )
+          OnKeyUp = ScriptMemoKeyUp
+          ParentFont = False
+          ScrollBars = ssAutoBoth
+          TabOrder = 0
+          WantTabs = True
+          WordWrap = False
+        end
+        object ScriptOutputMemo: TMemo
+          Left = 0
+          Height = 200
+          Top = 423
+          Width = 2
+          Align = alBottom
+          BorderStyle = bsNone
+          Lines.Strings = (
+            ''
+          )
+          ParentFont = False
+          ReadOnly = True
+          ScrollBars = ssAutoBoth
+          TabOrder = 1
+          WordWrap = False
+        end
+        object ScriptSplitter: TSplitter
+          Cursor = crVSplit
+          Left = 0
+          Height = 6
+          Top = 417
+          Width = 2
+          Align = alBottom
+          ResizeAnchor = akBottom
+        end
       end
     end
+    object LeftSplitter: TSplitter
+      Left = 269
+      Height = 641
+      Top = 1
+      Width = 6
+    end
+    object RightSplitter: TSplitter
+      Left = 752
+      Height = 641
+      Top = 1
+      Width = 6
+      Align = alRight
+      ResizeAnchor = akRight
+    end
+    object CenterPanel: TPanel
+      Left = 275
+      Height = 641
+      Top = 1
+      Width = 477
+      Align = alClient
+      TabOrder = 4
+    end
   end
-  object LeftSplitter: TSplitter
-    Left = 268
-    Height = 756
-    Top = 0
-    Width = 6
+  object TBSplitter: TSplitter
+    Cursor = crVSplit
+    Left = 0
+    Height = 6
+    Top = 643
+    Width = 761
+    Align = alBottom
+    MinSize = 4
+    ResizeAnchor = akBottom
   end
-  object RightSplitter: TSplitter
-    Left = 1025
-    Height = 756
-    Top = 0
-    Width = 6
-    Align = alRight
-    ResizeAnchor = akRight
-  end
-  object CenterPanel: TPanel
-    Left = 274
-    Height = 756
-    Top = 0
-    Width = 751
-    Align = alClient
-    Constraints.MinHeight = 32
-    Constraints.MinWidth = 32
-    ParentFont = False
-    TabOrder = 4
+  object BottomPanel: TPanel
+    Left = 0
+    Height = 4
+    Top = 649
+    Width = 761
+    Align = alBottom
+    TabOrder = 2
   end
   object MainMenu: TMainMenu
     left = 280
@@ -1609,7 +1653,7 @@ object GLForm1: TGLForm1
         OnClick = OpenFSLMenuClick
       end
       object AddOverlayMenu: TMenuItem
-        Caption = 'Add overlay'
+        Caption = 'Add Overlay'
         ShortCut = 16449
         OnClick = AddOverlayMenuClick
       end
@@ -1832,6 +1876,81 @@ object GLForm1: TGLForm1
         end
       end
     end
+    object GraphMenu: TMenuItem
+      Caption = 'Graph'
+      object GraphOpenMenu: TMenuItem
+        Caption = 'Open'
+        OnClick = GraphOpenMenuClick
+      end
+      object GraphSaveMenu: TMenuItem
+        Caption = 'Save As Text'
+        OnClick = GraphSaveMenuClick
+      end
+      object GraphSaveBitmapMenu: TMenuItem
+        Caption = 'Save As Bitmap'
+        OnClick = GraphSaveBitmapMenuClick
+      end
+      object GraphAddMenu: TMenuItem
+        Caption = 'Add (Hold) Current Position'
+        OnClick = GraphAddMenuClick
+      end
+      object GraphClearMenu: TMenuItem
+        Caption = 'Clear'
+        OnClick = GraphClearMenuClick
+      end
+      object GraphScalingMenu: TMenuItem
+        Caption = 'Scaling'
+        object GraphRawMenu: TMenuItem
+          AutoCheck = True
+          Caption = 'Raw'
+          Checked = True
+          GroupIndex = 211
+          RadioItem = True
+          OnClick = GraphScaleClick
+        end
+        object GraphDemeanMenu: TMenuItem
+          Tag = 1
+          AutoCheck = True
+          Caption = 'Demeaned'
+          GroupIndex = 211
+          RadioItem = True
+          OnClick = GraphScaleClick
+        end
+        object GraphNormalizeMenu: TMenuItem
+          Tag = 2
+          AutoCheck = True
+          Caption = 'Normalize (-1..1)'
+          GroupIndex = 211
+          RadioItem = True
+          OnClick = GraphScaleClick
+        end
+        object GraphNormalize01Menu: TMenuItem
+          Tag = 3
+          AutoCheck = True
+          Caption = 'Normalize (0..1)'
+          GroupIndex = 211
+          RadioItem = True
+          OnClick = GraphScaleClick
+        end
+        object GraphPercentMenu: TMenuItem
+          Tag = 4
+          AutoCheck = True
+          Caption = 'Percent Signal'
+          GroupIndex = 211
+          RadioItem = True
+          OnClick = GraphScaleClick
+        end
+      end
+      object GraphMarkerMenu: TMenuItem
+        AutoCheck = True
+        Caption = 'Show Markers'
+        OnClick = GraphMarkerMenuClick
+      end
+      object GraphShowHideMenu: TMenuItem
+        Caption = 'Show or Hide'
+        OnClick = GraphShowHideMenuClick
+      end
+    end
     object LandmarkMenu: TMenuItem
       Caption = 'Landmarks'
       object LandmarkOpenMenu: TMenuItem
@@ -1987,6 +2106,16 @@ object GLForm1: TGLForm1
         AutoCheck = True
         Caption = 'Animate Volumes'
         OnClick = DisplayAnimateMenuClick
+      end
+      object DisplayCorrelationR: TMenuItem
+        Caption = 'Seed Correlation (Pearson)'
+        OnClick = DisplayCorrelationRClick
+      end
+      object DisplayCorrelationZ: TMenuItem
+        Tag = 1
+        Caption = 'Seed Correlation (Fisher z'')'
+        Visible = False
+        OnClick = DisplayCorrelationRClick
       end
     end
     object ViewMenu: TMenuItem

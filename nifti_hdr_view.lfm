@@ -173,6 +173,7 @@ object HdrForm: THdrForm
         Width = 239
         BorderSpacing.Left = 6
         ItemHeight = 26
+        ItemIndex = 0
         Items.Strings = (
           'Unknown'
           'ni1: NIfTI separate file (hdr+.img)'
@@ -183,7 +184,7 @@ object HdrForm: THdrForm
         OnSelect = HeaderMagicDropSelect
         Style = csDropDownList
         TabOrder = 15
-        Text = '0'
+        Text = 'Unknown'
       end
       object Endian: TComboBox
         AnchorSideLeft.Control = fTypeDrop
@@ -196,13 +197,14 @@ object HdrForm: THdrForm
         Width = 210
         BorderSpacing.Left = 6
         ItemHeight = 26
+        ItemIndex = 0
         Items.Strings = (
           'Native Endian'
           'Swapped Endian'
         )
         Style = csDropDownList
         TabOrder = 16
-        Text = '0'
+        Text = 'Native Endian'
       end
       object fTypeDrop: TComboBox
         AnchorSideLeft.Control = Label8
@@ -217,6 +219,7 @@ object HdrForm: THdrForm
         BorderSpacing.Top = 6
         DropDownCount = 20
         ItemHeight = 26
+        ItemIndex = 0
         Items.Strings = (
           'binary'
           '8-bit S'
@@ -237,7 +240,7 @@ object HdrForm: THdrForm
         )
         Style = csDropDownList
         TabOrder = 17
-        Text = '0'
+        Text = 'binary'
       end
       object xyzt_sizeDrop: TComboBox
         AnchorSideLeft.Control = Ymm
@@ -250,6 +253,7 @@ object HdrForm: THdrForm
         Width = 128
         BorderSpacing.Left = 8
         ItemHeight = 26
+        ItemIndex = 0
         Items.Strings = (
           'Unknown'
           'Meter'
@@ -259,7 +263,7 @@ object HdrForm: THdrForm
         )
         Style = csDropDownList
         TabOrder = 18
-        Text = '0'
+        Text = 'Unknown'
       end
       object xyzt_timeDrop: TComboBox
         AnchorSideLeft.Control = TSec
@@ -272,6 +276,7 @@ object HdrForm: THdrForm
         Width = 128
         BorderSpacing.Left = 6
         ItemHeight = 26
+        ItemIndex = 0
         Items.Strings = (
           'Unknown'
           'Second'
@@ -283,7 +288,7 @@ object HdrForm: THdrForm
         )
         Style = csDropDownList
         TabOrder = 19
-        Text = '0'
+        Text = 'Unknown'
       end
       object Xdim: TSpinEdit
         AnchorSideLeft.Control = DimLabel
@@ -638,6 +643,7 @@ object HdrForm: THdrForm
         BorderSpacing.Top = 6
         Constraints.MinWidth = 260
         ItemHeight = 26
+        ItemIndex = 0
         Items.Strings = (
           'None'
           'Scanner Position'
@@ -649,7 +655,7 @@ object HdrForm: THdrForm
         OnSelect = HeaderMagicDropSelect
         Style = csDropDownList
         TabOrder = 19
-        Text = '0'
+        Text = 'None'
       end
       object SFormDrop: TComboBox
         AnchorSideLeft.Control = Label47
@@ -664,6 +670,7 @@ object HdrForm: THdrForm
         BorderSpacing.Top = 6
         Constraints.MinWidth = 260
         ItemHeight = 26
+        ItemIndex = 0
         Items.Strings = (
           'None'
           'Scanner Position'
@@ -675,7 +682,7 @@ object HdrForm: THdrForm
         OnSelect = HeaderMagicDropSelect
         Style = csDropDownList
         TabOrder = 20
-        Text = '0'
+        Text = 'None'
       end
       object srow_x0Edit: TFloatSpinEdit
         AnchorSideLeft.Control = Label24
@@ -1162,6 +1169,7 @@ object HdrForm: THdrForm
         BorderSpacing.Top = 6
         DropDownCount = 44
         ItemHeight = 26
+        ItemIndex = 0
         Items.Strings = (
           'Not statistics'
           'Correlation coefficient '
@@ -1200,7 +1208,7 @@ object HdrForm: THdrForm
         )
         Style = csDropDownList
         TabOrder = 3
-        Text = '0'
+        Text = 'Not statistics'
       end
       object intent_p1Edit: TFloatSpinEdit
         AnchorSideLeft.Control = Intent1Label
@@ -1355,6 +1363,7 @@ object HdrForm: THdrForm
         BorderSpacing.Left = 6
         BorderSpacing.Top = 6
         ItemHeight = 26
+        ItemIndex = 0
         Items.Strings = (
           'Unknown'
           'Sequential Increasing (1 2 3 4)'
@@ -1366,7 +1375,7 @@ object HdrForm: THdrForm
         )
         Style = csDropDownList
         TabOrder = 4
-        Text = '0'
+        Text = 'Unknown'
       end
       object FreqDimDrop: TComboBox
         AnchorSideLeft.Control = FreqLabel
@@ -1380,6 +1389,7 @@ object HdrForm: THdrForm
         BorderSpacing.Left = 6
         BorderSpacing.Top = 6
         ItemHeight = 26
+        ItemIndex = 0
         Items.Strings = (
           'Unknown'
           'I'
@@ -1388,7 +1398,7 @@ object HdrForm: THdrForm
         )
         Style = csDropDownList
         TabOrder = 5
-        Text = '0'
+        Text = 'Unknown'
       end
       object PhaseDimDrop: TComboBox
         AnchorSideLeft.Control = FreqDimDrop
@@ -1400,6 +1410,7 @@ object HdrForm: THdrForm
         Width = 215
         BorderSpacing.Top = 6
         ItemHeight = 26
+        ItemIndex = 0
         Items.Strings = (
           'Unknown'
           'I'
@@ -1408,7 +1419,7 @@ object HdrForm: THdrForm
         )
         Style = csDropDownList
         TabOrder = 6
-        Text = '0'
+        Text = 'Unknown'
       end
       object SliceDimDrop: TComboBox
         AnchorSideLeft.Control = FreqDimDrop
@@ -1420,6 +1431,7 @@ object HdrForm: THdrForm
         Width = 215
         BorderSpacing.Top = 6
         ItemHeight = 26
+        ItemIndex = 0
         Items.Strings = (
           'Unknown'
           'I'
@@ -1428,7 +1440,7 @@ object HdrForm: THdrForm
         )
         Style = csDropDownList
         TabOrder = 7
-        Text = '0'
+        Text = 'Unknown'
       end
       object slice_startEdit: TSpinEdit
         AnchorSideLeft.Control = toffsetEdit

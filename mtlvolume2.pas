@@ -20,7 +20,7 @@ type
       private
         {$IFDEF VIEW2D}
         colorEditorVertexBuffer, sliceVertexBuffer, renderVertexBuffer, lineVertexBuffer: MTLBufferProtocol;
-        shader2D, shaderLines2D: TMetalPipeline;
+        shader2D, shader2Dn, shaderLines2D: TMetalPipeline;
         MeshRenderPassDescriptor: MTLRenderPassDescriptor;
         slices2D: TSlices2D;
         colorEditor: TColorEditor;
@@ -172,6 +172,7 @@ begin
  {$IFDEF VIEW2D}
  meshRenderPassDescriptor := nil;
  options := TMetalPipelineOptions.Default;
+ //default shader
  shaderName := ShaderDir+pathdelim+'_Texture2D.metal';
  options.libraryName := shaderName;
  if not fileexists(shaderName) then
@@ -185,6 +186,13 @@ begin
  options.pipelineDescriptor.colorAttachmentAtIndex(0).setDestinationRGBBlendFactor(MTLBlendFactorOneMinusSourceAlpha);
  options.pipelineDescriptor.colorAttachmentAtIndex(0).setDestinationAlphaBlendFactor(MTLBlendFactorOneMinusSourceAlpha);
  shader2D := MTLCreatePipeline(options);
+ //nearest neighbor shader
+ shaderName := ShaderDir+pathdelim+'_Texture2Dn.metal';
+ options.libraryName := shaderName;
+ if not fileexists(shaderName) then
+  writeln('Unable to find ' + shaderName);
+ shader2Dn := MTLCreatePipeline(options);
+ //line shades
  shaderName := ShaderDir+pathdelim+'_Line2D.metal';
  options.libraryName := shaderName;
  if not fileexists(shaderName) then
@@ -616,7 +624,10 @@ begin
       fragUniforms.drawAlpha := Drawing.OpacityFraction; //<- loaded!
   MTLBeginFrame();
     //draw 2D slices
-    MTLSetShader(shader2D);
+    if not isSmooth2D then
+       MTLSetShader(shader2Dn)
+    else
+        MTLSetShader(shader2D);
     MTLSetFragmentTexture(volTex, 0);
     MTLSetFragmentTexture(overlayVolTex, 1);
     MTLSetFragmentTexture(drawVolTex, 2);
@@ -904,7 +915,10 @@ procedure TGPUVolume.PaintMosaic2D(var vol: TNIfTI; Drawing: TDraw; MosaicString
            fragUniforms.drawAlpha := 0.0
         else
             fragUniforms.drawAlpha := Drawing.OpacityFraction; //<- loaded!
-        MTLSetShader(shader2D);
+        if not isSmooth2D then
+           MTLSetShader(shader2Dn)
+        else
+            MTLSetShader(shader2D);
         MTLSetFragmentTexture(volTex, 0);
         MTLSetFragmentTexture(overlayVolTex, 1);
         MTLSetFragmentTexture(drawVolTex, 2);

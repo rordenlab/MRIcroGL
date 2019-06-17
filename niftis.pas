@@ -4,7 +4,9 @@ interface
 //manages multiple overlays
 uses
   {$IFDEF CUSTOMCOLORS} colorTable,  {$ENDIF}
-  drawvolume, Clipbrd, SimdUtils, sysutils,Classes, nifti, Math, dialogs;//, SimdTypes;
+  {$IFDEF LCLCocoa}UserNotification, {$ELSE} TimedDialog,{$ENDIF}
+
+  drawvolume, Clipbrd, SimdUtils, sysutils,Classes, nifti, Math,  dialogs;//, SimdTypes;
 const
   kBackgroundLayer = 0;
   kMinOverlay = 1;
@@ -17,6 +19,7 @@ Type
         fAdditiveOverlayBlending, fMaskWithBackground, fInterpolateOverlays : boolean;
         niis: array[0..kMaxOverlay] of TNIfTI;
         fDrawing: TDraw;
+        procedure SkippedVolumesWarning();
       public
         LoadFewVolumes: boolean;
         MaxVox: integer; //maximum number of voxels in any dimension
@@ -26,6 +29,7 @@ Type
         property MaskWithBackground: boolean read fMaskWithBackground write fMaskWithBackground;
         property AdditiveOverlayBlending: boolean read fAdditiveOverlayBlending write fAdditiveOverlayBlending;
         function AddLayer(niftiFileName: string; backColor: TRGBA): boolean;
+        function AddCorrelLayer(vox: TVec3i; backColor: TRGBA; isZ: boolean): boolean;
         function OpenDrawing(niftiFileName: string): boolean;
         function OverlaysNeedsUpdate: boolean;
         function Layer(idx: integer; out vol: TNIfTI): boolean;
@@ -42,7 +46,7 @@ Type
 
 implementation
 
-uses nifti_types; //mainunit,
+uses nifti_types , mainunit;
 
 procedure printerror(msg: string);
 begin
@@ -278,6 +282,17 @@ begin
      nii.Destroy;
 end;
 
+procedure TNIfTIs.SkippedVolumesWarning();
+begin
+     if (fNumLayers = 0) and (niis[fNumLayers].VolumesLoaded > 1) and (niis[fNumLayers].VolumesLoaded < niis[fNumLayers].Header.dim[4]) then
+       {$IFDEF LCLCocoa}
+       DeliverUserNotification(format('Loaded %d of %d volumes', [niis[fNumLayers].VolumesLoaded, niis[fNumLayers].Header.dim[4]]), 'Adjust preferences to load all volumes.','','');
+       {$ELSE}
+       TimedDialogForm.ShowTimedDialog('MRIcroGL Warning', format('Only loaded %d of %d volumes. Adjust preferences to see all volumes (full graphs and calibration maps).', [niis[fNumLayers].VolumesLoaded, niis[fNumLayers].Header.dim[4]]), 3000, GLForm1.Left+20, GLForm1.Top+20);
+       {$ENDIF}
+     //TimedDialogForm.ShowTimedDialog('MRIcroGL Warning', format('Only loaded %d of %d volumes. Adjust preferences to see all volumes (full graphs and calibration maps).', [niis[fNumLayers].VolumesLoaded, niis[fNumLayers].Header.dim[4]]), 3000);
+end;
+
 function TNIfTIs.AddLayer(niftiFileName: string; backColor: TRGBA): boolean;
 begin
      result :=  (niftiFileName <> '') and (fileexists(niftiFileName));
@@ -287,10 +302,42 @@ begin
      end
      else
         niis[fNumLayers] := TNIfTI.Create(niftiFileName, backColor, niis[0].Mat, niis[0].Dim, fInterpolateOverlays, result);
+     SkippedVolumesWarning();
      if (not result) and (fNumLayers > 0) then
         niis[fNumLayers].Destroy //e.g. attempted to open RGB as overlay
      else
          fNumLayers := fNumLayers + 1;
+end;
+
+function TNIfTIs.AddCorrelLayer(vox: TVec3i; backColor: TRGBA; isZ: boolean): boolean;
+var
+  rs: TFloat32s;
+  hdr: TNIFTIhdr;
+  //i,n: integer;
+  prefix,s: string;
+begin
+     result := false;
+     if (fNumLayers > kMaxOverlay) or (fNumLayers < 1) then exit;
+     rs := niis[0].SeedCorrelationMap(vox, isZ);
+     if length(rs) < 1 then exit;
+     //n := length(rs);
+     //for i := 0 to (n-1) do
+     //    rs[i] := random();
+     result := true;
+     hdr := niis[0].Header;
+     hdr.intent_code := kNIFTI_INTENT_CORREL;
+     prefix := 'r';
+     if isZ then begin
+        prefix := 'z';
+        hdr.intent_code := kNIFTI_INTENT_ZSCORE;
+     end;
+     s := '';
+     if (niis[0].VolumesLoaded < niis[0].Header.dim[4]) then
+        s := format('%dof%d_',[niis[0].VolumesLoaded, niis[0].header.dim[4]]);
+     niis[fNumLayers] := TNIfTI.Create(prefix+inttostr(vox.x)+'x'+inttostr(vox.y)+'x'+inttostr(vox.z)+'_'+s+niis[0].shortname, backColor, niis[0].Mat, niis[0].Dim, fInterpolateOverlays, hdr, rs);
+     //!TOBO niis[fNumLayers].SetDisplayColorScheme('8RedYell', 8);
+     fNumLayers := fNumLayers + 1;
+     setlength(rs,1);
 end;
 
 constructor TNIfTIs.Create(niftiFileName: string; backColor: TRGBA; lLoadFewVolumes: boolean; lMaxVox: integer; out isOK: boolean); overload;
@@ -300,6 +347,7 @@ begin
      fNumLayers := 0;
      niis[0] := TNIfTI.Create(niftiFileName, backColor, LoadFewVolumes, MaxVox, isOK);
      fDrawing := TDraw.Create();
+     SkippedVolumesWarning();
      fNumLayers := 1;
      fAdditiveOverlayBlending := false;
      fMaskWithBackground := false;

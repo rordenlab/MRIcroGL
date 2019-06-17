@@ -4,7 +4,7 @@ diffuse|float|0.0|0.2|1
 specular|float|0.0|0.2|1
 shininess|float|0.01|10.0|30
 overlayFuzzy|float|0.01|0.5|1
-overlayDepth|float|0.0|0.3|0.8
+overlayDepth|float|0.0|0.0|0.8
 //vert
 #version 330 core
 layout(location = 0) in vec3 vPos;
@@ -35,6 +35,9 @@ uniform float overlayDepth = 0.3;
 uniform float overlayFuzzy = 0.5;
 uniform int overlays = 0;
 uniform float backAlpha = 0.5;
+uniform mat3 NormalMatrix;
+
+uniform sampler2D matcap2D;
 vec3 GetBackPosition (vec3 startPosition) { //when does ray exit unit cube http://prideout.net/blog/?p=64
 	vec3 invR = 1.0 / rayDir;
     vec3 tbot = invR * (vec3(0.0)-startPosition);
@@ -70,11 +73,13 @@ void main() {
 			vec3 a = colorSample.rgb * ambient;
 			float s =  0;
 			vec3 d = vec3(0.0, 0.0, 0.0);
-			if (colorSample.a > 0.01) {
+			if (colorSample.a > 0.00) {
 				bgNearest = min(lengthAcc,bgNearest);
 				//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
 				gradSample = texture(gradientOverlay,samplePos); //interpolate gradient direction and magnitude
 				gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
+
+
 				//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
 				if (gradSample.a < prevGrad.a)
 					gradSample.rgb = prevGrad.rgb;
@@ -82,6 +87,7 @@ void main() {
 				float lightNormDot = dot(gradSample.rgb, lightPosition);
 				d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;
 				s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
+
 
 			}
 			colorSample.rgb = a + d + s;
@@ -142,9 +148,27 @@ void main() {
 				float lightNormDot = dot(gradSample.rgb, lightPosition);
 				d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;
 				s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
+				//vec3 uv = gradSample.rgb;
+				//uv = transpose(NormalMatrix) * gradSample.rgb;
+				vec3 n = normalize(NormalMatrix * gradSample.rgb);
+				//uv.x = 1.0;
+				//vec3 n = normalize(reflect(-rayDir, gradSample.rgb));
+
+				vec2 uv = n.xy * 0.5 + 0.5;
+				uv.y = 1.0-uv.y;
+				d = texture(matcap2D,uv.xy).rgb;
+				//d.rg = uv.xy;
+				//d.b = 0.2;
+
+
 			}
 		}
-		colorSample.rgb = a + d + s;
+		//d = vec3(1.0, 0.0, 0.0);
+		//vec2 uv = colorSample.rg;
+		//d = texture(matcap2D,uv.xy).rgb;
+		colorSample.rgb = d;
+
+		//colorSample.rgb = a + d + s;
 		colorSample.rgb *= colorSample.a;
 		colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
 		samplePos += deltaDir;
@@ -156,10 +180,12 @@ void main() {
 	colAcc.a *= backAlpha;
 	//if (overAcc.a > 0.0) { //<- conditional not required: overMix always 0 for overAcc.a = 0.0
 		float overMix = overAcc.a;
-		if ((overNearest > bgNearest) && (colAcc.a > 0.0)) { //background (partially) occludes overlay
+		if (((overNearest) > bgNearest) && (colAcc.a > 0.0)) { //background (partially) occludes overlay
 			//max distance between two vertices of unit cube is 1.73
 			float dx = (overNearest - bgNearest)/1.73;
+			//dx = min(dx, 0.00001);
 			dx = colAcc.a * pow(dx, overlayDepth);
+			//dx = colAcc.a;
 			overMix *= 1.0 - dx;
 		}
 		colAcc.rgb = mix(colAcc.rgb, overAcc.rgb, overMix);

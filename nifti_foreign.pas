@@ -796,7 +796,7 @@ begin
   sList.Free;
 end;
 
-function nii_readVmr (var fname: string; isV16: boolean; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
+function nii_readVmr (var fname: string; isV16: boolean; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 //http://support.brainvoyager.com/automation-aamp-development/23-file-formats/385-developer-guide-26-the-format-of-vmr-files.html
 Type
   Tvmr_header = packed record //Next: VMR Format Header structure
@@ -891,7 +891,7 @@ begin
   result := true;
 end; //nii_readVmr()
 
-function nii_readBVox (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
+function nii_readBVox (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 //http://pythology.blogspot.com/2014/08/you-can-do-cool-stuff-with-manual.html
 Type
   Tbv_header = packed record //Next: PIC Format Header structure
@@ -954,7 +954,7 @@ begin
   result := true;
 end; //nii_readBVox
 
-function nii_readDeltaVision (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
+function nii_readDeltaVision (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 const
      kDV_HEADER_SIZE = 1024;
      kSIG_NATIVE = 49312;
@@ -1060,7 +1060,7 @@ begin
   s:=outguy.Long;
 end; //proc swap4
 
-function nii_readGipl (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
+function nii_readGipl (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 const
      kmagic_number =4026526128;
 Type
@@ -1167,7 +1167,8 @@ begin
   result := true;
 end; //nii_readGipl
 
-function nii_readpic (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
+function nii_readpic (var fname: string; var nhdr: TNIFTIhdr): boolean;
+//function nii_readpic (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
 //https://github.com/jefferis/pic2nifti/blob/master/libpic2nifti.c
 const
      kBIORAD_HEADER_SIZE  = 76;
@@ -1276,15 +1277,15 @@ end;
 function nii_readEcat(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
 Const
   ECAT7_BYTE =1;
-  ECAT7_VAXI2 =2;
+  (*ECAT7_VAXI2 =2;
   ECAT7_VAXI4 =3;
   ECAT7_VAXR4 =4;
-  ECAT7_IEEER4 =5;
+  ECAT7_IEEER4 =5;*)
   ECAT7_SUNI2 =6;
   ECAT7_SUNI4 =7;
   //image types
   ECAT7_2DSCAN =1;
-  ECAT7_IMAGE16 =2;
+  (*ECAT7_IMAGE16 =2;
   ECAT7_ATTEN =3;
   ECAT7_2DNORM =4;
   ECAT7_POLARMAP =5;
@@ -1295,7 +1296,7 @@ Const
   ECAT7_IMAGE8 =10;
   ECAT7_3DSCAN =11;
   ECAT7_3DSCAN8 =12;
-  ECAT7_3DNORM =13;
+  ECAT7_3DNORM =13;*)
   ECAT7_3DSCANFIT =14;
 Label
   666;
@@ -1610,7 +1611,7 @@ end; *)
        if EOF(f) then exit(false);
        while (not  EOF(f)) do begin
              Read(f,bt);
-             if bt = kEOLN then exit;
+             if bt = kEOLN then exit(true);
              s := s + Chr(bt);
        end;
        exit(true);
@@ -3129,6 +3130,7 @@ var
   lExt, lExt2GZ: string;
 begin
   NII_Clear (lHdr);
+  gzBytes := 0;
   swapEndian := false;
   //gzBytes := false;
   isDimPermute2341 := false;
@@ -3142,19 +3144,19 @@ begin
      lExt2GZ := UpCaseExt(lExt2GZ);
   end;
   if (lExt = '.DV') then
-     result := nii_readDeltaVision(lFilename, lHdr, gzBytes, swapEndian)
+     result := nii_readDeltaVision(lFilename, lHdr, swapEndian)
   else if (lExt = '.V') then
        result := nii_readEcat(lFilename, lHdr, gzBytes, swapEndian)
   else if (lExt = '.VMR') then
-       result := nii_readVmr(lFilename, false, lHdr, gzBytes, swapEndian)
+       result := nii_readVmr(lFilename, false, lHdr, swapEndian)
   else if (lExt = '.V16') then
-       result := nii_readVmr(lFilename, true, lHdr, gzBytes, swapEndian)
+       result := nii_readVmr(lFilename, true, lHdr, swapEndian)
   else if (lExt = '.BVOX') then
-       result := nii_readBVox(lFilename, lHdr, gzBytes, swapEndian)
+       result := nii_readBVox(lFilename, lHdr, swapEndian)
   else if (lExt = '.GIPL') then
-       result := nii_readGipl(lFilename, lHdr, gzBytes, swapEndian)
+       result := nii_readGipl(lFilename, lHdr, swapEndian)
   else if (lExt = '.PIC') then
-    result := nii_readpic(lFilename, lHdr, gzBytes, swapEndian)
+    result := nii_readpic(lFilename, lHdr)
   else if (lExt = '.VTK') then
     result := readVTKHeader(lFilename, lHdr, gzBytes, swapEndian)
   else if (lExt = '.MGH') or (lExt = '.MGZ') then

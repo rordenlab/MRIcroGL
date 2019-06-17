@@ -8,7 +8,7 @@ uses
   //cmem, // <- http://wiki.freepascal.org/Parallel_procedures
   {$ENDIF}{$ENDIF}
   Interfaces, // this includes the LCL widgetset
-  Forms, uscale, mainunit, dcm2nii, drawVolume, autoroi, nifti_hdr_view;
+  Forms, uscale, mainunit, TimedDialog, dcm2nii, drawVolume, autoroi, nifti_hdr_view;
 
 {$R *.res}
 begin
@@ -17,6 +17,7 @@ begin
   Application.Initialize;
   Application.CreateForm(TGLForm1, GLForm1);
   Application.CreateForm(Tdcm2niiForm, dcm2niiForm);
+  Application.CreateForm(TTimedDialogForm, TimedDialogForm);
   Application.CreateForm(TAutoROIForm, AutoROIForm);
   Application.CreateForm(THdrForm, HdrForm);
   ConstrainTrackBars();

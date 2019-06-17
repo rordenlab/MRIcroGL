@@ -3,7 +3,7 @@
 #typical users should use the "_osx.command" to build files
 # this script builds other tools and special versions of MRIcroGL
 
-
+#make LCL_PLATFORM=cocoa CPU_TARGET=x86_64 clean bigide
 
 find /Users/rorden/tst/MRIcroGL12 -name ‘*.DS_Store’ -type f -delete
 

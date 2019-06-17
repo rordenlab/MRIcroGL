@@ -20,7 +20,7 @@ uses
   {$IFDEF OPENFOREIGN} nifti_foreign, {$ENDIF}
   {$IFDEF CUSTOMCOLORS} colorTable,  {$ENDIF}
   {$IFDEF GZIP}zstream, umat, {$IFNDEF FASTGZ}GZIPUtils,{$ENDIF} {$ENDIF} //Freepascal includes the handy zstream function for decompressing GZip files
-  dialogs, clipbrd, SimdUtils, sysutils,Classes, nifti_types, Math, VectorMath, otsuml;
+  strutils, dialogs, clipbrd, SimdUtils, sysutils,Classes, nifti_types, Math, VectorMath, otsuml;
 //Written by Chris Rorden, released under BSD license
 //This is the header NIfTI format http://nifti.nimh.nih.gov/nifti-1/
 //NIfTI is popular in neuroimaging - should be compatible for Analyze format
@@ -127,6 +127,8 @@ Type
         function VoxIntensityString(vox: TVec3i): string; overload;
         function VoxIntensity(vox: integer): single; overload; //return intensity of voxel at coordinate
         function VoxIntensity(vox: TVec3i): single; overload; //return intensity of voxel at coordinate
+        function VoxIntensityArray(vox: TVec3i): TFloat32s;
+        function SeedCorrelationMap(vox: TVec3i; isZ: boolean): TFloat32s;
         property OpacityPercent: integer read fOpacityPct write fOpacityPct; //0=transparent, 50=translucent, 100=opaque
         property Histogram: TLUT read fhistogram;
         property VolumeMin: single read fMin; //darkest voxel in volume
@@ -153,6 +155,7 @@ Type
         procedure GPULoadDone();
         function Save(niftiFileName: string): boolean;
         function Load(niftiFileName: string): boolean; overload;
+        function Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s): boolean; overload;
         function Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; volumeNumber: integer = 0; isKeepContrast: boolean = false): boolean; overload;
         procedure SetDisplayMinMax(newMin, newMax: single); overload;
         procedure SetDisplayMinMaxNoUpdate(newMin, newMax: single); overload;
@@ -166,6 +169,8 @@ Type
         function GenerateGradientVolume: TRGBAs; overload;
         {$ENDIF}
         constructor Create(); overload; //empty volume
+        constructor Create(niftiFileName: string; backColor: TRGBA;  tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s); overload;
+
         constructor Create(niftiFileName: string; backColor: TRGBA; lLoadFewVolumes: boolean; lMaxVox: integer; out isOK: boolean); overload; //background
         constructor Create(niftiFileName: string; backColor: TRGBA; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; out isOK: boolean; lLoadFewVolumes: boolean = true; lMaxVox: integer = 640); overload; //overlay
         constructor Create(tarMat: TMat4; tarDim: TVec3i); overload; //blank drawing
@@ -412,7 +417,7 @@ begin
          if (i >= 0) and (i < fLabels.Count) then
             result := fLabels[i]
          else
-             result := '';
+             result := inttostr(i);//''; //tobo
      end else
          result := format('%3.6g', [f]);
 end;
@@ -425,6 +430,317 @@ begin
      result := '';
      if (i < 0) or (i >= (dim.x * dim.y * dim.z)) then exit;
      result := VoxIntensityString(i);
+end;
+
+
+procedure printf (lS: AnsiString);
+begin
+{$IFNDEF WINDOWS} writeln(lS); {$ENDIF}
+end;
+
+//{$DEFINE FASTCORREL}
+{$IFDEF FASTCORREL} //~10% faster, but may be less precise for large values.
+function correl(var v: TFloat32s): double;
+var
+  i, n: integer;
+  sum, mn: double;
+
+begin
+     n := length(v);
+     if n < 2 then exit(0); //avoid div by zero
+     //compute mean for seed
+     sum := 0.0;
+     for i := 0 to (n - 1) do
+         sum := sum + v[i];
+     mn := sum / n;
+     result := 0.0;
+     for i := 0 to (n - 1) do begin
+         v[i] := (v[i]-mn);
+         result := result + sqr(v[i]);
+     end;
+end;
+
+function TNIfTI.SeedCorrelationMap(vox: TVec3i): TFloat32s;
+//Based on Numerical Recipes. One suspects this might have poor precision for large values
+// https://www.johndcook.com/blog/2008/11/05/how-to-calculate-pearson-correlation-accurately/
+var
+  vx, nVx, vol, nVol, volBytes: integer;
+  vol8: TUInt8s;
+  vol16: TInt16s;
+  x, y, vol32: TFloat32s;
+  sxx, syy, sxy: double;
+  r: double;
+  {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
+begin
+ setlength(result, 0);
+ if IsLabels then exit;
+ if volumesLoaded < 2 then exit;
+ if fHdr.bitpix = 24 then exit;
+ {$IFDEF TIMER}startTime := now;{$ENDIF}
+ nVx := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3];
+ volBytes := nVx * (fHdr.bitpix shr 3);
+ nVol := length(fRawVolBytes) div volBytes;
+ if nVol <> fVolumesLoaded then exit;
+ vx := vox.x + (vox.y * dim.x) + (vox.z * (dim.x * dim.y));
+ if (vx < 0) or (vx >= nVx) then exit;
+ setlength(result, nVx);
+ setlength(x, nVol);
+ setlength(y, nVol);
+ vol8 := fRawVolBytes;
+ vol16 := TInt16s(vol8);
+ vol32 := TFloat32s(vol8);
+ //load values for seed
+ if fHdr.datatype = kDT_UINT8 then begin
+    for vol := 0 to (nVol - 1) do
+        x[vol] := vol8[vx + (vol * nVx)];
+ end else if fHdr.datatype = kDT_INT16 then begin
+   for vol := 0 to (nVol - 1) do
+       x[vol] := vol16[vx + (vol * nVx)];
+ end else if fHdr.datatype = kDT_FLOAT then begin
+   for vol := 0 to (nVol - 1) do
+       x[vol] := vol32[vx + (vol * nVx)];
+ end;
+ sxx := correl(x);
+ //compute correlation for each voxel
+ for vx := 0 to (nVx - 1) do begin
+    if fHdr.datatype = kDT_UINT8 then begin
+       for vol := 0 to (nVol - 1) do
+           y[vol] := vol8[vx + (vol * nVx)];
+    end else if fHdr.datatype = kDT_INT16 then begin
+      for vol := 0 to (nVol - 1) do
+          y[vol] := vol16[vx + (vol * nVx)];
+    end else if fHdr.datatype = kDT_FLOAT then begin
+      for vol := 0 to (nVol - 1) do
+          y[vol] := vol32[vx + (vol * nVx)];
+    end;
+    syy := correl(y);
+    sxy := 0.0;
+    for vol := 0 to (nVol-1) do
+        sxy := sxy + (x[vol] * y[vol]);
+    r := sxy / sqrt(sxx*syy);
+    result[vx] := r;
+ end;
+ {$IFDEF TIMER}printf(format('Correl time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+end;
+
+{$ELSE}
+
+//{$DEFINE ONEPASSCORREL}
+{$IFDEF ONEPASSCORREL}
+function correl(var v: TFloat32s): double;
+//stable one-pass method: extra divisions mean this is slower than 2 pass
+//http://jonisalonen.com/2013/deriving-welfords-method-for-computing-variance/
+//aka Welford’s method for computing variance
+//https://www.strchr.com/standard_deviation_in_one_pass
+var
+  i, n: integer;
+  sd, mn, delta: double;
+begin
+     n := length(v);
+     if n < 2 then exit(0.0); //avoid div by zero
+     //compute mean for seed
+     sd := 0.0;
+     mn := v[0];
+     for i := 1 to (n - 1) do begin
+         delta := v[i] - mn;
+         mn := mn + delta / (i+1);
+         sd := sd + delta*(v[i]- mn);
+     end;
+     sd := sqrt(sd / (n - 1));
+     if (sd = 0.0) then exit; //no variance
+     sd := 1/sd;
+     for i := 0 to (n - 1) do
+         v[i] := (v[i]-mn)*sd;
+     result := sd;
+end;
+{$ELSE}
+function correl(var v: TFloat32s): double;
+var
+  i, n: integer;
+  sd, sum, mn: double;
+begin
+     n := length(v);
+     if n < 2 then exit(0.0); //avoid div by zero
+     //compute mean for seed
+     sd := 0.0;
+     sum := 0.0;
+     for i := 0 to (n - 1) do
+         sum := sum + v[i];
+     mn := sum / n;
+     for i := 0 to (n - 1) do
+         sd := sd + sqr(v[i] - mn);
+     sd := sqrt(sd / (n - 1));
+     if (sd = 0.0) then exit(0.0); //no variance
+     sd := 1/sd;
+     for i := 0 to (n - 1) do
+         v[i] := (v[i]-mn)*sd;
+     result := sd;
+end;
+{$ENDIF}//ONEPASSCORREL
+{$DEFINE FASTCORREL2}
+
+{$IFDEF FASTCORREL2}
+function correlR(var x, y: TFloat32s): single;
+//assumes X already processed with correl()
+// about 10% faster in practice than running correl() twice
+var
+  i, n: integer;
+  r, sum, mn, sd: double;
+begin
+  n := length(x);
+  if (n < 2) or (n <> length(y)) then exit(0.0); //avoid div by zero
+  sum := 0.0;
+  for i := 0 to (n - 1) do
+      sum := sum + y[i];
+  mn := sum / n;
+  sd := 0.0;
+  for i := 0 to (n - 1) do
+      sd := sd + sqr(y[i] - mn);
+  sd := sqrt(sd / (n - 1));
+  if (sd = 0) then exit(0.0);
+  sd := 1/sd;
+  r := 0.0;
+  for i := 0 to (n - 1) do begin
+      r := r + (x[i] * ((y[i]-mn)*sd));
+  end;
+  r := r / (n - 1);
+  exit(r);
+end;
+{$ENDIF} //FASTCORREL2
+
+function TNIfTI.SeedCorrelationMap(vox: TVec3i; isZ: boolean): TFloat32s;
+//https://www.johndcook.com/blog/2008/11/05/how-to-calculate-pearson-correlation-accurately/
+var
+  //vx1,
+  vx, nVx, vol, nVol, volBytes: integer;
+  vol8: TUInt8s;
+  vol16: TInt16s;
+  vSeed, v, vol32: TFloat32s;
+  r: double;
+  {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
+begin
+ setlength(result, 0);
+ if IsLabels then exit;
+ if volumesLoaded < 2 then exit;
+ if fHdr.bitpix = 24 then exit;
+ {$IFDEF TIMER}startTime := now;{$ENDIF}
+ nVx := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3];
+ volBytes := nVx * (fHdr.bitpix shr 3);
+ nVol := length(fRawVolBytes) div volBytes;
+ if nVol <> fVolumesLoaded then exit;
+ vx := vox.x + (vox.y * dim.x) + (vox.z * (dim.x * dim.y));
+ if (vx < 0) or (vx >= nVx) then exit;
+ setlength(result, nVx);
+ setlength(v, nVol);
+ setlength(vSeed, nVol);
+ vol8 := fRawVolBytes;
+ vol16 := TInt16s(vol8);
+ vol32 := TFloat32s(vol8);
+ //load values for seed
+ if fHdr.datatype = kDT_UINT8 then begin
+    for vol := 0 to (nVol - 1) do
+        v[vol] := vol8[vx + (vol * nVx)];
+ end else if fHdr.datatype = kDT_INT16 then begin
+   for vol := 0 to (nVol - 1) do
+       v[vol] := vol16[vx + (vol * nVx)];
+ end else if fHdr.datatype = kDT_FLOAT then begin
+   for vol := 0 to (nVol - 1) do
+       v[vol] := vol32[vx + (vol * nVx)];
+ end;
+ if (correl(v) = 0.0) then begin //no variance in seed
+   setlength(v, nVol);
+   setlength(vSeed, nVol);
+   setlength(result, 0);
+   exit;
+ end;
+ for vol := 0 to (nVol - 1) do
+       vSeed[vol] := v[vol];
+ //vSeed := copy(v, low(v), high(v));
+ //vx1 := vx;
+ //compute correlation for each voxel
+ for vx := 0 to (nVx - 1) do begin
+    if fHdr.datatype = kDT_UINT8 then begin
+       for vol := 0 to (nVol - 1) do
+           v[vol] := vol8[vx + (vol * nVx)];
+    end else if fHdr.datatype = kDT_INT16 then begin
+      for vol := 0 to (nVol - 1) do
+          v[vol] := vol16[vx + (vol * nVx)];
+    end else if fHdr.datatype = kDT_FLOAT then begin
+      for vol := 0 to (nVol - 1) do
+          v[vol] := vol32[vx + (vol * nVx)];
+    end;
+    {$IFDEF FASTCORREL2} //FastCorrel2 about 10% faster
+    result[vx] := CorrelR(vSeed, v);
+    {$ELSE}
+    if (correl(v) = 0.0) then begin //no variance at this voxel
+       result[vx] := 0;
+       continue;
+    end;
+    r := 0.0;
+    for vol := 0 to (nVol - 1) do
+        r := r + (v[vol] * vSeed[vol]);
+    r := r / (nVol - 1);
+    result[vx] := r;
+    {$ENDIF}
+ end;
+ if isZ then begin
+    //https://www.statisticshowto.datasciencecentral.com/fisher-z/
+    //z’ = .5[ln(1+r) – ln(1-r)]
+    for vx := 0 to (nVx - 1) do begin
+        r := result[vx];
+        if (r >= 1.0) or (r <= -1.0) then
+           result[vx] := 10.0
+        else
+            result[vx] := 0.5 * ln((1+r)/(1-r));
+            //result[vx] := arctanh(r);
+            //result[vx] := 0.5 * (ln(1+r) - ln(1-r));
+            //Matlab check: these generate same values
+            // atanh(r)
+            // 0.5 * (log(1+r)-log(1-r))
+            // log((1+r)/(1-r))*0.5
+        //result[vx] := 0.5*(ln(1+r) – ln(1-r));
+    end;
+ end;
+ //result[vx1] := 1;
+ setlength(v, 0);
+ setlength(vSeed, 0);
+ {$IFDEF TIMER}printf(format('Correl time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+end;
+{$ENDIF}
+
+function TNIfTI.VoxIntensityArray(vox: TVec3i): TFloat32s;
+var
+  vx, nVx, vol, nVol, volBytes: integer;
+  vol8: TUInt8s;
+  vol16: TInt16s;
+  vol32: TFloat32s;
+begin
+     setlength(result, 0);
+     if IsLabels then exit;
+     if volumesLoaded < 2 then exit;
+     if fHdr.bitpix = 24 then exit;
+     nVx := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3];
+     volBytes := nVx * (fHdr.bitpix shr 3);
+     nVol := length(fRawVolBytes) div volBytes;
+     if nVol <> fVolumesLoaded then exit;
+     vx := vox.x + (vox.y * dim.x) + (vox.z * (dim.x * dim.y));
+     if (vx < 0) or (vx >= nVx) then exit;
+     setlength(result, fVolumesLoaded);
+     vol8 := fRawVolBytes;
+     vol16 := TInt16s(vol8);
+     vol32 := TFloat32s(vol8);
+     if fHdr.datatype = kDT_UINT8 then begin
+        for vol := 0 to (nVol - 1) do
+            result[vol] := vol8[vx + (vol * nVx)];
+     end else if fHdr.datatype = kDT_INT16 then begin
+       for vol := 0 to (nVol - 1) do
+           result[vol] := vol16[vx + (vol * nVx)];
+     end else if fHdr.datatype = kDT_FLOAT then begin
+       for vol := 0 to (nVol - 1) do
+           result[vol] := vol32[vx + (vol * nVx)];
+     end;
+     for vol := 0 to (nVol - 1) do
+         result[vol] := (result[vol] * fHdr.scl_slope) + fHdr.scl_inter;
 end;
 
 function TNIfTI.AsFloats(): TFloat32s; //volume where voxels non-zero voxels are set to 1, voxels with intensity zero set to 0
@@ -572,11 +888,6 @@ begin
  result := clut.FullColorTable;
 end;
 {$ENDIF}
-
-procedure printf (lS: AnsiString);
-begin
-{$IFNDEF WINDOWS} writeln(lS); {$ENDIF}
-end;
 
 {$IFDEF CPUGRADIENTS}
 const
@@ -2590,6 +2901,7 @@ begin
   initHistogram(histo);
   histo := nil;
   {$IFDEF TIMER}
+  //printf(format('float voxels %d slope %g inter %g',[vx, fHdr.scl_slope, fHdr.scl_inter]));
   printf(format('float range %g..%g',[fMin,fMax]));
   printf(format('float window %g...%g', [ fAutoBalMin, fAutoBalMax]));
   {$ENDIF}
@@ -3996,10 +4308,116 @@ begin
 end;
 
 //{$DEFINE DEBUG}
+function TNIfTI.Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s): boolean; overload;
+var
+   scaleMx: single;
+   vol32: TFloat32s;
+   i: integer;
+   {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
+begin
+  {$IFDEF CACHEUINT8} //release cache, reload on next refresh
+  fWindowMinCache8 := infinity;
+  fCache8 := nil;
+  {$ENDIF}
+  fLabels.Clear;
+  fBidsName := '';
+  fFilename := niftiFileName;
+  fVolumeDisplayed := 0;
+  if fVolumeDisplayed < 0 then fVolumeDisplayed := 0;
+  fIsOverlay := (tarDim.X) > 0;
+  HiddenByCutout := not fIsOverlay;
+  fShortName := changefileextX(extractfilename(fFilename),'');
+  result := true;
+  fHdr := Hdr;
+  fHdr.datatype:= kDT_FLOAT32;
+  fHdr.bitpix := 32;
+  fHdr.scl_inter:= 0;
+  fHdr.scl_slope:= 1;
+  fHdr.cal_max := 0;
+  fHdr.cal_min := 0;
+  fHdr.dim[0] := 3;
+  fHdr.dim[4] := 1;
+  if fHdr.intent_code = kNIFTI_INTENT_CORREL then begin
+    fHdr.cal_min := 0.05;
+    fHdr.cal_max := 1;
+  end;
+  setlength(fRawVolBytes, length(img)*4);
+  //vol32 := TFloat32s(fRawVolBytes);
+  //vol32 := copy(img, low(img), high(img));
+  vol32 := TFloat32s(fRawVolBytes);
+  //fRawVolBytes
+  for i := 0 to (length(img)-1) do
+        vol32[i] := img[i];
+  fixBogusHeaders(fHdr);
+  fHdrNoRotation := fHdr; //raw header without reslicing or orthogonal rotation
+  if prod(tarDim) = 0 then //reduce size of huge background images
+     if ShrinkLarge(fHdr,fRawVolBytes, MaxVox) then
+        fVolumesLoaded := 1;
+  scaleMx := max(max(abs(fHdr.Dim[1]*fHdr.PixDim[1]),abs(fHdr.Dim[2]*fHdr.pixDim[2])),abs(fHdr.Dim[3]*fHdr.pixDim[3]));
+  if (scaleMx <> 0) then begin
+    fScale.X := abs((fHdr.Dim[1]*fHdr.PixDim[1]) / scaleMx);
+    fScale.Y := abs((fHdr.Dim[2]*fHdr.PixDim[2]) / scaleMx);
+    fScale.Z := abs((fHdr.Dim[3]*fHdr.PixDim[3]) / scaleMx);
+  end;
+  fDim.x := fHdr.Dim[1];
+  fDim.y := fHdr.Dim[2];
+  fDim.z := fHdr.Dim[3];
+  fPermInOrient := pti(1,2,3);
+  fMat := SForm2Mat(fHdr);
+  fMatInOrient := fMat;
+  {$IFDEF TIMER}startTime := now;{$ENDIF}
+  if fHdr.scl_slope = 0 then fHdr.scl_slope := 1;
+  if prod(tarDim) > 0 then begin
+       VolumeReslice(tarMat, tarDim, isInterpolate)
+  end else
+      VolumeReorient();
+  {$IFDEF TIMER}printf(format('Reorient time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+  fMat := SForm2Mat(fHdr);
+  fInvMat := fMat.inverse;
+  {$IFDEF TIMER}startTime := now;{$ENDIF}
+  initFloat32();
+  if fAutoBalMin = fAutoBalMax then begin //e.g. thresholded data
+     fAutoBalMin := fMin;
+     fAutoBalMax := fMax;
+     fWindowMin := fMin;
+     fWindowMax := fMax;
+  end else if (fIsOverlay) and (fAutoBalMin < -1.0) and (fAutoBalMax > 1.0) then begin
+    fAutoBalMin := fAutoBalMax;
+    fAutoBalMax := fAutoBalMax;
+  end;
+  if (fHdr.cal_max > fHdr.cal_min) then begin
+     if (fAutoBalMax > fAutoBalMin) and (((fHdr.cal_max - fHdr.cal_min)/(fAutoBalMax - fAutoBalMin)) > 5) then begin
+          {$IFDEF Unix}writeln('Ignoring implausible cal_min..cal_max: FSL eddy?');{$ENDIF}
+     end else begin
+          fAutoBalMin := fHdr.cal_min;
+          fAutoBalMax := fHdr.cal_max;
+     end;
+  end;
+
+  {$IFDEF TIMER}printf(format('Init time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+  {$IFDEF TIMER}startTime := now;{$ENDIF}
+  fWindowMin := fAutoBalMin;
+  fWindowMax := fAutoBalMax;
+  if (CLUT.SuggestedMinIntensity < CLUT.SuggestedMaxIntensity) and (fMax > CLUT.SuggestedMinIntensity) and (fMin < CLUT.SuggestedMaxIntensity) then begin
+     fWindowMin := CLUT.SuggestedMinIntensity;
+     fWindowMax := CLUT.SuggestedMaxIntensity;
+  end;
+  if (fIsOverlay) and (fMin > -25) and (fMin < -5) and (fMax > 5) and (fMax < 25) and (fAutoBalMin < -0.5) and (fAutoBalMax > 0.5) then begin
+     printf('Adjusting initial image intensity: Assuming statistical overlay.');
+     fWindowMin := 1;
+     fWindowMax := 1;
+  end;
+  {$IFDEF TIMER}startTime := now;{$ENDIF}
+  SetDisplayMinMax();
+  {$IFDEF TIMER}printf(format('Set Min/Max time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+end;
+
+
 function TNIfTI.Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; volumeNumber: integer = 0; isKeepContrast: boolean = false): boolean; overload;
 var
    scaleMx: single;
    lLUTname: string;
+   i: integer;
    {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
 begin
   {$IFDEF CACHEUINT8} //release cache, reload on next refresh
@@ -4020,7 +4438,6 @@ begin
     fVolumeDisplayed := 0;
     fShortName := 'Borg';
     result := false;
-
   end else if not OpenNIfTI() then begin
      MakeBorg(64);
      fVolumeDisplayed := 0;
@@ -4031,15 +4448,19 @@ begin
      showmessage('Unable to load RGB image as overlay (overlays must be scalar).');
      exit(false);
   end;
+  if (PosEx(pathdelim+'atlases'+pathdelim, niftiFileName) > 0) and (fHdr.dim[4] < 2) then begin
+     fHdr.intent_code := kNIFTI_INTENT_LABEL;
+  end;
   if (IsLabels) then begin
      if (fHdr.bitpix <= 16)  then begin
         LoadLabelsTxt(fFilename, fLabels);
         if (fLabels.Count < 1) and (( fHdr.vox_offset- fHdr.HdrSz) > 128) then
            LoadLabels(fFilename, fLabels, fHdr.HdrSz, round( fHdr.vox_offset));
      end;
-      if (fLabels.Count < 1) then
-        fHdr.intent_code :=  kNIFTI_INTENT_NONE
-      else begin
+      if (fLabels.Count < 1) then begin
+        //fHdr.intent_code :=  kNIFTI_INTENT_NON
+        //tobo
+      end else begin
         lLUTname := changefileextX(fFilename,'.lut'); //file.nii.gz -> file.lut
         if not Fileexists(lLUTname) then
            lLUTname := changefileext(fFilename,'.lut'); //file.nii.gz -> file.nii.lut ;
@@ -4159,6 +4580,43 @@ begin
      result := Load(niftiFileName,tarMat, tarDim, false);
 end;
 
+constructor TNIfTI.Create(niftiFileName: string; backColor: TRGBA;  tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s); overload;
+{$IFNDEF CUSTOMCOLORS}
+var
+   i: integer;
+{$ENDIF}
+begin
+ LoadFewVolumes := false;
+ ZeroIntensityInvisible := false;
+ MaxVox := 1024;
+ {$IFDEF CACHEUINT8}  //release cache, force creation on next refresh
+ fWindowMinCache8 := infinity;
+ fCache8 := nil;
+ {$ENDIF}
+ Nii_Clear(fHdrNoRotation);
+ fVolumeDisplayed := 0;
+ fVolumesLoaded := 1;
+ fIsNativeEndian := true;
+ fKnownOrientation := false;
+ fIsOverlay := false;
+ fIsDrawing := false;
+ fCutoutLow := Vec3(0,0,0);
+ fCutoutHigh := Vec3(0,0,0);
+ fOpacityPct := 100;
+ fRawVolBytes := nil;
+ fVolRGBA := nil;
+ fLabels := TStringList.Create;
+ {$IFDEF CUSTOMCOLORS}
+ clut := TCLUT.Create();
+ clut.BackColor :=  backColor;
+ {$ELSE}
+ for i := 0 to 255 do
+     fLUT[i] := setRGBA(i,i,i,i); //grayscale default
+ {$ENDIF}
+ // isOK :=
+  Load(niftiFileName, tarMat, tarDim, isInterpolate, hdr, img);
+end;
+
 constructor TNIfTI.Create(niftiFileName: string;  backColor: TRGBA; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; out isOK: boolean; lLoadFewVolumes: boolean = true; lMaxVox: integer = 640); overload;
 {$IFNDEF CUSTOMCOLORS}
 var
@@ -4192,9 +4650,6 @@ begin
  for i := 0 to 255 do
      fLUT[i] := setRGBA(i,i,i,i); //grayscale default
  {$ENDIF}
- //if niftiFileName = '-' then
- //    isOK := LoadEmpty(tarMat, tarDim)
- //else
   isOK := Load(niftiFileName, tarMat, tarDim, isInterpolate);
 end;
 

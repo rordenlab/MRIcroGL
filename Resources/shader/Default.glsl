@@ -1,11 +1,9 @@
 //pref
-ambient|float|0.0|1.0|1|Illuminate surface regardless of lighting
-diffuse|float|0.0|0.2|1|Illuminate surface based on light position
-specular|float|0.0|0.2|1|Glint from shiny surfaces
-shininess|float|0.01|10.0|30|Specular reflections can be rough or precise
-overlayFuzzy|float|0.01|0.5|1|Do overlay layers have blurry surfaces?
-overlayDepth|float|0.0|0.3|0.8|Can we see overlay layers deep beneath the background image?
-overlayClip|float|0|0|1|Does clipping also influence overlay layers?
+brighten|float|0.5|2|3.5
+surfaceColor|float|0.0|1.0|1.0
+edge|float|0|0.2|1.0
+overlayFuzzy|float|0.01|0.5|1
+overlayDepth|float|0.0|0.15|0.99
 //vert
 #version 330 core
 layout(location = 0) in vec3 vPos;
@@ -28,15 +26,16 @@ uniform sampler3D intensityVol, gradientVol;
 uniform sampler3D intensityOverlay, gradientOverlay;
 uniform vec3 lightPosition, rayDir;
 uniform vec4 clipPlane;
-uniform float ambient = 1.0;
-uniform float diffuse = 0.3;
-uniform float specular = 0.25;
-uniform float shininess = 10.0;
+uniform float brighten = 1.5;
+uniform float surfaceColor = 1.0;
 uniform float overlayDepth = 0.3;
 uniform float overlayFuzzy = 0.5;
 uniform int overlays = 0;
 uniform float backAlpha = 0.5;
-uniform float overlayClip = 0.0;
+uniform float edge = 0.2;
+uniform mat3 NormalMatrix;
+
+uniform sampler2D matcap2D;
 vec3 GetBackPosition (vec3 startPosition) { //when does ray exit unit cube http://prideout.net/blog/?p=64
 	vec3 invR = 1.0 / rayDir;
     vec3 tbot = invR * (vec3(0.0)-startPosition);
@@ -54,16 +53,58 @@ void main() {
 	vec3 deltaDir = dir * stepSize;
 	vec4 gradSample, colorSample;
 	float bgNearest = len; //assume no hit
-	float overNearest = bgNearest;
-
+	float overFarthest = len;
+	float ambient = 1.0;
+	float diffuse = 0.3;
+	float specular = 0.25;
+	float shininess = 10.0;
 	vec4 overAcc = vec4(0.0,0.0,0.0,0.0);
 	vec4 colAcc = vec4(0.0,0.0,0.0,0.0);
 	vec4 prevGrad = vec4(0.0,0.0,0.0,0.0);
 	float lengthAcc = 0.0;
+	vec3 samplePos;
 	//overlay pass
-	vec3 startPos = start.xyz +deltaDir* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453));
-	vec3 samplePos = startPos;
-	float lenClip = len;
+	if ( overlays > 0 ) {
+		samplePos = start.xyz +deltaDir* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453));
+		while (lengthAcc <= len) {
+			colorSample = texture(intensityOverlay,samplePos);
+			if (colorSample.a > 0.00) {
+				colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);
+				colorSample.a *=  overlayFuzzy;
+				vec3 a = colorSample.rgb * ambient;
+				float s =  0;
+				vec3 d = vec3(0.0, 0.0, 0.0);
+				overFarthest = lengthAcc;
+				//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
+				gradSample = texture(gradientOverlay,samplePos); //interpolate gradient direction and magnitude
+				gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
+				//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
+				if (gradSample.a < prevGrad.a)
+					gradSample.rgb = prevGrad.rgb;
+				prevGrad = gradSample;
+				float lightNormDot = dot(gradSample.rgb, lightPosition);
+				d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;
+				s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
+
+				colorSample.rgb = a + d + s;
+				colorSample.rgb *= colorSample.a;
+				colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
+			}
+			samplePos += deltaDir;
+			lengthAcc += stepSize;
+			if ( lengthAcc >= len || colAcc.a > 0.95 )
+				break;
+		} //while lengthAcc < len
+		colAcc.a = colAcc.a/0.95;
+		overAcc = colAcc; //color accumulated by overlays
+		//clear values for background
+		colAcc = vec4(0.0,0.0,0.0,0.0);
+		prevGrad = vec4(0.0,0.0,0.0,0.0);
+		lengthAcc = 0.0;
+	} //if overlayNum > 0
+	bgNearest = len; //assume no hit
+	//end ovelay pass clip plane applied to background ONLY...
+	samplePos = start.xyz +deltaDir* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453));
 	if (clipPlane.a > -0.5) {
 		bool frontface = (dot(dir , clipPlane.xyz) > 0.0);
 		float dis = dot(dir,clipPlane.xyz);
@@ -75,77 +116,21 @@ void main() {
 			if (frontface) {
 				lengthAcc = dis;
 				//stepSizeX2 = dis;
-				startPos += dir * dis;
+				samplePos += dir * dis;
 				//len -= dir * dis;
 			} else {
 				backPosition =  start + dir * (dis);
-				lenClip = length(backPosition - start);
+				len = length(backPosition - start);
 			}
 		}
 	}
-	float startLength = lengthAcc;
-	float stepSizeX2 = -1.0;
-
-	if ( overlays > 0.5 ) {
-		//samplePos = startPos;
-		lengthAcc = 0;
-		if (overlayClip > 0) {
-			samplePos = startPos;
-			lengthAcc = startLength;
-			stepSizeX2 = lengthAcc + (stepSize * 2.0);
-			len = lenClip;
-		}
-		while (lengthAcc <= len) {
-			colorSample = texture(intensityOverlay,samplePos);
-			colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);
-			colorSample.a *=  overlayFuzzy;
-			vec3 a = colorSample.rgb * ambient;
-			float s =  0;
-			vec3 d = vec3(0.0, 0.0, 0.0);
-			if (colorSample.a > 0.0) {
-				bgNearest = min(lengthAcc,bgNearest);
-				//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
-				if (lengthAcc > stepSizeX2) {
-					gradSample = texture(gradientOverlay,samplePos); //interpolate gradient direction and magnitude
-					gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
-					//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
-					if (gradSample.a < prevGrad.a)
-						gradSample.rgb = prevGrad.rgb;
-					prevGrad = gradSample;
-					float lightNormDot = dot(gradSample.rgb, lightPosition);
-					d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;
-					s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
-				}
-
-			}
-			colorSample.rgb = a + d + s;
-			colorSample.rgb *= colorSample.a;
-			colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
-			samplePos += deltaDir;
-			lengthAcc += stepSize;
-			if ( lengthAcc >= len || colAcc.a > 0.95 )
-				break;
-		} //while lengthAcc < len
-		colAcc.a = colAcc.a/0.95;
-		overAcc = colAcc; //color accumulated by overlays
-		overNearest = bgNearest;
-		//clear values for background
-		colAcc = vec4(0.0,0.0,0.0,0.0);
-		prevGrad = vec4(0.0,0.0,0.0,0.0);
-		lengthAcc = 0.0;
-	} //if overlayNum > 0
-	bgNearest = len; //assume no hit
-	//end ovelay pass clip plane applied to background ONLY...
-	samplePos = startPos;
-	lengthAcc = startLength;
-	stepSizeX2 = lengthAcc + (stepSize * 2.0);
-	len = lenClip;
+	float stepSizeX2 = lengthAcc + (stepSize * 2.0);
+	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
 	while (lengthAcc <= len) {
 		colorSample = texture(intensityVol,samplePos);
 		colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);
 		vec3 a = colorSample.rgb * ambient;
-		float s =  0;
-		vec3 d = vec3(0.0, 0.0, 0.0);
+		vec3 d = defaultDiffuse;
 		if (colorSample.a > 0.01) {
 			bgNearest = min(lengthAcc,bgNearest);
 			//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
@@ -156,12 +141,29 @@ void main() {
 				if (gradSample.a < prevGrad.a)
 					gradSample.rgb = prevGrad.rgb;
 				prevGrad = gradSample;
-				float lightNormDot = dot(gradSample.rgb, lightPosition);
-				d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;
-				s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
-			}
+				vec3 n = normalize(normalize(NormalMatrix * gradSample.rgb));
+				vec2 uv = n.xy * 0.5 + 0.5;
+				d = texture(matcap2D,uv.xy).rgb;
+
+				//colorSample.rgb = a * d * 1.5;
+				vec3 surf = mix(defaultDiffuse, a, surfaceColor); //0.67 as default Brighten is 1.5
+				colorSample.rgb = d * surf * brighten;
+
+
+				vec3 lightDirHeadOn = rayDir.xyz;
+				float lightNormDot = dot(gradSample.rgb, lightDirHeadOn); //with respect to viewer
+				float edgeThresh = 0.01;
+				float edgeExp = 0.15;
+				float edgeVal = pow(1.0-abs(lightNormDot),edgeExp);
+				edgeVal = edgeVal * pow(gradSample.a,1.0-edge);
+				if (edgeVal >= edgeThresh)
+					colorSample.rgb = mix(colorSample.rgb, vec3(0.0,0.0,0.0), pow((edgeVal-edgeThresh)/(1.0-edgeThresh),4.0));
+			} else
+				colorSample.a *= 2.0;
 		}
-		colorSample.rgb = a + d + s;
+
+
+		//colorSample.rgb = a + d + s;
 		colorSample.rgb *= colorSample.a;
 		colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
 		samplePos += deltaDir;
@@ -173,9 +175,8 @@ void main() {
 	colAcc.a *= backAlpha;
 	//if (overAcc.a > 0.0) { //<- conditional not required: overMix always 0 for overAcc.a = 0.0
 		float overMix = overAcc.a;
-		if ((overNearest > bgNearest) && (colAcc.a > 0.0)) { //background (partially) occludes overlay
-			//max distance between two vertices of unit cube is 1.73
-			float dx = (overNearest - bgNearest)/1.73;
+		if (((overFarthest) > bgNearest) && (colAcc.a > 0.0)) { //background (partially) occludes overlay
+			float dx = (overFarthest - bgNearest)/1.73;
 			dx = colAcc.a * pow(dx, overlayDepth);
 			overMix *= 1.0 - dx;
 		}

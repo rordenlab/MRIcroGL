@@ -10,9 +10,11 @@ unit mainunit;
   error: you must compile for the Cocoa widgetset (ProjectOptions/Additions&Overrides)
 {$ENDIF}
 {$H+}
+{$IFNDEF METALAPI} {$DEFINE MATCAP} {$ENDIF}
 {$DEFINE MYPY} //use Python scripts
 {$DEFINE COMPILEYOKE} //use yoking
 {$DEFINE CLRBAR} //provide color bar
+{$DEFINE GRAPH} //timeseries viewer
 {$WARN 5024 OFF} //disable warnings about unused parameters
 {$WARN 5043 off : Symbol "$1" is deprecated}
 {$DEFINE MATT1}
@@ -31,12 +33,33 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20190410'; //+fixes Metal memory leak
+  kVers = '1.2.20190606'; //+fixes Metal memory leak
 type
 
   { TGLForm1 }
 
   TGLForm1 = class(TForm)
+    CenterPanel: TPanel;
+    GraphMenu: TMenuItem;
+    GraphScalingMenu: TMenuItem;
+    GraphSaveMenu: TMenuItem;
+    GraphOpenMenu: TMenuItem;
+    GraphMarkerMenu: TMenuItem;
+    GraphRawMenu: TMenuItem;
+    GraphDemeanMenu: TMenuItem;
+    GraphNormalizeMenu: TMenuItem;
+    GraphNormalize01Menu: TMenuItem;
+    GraphPercentMenu: TMenuItem;
+    GraphAddMenu: TMenuItem;
+    GraphShowHideMenu: TMenuItem;
+    GraphClearMenu: TMenuItem;
+    GraphSaveBitmapMenu: TMenuItem;
+    DisplayCorrelationR: TMenuItem;
+    DisplayCorrelationZ: TMenuItem;
+    MatCapDrop: TComboBox;
+    TBSplitter: TSplitter;
+    TopPanel: TPanel;
+    BottomPanel: TPanel;
     AnatDrop: TComboBox;
     CreateOverlapImageMenu: TMenuItem;
     CreateSubtractionPlotMenu: TMenuItem;
@@ -229,7 +252,6 @@ type
     LayerList: TCheckListBox;
     ColorDialog1: TColorDialog;
     ClipBox: TGroupBox;
-    CenterPanel: TPanel;
     LayerPopup: TPopupMenu;
     ScriptMemo: TMemo;
     ScriptOutputMemo: TMemo;
@@ -274,12 +296,25 @@ type
     ZTrackBar: TTrackBar;
     procedure CreateOverlapImageMenuClick(Sender: TObject);
     procedure CreateSubtractionPlotMenuClick(Sender: TObject);
+    procedure DisplayCorrelationRClick(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure FormKeyPress(Sender: TObject; var Key: char);
     procedure FormMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
+    procedure GraphMouseWheel(Sender: TObject; Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
+    procedure GraphMouseDown(Sender: TObject; Button: TMouseButton;Shift: TShiftState; X, Y: Integer);
+    procedure GraphAddMenuClick(Sender: TObject);
+    procedure GraphClearMenuClick(Sender: TObject);
+    procedure GraphMarkerMenuClick(Sender: TObject);
+    procedure GraphOpenMenuClick(Sender: TObject);
+    procedure GraphOpen(fnm: string);
+    procedure GraphSaveBitmapMenuClick(Sender: TObject);
+    procedure GraphSaveMenuClick(Sender: TObject);
+    procedure GraphScaleClick(Sender: TObject);
+    procedure GraphShowHideMenuClick(Sender: TObject);
     procedure LayerInvertColorMapMenuClick(Sender: TObject);
     procedure LayerZeroIntensityInvisibleMenuClick(Sender: TObject);
+    procedure MatCapDropChange(Sender: TObject);
     procedure ReportPositionXYZ(isUpdateYoke: boolean = false);
     procedure AnatAddBtnClick(Sender: TObject);
     procedure AnatDeleteBtnClick(Sender: TObject);
@@ -351,6 +386,7 @@ type
     procedure SmoothMenuClick(Sender: TObject);
     procedure StoreFMRIMenuClick(Sender: TObject);
     procedure TextAndCubeMenuClick(Sender: TObject);
+    procedure ViewGPUgPrepare(Sender: TObject);
     procedure ToolPanelDblClick(Sender: TObject);
     procedure UpdateColorBar;
     procedure SaveColorTable;
@@ -404,6 +440,8 @@ type
     procedure FormDropFiles(Sender: TObject; const FileNames: array of String);
     //procedure FormResize(Sender: TObject);
     procedure PrefTrackChange(Sender: TObject);
+    procedure GraphPaint(Sender: TObject);
+    procedure GraphShow();
     procedure ShaderDropChange(Sender: TObject);
     procedure SharpenMenuClick(Sender: TObject);
     //procedure SplitterMoved(Sender: TObject);
@@ -424,7 +462,7 @@ type
     procedure ViewGPUDblClick(Sender: TObject);
     procedure ViewGPUKeyPress(Sender: TObject; var Key: char);
     procedure ViewGPUKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
-
+    procedure ViewGPUgKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure setShaderSliders;
     procedure SetDarkMode();
     procedure CutoutChange(Sender: TObject);
@@ -461,11 +499,13 @@ implementation
 {$R *.lfm}
 {$IFDEF METALAPI}
 uses
+  {$IFDEF GRAPH}mtlgraph,{$ENDIF}
   {$IFDEF CLRBAR}mtlclrbar, {$ENDIF} MetalPipeline,  Metal,MetalControl, mtlvolume2;
 const  kExt = '.metal';
 {$ELSE}
 uses
-  {$IFDEF LCLCocoa}glcocoanscontext,{$ENDIF}{$IFDEF CLRBAR}glclrbar, {$ENDIF} retinahelper,  OpenGLContext,  glvolume2, glcorearb, gl_core_utils {$IFNDEF UNIX}, proc_py {$ENDIF};
+ {$IFDEF GRAPH}glgraph,{$ENDIF}
+ {$IFDEF LCLCocoa}glcocoanscontext,{$ENDIF}{$IFDEF CLRBAR}glclrbar, {$ENDIF} retinahelper,  OpenGLContext,  glvolume2, glcorearb, gl_core_utils {$IFNDEF UNIX}, proc_py {$ENDIF};
 const kExt = '.glsl';
 {$ENDIF}
 const
@@ -484,10 +524,17 @@ var
  {$IFDEF METALAPI}
  isPrepared: boolean = false;
  ViewGPU1: TMetalControl;
+ {$IFDEF GRAPH}ViewGPUg: TMetalControl;{$ENDIF}
  {$ELSE}
  ViewGPU1: TOpenGLControl;
+  {$IFDEF GRAPH}ViewGPUg: TOpenGLControl;{$ENDIF}
  {$ENDIF}
+  {$IFDEF GRAPH}gGraph: TGPUGraph;{$ENDIF}
  {$IFDEF CLRBAR}gClrbar: TGPUClrbar;{$ENDIF}
+
+ {$IFDEF LCLCocoa}{$IFNDEF METALAPI}
+{$DEFINE isCocoaOpenGL}
+{$ENDIF}{$ENDIF}
 
 procedure TGLForm1.ForceOverlayUpdate();
 var
@@ -1257,6 +1304,34 @@ begin
     end;
 end;
 
+function PySHADERMATCAP(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  PtrName: PChar;
+  StrName: string;
+  i: integer;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(FALSE));
+  with GetPythonEngine do
+    if Bool(PyArg_ParseTuple(Args, 's:shadermatcap', @PtrName)) then
+    begin
+      StrName:= string(PtrName);
+      i := GLForm1.MatCapDrop.Items.IndexOf(StrName);
+      if i < 0 then begin
+         if GLForm1.MatCapDrop.Items.Count < 1 then
+            GLForm1.ScriptOutputMemo.Lines.Add('No matcap images available: reinstall Surfice.')
+         else
+             GLForm1.ScriptOutputMemo.Lines.Add('Unable to find matcap named '+StrName+'. Solution: choose an available matcap, e.g. "'+GLForm1.MatCapDrop.Items[0]+'"');
+         Result:= GetPythonEngine.PyBool_FromLong(Ord(False));
+         exit;
+      end;
+      GLForm1.MatCapDrop.ItemIndex := i;
+      GLForm1.MatCapDropChange(nil);
+      if not GLForm1.MatCapDrop.visible then
+         GLForm1.ScriptOutputMemo.Lines.Add('Hint: shadermatcap() requires using a shader that supports matcaps (use shadername() to select a new shader).');
+      Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+    end;
+end;
+
 function PyCOLORFROMZERO(Self, Args : PPyObject): PPyObject; cdecl;
 var
   Layer, IsFromZero: integer;
@@ -1759,6 +1834,7 @@ begin
     AddMethod('toolformvisible', @PyTOOLFORMVISIBLE, ' toolformvisible(visible) -> Show (1) or hide (0) the tool panel.');
     AddMethod('shaderadjust', @PySHADERADJUST, ' shaderadjust(sliderName, sliderValue) -> Set level of shader property. Example "gl.shaderadjust(''edgethresh'', 0.6)"');
     AddMethod('shaderlightazimuthelevation', @PySHADERLIGHTAZIMUTHELEVATION, ' shaderlightazimuthelevation(a,e) -> Position the light that illuminates the rendering. For example, "shaderlightazimuthelevation(0,45)" places a light 45-degrees above the object');
+    AddMethod('shadermatcap', @PySHADERMATCAP, ' shadermatcap(name) -> Set material capture file (assumes "matcap" shader. For example, "shadermatcap(''mc01'')" selects mc01 matcap.');
     AddMethod('shadername', @PySHADERNAME, ' shadername(name) -> Choose rendering shader function. For example, "shadername(''mip'')" renders a maximum intensity projection.');
     AddMethod('shaderquality1to10', @PySHADERQUALITY1TO10, ' shaderquality1to10(i) -> Renderings can be fast (1) or high quality (10), medium values (6) balance speed and quality.');
     AddMethod('shaderupdategradients', @PySHADERUPDATEGRADIENTS, ' shaderupdategradients() -> Recalculate volume properties.');
@@ -2240,8 +2316,8 @@ var
    pct32, neg32 : TFloat32s;
       dlg : TSaveDialog;
    //dlg : TSaveDialog;
-label
-  123, 124, 125;
+//label
+//  123, 124, 125;
 begin
     {$IFDEF Darwin}
     //showmessage('Select positive image (made with "Create Overlap Image")');
@@ -2282,9 +2358,6 @@ begin
        showmessage('Images should have same number of voxels');
        exit;
     end;
-
-
-
     dlg := TSaveDialog.Create(self);
     dlg.Title := 'Save sum map as NIfTI volume';
     dlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
@@ -2302,14 +2375,36 @@ begin
         pct32[i] := ((pct32[i] / nPos) - (neg32[i] / nNeg)) * 100;
     if dlg.Execute then
        niiPos.SaveAsSourceOrient(dlg.FileName, '', '%'+inttostr(nPos)+':'+inttostr(nNeg), TUInt8s(pct32), kDT_FLOAT32, kNIFTI_INTENT_ESTIMATE, -100, 100);
-
     pct32 := nil;
     neg32 := nil;
-
-
-
     niiNeg.Free;
     niiPos.Free;
+end;
+
+procedure TGLForm1.DisplayCorrelationRClick(Sender: TObject);
+var
+ niftiVol: TNIfTI;
+ vox: TVec3i;
+ i: integer;
+begin
+  if not vols.Layer(0,niftiVol) then exit;
+ Vol1.Slice2Dmm(niftiVol, vox);
+ if not vols.AddCorrelLayer(vox, gPrefs.ClearColor, (sender as TMenuItem).tag = 1) then exit;
+ //if (vols.NumLayers > 1) then
+ //  GLForm1.LayerChange(vols.NumLayers-1, vols.NumLayers-1, -1, kNaNsingle, kNaNsingle); //kNaNsingle
+ //set color scheme
+ i := GLForm1.LayerColorDrop.Items.IndexOf('8RedYell'); //search is case-insensitive!
+ if i > 0 then
+    LayerChange(vols.NumLayers-1, i, -1, kNaNsingle, kNaNsingle)
+ else
+     LayerChange(vols.NumLayers-1, vols.NumLayers-1, -1, kNaNsingle, kNaNsingle);
+
+
+ UpdateLayerBox(true);
+ UpdateColorbar();
+ //Vol1.UpdateOverlays(vols);
+ UpdateTimer.Enabled:= true;
+
 
 end;
 
@@ -2371,10 +2466,16 @@ begin
      ScriptMemo.Color := clGray;
      ScriptOutputMemo.Color := clGray;
      MosaicText.Color := clGray;
+     {$IFDEF GRAPH}
+     gGraph.DarkColorScheme();
+     {$ENDIF}
   end else begin
       ScriptMemo.Color := clDefault;
       ScriptOutputMemo.Color := clDefault;
       MosaicText.Color := clDefault;
+      {$IFDEF GRAPH}
+      gGraph.GrayColorScheme();
+      {$ENDIF}
   end;
   {$ENDIF}{$ENDIF}
 end;
@@ -2508,6 +2609,7 @@ begin
   end;
   if openDialog.Files.Count < 1 then
      exit;
+  fnm := '';
   for lF := 0 to (openDialog.Files.Count-1) do
       fnm := SaveTIFFAsNifti(openDialog.Files[lF]);
   openDialog.Free;
@@ -2599,6 +2701,9 @@ begin
         DisplayPrevMenu.Enabled := isMultiVol;
         DisplayNextMenu.Enabled := isMultiVol;
         DisplayAnimateMenu.Enabled := isMultiVol;
+        DisplayCorrelationR.Enabled := isMultiVol;
+        DisplayCorrelationZ.Enabled := isMultiVol;
+        GraphAddMenu.Enabled := isMultiVol;
      end;
      if (LayerList.ItemIndex < 0)  then
         LayerList.ItemIndex := LayerList.Items.Count -1;
@@ -3637,7 +3742,6 @@ end;
 procedure TGLForm1.Smooth2DCheckChange(Sender: TObject);
 begin
  if vols = nil then exit; //mungo : mosaic selected before image is loaded
-
  Vol1.ShowSmooth2D:= Smooth2DCheck.checked;
  ViewGPU1.Invalidate;
 end;
@@ -3693,10 +3797,27 @@ var
    sliceMM: TVec3;
    vox: TVec3i;
    i: integer;
+   graphLine: TFloat32s;
 begin
      if not vols.Layer(0,niftiVol) then exit;
-     str := '';
      sliceMM := Vol1.Slice2Dmm(niftiVol, vox);
+     {$IFDEF GRAPH}
+     if niftiVol.volumesLoaded > 1 then begin
+       graphLine :=  niftiVol.VoxIntensityArray(vox);
+       if (length(graphLine) <> niftiVol.volumesLoaded) then begin
+          setlength(graphLine, 0);
+          exit;
+       end;
+       gGraph.HorizontalSelection:= niftiVol.VolumeDisplayed;
+       if (niftiVol.VolumesLoaded < niftiVol.Header.dim[4]) then
+          gGraph.AddLine(graphLine,format('%s (%d of %d) [%d %d %d]',[niftiVol.ShortName, niftiVol.VolumesLoaded, niftiVol.header.dim[4], vox.x, vox.y, vox.z]), true)
+       else
+           gGraph.AddLine(graphLine,format('%s [%d %d %d]',[niftiVol.ShortName, vox.x, vox.y, vox.z]), true);
+       ViewGPUg.Invalidate;
+       setlength(graphLine, 0);
+     end;
+     {$ENDIF}
+     str := '';
      {$IFDEF COMPILEYOKE}
      if (isUpdateYoke) then begin
         gSliceMM := Vec3(sliceMM.X, sliceMM.Y, sliceMM.Z);
@@ -3904,7 +4025,7 @@ end;
 procedure TGLForm1.FormDropFiles(Sender: TObject; const FileNames: array of String);
 var
  ss: TShiftState;
- fnm: string;
+ fnm, ext, fnmREC, fnmRec2: string;
 begin
   if (gPrefs.InitScript <> '') then exit; //MacOS gets paramstr as FormDropFiles, but deletes those that begin with '-', e.g. '-std'
   if length(FileNames) < 1 then exit;
@@ -3914,6 +4035,20 @@ begin
   end;
   fnm := GetFullPath(Filenames[0]);
   if (not fileexists(fnm)) and (not DirectoryExists(fnm)) then exit;
+  ext := upcase(ExtractFileExt(fnm));
+  if (ext = '.PAR') then begin
+     //need to distinguish Philips PAR/REC from FSL mcflirt PAR file
+     fnmREC := changefileext(fnm,'.REC');
+     fnmRec2 := changefileext(fnm,'.rec');
+     if (not fileexists(fnmREC)) and (not fileexists(fnmREC2)) then begin
+        GraphOpen(fnm);
+        exit;
+     end;
+  end;
+  if (ext = '.1D') or (ext = '.TXT') or (ext = '.CSV') then begin
+     GraphOpen(fnm);
+     exit;
+  end;
   if (isDICOM(fnm)) then begin
   //if (not isNifti(Filenames[0])) then begin
      fnm := dcm2Nifti(dcm2niiForm.getCustomDcm2niix, fnm);
@@ -3973,6 +4108,12 @@ end;
   i, t: integer;
  begin
   //ShaderSliders
+ {$IFDEF MATCAP}
+ MatCapDrop.Visible := (Vol1.matcapLoc >= 0);
+ LightElevTrack.Visible := (Vol1.matcapLoc < 0);
+ LightAziTrack.Visible := (Vol1.matcapLoc < 0);
+ {$ENDIF MATCAP}
+ //if nUniform
     for i := 0 to GLForm1.ShaderBox.ControlCount - 1 do begin
        t := GLForm1.ShaderBox.Controls[i].tag;
        if (t < 1) or (t > kMaxUniform) then continue;
@@ -3998,17 +4139,145 @@ procedure TGLForm1.FormKeyDown(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 begin
   //if (VK_UP = Key) then LayerBox.caption := 'F'+inttostr(random(888));
-
   //if (VK_UP <> Key) then LayerBox.caption := 'F-'+inttostr(random(888));     //LayerBox.caption := inttostr(random(888));
-
 end;
-
-
 
 procedure TGLForm1.FormMouseDown(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
 begin
 //
+end;
+
+procedure TGLForm1.GraphAddMenuClick(Sender: TObject);
+begin
+ {$IFDEF GRAPH}
+ gGraph.CloneLine();
+ ViewGPUg.Invalidate;
+ if BottomPanel.Height < 50 then
+    GraphShowHideMenu.Click();
+
+ {$ENDIF}
+end;
+
+procedure TGLForm1.GraphClearMenuClick(Sender: TObject);
+const
+  k = 10;
+var
+   newVals: TFloat32s;
+   i: integer;
+begin
+ {$IFDEF GRAPH}
+  gGraph.ClearLines();
+  setlength(newVals, k);
+  for i := 0 to k-1 do
+      newVals[i] := 0;//(3 * sin(i/(k/12))) + 6;
+  gGraph.AddLine(newVals, 'No Graph Loaded: Use Graph Open Menu or View 4D Image');
+  newVals := nil;
+  ViewGPUg.Invalidate;
+ {$ENDIF}
+end;
+
+procedure TGLForm1.GraphMarkerMenuClick(Sender: TObject);
+begin
+ {$IFDEF GRAPH}
+ gGraph.isMarker := GraphMarkerMenu.Checked;
+ gGraph.isRedraw:= true;
+ ViewGPUg.Invalidate;
+ {$ENDIF}
+end;
+
+procedure TGLForm1.GraphOpen(fnm: string);
+begin
+ {$IFDEF GRAPH}
+  if not gGraph.LoadText(fnm) then
+     showmessage('Unable to load graph from text file "'+fnm+'"');
+  ViewGPUg.Invalidate;
+  if BottomPanel.Height < 20 then
+     BottomPanel.Height := GLForm1.Height div 2;
+ {$ENDIF}
+end;
+
+procedure TGLForm1.GraphOpenMenuClick(Sender: TObject);
+{$IFNDEF GRAPH}
+begin
+     //
+end;
+{$ELSE}
+ var
+   openDlg: TOpenDialog;
+ begin
+   openDlg := TOpenDialog.Create(application);
+   openDlg.Title := 'Select text file with graph data';
+   openDlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+   if not Fileexists(openDlg.InitialDir) then
+      openDlg.InitialDir := GetCurrentDir;
+   openDlg.Filter := 'Text file|*.txt;*.1D;*.PAR|Comma separated values|*.csv|Any file|*.*';
+   openDlg.DefaultExt := 'txt';
+   openDlg.FilterIndex := 1;
+   if not openDlg.Execute then begin
+      openDlg.Free;
+      exit;
+   end;
+   GraphOpen(openDlg.Filename);
+   openDlg.Free;
+ end;
+{$ENDIF}
+
+procedure TGLForm1.GraphSaveMenuClick(Sender: TObject);
+{$IFNDEF GRAPH}
+begin
+     //
+end;
+{$ELSE}
+ var
+   saveDlg: TSaveDialog;
+   strs: TStringList;
+   resp : integer;
+ begin
+   resp := MessageDlg('Export X axis data as the first column?', mtConfirmation,[mbCancel, mbYes, mbNo], 0);
+   if resp = mrCancel then exit;
+   strs := gGraph.AsText(resp = mrYes);
+   if (strs.Count < 1) then begin
+      showmessage('Unable to convert graph to text');
+      strs.Free;
+      exit;
+   end;
+   saveDlg := TSaveDialog.Create(application);
+   saveDlg.Title := 'Export graph data as text';
+   saveDlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+   if not Fileexists(saveDlg.InitialDir) then
+      saveDlg.InitialDir := GetCurrentDir;
+   saveDlg.Filter := 'Text file|*.txt';
+   saveDlg.DefaultExt := 'txt';
+   saveDlg.FilterIndex := 1;
+   if not saveDlg.Execute then begin
+      saveDlg.Free;
+      strs.Free;
+      exit;
+   end;
+   strs.SaveToFile(saveDlg.Filename);
+   strs.Free;
+   saveDlg.Free;
+ end;
+{$ENDIF}
+
+procedure TGLForm1.GraphScaleClick(Sender: TObject);
+begin
+  {$IFDEF GRAPH}
+  gGraph.Style := (sender as TMenuItem).tag;
+  gGraph.isRedraw := true;
+  ViewGPUg.Invalidate;
+  {$ENDIF}
+end;
+
+procedure TGLForm1.GraphShowHideMenuClick(Sender: TObject);
+begin
+ {$IFDEF GRAPH}
+ if BottomPanel.Height > 50 then
+    BottomPanel.Height := TBSplitter.MinSize
+ else
+   BottomPanel.Height := GLForm1.Height div 2;
+ {$ENDIF}
 end;
 
 procedure TGLForm1.LayerInvertColorMapMenuClick(Sender: TObject);
@@ -4046,6 +4315,63 @@ procedure TGLForm1.LayerZeroIntensityInvisibleMenuClick(Sender: TObject);
    updateTimer.enabled := true;
 end;
 
+procedure TGLForm1.MatCapDropChange(Sender: TObject);
+begin
+ {$IFDEF MATCAP}
+ //GLBox.MakeCurrent;
+ //SetMatCap(MatCapDir+pathdelim+MatCapDrop.Items[MatCapDrop.ItemIndex]+'.jpg');
+ //GLBox.ReleaseContext;
+ //GLBoxRequestUpdate(Sender);
+ if MatCapDrop.Items.Count < 1 then exit;
+ if MatCapDrop.ItemIndex < 0 then
+    MatCapDrop.ItemIndex := 0;
+  Vol1.SetMatCap(MatCapDrop.Items[MatCapDrop.ItemIndex]);
+  ViewGPU1.Invalidate;
+ {$ENDIF}
+end;
+
+procedure UpdateMatCapDrop (var LUTdrop: TComboBox);
+{$IFDEF MATCAP}
+var
+  lSearchRec: TSearchRec;
+  lF: ansistring;
+  lS: TStringList;
+  MatCapDir: string;
+begin
+  LUTdrop.Items.Clear;
+  lS := TStringList.Create;
+  MatCapDir := ExtractFilePath(ShaderDir)+ 'matcap';
+  if FindFirst(MatCapDir+pathdelim+'*.jpg', faAnyFile, lSearchRec) = 0 then
+    repeat
+      lF :=ExtractFileName(lSearchRec.Name);
+      if (length(lF) > 1) and (lF[1] <> '.') then  //OSX can create hidden files
+        lS.Add(ChangeFileExt(ExtractFileName(lSearchRec.Name),'')) ;
+    until (FindNext(lSearchRec) <> 0);
+  FindClose(lSearchRec);
+  if lS.Count < 1 then begin;
+     showmessage('Error: unable to find any MatCaps in '+MatCapDir+pathdelim+'*.jpg' );
+     //LUTdrop.Items.Add('No MatCaps found');
+     Freeandnil(lS);
+     exit;
+  end;
+  lS.sort;
+  LUTdrop.Items.AddStrings(lS);
+  Freeandnil(lS);
+end;//UpdateMatCapDrop()
+{$ELSE}
+begin
+  //
+end;
+{$ENDIF}
+
+procedure TGLForm1.ViewGPUgKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+begin
+     if not DisplayNextMenu.Enabled then exit;
+     if (Key = VK_LEFT) or (Key = VK_Down) then DisplayPrevMenu.Click;
+     if (Key = VK_RIGHT) or (Key = VK_Up) then DisplayNextMenu.Click;
+
+end;
+
 procedure TGLForm1.ViewGPUKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
  var
   sliceMove: TVec3i;
@@ -4053,6 +4379,17 @@ procedure TGLForm1.ViewGPUKeyDown(Sender: TObject; var Key: Word; Shift: TShiftS
   niftiVol: TNIfTI;
  begin
   if not vols.Layer(0,niftiVol) then exit;
+  (*if not vols.Layer(0,niftiVol) then begin
+    if DisplayNextMenu.Enabled then begin
+       if (Key = VK_LEFT) or (Key = VK_Down) then DisplayPrevMenu.Click;
+       if (Key = VK_RIGHT) or (Key = VK_Up) then DisplayNextMenu.Click;
+
+       exit;
+    end;
+      exit;
+  end; *)
+
+
   sliceMove:= pti(0,0,0);
    Case Key of
       VK_LEFT: sliceMove.X := -1; //LEFT
@@ -4084,8 +4421,6 @@ begin
  //LayerBox.caption := 'z'+inttostr(random(888));
   // if (VK_UP = Key) then caption := inttostr(random(888));
   //if (VK_UP <> Key) then caption := '-'+inttostr(random(888));
-
-
 end;
 
 procedure TGLForm1.ViewGPUDblClick(Sender: TObject);
@@ -4107,8 +4442,6 @@ begin
               SliceZoom.Position := SliceZoom.min;
            end else
                Vol1.SetSlice2DFrac(Vol1.GetSlice2DFrac(gMouse.X,gMouse.Y,i)); //
-
-
            Vol1.Slices.ZoomCenter := 1.0 - Vol1.Slices.SliceFrac;
            //Vol1.Slices.ZoomCenter := 1.0 - fracXYZ;
            //SliceBox.Caption := format('%f %f %f', [Vol1.Slices.ZoomCenter.x, Vol1.Slices.ZoomCenter.y, Vol1.Slices.ZoomCenter.z]);
@@ -4119,7 +4452,7 @@ begin
 
 	if true then begin//(not (gPrefs.ColorEditor)) or (not InColorBox(abs(MousePt.X),abs(MousePt.Y))) then begin
 		if not gPrefs.ColorbarVisible then
-		exit;
+		   exit;
 		gPrefs.ColorBarPosition := gPrefs.ColorBarPosition + 1;
 		SetColorbarPosition;
 		ViewGPU1.invalidate;
@@ -4162,6 +4495,12 @@ begin
   Vol1.Slices.ZoomCenter := Vec3(0.5,0.5,0.5);
   sliceZoom.position := 100;
   ss := getKeyshiftstate;
+  {$IFDEF MATCAP}
+  if (MatCapDrop.Items.Count > 0) and (MatCapDrop.ItemIndex <> 0) then begin
+     MatCapDrop.ItemIndex := 0;
+     Vol1.SetMatCap(MatCapDrop.Items[MatCapDrop.ItemIndex]);
+  end;
+  {$ENDIF}
   if (Sender <> nil) and (ssShift in ss) then begin
     LineWidthEdit.value := 1;
     gPrefs.DisplayOrient := kRenderOrient;
@@ -4421,6 +4760,36 @@ begin
 end;
 {$ENDIF}
 
+procedure TGLForm1.GraphSaveBitmapMenuClick(Sender: TObject);
+{$IFDEF GRAPH}
+{$IFDEF METALAPI}
+begin
+  Showmessage('TODO: Metal graphics screen capture');
+end;
+{$ELSE}
+var
+   bmp: TBitmap;
+   png: TPortableNetworkGraphic;
+begin
+  if not SaveDialog1.execute then exit;
+  bmp := ScreenShotGL(ViewGPUg);
+  if (bmp = nil) then exit;
+  png := TPortableNetworkGraphic.Create;
+  try
+   png.Assign(bmp);    //Convert data into png
+   png.SaveToFile(SaveDialog1.Filename);
+  finally
+    png.Free;
+  end;
+  bmp.Free;
+end;
+{$ENDIF}
+{$ELSE}
+begin
+  //Showmessage('compile for graph');
+end;
+{$ENDIF}
+
 procedure TGLForm1.ExitFullScreenMenuClick(Sender: TObject);
 begin
   GLForm1.WindowState:= wsNormal;
@@ -4462,6 +4831,11 @@ begin
     UpdateLayerBox(true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
     //UpdateTimer.Enabled := true;
     UpdateTimerTimer(Sender);
+    {$IFDEF GRAPH}
+    gGraph.HorizontalSelection:= v.VolumeDisplayed;
+    gGraph.isRedraw := true;
+    ViewGPUg.Invalidate;
+    {$ENDIF}
     exit;
   end;
   //exit if success
@@ -4486,9 +4860,53 @@ begin
    //LayerBox.caption := format('%d %d/%d ',[i,v.VolumeDisplayed+1, v.Header.dim[4]]); //+1 as indexed from 1
    UpdateLayerBox(true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
    UpdateTimer.Enabled := true;
+   {$IFDEF GRAPH}
+   gGraph.HorizontalSelection:= v.VolumeDisplayed;
+   gGraph.isRedraw := true;
+   ViewGPUg.Invalidate;
+   {$ENDIF}
    exit(true);
  end;
 
+end;
+
+procedure TGLForm1.GraphMouseWheel(Sender: TObject; Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
+begin
+ {$IFDEF GRAPH}
+ if not DisplayNextMenu.Enabled then exit;
+ if (WheelDelta < 0) then
+    DisplayNextMenu.Click
+ else
+     DisplayPrevMenu.Click;
+ {$ENDIF}
+end;
+
+procedure TGLForm1.GraphMouseDown(Sender: TObject; Button: TMouseButton;Shift: TShiftState; X, Y: Integer);
+var
+   f: double;
+   v: TNIfTI;
+   vol: integer;
+begin
+     {$IFDEF GRAPH}
+    {$IFDEF isCocoaOpenGL}
+    f := ViewGPUg.retinaScale;
+    X := round(X * f);
+    Y := round(Y * f);
+    {$ENDIF}
+     f := gGraph.HorizontalClickFrac(X);
+     if (f < 0) or (f > 1) then exit;
+     if f = 1 then f := f - 0.000001;
+     if not vols.Layer(0,v) then exit;
+     //if (v.Header.dim[4] < 2 then exit;
+     if (v.VolumesLoaded < 2) then exit;
+     vol := trunc(v.VolumesLoaded * f) ; // 0...(v.Header.dim[4]-1)
+     v.SetDisplayVolume(vol);
+     gGraph.HorizontalSelection:= v.VolumeDisplayed;
+     gGraph.isRedraw := true;
+     ViewGPUg.Invalidate;
+        UpdateLayerBox(true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
+   UpdateTimer.Enabled := true;
+     {$ENDIF}
 end;
 
 procedure TGLForm1.DrawHintsMenuClick(Sender: TObject);
@@ -4848,6 +5266,22 @@ begin
               hi := strtofloatdef(ParamStr(i), 01.0);
               inc(i);
               script.Add(format('gl.minmax (%d, %g, %g)',[max(layers-1,0), lo, hi]) );
+           end else if (upcase(s[2]) = 'H')  then begin//e.g. '-h'
+              {$IFDEF UNIX}
+              dwriteln('');
+              dwriteln('MRIcroGL '+kVers);
+              dwriteln(' Usage: MRIcroGL [options] file [displayOpts] file [displayOpts]');
+              dwriteln('   -h  : Display help');
+              dwriteln('   -cm : Color map: "-cm actc"');
+              dwriteln('   -dr : Display range: "-dr 2 5"');
+              dwriteln('   -std : Load standard image: "-std" ');
+              dwriteln(' Examples:');
+              dwriteln('   MRIcroGL spm152 spmMotor  -cm actc -dr 2 5');
+              dwriteln('   MRIcroGL spm152 -cm copper -dr 25 70 spmMotor  -cm actc -dr 2 5');
+              dwriteln('   MRIcroGL ~/myScript.py');
+              dwriteln(' ');
+              dwriteln(' ');
+              {$ENDIF}
            end else             //gl.minmax(2, -4, -4)
                dwriteln('Unknown argument "'+s+'"');
            //dwriteln('>>Unknown argument "'+upcase(s[2])+upcase(s[3])+'"');
@@ -4906,6 +5340,8 @@ begin
  isBusy := false;
  ViewGPU1.Invalidate;
 end;
+
+
 
 procedure TGLForm1.AboutMenuClick(Sender: TObject);
 var
@@ -4973,9 +5409,7 @@ begin
   dlg.Free;
 end;
 
-{$IFDEF LCLCocoa}{$IFNDEF METALAPI}
-{$DEFINE isCocoaOpenGL}
-{$ENDIF}{$ENDIF}
+
 
 {$IFDEF isCocoaOpenGL}
 var
@@ -5091,11 +5525,8 @@ end;
 procedure TGLForm1.ViewGPUMouseMove(Sender: TObject; Shift: TShiftState; X,
   Y: Integer);
 var
- //sliceMM,
  fracXYZdown, fracXYZ, diff: TVec3;
  i, j: integer;
- //vox: TVec3i;
- //str : string;
  niftiVol: TNIfTI;
  {$IFDEF LCLCocoa}{$IFNDEF METALAPI}
  f:single;
@@ -5297,6 +5728,72 @@ var
   ViewGPU1.Invalidate;
 end;
 
+procedure TGLForm1.GraphPaint(Sender: TObject);
+begin
+ {$IFDEF GRAPH}
+  gGraph.Paint(ViewGPUg);
+ {$ENDIF}
+end;
+
+procedure TGLForm1.ViewGPUgPrepare(Sender: TObject);
+begin
+  {$IFDEF GRAPH}
+  {$IFDEF METALAPI}
+  ViewGPUg.SetPreferredFrameRate(0);
+  ViewGPUg.InvalidateOnResize := true;
+
+  {$ENDIF}
+  {$ENDIF}
+end;
+
+{$IFDEF GRAPH}
+procedure TGLForm1.GraphShow();
+begin
+ {$IFDEF METALAPI}
+ ViewGPUg :=  TMetalControl.Create(GLForm1);
+ ViewGPUg.OnPrepare := @ViewGPUgPrepare;
+ {$ELSE}
+ ViewGPUg :=  TOpenGLControl.Create(GLForm1);
+ ViewGPUg.OpenGLMajorVersion:= 3;
+ ViewGPUg.OpenGLMinorVersion:= 3;
+ ViewGPUg.MultiSampling:=4;
+ {$ENDIF}
+ ViewGPUg.Parent := BottomPanel;
+ ViewGPUg.Align:= alClient;
+ ViewGPUg.OnPaint := @GraphPaint;
+ ViewGPUg.OnMouseDown := @GraphMouseDown;
+ ViewGPUg.OnMouseWheel:= @GraphMouseWheel;
+ ViewGPUg.OnKeyDown := @ViewGPUgKeyDown;
+ {$IFDEF METALAPI}
+ ViewGPUg.renderView.setSampleCount(4);
+ {$ELSE}
+ ViewGPUg.MakeCurrent(false);
+ {$IFDEF LCLCocoa}
+ ViewGPUg.setRetina(true);
+ {$ENDIF}
+ if (not  Load_GL_version_3_3_CORE) then begin
+    showmessage('Unable to load OpenGL 3.3 Core');
+    halt;
+ end;
+ ViewGPUg.ReleaseContext;
+ if GLErrorStr <> '' then begin
+    showmessage(GLErrorStr);
+    GLErrorStr := '';
+ end;
+ {$ENDIF}
+ gGraph := TGPUGraph.Create(ViewGPUg);
+ GraphClearMenuClick(nil);
+
+end;
+{$ELSE}
+procedure TGLForm1.GraphShow();
+begin
+  GraphMenu.visible := false;
+  BottomPanel.visible := false;
+  TBSplitter.Visible := false;
+end;
+{$ENDIF}
+
 procedure TGLForm1.FormShow(Sender: TObject);
 var
  i: integer;
@@ -5397,25 +5894,30 @@ begin
   end;
   if (length(gPrefs.InitScript) > 0) then
      s := '+'; //load borg for quick load
+  //vols.Create
   vols := TNIfTIs.Create(s,  gPrefs.ClearColor, gPrefs.LoadFewVolumes, gPrefs.MaxVox, isOK); //to do: warning regarding multi-volume files?
   //niftiVol := TNIfTI.Create('/Users/rorden/metal_demos/tar.nii');
   //niftiVol := TNIfTI.Create('/Users/rorden/metal_demos/rmotor.nii.gz', niftiVol.Mat, niftiVol.Dim);
+    GraphShow();
   {$IFDEF METALAPI}
   ViewGPU1 :=  TMetalControl.Create(CenterPanel);
   //ViewGPU1.OnPrepare := @ViewGPUPrepare;
   EditMenu.Visible := false; //to do: copy bitmap
-  Smooth2DCheck.Visible := false; //to do: Metal nearest neighbor must change shader
+  //Smooth2DCheck.Visible := false; //to do: Metal nearest neighbor must change shader
   //To do: variant of _Texture2D.metal e.g. _Texture2DFlat.metal with nearest neighbor :
   // constexpr sampler texSampL (mag_filter::linear,min_filter::linear);
   // constexpr sampler texSampN (mag_filter::nearest,min_filter::nearest);
 
   {$ELSE}
+  //ViewGPU1 :=  TOpenGLControl.Create(CenterPanel);
   ViewGPU1 :=  TOpenGLControl.Create(GLForm1);
+  //ViewGPU1.Parent := CenterPanel;
   ViewGPU1.OpenGLMajorVersion := 3;
   ViewGPU1.OpenGLMinorVersion := 3;
   ViewGPU1.MultiSampling := 4;
   {$ENDIF}
-  ViewGPU1.Parent := GLForm1;
+  //ViewGPU1.Parent := GLForm1;
+  ViewGPU1.Parent := CenterPanel;
   {$IFDEF METALAPI}ViewGPU1.renderView.setSampleCount(4);{$ENDIF}
   ViewGPU1.Align:= alClient;
   ViewGPU1.OnKeyPress:=@ViewGPUKeyPress;
@@ -5443,6 +5945,13 @@ begin
   Vol1.Prepare(shaderName);
   setShaderSliders;
   //ViewGPUPrepare(Sender);
+  {$ENDIF}
+  {$IFDEF MATCAP}
+  UpdateMatCapDrop(MatCapDrop);
+  if (MatCapDrop.Items.Count > 0) then begin
+     MatCapDrop.ItemIndex := 0;
+     Vol1.SetMatCap(MatCapDrop.Items[MatCapDrop.ItemIndex]);
+  end;
   {$ENDIF}
   //auto generate color tables
   shaderPath := ResourceDir+pathdelim+'lut';
@@ -5527,6 +6036,13 @@ begin
      UpdateTimer.Enabled:=true;
   ViewGPUPrepare(Sender);
   {$ENDIF}
+  if gPrefs.InitScript = '' then begin //update graph and caption
+    XCoordEdit.Text := '0';
+    YCoordEdit.Text := '0';
+    ZCoordEdit.Text := '0';
+    SetXHairPosition(0,0,0 );
+  end;
+
 end;
 
 procedure TGLForm1.ViewGPUPrepare(Sender: TObject);
@@ -5565,10 +6081,11 @@ var
 begin
   if isBusy then exit;
   if not vols.Layer(0,niftiVol) then exit;
- {$IFDEF METALAPI}
+  {$IFDEF METALAPI}
  if not isPrepared then ViewGPUPrepare(Sender);
  MTLSetClearColor(MTLClearColorMake(gPrefs.ClearColor.r/255, gPrefs.ClearColor.g/255, gPrefs.ClearColor.b/255, 1));
  {$ELSE}
+ ViewGPU1.MakeCurrent(false);
  glClearColor(gPrefs.ClearColor.R/255, gPrefs.ClearColor.G/255, gPrefs.ClearColor.B/255, 1.0);
  {$ENDIF}
   if gPrefs.DisplayOrient = kMosaicOrient then

@@ -6,8 +6,10 @@ interface
 {$DEFINE GPUGRADIENTS} //Computing volume gradients on the GPU is much faster than using the CPU
 {$DEFINE VIEW2D}
 {$DEFINE CUBE}
+{$DEFINE MATCAP}
 {$DEFINE TIMER} //reports GPU gradient time to stdout (Unix only)
 uses
+  {$IFDEF MATCAP} GraphType, FPImage, IntfGraphics, LCLType,{$ENDIF}
   {$IFDEF TIMER} DateUtils,{$ENDIF}
  {$IFDEF CUBE} glcube, {$ENDIF}
  retinahelper,glclrbar, niftis, SimdUtils, glcorearb, gl_core_utils, VectorMath, Classes, SysUtils, Graphics,
@@ -36,11 +38,15 @@ type
         clrbar: TGPUClrbar;
         glControl: TOpenGLControl;
         overlayGradientVolLoc, overlayIntensityVolLoc,
-        rayDirLoc,intensityVolLoc, gradientVolLoc,mvpLoc, imvLoc, lightPositionLoc,clipPlaneLoc,
+        rayDirLoc,intensityVolLoc, gradientVolLoc,mvpLoc,normLoc, //imvLoc,
+        lightPositionLoc,clipPlaneLoc,
         backAlphaLoc, sliceSizeLoc, stepSizeLoc, loopsLoc, overlaysLoc : GLint;
         overlayGradientTexture3D, overlayIntensityTexture3D,
         drawTexture1D, drawTexture3D,
         gradientTexture3D, intensityTexture3D, vao, programRaycast: GLuint;
+        {$IFDEF MATCAP}
+        matcap2D: GLuint;
+        {$ENDIF}
         {$IFDEF CUBE} gCube :TGPUCube; {$ENDIF}
         {$IFDEF GPUGRADIENTS}programSobel, programBlur: GLuint;
         procedure CreateGradientVolumeGPU(Xsz,Ysz,Zsz: integer; var inTex, grTex: GLuint);
@@ -52,6 +58,7 @@ type
         procedure UpdateDraw(Drawing: TDraw);
         procedure CreateOverlayTextures(Dim: TVec3i; volRGBA: TRGBAs);
       public
+        matcapLoc: GLint;
         {$IFDEF VIEW2D}
         SelectionRect: TVec4;
         property ShowColorEditor: boolean read colorEditorVisible write colorEditorVisible;
@@ -66,6 +73,7 @@ type
         procedure PaintMosaicRender(var vol: TNIfTI; lRender: TMosaicRender);
         procedure PaintMosaic2D(var vol: TNIfTI; Drawing: TDraw; MosaicString: string);
         {$ENDIF}
+        {$IFDEF MATCAP}procedure SetMatCap(lFilename: string);{$ENDIF}
         //procedure CreateOverlayTextures();
         procedure UpdateOverlays(vols: TNIfTIs);
         property Quality1to10: integer read RayCastQuality1to10 write RayCastQuality1to10;
@@ -543,6 +551,105 @@ kFrag = #10'#version 330 core'
 +#10'    FragColor = colAcc;'
 +#10'}';
 
+{$IFDEF MATCAP}
+
+{$IFDEF WINDOWS}
+procedure FlipVertical (var px: TPicture);
+var
+  p: array of byte;
+  i, half, b: integer;
+  LoPtr, HiPtr: PInteger;
+begin
+    if px.Height < 3 then exit;
+    half := (px.Height div 2);
+    b := px.Bitmap.RawImage.Description.BytesPerLine;
+    LoPtr := PInteger(px.Bitmap.RawImage.Data);
+    HiPtr := PInteger(px.Bitmap.RawImage.Data+ ((px.Height -1) * b));
+    setlength(p, b);
+    for i := 1 to half do begin
+          System.Move(LoPtr^,p[0],b); //(src, dst,sz)
+          System.Move(HiPtr^,LoPtr^,b); //(src, dst,sz)
+          System.Move(p[0],HiPtr^,b); //(src, dst,sz)
+          Inc(PByte(LoPtr), b );
+          Dec(PByte(HiPtr), b);
+    end;
+end; //FlipVertical()
+{$ENDIF}
+
+function LoadMatCap(fnm: string; var texID: GLuint): boolean;
+var
+  px: TPicture;
+  ifnm, MatCapDir: string;
+  {$IFNDEF WINDOWS}
+  AImage: TLazIntfImage;
+  lRawImage: TRawImage;
+  {$ENDIF}
+begin
+  result := false;
+  if not fileexists(fnm) then begin
+     ifnm := fnm;
+     MatCapDir := ExtractFilePath(ShaderDir)+ 'matcap';
+     fnm := MatCapDir+pathdelim+fnm+'.jpg';
+     if not fileexists(fnm) then begin
+        printf(format('LoadTex: unable to find "%s" or "%s"',[ifnm, fnm]));
+        exit;
+     end;
+  end;
+  px := TPicture.Create;
+    try
+       {$IFDEF Windows}
+       px.LoadFromFile(fnm);
+       FlipVertical(px);
+       {$ELSE}
+       //ensure order is GL_RGBA8 - it is with many PNG files, but not JPEG
+       lRawImage.Init;
+       lRawImage.Description.Init_BPP32_R8G8B8A8_BIO_TTB(0,0);
+       lRawImage.Description.LineOrder := riloBottomToTop; // openGL uses cartesian coordinates
+       lRawImage.CreateData(false);
+       AImage := TLazIntfImage.Create(0,0);
+       try
+         AImage.SetRawImage(lRawImage);
+         AImage.LoadFromFile(fnm);
+         px.Bitmap.LoadFromIntfImage(AImage);
+       finally
+         AImage.Free;
+       end;
+       {$ENDIF}
+    except
+      px.Bitmap.Width:=-1;
+    end;
+  if ((px.Bitmap.PixelFormat <> pf24bit ) and  (px.Bitmap.PixelFormat <> pf32bit )) or (px.Bitmap.Width < 1) or (px.Bitmap.Height < 1) then begin
+     printf(format('LoadTex: unsupported pixel format bpp (%d) or size (%dx%d)',[PIXELFORMAT_BPP[px.Bitmap.PixelFormat], px.Bitmap.Width, px.Bitmap.Height]));
+     exit;
+  end;
+  px.Bitmap.Height;
+  px.Bitmap.Width;
+  if texID <> 0 then
+     glDeleteTextures(1,@texID);
+  glGenTextures(1, @texID);
+  glBindTexture(GL_TEXTURE_2D,  texID);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+  //glTexImage2D(GL_TEXTURE_2D, 0,GL_RGBA8, px.Width, px.Height, 0, GL_BGRA, GL_UNSIGNED_BYTE, PInteger(px.Bitmap.RawImage.Data));
+  {$IFDEF WINDOWS}
+  glTexImage2D(GL_TEXTURE_2D, 0,GL_RGBA8, px.Width, px.Height, 0, GL_BGRA, GL_UNSIGNED_BYTE, PInteger(px.Bitmap.RawImage.Data));
+  {$ELSE}
+  glTexImage2D(GL_TEXTURE_2D, 0,GL_RGBA8, px.Width, px.Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, PInteger(px.Bitmap.RawImage.Data));
+  {$ENDIF}
+  px.Free;
+  result := true;
+end;
+
+procedure TGPUVolume.SetMatCap(lFilename: string);
+begin
+  glControl.MakeCurrent();
+  LoadMatCap(lFilename, matcap2D);
+  glControl.ReleaseContext;
+end;
+{$ENDIF}
+
 procedure TGPUVolume.SetShader(shaderName: string);
 var
   VertexProgram, FragmentProgram: string;
@@ -555,12 +662,17 @@ begin
   if VertexProgram = '' then VertexProgram := kVert;
   if FragmentProgram = '' then FragmentProgram := kFrag;
   programRaycast :=  initVertFrag(VertexProgram, FragmentProgram);
-  imvLoc := glGetUniformLocation(programRaycast, pAnsiChar('ModelViewMatrixInverse'));
+  //imvLoc := glGetUniformLocation(programRaycast, pAnsiChar('ModelViewMatrixInverse'));
   mvpLoc := glGetUniformLocation(programRaycast, pAnsiChar('ModelViewProjectionMatrix'));
   rayDirLoc := glGetUniformLocation(programRaycast, pAnsiChar('rayDir'));
   sliceSizeLoc := glGetUniformLocation(programRaycast, pAnsiChar('sliceSize'));
   stepSizeLoc := glGetUniformLocation(programRaycast, pAnsiChar('stepSize'));
   backAlphaLoc := glGetUniformLocation(programRaycast, pAnsiChar('backAlpha'));
+  matcapLoc := glGetUniformLocation(programRaycast, pAnsiChar('matcap2D'));
+  {$IFDEF MATCAP}
+  normLoc := glGetUniformLocation(programRaycast, pAnsiChar('NormalMatrix'));
+  //printf(format('%d %s--->matcap @ %d = %d', [normLoc, shaderName, matcapLoc, matcap2D]));
+  {$ENDIF}
   loopsLoc := glGetUniformLocation(programRaycast, pAnsiChar('loops'));
   overlaysLoc := glGetUniformLocation(programRaycast, pAnsiChar('overlays'));
   lightPositionLoc := glGetUniformLocation(programRaycast, pAnsiChar('lightPosition'));
@@ -710,6 +822,7 @@ begin
   fLightPos := Vec4(0, 0.707, 0.707, 0);
   fClipPlane := Vec4(0, 0, 0, -1);
   vao:= 0;
+  matcap2D := 0;
   overlayGradientTexture3D := 0;
   overlayIntensityTexture3D := 0;
   drawTexture1D := 0;
@@ -839,6 +952,7 @@ var
   Vol: TNIfTI;
 begin
   if not vols.Layer(0,Vol) then exit;
+  glControl.MakeCurrent();
   overlayNum := vols.NumLayers -1; //-1 as we ignore background
   if (overlayNum < 1)  then begin //background only
       //GLForm1.LayerBox.Caption := '>>>'+inttostr(random(888));
@@ -858,6 +972,7 @@ var
  //startTime : TDateTime;
 begin
  result := true;
+ glControl.MakeCurrent();
  if (Vol.VolRGBA = nil) then exit;
  if (intensityTexture3D <> 0) then glDeleteTextures(1,@intensityTexture3D);
  if (gradientTexture3D <> 0) then glDeleteTextures(1,@gradientTexture3D);
@@ -958,10 +1073,15 @@ end;
 
 procedure TGPUVolume.PaintMosaicRender(var vol: TNIfTI; lRender: TMosaicRender);
 var
-  modelViewProjectionMatrixInverse, modelViewProjectionMatrix, projectionMatrix, modelMatrix: TMat4;
+  //modelViewProjectionMatrixInverse,
+  modelViewProjectionMatrix, projectionMatrix, modelMatrix: TMat4;
   modelLightPos, v, rayDir: TVec4;
   i: integer;
   lElevation, lAzimuth: single;
+  {$IFDEF MATCAP}
+  normalMatrix: TMat4;
+  nMtx: array [0..8] of single;
+  {$ENDIF}
 begin
   case lRender.Orient of
     -kSagLeftOrient, -kSagRightOrient: lAzimuth:=90;
@@ -1001,6 +1121,34 @@ begin
      glUniform1f(backAlphaLoc, vol.OpacityPercent/100);
   glUniform1f(sliceSizeLoc, 1/maxDim);
   glUniform1i(loopsLoc,round(maxDim*2.2));
+  {$IFDEF MATCAP}
+  //printf(format('>>matcapLoc %d matcap %d',[matcapLoc, matcap2D]));
+  if (matcapLoc >= 0) and (matcap2D > 0) then begin
+    modelMatrix := TMat4.Identity;
+    modelMatrix *= TMat4.Translate(0, 0, -fDistance);
+    modelMatrix *= TMat4.RotateX(-DegToRad(90-lElevation));
+    modelMatrix *= TMat4.RotateZ(DegToRad(lAzimuth));
+    modelMatrix *= TMat4.Translate(-vol.Scale.X/2, -vol.Scale.Y/2, -vol.Scale.Z/2);
+    modelLightPos := (modelMatrix.Transpose * fLightPos);
+    modelMatrix *= TMat4.Scale(vol.Scale.X, vol.Scale.Y, vol.Scale.Z); //for volumes that are rectangular not square
+
+    glActiveTexture(GL_TEXTURE6);
+    glBindTexture(GL_TEXTURE_2D, matcap2D);
+    glUniform1i(matcapLoc, 6);
+    normalMatrix := modelMatrix.Inverse.Transpose;
+    nMtx[0] := normalMatrix.m[0,0];
+    nMtx[1] := normalMatrix.m[0,1];
+    nMtx[2] := normalMatrix.m[0,2];
+    nMtx[3] := normalMatrix.m[1,0];
+    nMtx[4] := normalMatrix.m[1,1];
+    nMtx[5] := normalMatrix.m[1,2];
+    nMtx[6] := normalMatrix.m[2,0];
+    nMtx[7] := normalMatrix.m[2,1];
+    nMtx[8] := normalMatrix.m[2,2];
+    glUniformMatrix3fv(normLoc, 1, GL_FALSE, @nMtx);
+  end;
+  {$ENDIF}
+
   //unit model matrix for lighting
   modelMatrix := TMat4.Identity;
   modelMatrix *= TMat4.Translate(0.5, 0.5, -1.0);
@@ -1016,6 +1164,7 @@ begin
   modelMatrix *= TMat4.RotateX(-DegToRad(90-lElevation));
   modelMatrix *= TMat4.RotateZ(DegToRad(lAzimuth));
   modelMatrix *= TMat4.Translate(-0.5, -0.5, -0.5); //pivot around 0.5 as cube spans 0..1
+
   projectionMatrix := TMat4.OrthoGL (0, glControl.clientwidth, 0, glControl.clientheight, 0.01, 2);
   glUniform3f(lightPositionLoc,modelLightPos.x, modelLightPos.y, modelLightPos.z);
   glUniform4f(clipPlaneLoc, fClipPlane.x, fClipPlane.y, fClipPlane.z, fClipPlane.w);
@@ -1029,9 +1178,9 @@ begin
   rayDir.w := 0;
   rayDir := rayDir.Normalize;
   addFuzz(rayDir);
-  modelViewProjectionMatrixInverse := modelViewProjectionMatrix.Inverse;
   glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, @modelViewProjectionMatrix);
-  glUniformMatrix4fv(imvLoc, 1, GL_FALSE, @modelViewProjectionMatrixInverse);
+  //x modelViewProjectionMatrixInverse := modelViewProjectionMatrix.Inverse;
+  //x glUniformMatrix4fv(imvLoc, 1, GL_FALSE, @modelViewProjectionMatrixInverse);
   glUniform3f(rayDirLoc,rayDir.x,rayDir.y,rayDir.z);
   //glViewport(0, 0, glControl.ClientWidth, glControl.ClientHeight); //required for form resize
   glControl.SetViewport();
@@ -1107,6 +1256,15 @@ begin
     glActiveTexture( GL_TEXTURE4);
     glBindTexture(GL_TEXTURE_1D, drawTexture1D);
     glUniform1i(uniform_drawLUT, 4);
+     if not isSmooth2D then begin
+       glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
+       glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+       glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+       glBindTexture(GL_TEXTURE_3D, overlayIntensityTexture3D);
+       glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+       glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+     end;
+
     if (not Drawing.IsOpen) or (Drawing.OpacityFraction <= 0.0) then
        glUniform1f(uniform_drawAlpha, 0.0)
     else
@@ -1124,6 +1282,14 @@ begin
     glBufferData(GL_ARRAY_BUFFER,slices2D.NumberOfVertices*SizeOf(TVertex2D), @slices2D.SliceVertices[0], GL_STATIC_DRAW);
     glBindVertexArray(vaoTex2d);
     glDrawArrays(GL_TRIANGLES, 0, slices2D.NumberOfVertices);
+    if not isSmooth2D then begin
+      glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
+      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      glBindTexture(GL_TEXTURE_3D, overlayIntensityTexture3D);
+      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    end;
   end;
   //draw render
   if slices2D.NumberOfMosaicRenders > 0 then
@@ -1178,11 +1344,11 @@ begin
      slices2D.DrawOutLine(SelectionRect.X,h-SelectionRect.Y, SelectionRect.Z,h-SelectionRect.W);
   if slices2D.NumberOfVertices < 3 then exit; //nothing to do
   //select nearest neighbor vs linear interpolation
-  if not isSmooth2D then begin
+  (*if not isSmooth2D then begin
     glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  end;
+  end;*)
   //draw
   //glViewport(0, 0, glControl.ClientWidth, glControl.ClientHeight); //required for form resize
   glControl.SetViewport();
@@ -1195,10 +1361,19 @@ begin
   //background texture
   glActiveTexture(GL_TEXTURE1);
   glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
+  if not isSmooth2D then begin
+      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    end;
   glUniform1i(uniform_tex, 1);
   //overlay texture
   glActiveTexture(GL_TEXTURE2);
   glBindTexture(GL_TEXTURE_3D, overlayIntensityTexture3D);
+  if not isSmooth2D then begin
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  end;
+
   glUniform1i(uniform_overlay, 2);
   //draw texture
   glActiveTexture(GL_TEXTURE3);
@@ -1251,14 +1426,19 @@ begin
       glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
       glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
       glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      glBindTexture(GL_TEXTURE_3D, overlayIntensityTexture3D);
+      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   end;
-
 end;
 {$ENDIF}
 
 procedure TGPUVolume.Paint(var vol: TNIfTI);
 var
-  modelViewProjectionMatrixInverse, modelViewProjectionMatrix, projectionMatrix, modelMatrix: TMat4;
+  //modelViewProjectionMatrixInverse,
+ normalMatrix,
+  modelViewProjectionMatrix, projectionMatrix, modelMatrix: TMat4;
+  nMtx: array [0..8] of single;
   modelLightPos, v, rayDir: TVec4;
   w,h, whratio, scale: single;
   i: integer;
@@ -1318,6 +1498,27 @@ begin
   if (shaderPrefs.nUniform > 0) then
      for i := 1 to shaderPrefs.nUniform do
          glUniform1f(prefLoc[i], shaderPrefs.Uniform[i].DefaultV);
+
+  //bind matcap
+  {$IFDEF MATCAP}
+  //printf(format('>>matcapLoc %d matcap %d',[matcapLoc, matcap2D]));
+  if (matcapLoc >= 0) and (matcap2D > 0) then begin
+     glActiveTexture(GL_TEXTURE6);
+     glBindTexture(GL_TEXTURE_2D, matcap2D);
+     glUniform1i(matcapLoc, 6);
+     normalMatrix := modelMatrix.Inverse.Transpose;
+     nMtx[0] := normalMatrix.m[0,0];
+     nMtx[1] := normalMatrix.m[0,1];
+     nMtx[2] := normalMatrix.m[0,2];
+     nMtx[3] := normalMatrix.m[1,0];
+     nMtx[4] := normalMatrix.m[1,1];
+     nMtx[5] := normalMatrix.m[1,2];
+     nMtx[6] := normalMatrix.m[2,0];
+     nMtx[7] := normalMatrix.m[2,1];
+     nMtx[8] := normalMatrix.m[2,2];
+     glUniformMatrix3fv(normLoc, 1, GL_FALSE, @nMtx);
+  end;
+  {$ENDIF}
   modelViewProjectionMatrix := ( projectionMatrix * modelMatrix);
   rayDir.x := 0; RayDir.y := 0; rayDir.z := 1; RayDir.w := 0;
   v := rayDir;
@@ -1325,9 +1526,9 @@ begin
   rayDir.w := 0;
   rayDir := rayDir.Normalize;
   addFuzz(rayDir);
-  modelViewProjectionMatrixInverse := modelViewProjectionMatrix.Inverse;
   glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, @modelViewProjectionMatrix);
-  glUniformMatrix4fv(imvLoc, 1, GL_FALSE, @modelViewProjectionMatrixInverse);
+  //x modelViewProjectionMatrixInverse := modelViewProjectionMatrix.Inverse;
+  //x glUniformMatrix4fv(imvLoc, 1, GL_FALSE, @modelViewProjectionMatrixInverse);
   glUniform3f(rayDirLoc,rayDir.x,rayDir.y,rayDir.z);
   //glViewport(0, 0, glControl.ClientWidth, glControl.ClientHeight); //required for form resize
   glControl.SetViewport();
