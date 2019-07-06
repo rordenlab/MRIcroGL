@@ -24,7 +24,6 @@ uses
   {$IFDEF MATT1}umat, {$ENDIF}
   {$IFDEF COMPILEYOKE} yokesharemem, {$ENDIF}
   {$IFDEF MYPY}PythonEngine,  {$ENDIF}
-  //CocoaMore,
   {$IFDEF LCLCocoa} {$IFDEF NewCocoa} nsappkitext, UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
   lcltype, GraphType, Graphics, dcm_load, nifti_tiff,
@@ -57,7 +56,9 @@ type
     DisplayCorrelationR: TMenuItem;
     DisplayCorrelationZ: TMenuItem;
     MatCapDrop: TComboBox;
+    ReorientMenu: TMenuItem;
     TBSplitter: TSplitter;
+    LayerWidgetChangeTimer: TTimer;
     TopPanel: TPanel;
     BottomPanel: TPanel;
     AnatDrop: TComboBox;
@@ -313,8 +314,10 @@ type
     procedure GraphScaleClick(Sender: TObject);
     procedure GraphShowHideMenuClick(Sender: TObject);
     procedure LayerInvertColorMapMenuClick(Sender: TObject);
+    procedure LayerWidgetChangeTimerTimer(Sender: TObject);
     procedure LayerZeroIntensityInvisibleMenuClick(Sender: TObject);
     procedure MatCapDropChange(Sender: TObject);
+    procedure ReorientMenuClick(Sender: TObject);
     procedure ReportPositionXYZ(isUpdateYoke: boolean = false);
     procedure AnatAddBtnClick(Sender: TObject);
     procedure AnatDeleteBtnClick(Sender: TObject);
@@ -395,6 +398,7 @@ type
     procedure CutNearBtnClick(Sender: TObject);
     procedure CutNoneBtnClick(Sender: TObject);
     procedure SetFormDarkMode(var f: TForm);
+    procedure SetToolPanelMaxWidth();
     procedure DisplayViewMenu(Sender: TObject);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure HelpMenuClick(Sender: TObject);
@@ -424,7 +428,7 @@ type
     procedure UpdateLayerBox(NewLayers: boolean);
     function AddLayer(Filename: string): boolean;
     procedure UpdateContrast (Xa,Ya, Xb, Yb: integer);
-    function AddBackground(Filename: string; isAddToRecent: boolean = true): boolean;
+    function AddBackground(Filename: string; isAddToRecent: boolean = true; isFromFormDrop: boolean = false): boolean;
     procedure AboutMenuClick(Sender: TObject);
     procedure BackColorMenuClick(Sender: TObject);
     procedure ClipLabelClick(Sender: TObject);
@@ -542,7 +546,7 @@ var
     niftiVol: TNIfTI;
 begin
   i := LayerList.Count-1;
-  caption := inttostr(i);
+  //caption := inttostr(i);
   if (i < 0) then exit;
   if not vols.Layer(i,niftiVol) then exit;
   niftiVol.CX.NeedsUpdate := true;
@@ -2388,8 +2392,9 @@ var
  i: integer;
 begin
   if not vols.Layer(0,niftiVol) then exit;
- Vol1.Slice2Dmm(niftiVol, vox);
- if not vols.AddCorrelLayer(vox, gPrefs.ClearColor, (sender as TMenuItem).tag = 1) then exit;
+
+  Vol1.Slice2Dmm(niftiVol, vox);
+  if not vols.AddCorrelLayer(vox, gPrefs.ClearColor, (sender as TMenuItem).tag = 1) then exit;
  //if (vols.NumLayers > 1) then
  //  GLForm1.LayerChange(vols.NumLayers-1, vols.NumLayers-1, -1, kNaNsingle, kNaNsingle); //kNaNsingle
  //set color scheme
@@ -2446,6 +2451,18 @@ begin
      AddLayer(gPrefs.PrevFilename[(sender as TMenuItem).tag])
   else
      AddBackground(gPrefs.PrevFilename[(sender as TMenuItem).tag]);
+end;
+
+procedure TGLForm1.SetToolPanelMaxWidth();
+var
+ mx: integer;
+begin
+     mx := LayerAlphaTrack.Left + LayerAlphaTrack.Width;
+     mx := max(mx, MosColOverlapTrack.Left + MosColOverlapTrack.Width);
+     mx := max(mx, CutNearBtn.Left + CutNearBtn.Width);
+     mx := max(mx, ZCoordEdit.Left + ZCoordEdit.Width);
+     mx := max(mx, QualityTrack.Left + QualityTrack.Width);
+     ToolPanel.Constraints.MaxWidth:= mx+8;
 end;
 
 procedure TGLForm1.SetFormDarkMode(var f: TForm);
@@ -2640,6 +2657,16 @@ begin
  {$ENDIF}
 end;
 
+
+function  DefuzzX(const x:  single):  single;
+//instead of "5.9e-6" write "0.0"
+const
+ fuzz = 1.0E-5;
+begin
+  if  ABS(x) < fuzz then exit(0.0);
+  exit(x);
+end {Defuzz};
+
 procedure TGLForm1.LayerWidgetChange(Sender: TObject);
 var
   i, pct: integer;
@@ -2673,7 +2700,8 @@ end;
 
 procedure TGLForm1.LayerAlphaTrackMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 begin
-  LayerWidgetChange(sender);
+  LayerWidgetChangeTimer.enabled := true;
+  //LayerWidgetChange(sender);
 end;
 
 procedure TGLForm1.UpdateLayerBox(NewLayers: boolean);
@@ -2719,6 +2747,7 @@ begin
      LayerBrightEdit.Text := format('%.6g', [v.DisplayMax]);
      LayerColorDrop.ItemIndex := v.FullColorTable.Tag;
      LayerAlphaTrack.Position := v.OpacityPercent;
+     LayerBox.Hint := format('image intensity range %.4g..%.4g',[DefuzzX(v.VolumeMin), DefuzzX(v.VolumeMax)]);
 end;
 
 procedure TGLForm1.LayerChange(layer, colorTag, opacityPercent: integer; displayMin, displayMax: single); //kNaNsingle
@@ -2768,7 +2797,8 @@ end;
 procedure TGLForm1.LayerContrastKeyUp(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 begin
-     LayerWidgetChange(Sender);
+     LayerWidgetChangeTimer.enabled := true;
+     //LayerWidgetChange(Sender);
 end;
 
 procedure TGLForm1.LineColorBtnClick(Sender: TObject);
@@ -3113,6 +3143,7 @@ begin
   end;
   fnm := dlg.FileName;
   dlg.Free;
+
   niftiVol.SaveAsSourceOrient(fnm, vols.Drawing.VolRawBytes);
   vols.Drawing.NeedsSave := false;
 end;
@@ -3378,7 +3409,8 @@ var
   PrefForm: TForm;
   bmpEdit: TEdit;
   LoadFewVolumesCheck, LandMarkCheck,
-  {$IFDEF LCLCocoa} DarkModeCheck, RetinaCheck,{$ENDIF} RadiologicalCheck: TCheckBox;
+  {$IFDEF LCLCocoa} DarkModeCheck, RetinaCheck,{$ENDIF}
+  BitmapAlphaCheck, RadiologicalCheck: TCheckBox;
   OkBtn, AdvancedBtn: TButton;
   bmpLabel: TLabel;
   WindowCombo : TComboBox;
@@ -3433,12 +3465,26 @@ begin
   bmpEdit.BorderSpacing.Left := 8;
   bmpEdit.Anchors := [akTop, akLeft];
   bmpEdit.Parent:=PrefForm;
+  //BitmapAlphaCheck
+  BitmapAlphaCheck:=TCheckBox.create(PrefForm);
+  BitmapAlphaCheck.Checked := gPrefs.ScreenCaptureTransparentBackground;
+  BitmapAlphaCheck.Caption:='Background transparent in bitmaps';
+  //BitmapAlphaCheck.Left := 8;
+  //BitmapAlphaCheck.Top := 8;
+  BitmapAlphaCheck.AutoSize := true;
+  BitmapAlphaCheck.AnchorSide[akTop].Side := asrBottom;
+  BitmapAlphaCheck.AnchorSide[akTop].Control := bmpLabel;
+  BitmapAlphaCheck.BorderSpacing.Top := 6;
+  BitmapAlphaCheck.AnchorSide[akLeft].Side := asrLeft;
+  BitmapAlphaCheck.AnchorSide[akLeft].Control := PrefForm;
+  BitmapAlphaCheck.BorderSpacing.Left := 6;
+  BitmapAlphaCheck.Parent:=PrefForm;
   //  RadiologicalCheck
   RadiologicalCheck:=TCheckBox.create(PrefForm);
   RadiologicalCheck.Checked := gPrefs.FlipLR_Radiological;
   RadiologicalCheck.Caption:='Radiological convention (left on right)';
   RadiologicalCheck.AnchorSide[akTop].Side := asrBottom;
-  RadiologicalCheck.AnchorSide[akTop].Control := bmpLabel;
+  RadiologicalCheck.AnchorSide[akTop].Control := BitmapAlphaCheck;
   RadiologicalCheck.BorderSpacing.Top := 6;
   RadiologicalCheck.AnchorSide[akLeft].Side := asrLeft;
   RadiologicalCheck.AnchorSide[akLeft].Control := PrefForm;
@@ -3542,6 +3588,13 @@ begin
   Vol1.Slices.RadiologicalConvention := gPrefs.FlipLR_Radiological;
   gPrefs.BitmapZoom:= strtointdef(bmpEdit.Text,1);
   gPrefs.LoadFewVolumes := LoadFewVolumesCheck.Checked;
+  if (gPrefs.ScreenCaptureTransparentBackground <>  BitmapAlphaCheck.Checked) then begin
+     gPrefs.ScreenCaptureTransparentBackground :=  BitmapAlphaCheck.Checked;
+     if gPrefs.ScreenCaptureTransparentBackground then
+        gPrefs.ClearColor.A := 0
+     else
+         gPrefs.ClearColor.A := 255;
+  end;
   gPrefs.StartupWindowMode := WindowCombo.ItemIndex;
   vols.LoadFewVolumes  := gPrefs.LoadFewVolumes;
   if gPrefs.BitmapZoom < 1 then gPrefs.BitmapZoom := 1;
@@ -3648,7 +3701,9 @@ procedure TGLForm1.SaveNIfTIMenuClick(Sender: TObject);
 var
 niftiVol: TNIfTI;
 dlg : TSaveDialog;
+ext: string;
 begin
+
  if not vols.Layer(0,niftiVol) then exit;
  dlg := TSaveDialog.Create(self);
  dlg.Title := 'Save NIfTI volume';
@@ -3657,11 +3712,19 @@ begin
  if PosEx('.app', dlg.InitialDir) > 0  then
        dlg.InitialDir := HomeDir(false);
  {$ENDIF}
- dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
+ dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz|Blender Volume|*.bvox|OSPRay Volume|*.osp';
  dlg.DefaultExt := '*.nii';
  dlg.FilterIndex := 0;
- if dlg.Execute then
-    niftiVol.Save(dlg.FileName);
+ //niftiVol.SaveBVox('/Users/rorden/tmp/v.bvox'); exit;
+ if dlg.Execute then begin
+    ext := upcase(ExtractFileExt(dlg.FileName));
+    if (ext = '.OSP') then
+       niftiVol.SaveOsp(dlg.FileName)
+    else if (ext = '.BVOX') then
+       niftiVol.SaveBVox(dlg.FileName)
+    else
+        niftiVol.Save(dlg.FileName);
+ end;
  dlg.Free;
 
 end;
@@ -3952,7 +4015,7 @@ begin
   //ViewGPU1.Invalidate;
 end;
 
-function TGLForm1.AddBackground(Filename: string; isAddToRecent: boolean = true): boolean;
+function TGLForm1.AddBackground(Filename: string; isAddToRecent: boolean = true; isFromFormDrop: boolean = false): boolean;
 //close all open layers and add a new background layer
 var
    {$IFDEF MATT1}
@@ -3960,6 +4023,7 @@ var
    i: integer;
    {$ENDIF}
  fnm: string;
+ FileNames: array of String ;
 begin
   AnimateTimer.Enabled := false;
   DisplayAnimateMenu.Checked := false;
@@ -3973,8 +4037,14 @@ begin
   if (ext = '.MAT') then
      MatLoadForce(kMatForceT1);
   {$ENDIF}
-  if not AddLayer(fnm) then
+  if (not AddLayer(fnm)) then begin
+    if (isFromFormDrop) then exit(false);
+    setlength(Filenames, 1);
+    Filenames[0] := fnm;
+    FormDropFiles(nil, FileNames);
+    Filenames := nil;
     exit(false);
+  end;
   gPrefs.PrevBackgroundImage := fnm; //launch with last image, even if it is template/fsl image
   if (isAddToRecent) then AddOpenRecent(fnm);
   {$IFDEF MATT1}
@@ -4053,7 +4123,7 @@ begin
   //if (not isNifti(Filenames[0])) then begin
      fnm := dcm2Nifti(dcm2niiForm.getCustomDcm2niix, fnm);
      if fnm = '' then exit;
-     AddBackground(fnm, false);
+     AddBackground(fnm, false, true);
      if fnm <> Filenames[0] then
         deletefile(fnm);
      exit;
@@ -4064,7 +4134,7 @@ begin
   if (ssMeta in ss) or (ssCtrl in ss) then
      AddLayer(fnm)
   else
-      AddBackground(fnm);
+      AddBackground(fnm,true, true);
 end;
 
 procedure TGLForm1.OpenMenuClick(Sender: TObject);
@@ -4302,6 +4372,12 @@ procedure TGLForm1.LayerInvertColorMapMenuClick(Sender: TObject);
   //
 end;
 
+procedure TGLForm1.LayerWidgetChangeTimerTimer(Sender: TObject);
+begin
+  LayerWidgetChangeTimer.enabled := false;
+  LayerWidgetChange(Sender);
+end;
+
 procedure TGLForm1.LayerZeroIntensityInvisibleMenuClick(Sender: TObject);
  var
      i: integer;
@@ -4328,6 +4404,78 @@ begin
   Vol1.SetMatCap(MatCapDrop.Items[MatCapDrop.ItemIndex]);
   ViewGPU1.Invalidate;
  {$ENDIF}
+end;
+
+procedure TGLForm1.ReorientMenuClick(Sender: TObject);
+//{$DEFINE REORIENTDEBUG}
+//label
+//  245;
+var
+  //lImg: Bytep;
+  dlg : TSaveDialog;
+  niftiVol: TNIfTI;
+  //s: string;
+  //dx, dy, dz: single;
+  perm: TVec3i;
+  btn : array  [1..6] of string = ('red','green','blue','purple','orange','yellow');
+  //M, Mhdr: TMat4;
+  //i, dim1,dim2,dim3,
+  btnR,btnA,btnS: integer;
+  //lHdr: TNIFTIHdr;
+begin
+ (*perm.x := -1;
+ perm.y := 2;
+ perm.z := 3;
+ if not vols.Layer(0, niftiVol) then exit;
+
+ niftiVol.SaveRotated('x.nii', perm);
+ exit;  *)
+
+ Vol1.Slices.isOrientationTriangles := true;
+ if gPrefs.DisplayOrient <> kMosaicOrient then
+    MPRMenu.click;
+ btnR := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s RIGHT?',
+      mtInformation,[ 1,btn[1], 2,btn[2], 3,btn[3], 4,btn[4], 5,btn[5], 6,btn[6] ],'');
+ if (btnR <= 2) then
+    btnA := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s ANTERIOR?',
+         mtCustom,[ 3,btn[3], 4,btn[4], 5,btn[5], 6,btn[6] ],'')
+ else if (btnR <= 4) then
+    btnA := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s ANTERIOR?',
+         mtCustom,[ 1,btn[1], 2,btn[2], 5,btn[5], 6,btn[6] ],'')
+ else
+     btnA := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s ANTERIOR?',
+         mtCustom,[ 1,btn[1], 2,btn[2], 3,btn[3], 4,btn[4] ],'');
+ if (max(btnR,btnA) <= 4) then
+    btnS := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s SUPERIOR?',
+         mtCustom,[5,btn[5], 6,btn[6] ],'')
+ else if (min(btnR,btnA) >= 3) then
+    btnS := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s SUPERIOR?',
+         mtCustom,[1,btn[1], 2,btn[2] ],'')
+ else
+     btnS := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s SUPERIOR?',
+          mtCustom,[3,btn[3], 4,btn[4] ],'');
+ Vol1.Slices.isOrientationTriangles := false;
+ if (btnR=2) and (btnA=4) and (btnS=6) then begin
+    showmessage('Image already oriented');
+    exit;
+ end;
+ perm := pti( (btnR + 1) div 2, (btnA + 1) div 2,  (btnS + 1) div 2);
+ if odd(btnR) then perm.x := -perm.x;
+ if odd(btnA) then perm.y := -perm.y;
+ if odd(btnS) then perm.z := -perm.z;
+
+ //showmessage(format('%d %d %d', [perm.x, perm.y, perm.z]));
+ if not vols.Layer(0, niftiVol) then exit;
+ dlg := TSaveDialog.Create(self);
+ dlg.Title := 'Save NIfTI volume';
+ dlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+ dlg.FileName:= 'r'+extractfilename(gPrefs.PrevBackgroundImage);
+ dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
+ dlg.DefaultExt := '*.nii';
+ dlg.FilterIndex := 0;
+ if not dlg.Execute then exit;
+ niftiVol.SaveRotated(dlg.filename, perm);
+ dlg.Free;
 end;
 
 procedure UpdateMatCapDrop (var LUTdrop: TComboBox);
@@ -4583,6 +4731,8 @@ begin
       if not ColorDialog1.Execute then exit;
       gPrefs.ClearColor := SetRGBA(Red(ColorDialog1.Color), Green(ColorDialog1.Color), Blue(ColorDialog1.Color), 255);
   end;
+  if gPrefs.ScreenCaptureTransparentBackground then
+     gPrefs.ClearColor.A := 0;
   //if (gPrefs.ClearColor.R+gPrefs.ClearColor.G+gPrefs.ClearColor.B) > 128 then
   Vol1.SetTextContrast(gPrefs.ClearColor);
   //else
@@ -4706,7 +4856,11 @@ begin
  Result:=TBitmap.Create;
  Result.Width:= wOut;
  Result.Height:= hOut;
- Result.PixelFormat := pf24bit; //if pf32bit the background color is wrong, e.g. when alpha = 0
+ if gPrefs.ScreenCaptureTransparentBackground then
+   Result.PixelFormat := pf32bit
+ else
+     Result.PixelFormat := pf24bit; //if pf32bit the background color is wrong, e.g. when alpha = 0
+ //Result.PixelFormat := pf24bit; //if pf32bit the background color is wrong, e.g. when alpha = 0
  //Result.PixelFormat := pf32bit;
  RawImage := Result.RawImage;
  BytePerPixel := RawImage.Description.BitsPerPixel div 8;
@@ -6042,6 +6196,7 @@ begin
     ZCoordEdit.Text := '0';
     SetXHairPosition(0,0,0 );
   end;
+  SetToolPanelMaxWidth();
 
 end;
 
@@ -6083,10 +6238,10 @@ begin
   if not vols.Layer(0,niftiVol) then exit;
   {$IFDEF METALAPI}
  if not isPrepared then ViewGPUPrepare(Sender);
- MTLSetClearColor(MTLClearColorMake(gPrefs.ClearColor.r/255, gPrefs.ClearColor.g/255, gPrefs.ClearColor.b/255, 1));
+ MTLSetClearColor(MTLClearColorMake(gPrefs.ClearColor.r/255, gPrefs.ClearColor.g/255, gPrefs.ClearColor.b/255, gPrefs.ClearColor.A/255));
  {$ELSE}
  ViewGPU1.MakeCurrent(false);
- glClearColor(gPrefs.ClearColor.R/255, gPrefs.ClearColor.G/255, gPrefs.ClearColor.B/255, 1.0);
+ glClearColor(gPrefs.ClearColor.R/255, gPrefs.ClearColor.G/255, gPrefs.ClearColor.B/255, gPrefs.ClearColor.A/255);
  {$ENDIF}
   if gPrefs.DisplayOrient = kMosaicOrient then
        Vol1.PaintMosaic2D(niftiVol, vols.Drawing, gPrefs.MosaicStr)

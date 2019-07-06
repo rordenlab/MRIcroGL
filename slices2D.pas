@@ -61,6 +61,8 @@ type
     procedure DrawAx(L,B, W,H, ZFrac: single);
     procedure DrawCor(L,B, W,H, YFrac: single);
     procedure DrawSag(L,B, W,H, XFrac: single);
+    procedure DrawTri(V1, V2, V3: TVec2; clr : TVec4);
+    procedure DrawArrow(L,B,W,H: single; orient: integer);
     procedure DrawSagMirror(L,B, W,H, XFrac: single);
     procedure DrawLine(startX,startY,endX,endY: single);
     procedure DrawLineLBWH(left,bottom,width,height: single);
@@ -70,6 +72,7 @@ type
     procedure TextLabelLeft(X,Y: single; Caption: string);
     procedure TextLabelTop(X,Y: single; Caption: string);
   public
+    isOrientationTriangles: boolean;
     procedure DrawOutLine(L,T,R,B: single);
     property ZoomScale: single read fZoomScale write fZoomScale;
     property ZoomCenter: TVec3 read fZoomCenter write fZoomCenter;
@@ -293,6 +296,7 @@ begin
   txt := sdffont;
   fontScale := 1;
   fZoomScale := 1;
+  isOrientationTriangles := false;
   fZoomCenter := Vec3(0.5, 0.5, 0.5);// ? ? Z
   //zoom.sliceFrac2D := Vec3(0.5, 0.5, 0.5);
   isLabelOrient := true;
@@ -393,6 +397,20 @@ begin
   end;
 end;
 
+procedure TSlices2D.DrawTri(v1, v2, v3: TVec2; clr : TVec4);
+begin
+  newLines := true;
+  if (numLineVerts+3) > length(lineVerts) then
+     setlength(lineVerts, length(lineVerts)+kBlockSz);
+  lineVerts[numLineVerts +0].textureCoord := clr;
+  lineVerts[numLineVerts +1].textureCoord := clr;
+  lineVerts[numLineVerts +2].textureCoord := clr;
+  lineVerts[numLineVerts+0].position := v1;
+  lineVerts[numLineVerts+1].position := v2;
+  lineVerts[numLineVerts+2].position := v3;
+  numLineVerts := numLineVerts + 3;
+end;
+
 procedure TSlices2D.DrawRender(L,B, W,H, Slice: single; Orient: integer);
 begin
   if (length(mosRenders) < (numMosRender + 1)) then
@@ -434,6 +452,62 @@ begin
      if (rng = 0) then exit(-1.0);
      result := (val - lo)/rng;
 end;
+
+procedure SwapClr(var a,b: TVec4);
+var
+  c: TVec4;
+begin
+  c := a;
+  a := b;
+  b := c;
+end;
+
+procedure TSlices2D.DrawArrow(L,B,W,H: single; orient: integer);
+const
+  kFrac = 0.07;
+var
+  T,R: single;
+  x,y, midX, midY: single;
+  Tclr, Lclr, Rclr, Bclr : TVec4;
+begin
+  T := B + H;
+  R := L + W;
+  midX := L + W/2;
+  midY := B + H/2;
+
+  x := (W * kFrac);
+  y := (H * kFrac);
+  if orient = kAxialOrient then begin
+     Tclr := Vec4(1.0, 0.0, 1.0, 1.0); //anterior = purplse
+     Bclr := Vec4(0.0, 0.0, 1.0, 1.0); //posterior=blue
+  end else begin
+      Tclr := Vec4(1.0, 1.0, 0.0, 1.0); //superior = yellow
+      Bclr := Vec4(1.0, 0.65, 0.0, 1.0); //inferiro = orange
+
+
+
+  end;
+  if (orient = kAxialOrient) or (orient = kCoronalOrient) then begin
+     Lclr := Vec4(1.0, 0.0, 0.0, 1.0);  //left=red
+     Rclr := Vec4(0.0, 1.0, 0.0, 1.0);  //right=green
+     if isRadiological then
+        SwapClr(Lclr, Rclr); //<- don't think we do this: attempting to determine if displayed correctly
+  end else begin
+    Lclr := Vec4(1.0, 0.0, 1.0, 1.0); //anterior = purple
+    Rclr := Vec4(0.0, 0.0, 1.0, 1.0); //posterior = blue
+    if orient = kSagRightOrient then
+       SwapClr(Lclr, Rclr);
+  end;
+  //top arrow
+  DrawTri(Vec2(midX, T), Vec2(midX-x,T-y), Vec2(midX+X, T-y),   Tclr);
+  //bottom arrow
+  DrawTri(Vec2(midX, B), Vec2(midX-x,B+y), Vec2(midX+X, B+y),   Bclr);
+  //left arrow
+  DrawTri(Vec2(L, midY), Vec2(L+x,midY+y), Vec2(L+X, midY-y),   Lclr);
+  //right arrow
+  DrawTri(Vec2(R, midY), Vec2(R-x,midY+y), Vec2(R-X, midY-y),   Rclr);
+end;
+
 procedure TSlices2D.AddQuad(L,B, W,H, tZ: single; orient: integer; m: TMat4);
 var
   mZoom:TMat4;
@@ -488,6 +562,8 @@ begin
   sliceVerts[numSliceVerts+4] := sliceVerts[numSliceVerts+2];
   sliceVerts[numSliceVerts+5] := sliceVerts[numSliceVerts+1];
   numSliceVerts := numSliceVerts + 6;
+  if isOrientationTriangles then
+      DrawArrow(L,B,W,H, orient);
   if lineWid <= 0 then exit;
   if (orient <> kSagRightOrient) and (orient <> kSagLeftOrient) then
    x := LerpZero(tLB.x, tRB.x, sliceFrac2D.x) //for axial and coronal images screen X is texture X
@@ -499,7 +575,8 @@ begin
       y := LerpZero(tLB.y, tLT.y, sliceFrac2D.y); //for axial scans, screen y is texture y
   //if (x < 0) or (x > 1) or (y < 0) or (y > 1) then exit;
   DrawCrossX(L,B,W,H,x, y);
-end;   //radio
+end; //AddQuad()
+
 
 (*procedure TSlices2D.AddQuad(L,B, W,H, tZ: single; orient: integer; m: TMat4);
 var

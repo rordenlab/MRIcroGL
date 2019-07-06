@@ -1373,7 +1373,6 @@ begin
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   end;
-
   glUniform1i(uniform_overlay, 2);
   //draw texture
   glActiveTexture(GL_TEXTURE3);

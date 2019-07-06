@@ -1,7 +1,7 @@
 object GLForm1: TGLForm1
   Left = 519
   Height = 653
-  Top = 22
+  Top = 51
   Width = 761
   AllowDropFiles = True
   Caption = 'MRIcroGL'
@@ -54,6 +54,8 @@ object GLForm1: TGLForm1
         ClientWidth = 245
         Constraints.MinWidth = 10
         ParentFont = False
+        ParentShowHint = False
+        ShowHint = True
         TabOrder = 0
         object LayerList: TCheckListBox
           Left = 0
@@ -375,6 +377,7 @@ object GLForm1: TGLForm1
           TickStyle = tsNone
           BorderSpacing.Left = 4
           BorderSpacing.Top = 2
+          Constraints.MaxWidth = 80
           ParentFont = False
           ParentShowHint = False
           ShowHint = True
@@ -999,7 +1002,7 @@ object GLForm1: TGLForm1
           Left = 2
           Height = 21
           Top = 74
-          Width = 80
+          Width = 76
           BorderSpacing.Left = 2
           BorderSpacing.Top = 2
           OnChange = CoordEditChange
@@ -1026,10 +1029,10 @@ object GLForm1: TGLForm1
           AnchorSideLeft.Side = asrBottom
           AnchorSideTop.Control = XCoordEdit
           AnchorSideTop.Side = asrCenter
-          Left = 84
+          Left = 80
           Height = 21
           Top = 74
-          Width = 80
+          Width = 76
           BorderSpacing.Left = 2
           OnChange = CoordEditChange
           ParentFont = False
@@ -1041,10 +1044,10 @@ object GLForm1: TGLForm1
           AnchorSideLeft.Side = asrBottom
           AnchorSideTop.Control = XCoordEdit
           AnchorSideTop.Side = asrCenter
-          Left = 166
+          Left = 158
           Height = 21
           Top = 74
-          Width = 80
+          Width = 76
           BorderSpacing.Left = 2
           OnChange = CoordEditChange
           ParentFont = False
@@ -1156,12 +1159,13 @@ object GLForm1: TGLForm1
           Left = 13
           Height = 25
           Top = 2
-          Width = 80
+          Width = 76
           Max = 1000
           Position = 1000
           TickStyle = tsNone
           BorderSpacing.Left = 2
           BorderSpacing.Top = 2
+          Constraints.MaxWidth = 76
           OnMouseUp = CutoutMouseUp
           ParentFont = False
           TabOrder = 0
@@ -1171,14 +1175,15 @@ object GLForm1: TGLForm1
           AnchorSideLeft.Side = asrBottom
           AnchorSideTop.Control = XTrackBar
           AnchorSideTop.Side = asrCenter
-          Left = 95
+          Left = 91
           Height = 25
           Top = 2
-          Width = 80
+          Width = 76
           Max = 1000
           Position = 1000
           TickStyle = tsNone
           BorderSpacing.Left = 2
+          Constraints.MaxWidth = 76
           OnMouseUp = CutoutMouseUp
           ParentFont = False
           TabOrder = 1
@@ -1203,11 +1208,12 @@ object GLForm1: TGLForm1
           Left = 13
           Height = 25
           Top = 29
-          Width = 80
+          Width = 76
           Max = 1000
           Position = 1000
           TickStyle = tsNone
           BorderSpacing.Top = 2
+          Constraints.MaxWidth = 76
           OnMouseUp = CutoutMouseUp
           ParentFont = False
           TabOrder = 2
@@ -1217,14 +1223,15 @@ object GLForm1: TGLForm1
           AnchorSideLeft.Side = asrBottom
           AnchorSideTop.Control = YTrackBar
           AnchorSideTop.Side = asrCenter
-          Left = 95
+          Left = 91
           Height = 25
           Top = 29
-          Width = 80
+          Width = 76
           Max = 1000
           Position = 1000
           TickStyle = tsNone
           BorderSpacing.Left = 2
+          Constraints.MaxWidth = 76
           OnMouseUp = CutoutMouseUp
           ParentFont = False
           TabOrder = 3
@@ -1249,11 +1256,12 @@ object GLForm1: TGLForm1
           Left = 13
           Height = 25
           Top = 56
-          Width = 80
+          Width = 76
           Max = 1000
           Position = 1000
           TickStyle = tsNone
           BorderSpacing.Top = 2
+          Constraints.MaxWidth = 76
           OnMouseUp = CutoutMouseUp
           ParentFont = False
           TabOrder = 4
@@ -1263,14 +1271,15 @@ object GLForm1: TGLForm1
           AnchorSideLeft.Side = asrBottom
           AnchorSideTop.Control = ZTrackBar
           AnchorSideTop.Side = asrCenter
-          Left = 95
+          Left = 91
           Height = 25
           Top = 56
-          Width = 80
+          Width = 76
           Max = 1000
           Position = 1000
           TickStyle = tsNone
           BorderSpacing.Left = 2
+          Constraints.MaxWidth = 76
           OnMouseUp = CutoutMouseUp
           ParentFont = False
           TabOrder = 5
@@ -1279,10 +1288,10 @@ object GLForm1: TGLForm1
           AnchorSideLeft.Control = X2TrackBar
           AnchorSideLeft.Side = asrBottom
           AnchorSideTop.Control = CutoutBox
-          Left = 177
+          Left = 169
           Height = 25
           Top = 4
-          Width = 72
+          Width = 68
           BorderSpacing.Left = 2
           BorderSpacing.Top = 4
           Caption = 'Near'
@@ -1295,10 +1304,10 @@ object GLForm1: TGLForm1
           AnchorSideLeft.Side = asrBottom
           AnchorSideTop.Control = CutNearBtn
           AnchorSideTop.Side = asrBottom
-          Left = 177
+          Left = 169
           Height = 25
           Top = 33
-          Width = 72
+          Width = 68
           BorderSpacing.Left = 2
           BorderSpacing.Top = 4
           Caption = 'None'
@@ -1696,6 +1705,11 @@ object GLForm1: TGLForm1
       object ImportTIFFMenu: TMenuItem
         Caption = 'Convert TIFF to NIfTI'
         OnClick = ImportTIFFMenuClick
+      end
+      object ReorientMenu: TMenuItem
+        Caption = 'Rotate Volume'
+        Hint = 'Reorient image to standard space'#10
+        OnClick = ReorientMenuClick
       end
     end
     object DrawMenu: TMenuItem
@@ -2407,5 +2421,12 @@ object GLForm1: TGLForm1
     OnTimer = AnimateTimerTimer
     left = 369
     top = 210
+  end
+  object LayerWidgetChangeTimer: TTimer
+    Enabled = False
+    Interval = 100
+    OnTimer = LayerWidgetChangeTimerTimer
+    left = 351
+    top = 94
   end
 end

@@ -309,16 +309,30 @@ begin
          fNumLayers := fNumLayers + 1;
 end;
 
+
+
 function TNIfTIs.AddCorrelLayer(vox: TVec3i; backColor: TRGBA; isZ: boolean): boolean;
 var
   rs: TFloat32s;
   hdr: TNIFTIhdr;
   //i,n: integer;
-  prefix,s: string;
+  posStr, prefix,s: string;
 begin
+
+
      result := false;
      if (fNumLayers > kMaxOverlay) or (fNumLayers < 1) then exit;
-     rs := niis[0].SeedCorrelationMap(vox, isZ);
+     if Drawing.IsOpen then begin
+        posStr := '_roi';
+
+        rs := niis[0].SeedCorrelationMap(Drawing.VolRawBytes, isZ);
+     end else begin
+
+         posStr := inttostr(vox.x)+'x'+inttostr(vox.y)+'x'+inttostr(vox.z);
+         rs := niis[0].SeedCorrelationMap(vox, isZ);
+     end;
+
+
      if length(rs) < 1 then exit;
      //n := length(rs);
      //for i := 0 to (n-1) do
@@ -334,7 +348,7 @@ begin
      s := '';
      if (niis[0].VolumesLoaded < niis[0].Header.dim[4]) then
         s := format('%dof%d_',[niis[0].VolumesLoaded, niis[0].header.dim[4]]);
-     niis[fNumLayers] := TNIfTI.Create(prefix+inttostr(vox.x)+'x'+inttostr(vox.y)+'x'+inttostr(vox.z)+'_'+s+niis[0].shortname, backColor, niis[0].Mat, niis[0].Dim, fInterpolateOverlays, hdr, rs);
+     niis[fNumLayers] := TNIfTI.Create(prefix+PosStr+'_'+s+niis[0].shortname, backColor, niis[0].Mat, niis[0].Dim, fInterpolateOverlays, hdr, rs);
      //!TOBO niis[fNumLayers].SetDisplayColorScheme('8RedYell', 8);
      fNumLayers := fNumLayers + 1;
      setlength(rs,1);

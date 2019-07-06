@@ -116,6 +116,7 @@ Type
         function AsFloats(): TFloat32s;
         function NotZero(): TInt16s; //volume where voxels non-zero voxels are set to 1, voxels with intensity zero set to 0
         function NeedsUpdate(): boolean;
+        procedure SaveRotated(fnm: string; perm: TVec3i);
         procedure SaveAsSourceOrient(NiftiOutName: string; rawVolBytes: TUInt8s);  overload;
         procedure SaveAsSourceOrient(NiftiOutName, HdrDescrip, IntentName: string; rawVolBytes: TUInt8s; dataType: integer; intentCode: integer = 0; mn: single = 0; mx: single = 0);
         function FracToSlice(Frac: TVec3): TVec3i; //given volume fraction return zero-indexed slice
@@ -128,7 +129,10 @@ Type
         function VoxIntensity(vox: integer): single; overload; //return intensity of voxel at coordinate
         function VoxIntensity(vox: TVec3i): single; overload; //return intensity of voxel at coordinate
         function VoxIntensityArray(vox: TVec3i): TFloat32s;
-        function SeedCorrelationMap(vox: TVec3i; isZ: boolean): TFloat32s;
+        function SeedCorrelationMap(vox: TVec3i; isZ: boolean): TFloat32s; overload;
+        function SeedCorrelationMap(roi: TUInt8s; isZ: boolean): TFloat32s; overload;
+        function SeedCorrelationMap(vSeed: TFloat32s; isZ: boolean): TFloat32s; overload;
+
         property OpacityPercent: integer read fOpacityPct write fOpacityPct; //0=transparent, 50=translucent, 100=opaque
         property Histogram: TLUT read fhistogram;
         property VolumeMin: single read fMin; //darkest voxel in volume
@@ -154,6 +158,8 @@ Type
         procedure RemoveHaze(isSmoothEdges: boolean = true);
         procedure GPULoadDone();
         function Save(niftiFileName: string): boolean;
+        function SaveBVox(bVoxFileName: string): boolean;
+        function SaveOsp(OspFileName: string): boolean;
         function Load(niftiFileName: string): boolean; overload;
         function Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s): boolean; overload;
         function Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; volumeNumber: integer = 0; isKeepContrast: boolean = false): boolean; overload;
@@ -607,8 +613,175 @@ begin
   exit(r);
 end;
 {$ENDIF} //FASTCORREL2
+function TNIfTI.SeedCorrelationMap(vSeed: TFloat32s; isZ: boolean): TFloat32s; overload;
+//https://www.johndcook.com/blog/2008/11/05/how-to-calculate-pearson-correlation-accurately/
+var
+  //vx1,
+  vx, nVx, vol, nVol, volBytes: integer;
+  vol8: TUInt8s;
+  vol16: TInt16s;
+  v, vol32: TFloat32s;
+  r: double;
+  {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
+begin
+ setlength(result, 0);
+ if IsLabels then exit;
+ if volumesLoaded < 2 then exit;
+ if fHdr.bitpix = 24 then exit;
+ {$IFDEF TIMER}startTime := now;{$ENDIF}
+ nVx := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3];
+ volBytes := nVx * (fHdr.bitpix shr 3);
+ nVol := length(fRawVolBytes) div volBytes;
+ if nVol <> fVolumesLoaded then exit;
+ if length(vSeed) <> nVol then exit;
+ if (correl(vSeed) = 0.0) then exit; //no variance in seed
+ vol8 := fRawVolBytes;
+ vol16 := TInt16s(vol8);
+ vol32 := TFloat32s(vol8);
+ setlength(v, nVol);
+ setlength(result, nVx);
+ //compute correlation for each voxel
+ for vx := 0 to (nVx - 1) do begin
+    if fHdr.datatype = kDT_UINT8 then begin
+       for vol := 0 to (nVol - 1) do
+           v[vol] := vol8[vx + (vol * nVx)];
+    end else if fHdr.datatype = kDT_INT16 then begin
+      for vol := 0 to (nVol - 1) do
+          v[vol] := vol16[vx + (vol * nVx)];
+    end else if fHdr.datatype = kDT_FLOAT then begin
+      for vol := 0 to (nVol - 1) do
+          v[vol] := vol32[vx + (vol * nVx)];
+    end;
+    {$IFDEF FASTCORREL2} //FastCorrel2 about 10% faster
+    result[vx] := CorrelR(vSeed, v);
+    {$ELSE}
+    if (correl(v) = 0.0) then begin //no variance at this voxel
+       result[vx] := 0;
+       continue;
+    end;
+    r := 0.0;
+    for vol := 0 to (nVol - 1) do
+        r := r + (v[vol] * vSeed[vol]);
+    r := r / (nVol - 1);
+    result[vx] := r;
+    {$ENDIF}
+ end;
+ if isZ then begin
+    //https://www.statisticshowto.datasciencecentral.com/fisher-z/
+    //z’ = .5[ln(1+r) – ln(1-r)]
+    for vx := 0 to (nVx - 1) do begin
+        r := result[vx];
+        if (r >= 1.0) or (r <= -1.0) then
+           result[vx] := 10.0
+        else
+            result[vx] := 0.5 * ln((1+r)/(1-r));
+            //result[vx] := arctanh(r);
+            //result[vx] := 0.5 * (ln(1+r) - ln(1-r));
+            //Matlab check: these generate same values
+            // atanh(r)
+            // 0.5 * (log(1+r)-log(1-r))
+            // log((1+r)/(1-r))*0.5
+        //result[vx] := 0.5*(ln(1+r) – ln(1-r));
+    end;
+ end;
+ setlength(v, 0);
+ {$IFDEF TIMER}printf(format('Correl time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+end;
 
-function TNIfTI.SeedCorrelationMap(vox: TVec3i; isZ: boolean): TFloat32s;
+//VolRawBytes: TUInt8s
+function TNIfTI.SeedCorrelationMap(roi: TUInt8s; isZ: boolean): TFloat32s; overload;
+//https://www.johndcook.com/blog/2008/11/05/how-to-calculate-pearson-correlation-accurately/
+var
+  nROI, vx, nVx, vol, nVol, volBytes: integer;
+  vol8: TUInt8s;
+  vol16: TInt16s;
+  vSeed, vol32: TFloat32s;
+begin
+ result := nil;
+ if IsLabels then exit;
+ if volumesLoaded < 2 then exit;
+ if fHdr.bitpix = 24 then exit;
+ nVx := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3];
+ volBytes := nVx * (fHdr.bitpix shr 3);
+ nVol := length(fRawVolBytes) div volBytes;
+ if nVol <> fVolumesLoaded then exit;
+ if nVx <> length(roi) then exit;
+ nROI := 0;
+ for vx := 0 to (nVx-1) do
+     if roi[vx] <> 0 then nROI := nROI + 1;
+ if (nROI < 1) then exit; //no images in mask
+ setlength(vSeed, nVol);
+ vol8 := fRawVolBytes;
+ vol16 := TInt16s(vol8);
+ vol32 := TFloat32s(vol8);
+ //load values for seed
+ for vol := 0 to (nVol - 1) do
+     vSeed[vol] := 0;
+ if fHdr.datatype = kDT_UINT8 then begin
+    for vol := 0 to (nVol - 1) do begin
+        for vx := 0 to (nVx-1) do
+            if roi[vx] <> 0 then
+               vSeed[vol] := vSeed[vol]  + vol8[vx + (vol * nVx)];
+    end;
+ end else if fHdr.datatype = kDT_INT16 then begin
+   for vol := 0 to (nVol - 1) do begin
+       for vx := 0 to (nVx-1) do
+            if roi[vx] <> 0 then
+               vSeed[vol] := vSeed[vol]  + vol16[vx + (vol * nVx)];
+   end;
+ end else if fHdr.datatype = kDT_FLOAT then begin
+   for vol := 0 to (nVol - 1) do begin
+       for vx := 0 to (nVx-1) do
+            if roi[vx] <> 0 then
+               vSeed[vol] := vSeed[vol]  + vol32[vx + (vol * nVx)];
+   end;
+ end;
+ for vol := 0 to (nVol - 1) do
+     vSeed[vol] := vSeed[vol] / nROI;
+
+ result := SeedCorrelationMap(vSeed, isZ);
+end;
+
+
+function TNIfTI.SeedCorrelationMap(vox: TVec3i; isZ: boolean): TFloat32s; overload;
+//https://www.johndcook.com/blog/2008/11/05/how-to-calculate-pearson-correlation-accurately/
+var
+  //vx1,
+  vx, nVx, vol, nVol, volBytes: integer;
+  vol8: TUInt8s;
+  vol16: TInt16s;
+  vSeed, vol32: TFloat32s;
+begin
+ result := nil;
+ if IsLabels then exit;
+ if volumesLoaded < 2 then exit;
+ if fHdr.bitpix = 24 then exit;
+ nVx := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3];
+ volBytes := nVx * (fHdr.bitpix shr 3);
+ nVol := length(fRawVolBytes) div volBytes;
+ if nVol <> fVolumesLoaded then exit;
+ vx := vox.x + (vox.y * dim.x) + (vox.z * (dim.x * dim.y));
+ if (vx < 0) or (vx >= nVx) then exit;
+ setlength(vSeed, nVol);
+ vol8 := fRawVolBytes;
+ vol16 := TInt16s(vol8);
+ vol32 := TFloat32s(vol8);
+ //load values for seed
+ if fHdr.datatype = kDT_UINT8 then begin
+    for vol := 0 to (nVol - 1) do
+        vSeed[vol] := vol8[vx + (vol * nVx)];
+ end else if fHdr.datatype = kDT_INT16 then begin
+   for vol := 0 to (nVol - 1) do
+       vSeed[vol] := vol16[vx + (vol * nVx)];
+ end else if fHdr.datatype = kDT_FLOAT then begin
+   for vol := 0 to (nVol - 1) do
+       vSeed[vol] := vol32[vx + (vol * nVx)];
+ end;
+ result := SeedCorrelationMap(vSeed, isZ);
+end;
+
+
+(*function TNIfTI.SeedCorrelationMap(vox: TVec3i; isZ: boolean): TFloat32s; overload;
 //https://www.johndcook.com/blog/2008/11/05/how-to-calculate-pearson-correlation-accurately/
 var
   //vx1,
@@ -648,8 +821,8 @@ begin
        v[vol] := vol32[vx + (vol * nVx)];
  end;
  if (correl(v) = 0.0) then begin //no variance in seed
-   setlength(v, nVol);
-   setlength(vSeed, nVol);
+   setlength(v, 0);
+   setlength(vSeed, 0);
    setlength(result, 0);
    exit;
  end;
@@ -705,7 +878,7 @@ begin
  setlength(v, 0);
  setlength(vSeed, 0);
  {$IFDEF TIMER}printf(format('Correl time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
-end;
+end;  *)
 {$ENDIF}
 
 function TNIfTI.VoxIntensityArray(vox: TVec3i): TFloat32s;
@@ -1107,7 +1280,7 @@ begin
 end;
 {$ENDIF} //CPU gradients
 
-function reorient(dim : TVec3i; R: TMat4; out residualR: TMat4; out perm : TVec3i): boolean;
+function EstimateReorient(dim : TVec3i; R: TMat4; out residualR: TMat4; out perm : TVec3i): boolean;
 //compute dimension permutations and flips to reorient volume to standard space
 //From Xiangrui Li's BSD 2-Clause Licensed code
 // https://github.com/xiangruili/dicm2nii/blob/master/nii_viewer.m
@@ -1181,6 +1354,19 @@ begin
   result[2,0] := hdr.srow_z[0]; result[2,1] := hdr.srow_z[1]; result[2,2] := hdr.srow_z[2]; result[2,3] := hdr.srow_z[3];
 end;
 
+procedure Mat2QForm(m: TMat4; var hdr: TNIFTIhdr);
+var
+  i,j: integer;
+  m44 :mat44;
+  dumdx, dumdy, dumdz: single;
+begin
+   for i := 0 to 3 do
+       for j := 0 to 3 do
+           m44[i,j] := m[i,j];
+   nifti_mat44_to_quatern( m44 , hdr.quatern_b, hdr.quatern_c, hdr.quatern_d,hdr.qoffset_x,hdr.qoffset_y,hdr.qoffset_z, dumdx, dumdy, dumdz,hdr.pixdim[0]) ;
+   hdr.qform_code := hdr.sform_code;
+end;
+
 procedure Mat2SForm(m: TMat4; var hdr: TNIFTIhdr);
 begin
  hdr.srow_x[0] := m[0,0]; hdr.srow_x[1] := m[0,1]; hdr.srow_x[2] := m[0,2]; hdr.srow_x[3] := m[0,3];
@@ -1229,6 +1415,7 @@ begin
  fScale.y := inScale.v[perm.y-1];
  fScale.z := inScale.v[perm.z-1];
  Mat2SForm(outR, fHdr);
+ Mat2QForm(outR, fHdr);
  //setup lookup tables
  setlength(xOffset, fDim.x);
  if flp.x = 1 then begin
@@ -1310,6 +1497,14 @@ begin
  fHdr.dim[1] := fDim.X;
  fHdr.dim[2] := fDim.Y;
  fHdr.dim[3] := fDim.Z;
+ //shuffle pixdim
+ inScale[0] := fHdr.pixdim[1];
+ inScale[1] := fHdr.pixdim[2];
+ inScale[2] := fHdr.pixdim[3];
+ fHdr.pixdim[1] := inScale.v[perm.x-1];
+ fHdr.pixdim[2] := inScale.v[perm.y-1];
+ fHdr.pixdim[3] := inScale.v[perm.z-1];
+ //showmessage(format('%g %g %g', [fHdr.qoffset_x, fHdr.qoffset_y, fHdr.qoffset_z]));
 end;
 
 function ChangeFileExtX(fnm, ext: string): string; //treat ".nii.gz" as single extension
@@ -1319,6 +1514,179 @@ begin
       result := changefileext(result,'');
  result := result + ext;
 end;
+
+(*function EstimateResidual(dim : TVec3i; inR: TMat4; perm : TVec3i): TMat4;
+//compute dimension permutations and flips to reorient volume to standard space
+//From Xiangrui Li's BSD 2-Clause Licensed code
+// https://github.com/xiangruili/dicm2nii/blob/master/nii_viewer.m
+var
+  rotM: TMat4;
+  flp : TVec3i;
+begin
+  //sort columns  R(:,1:3) = R(:,perm);
+  if perm.x < 0 then flp.x := 1 else flp.x := 0;
+  if perm.y < 0 then flp.y := 1 else flp.y := 0;
+  if perm.z < 0 then flp.z := 1 else flp.z := 0;
+  if (perm.x = 1) and (perm.y = 2) and (perm.z = 3) and (flp.x = 0) and (flp.y = 0) and (flp.z = 0) then exit(inR);//already oriented correctly
+  rotM := TMat4.Identity;
+  rotM[0,0] := 1-flp.x*2;
+  rotM[1,1] := 1-flp.y*2;
+  rotM[2,2] := 1-flp.z*2;
+  rotM[0,3] := ((dim.v[abs(perm.x)-1])-1) * flp.x;
+  rotM[1,3] := ((dim.v[abs(perm.y)-1])-1) * flp.y;
+  rotM[2,3] := ((dim.v[abs(perm.z)-1])-1) * flp.z;
+  result := rotM.Inverse;
+  result *= inR;
+end; *)
+
+
+function mStr(prefix: string; m: TMat4): string;
+begin
+    result := format('%s = [%g %g %g %g; %g %g %g %g; %g %g %g %g; %g %g %g %g]; ', [prefix,
+      m[0,0], m[0,1],m[0,2],m[0,3],
+      m[1,0], m[1,1],m[1,2],m[1,3],
+      m[2,0], m[2,1],m[2,2],m[2,3],
+      m[3,0], m[3,1],m[3,2],m[3,3]]);
+end; //
+
+//rM = M*spm_get_space(fnm);
+function EstimateResidual(dim : TVec3i; inR: TMat4; perm : TVec3i): TMat4;
+//compute dimension permutations and flips to reorient volume to standard space
+//From Xiangrui Li's BSD 2-Clause Licensed code
+// https://github.com/xiangruili/dicm2nii/blob/master/nii_viewer.m
+var
+  M: TMat4;
+begin
+  if (perm.x = 1) and (perm.y = 2) and (perm.z = 3) then exit(inR);//already oriented correctly
+  M := TMat4.Diag(0.0, 0.0, 0.0);// zero3D;
+  if perm.x < 0 then
+      M[0,abs(perm.x)-1] := -1
+  else
+       M[0,abs(perm.x)-1] := 1;
+   if perm.y < 0 then
+      M[1,abs(perm.y)-1] := -1
+   else
+       M[1,abs(perm.y)-1] := 1;
+   if perm.z < 0 then
+      M[2,abs(perm.z)-1] := -1
+   else
+       M[2,abs(perm.z)-1] := 1;
+  result := inR * M;
+  //Clipboard.AsText := mStr('in', inR)+chr(10)+mStr('M', M)+chr(10)+mStr('result', result);
+end;
+
+procedure TNIfTI.SaveRotated(fnm: string; perm: TVec3i);
+//perm[1,2,3) means unchanged, perm[-1,2,3] flips X
+var
+  oHdr  : TNIFTIhdr;
+  oMat: TMat4;
+  mStream : TMemoryStream;
+  zStream: TGZFileStream;
+  NiftiOutName, lExt: string;
+  oPad32: Uint32; //nifti header is 348 bytes padded with 4
+begin
+ oHdr := fHdr;
+ oMat := EstimateResidual(fDim, fMat, perm);
+ Mat2SForm(oMat, oHdr);
+ Mat2QForm(oMat, oHdr);
+ mStream := TMemoryStream.Create;
+ oHdr.vox_offset :=  sizeof(oHdr) + 4;
+ oHdr.dim[4] := fVolumesLoaded;
+ mStream.Write(oHdr,sizeof(oHdr));
+ oPad32 := 4;
+ mStream.Write(oPad32, 4);
+ mStream.Write(fRawVolBytes[0], length(fRawVolBytes));
+ mStream.Position := 0;
+ FileMode := fmOpenWrite;   //FileMode := fmOpenRead;
+ NiftiOutName := fnm;
+ lExt := uppercase(extractfileext(NiftiOutName));
+ if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
+    if (lExt = '.GZ') then
+       NiftiOutName := ChangeFileExtX(NiftiOutName,'.nii.gz'); //img.gz -> img.nii.gz
+    zStream := TGZFileStream.Create(NiftiOutName, gzopenwrite);
+    zStream.CopyFrom(mStream, mStream.Size);
+    zStream.Free;
+ end else begin
+     if (lExt <> '.NII') then
+        NiftiOutName := NiftiOutName + '.nii';
+     mStream.SaveToFile(NiftiOutName); //save uncompressed
+ end;
+ mStream.Free;
+ FileMode := fmOpenRead;
+end;
+
+(*procedure TNIfTI.SaveRotated(fnm: string; perm: TVec3i);
+//perm[1,2,3) means unchanged, perm[-1,2,3] flips X
+var
+  oHdr  : TNIFTIhdr;
+  orawVolBytes: TUInt8s;
+  oMat: TMat4;
+  oDim: TVec3i;
+  oScale : TVec3;
+  mStream : TMemoryStream;
+  zStream: TGZFileStream;
+  NiftiOutName, lExt: string;
+  oPad32: Uint32; //nifti header is 348 bytes padded with 4
+begin
+
+ //
+ oHdr := fHdr;
+ oDim := fDim;
+ oScale := fScale;
+ EstimateResidual(fDim, fMat, oMat, perm);
+ //Clipboard.AsText := mStr('in', fMat);
+ Clipboard.AsText := mStr('in', fMat)+chr(10)+mStr('rot', oMat);
+ exit;
+ setlength(orawVolBytes, length(fRawVolBytes));
+     orawVolBytes := copy(fRawVolBytes, low(fRawVolBytes), high(fRawVolBytes));
+
+     //fScale : TVec3
+     (*
+     M := TMat4.Diag(0.0, 0.0, 0.0);// zero3D;
+      if perm.x < 0 then
+         M[0,abs(perm.x)-1] := -1
+      else
+          M[0,abs(perm.x)-1] := 1;
+      if perm.y < 0 then
+         M[1,abs(perm.y)-1] := -1
+      else
+          M[1,abs(perm.y)-1] := 1;
+      if perm.z < 0 then
+         M[2,abs(perm.z)-1] := -1
+      else
+          M[2,abs(perm.z)-1] := 1;
+      oMat := (M * fMat); *)
+
+
+     ApplyVolumeReorient(perm, oMat, oDim, oScale, oHdr, orawVolBytes);
+     showmessage(format('%d %d %d: %d %d %d -> %d %d %d', [perm.x, perm.y, perm.z, fDim.x, fDim.y, fDim.z, oDim.x, oDim.y, oDim.z]));
+     //exit;
+     //ApplyVolumeReorient(perm, fMatInOrient, oDim, oScale, oHdr, orawVolBytes);
+     //save
+     mStream := TMemoryStream.Create;
+     oHdr.vox_offset :=  sizeof(oHdr) + 4;
+     mStream.Write(oHdr,sizeof(oHdr));
+     oPad32 := 4;
+     mStream.Write(oPad32, 4);
+     mStream.Write(orawVolBytes[0], length(fRawVolBytes));
+     mStream.Position := 0;
+     FileMode := fmOpenWrite;   //FileMode := fmOpenRead;
+     NiftiOutName := fnm;
+     lExt := uppercase(extractfileext(NiftiOutName));
+     if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
+        if (lExt = '.GZ') then
+           NiftiOutName := ChangeFileExtX(NiftiOutName,'.nii.gz'); //img.gz -> img.nii.gz
+        zStream := TGZFileStream.Create(NiftiOutName, gzopenwrite);
+        zStream.CopyFrom(mStream, mStream.Size);
+        zStream.Free;
+     end else begin
+         if (lExt <> '.NII') then
+            NiftiOutName := NiftiOutName + '.nii';
+         mStream.SaveToFile(NiftiOutName); //save uncompressed
+     end;
+     mStream.Free;
+     FileMode := fmOpenRead;
+end;   *)
 
 procedure TNIfTI.SaveAsSourceOrient(NiftiOutName, HdrDescrip, IntentName: string; rawVolBytes: TUInt8s; dataType: integer; intentCode: integer = 0; mn: single = 0; mx: single = 0);
 
@@ -1434,6 +1802,16 @@ begin
      oHdr.datatype := kDT_FLOAT;
  oDim := fDim;
  oScale := fScale;
+ oHdr.scl_slope := 1;
+ oHdr.scl_inter := 0;
+ oHdr.cal_min:= 0.0;
+ oHdr.cal_max:= 0.0;
+ oHdr.glmin:= 0;
+ oHdr.glmax:= 0;
+ oHdr.dim[0] := 3;
+ for i := 4 to 7 do
+     oHdr.dim[i] := 1;
+
  //output perm reverses input permute
  //fPermInOrient
  oPerm := pti(1,2,3);
@@ -1480,7 +1858,7 @@ var
 begin
      if fHdr.sform_code = kNIFTI_XFORM_UNKNOWN then exit;
      //R := SForm2Mat(fHdr);
-     if not reorient(fDim, fMatInOrient, outR, fPermInOrient)  then exit;
+     if not EstimateReorient(fDim, fMatInOrient, outR, fPermInOrient)  then exit;
      //ApplyVolumeReorient(fPerm, outR);
      //fPermInOrient.Z := abs(fPermInOrient.Z);
      //showmessage(format('%d %d %d ', [fPermInOrient.X, fPermInOrient.Y, fPermInOrient.Z]));
@@ -2247,6 +2625,94 @@ end;
 
 {$ENDIF}
 
+function TNIfTI.SaveOsp(OspFileName: string): boolean;
+var
+  nByte: integer;
+  Stream : TFileStream;
+  fnm : string;
+  txt : TextFile;
+begin
+ fnm := changefileext(OspFileName,'.osp');
+ if fileexists(fnm) then begin
+    showmessage('Already a file named '+fnm);
+    exit;
+ end;
+ AssignFile (txt,fnm);
+ fnm := changefileext(OspFileName,'.raw');
+ Rewrite(txt);
+ Writeln(txt, '<?xml version="1.0"?>');
+ Writeln(txt, '<!-- OSPRay format file -->');
+ Writeln(txt, '<volume name="volume">');
+ Writeln(txt, format('  <dimensions> %d %d %d </dimensions>',[fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]]));
+ nByte := fHdr.dim[1] * fHdr.dim[2] * fHdr.dim[3];
+ if fHdr.datatype = kDT_UINT8 then begin
+    Writeln(txt, '  <voxelType> uchar </voxelType>');
+ end else if fHdr.datatype = kDT_INT16 then begin
+   Writeln(txt, '  <voxelType> short </voxelType>');
+   nByte := nByte * 2;
+ end else if fHdr.datatype = kDT_FLOAT then begin
+     Writeln(txt, '  <voxelType> float </voxelType>');
+     nByte := nByte * 4;
+ end;
+ Writeln(txt, '  <samplingRate> 1.0 </samplingRate> ');
+ Writeln(txt, format('  <filename> %s </filename> ',[extractfilename(fnm)]));
+ Writeln(txt, '</volume> ');
+ CloseFile(txt);
+ Stream:= TFileStream.Create(fnm, fmCreate);
+ Try
+    Stream.WriteBuffer(fRawVolBytes[0], nByte);
+ Finally
+  Stream.Free;
+ End;
+ result := true;
+end;
+
+
+function TNIfTI.SaveBVox(bVoxFileName: string): boolean;
+var
+  nX,nY,nZ,nVol: uint32;
+  i, nVox: integer;
+  vol16 : TInt16s;
+  vol32, v: TFloat32s;
+  Stream : TFileStream;
+  rawMin, rawMax, rawRange: single;
+begin
+ nX := fHdr.dim[1];
+ nY := fHdr.dim[2];
+ nZ := fHdr.dim[3];
+ nVol := 1;
+ nVox := nX * nY * nZ * nVol;
+ setlength(v, nVox);
+ vol16 := TInt16s(fRawVolBytes);
+ vol32 := TFloat32s(fRawVolBytes);
+ rawMin := (fMin - fHdr.scl_inter)/fHdr.scl_slope;
+ rawMax := (fMax - fHdr.scl_inter)/fHdr.scl_slope;
+ rawRange := abs(rawMax-rawMin);
+ if fHdr.datatype = kDT_UINT8 then begin
+    for i := 0 to (nVox-1) do
+        v[i] := (fRawVolBytes[i]-rawMin) / rawRange;
+ end else if fHdr.datatype = kDT_INT16 then begin
+     for i := 0 to (nVox-1) do
+         v[i] := (vol16[i]-rawMin) / rawRange;
+ end else if fHdr.datatype = kDT_FLOAT then begin
+   for i := 0 to (nVox-1) do
+       v[i] := (vol32[i]-rawMin) / rawRange;
+ end;
+ Stream:= TFileStream.Create(bVoxFileName, fmCreate);
+ Try
+    Stream.WriteBuffer(nX, SizeOf(nX));
+    Stream.WriteBuffer(nY, SizeOf(nX));
+    Stream.WriteBuffer(nZ, SizeOf(nX));
+    Stream.WriteBuffer(nVol, SizeOf(nX));
+    Stream.WriteBuffer(v[0], length(fRawVolBytes)* sizeof(single));
+
+ Finally
+  Stream.Free;
+ End;
+ v := nil;
+ result := true;
+end;
+
 function TNIfTI.Save(niftiFileName: string): boolean;
 var
    Stream : TFileStream;
@@ -2255,6 +2721,7 @@ var
    lExt: string;
 begin
  result := false;
+
  if fileexists(niftiFileName) then begin
     Showmessage('Unable to overwrite existing file "'+niftiFileName+'".');
     exit;
@@ -2272,6 +2739,9 @@ begin
  end;
  if (lExt <> '.NII') then niftiFileName := niftiFileName + '.nii';
  hdr := fHdr;
+ //showmessage(format('%g %g %g', [fHdr.qoffset_x, fHdr.qoffset_y, fHdr.qoffset_z]));
+ //hdr.qform_code:= kNIFTI_XFORM_SCANNER_ANAT;
+ //exit;
  hdr.HdrSz:= SizeOf (TNIFTIHdr);
  hdr.vox_offset:= 352;
  Stream:= TFileStream.Create(niftiFileName, fmCreate);
@@ -2329,9 +2799,9 @@ begin
   Quat2Mat(fHdr);
   //read the image data
   if extractfileext(Filename) = '.hdr' then begin
-    changefileext(FileName,'.img');
+    imgName := changefileext(FileName,'.img');
     if not FileExists(imgName) then begin
-      showmessage('Unable to find '+imgName);
+      showmessage('Unable to NIfTI image named "'+imgName+'"');
       exit;
     end;
     FSz := FSize(imgName);
@@ -3868,14 +4338,7 @@ begin
      result[2,3] := l;
 end;  //matrix3D()
 
-function mStr(prefix: string; m: TMat4): string;
-begin
-    result := format('%s = [%g %g %g %g; %g %g %g %g; %g %g %g %g; %g %g %g %g]; ', [prefix,
-      m[0,0], m[0,1],m[0,2],m[0,3],
-      m[1,0], m[1,1],m[1,2],m[1,3],
-      m[2,0], m[2,1],m[2,2],m[2,3],
-      m[3,0], m[3,1],m[3,2],m[3,3]]);
-end; //
+
 
 function Voxel2Voxel (lDestMat, lSrcMat: TMat4): TMat4;
 //returns matrix for transforming voxels from one image to the other image

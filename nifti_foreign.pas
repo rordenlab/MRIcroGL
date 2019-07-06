@@ -29,6 +29,7 @@ procedure NII_SetIdentityMatrix (var lHdr: TNIFTIHdr); //create neutral rotation
 {$ELSE}
 Type
     	ByteRA = array [1..1] of byte;
+        mat44 = array [0..3, 0..3] of Single;
 	Bytep = ^ByteRA;
 procedure UnGZip(const FileName: string; buffer: bytep; offset, sz: integer);
 {$ENDIF}
@@ -36,13 +37,15 @@ function readForeignHeader (var lFilename: string; var lHdr: TNIFTIhdr; var gzBy
 procedure convertForeignToNifti(var nhdr: TNIFTIhdr);
 function FSize (lFName: String): Int64;
 function isTIFF(fnm: string): boolean;
+procedure nifti_mat44_to_quatern( lR :mat44; var qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac : single);
+
 implementation
 
 const
     kNaNSingle : single = 1/0;
 Type
 
-  mat44 = array [0..3, 0..3] of Single;
+
   vect4 = array [0..3] of Single;
   mat33 = array [0..2, 0..2] of Single;
   vect3 = array [0..2] of Single;
@@ -555,10 +558,7 @@ begin
    result := Z ;
 end;
 
-procedure nifti_mat44_to_quatern( lR :mat44;
-                             var qb, qc, qd,
-                             qx, qy, qz,
-                             dx, dy, dz, qfac : single);
+procedure nifti_mat44_to_quatern( lR :mat44; var qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac : single);
 var
    r11,r12,r13 , r21,r22,r23 , r31,r32,r33, xd,yd,zd , a,b,c,d : double;
    P,Q: mat33;  //3x3
@@ -926,7 +926,7 @@ begin
     pswap4i(bhdr.nvol);
     nVoxSwap := bhdr.nx * bhdr.ny * bhdr.nz * bhdr.nvol * 4; //*4 as 32-bpp
     if (nVoxSwap + sizeof(Tbv_header) ) <> FSz then begin
-       NSLog('Not a valid BVox file: expected filesize of '+inttostr(nVoxSwap)+' or '+inttostr(nVox)+' bytes');
+       NSLog(format('Not a valid BVox file: expected filesize of %d or %d bytes (%dx%dx%dx%d)',[nVoxSwap,nVox, bhdr.nx, bhdr.ny, bhdr.nz, bhdr.nvol]));
        exit;
     end;
 

@@ -142,7 +142,7 @@ begin
 end;
 {$ENDIF}
 
-function dcmSeriesSelectForm(dcm2niixExe, dicomDir: string): string;
+(*function dcmSeriesSelectForm(dcm2niixExe, dicomDir: string): string;
 const
   kMaxItems = 16;
 var
@@ -220,7 +220,89 @@ begin
   FreeAndNil(PrefForm);
  123: //cleanup
   dcmStrings.Free;
-end; // PrefMenuClick()
+end; // PrefMenuClick()  *)
+
+function dcmSeriesSelectForm(dcm2niixExe, dicomDir: string): string;
+const
+  kMaxItems = 16;  //https://bugs.freepascal.org/view.php?id=35789
+var
+  PrefForm: TForm;
+  rg: TRadioGroup;
+  dcmStrings: TStringlist;
+  OKBtn, CancelBtn: TButton;
+  w,h: integer;
+label
+  123;
+begin
+  result := '';
+  dcmStrings := dcmList(dcm2niixExe, dicomDir);
+  if dcmStrings.Count < 1 then goto 123; //no files
+  if dcmStrings.Count = 1 then begin
+    result := dcmStrings[0];//seriesNum(dcmStrings[0]);
+    goto 123;
+  end;
+  PrefForm:=TForm.Create(nil);
+  PrefForm.BorderWidth := 4;
+  PrefForm.Caption:='Save converted images to '+HomeDir;
+  PrefForm.Position := poScreenCenter;
+  PrefForm.BorderStyle := bsDialog;
+  PrefForm.AutoSize:=false;
+  //PrefForm.Constraints.MinWidth := 400;
+  //radio group
+  rg := TRadioGroup.create(PrefForm);
+  rg.align := alTop;
+  //rg.AutoSize:=false;
+  rg.parent := PrefForm;
+  rg.caption := 'Select DICOM Series';
+  if dcmStrings.Count > (kMaxItems) then begin
+     rg.caption := rg.caption + ' (Partial Listing)';
+     while (dcmStrings.Count > kMaxItems) do
+           dcmStrings.Delete(dcmStrings.Count-1);
+  end;
+  rg.items := dcmStrings;
+  //rg.Constraints.MaxWidth:= 300; //https://bugs.freepascal.org/view.php?id=35789
+  rg.BorderSpacing.Around := 8;
+  rg.AutoSize := true;
+  rg.HandleNeeded;
+  rg.GetPreferredSize(w, h);
+  rg.Align := alTop;
+  rg.Height := h;
+  rg.ItemIndex:=0;
+  //OK button
+  OkBtn:=TButton.create(PrefForm);
+  OkBtn.Caption:='OK';
+  OkBtn.AutoSize := true;
+  OkBtn.AnchorSideTop.Control := rg;
+  OkBtn.AnchorSideTop.Side := asrBottom;
+  OkBtn.AnchorSideRight.Control := PrefForm;
+  OkBtn.AnchorSideRight.Side := asrBottom;
+  OkBtn.BorderSpacing.Right := 4;
+  OkBtn.Anchors := [akTop, akRight];
+  OkBtn.Parent:=PrefForm;
+  OkBtn.ModalResult:= mrOK;
+  //Cancel button
+  CancelBtn:=TButton.create(PrefForm);
+  CancelBtn.Caption:='Cancel';
+  CancelBtn.AutoSize := true;
+  CancelBtn.AnchorSideTop.Control := OkBtn;
+  CancelBtn.AnchorSideTop.Side := asrCenter;
+  CancelBtn.AnchorSideRight.Control := OkBtn;
+  CancelBtn.BorderSpacing.Right := 4;
+  CancelBtn.Anchors := [akTop, akRight];
+  CancelBtn.Parent:=PrefForm;
+  CancelBtn.ModalResult:= mrCancel;
+  //PrefForm.Height:= OkBtn.Top + OkBtn.Height+4;
+  PrefForm.AutoSize:=true;
+  {$IFDEF LCLCocoa}GLForm1.SetFormDarkMode(PrefForm); {$ENDIF}
+  PrefForm.ShowModal;
+  result := rg.Items[rg.ItemIndex];
+  if PrefForm.ModalResult = mrCancel then
+    result :=  '';
+  FreeAndNil(PrefForm);
+ 123: //cleanup
+  dcmStrings.Free;
+end; // dcmSeriesSelectForm()
+
 
 function findNiiFile(baseName: string): string;
 //if baseName '~/d/img.nii' does not exist but '~/d/img_e1.nii' does

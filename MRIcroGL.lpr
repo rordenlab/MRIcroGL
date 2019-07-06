@@ -20,7 +20,7 @@ begin
   Application.CreateForm(TTimedDialogForm, TimedDialogForm);
   Application.CreateForm(TAutoROIForm, AutoROIForm);
   Application.CreateForm(THdrForm, HdrForm);
-  ConstrainTrackBars();
+  //ConstrainTrackBars();
   Application.Run;
   //Windows: if you get an error "Can't find object file" you can copy the 'static' folder from
   //  https://github.com/synopse/mORMot

@@ -10,7 +10,7 @@ type
   TMRU =  array [1..knMRU] of string;
   TPrefs = record
          AnimationIntervalMsec, LineWidth, StartupWindowMode,DisplayOrient, StartupDisplayOrient, ColorbarSize,ColorbarPosition, Quality1to10, BitmapZoom, MaxVox: integer;
-         LandmarkPanel, LoadFewVolumes, LabelOrient, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay, FlipYZ, FlipLR_Radiological, SkipPrefWriting: boolean;
+         ScreenCaptureTransparentBackground, LandmarkPanel, LoadFewVolumes, LabelOrient, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay, FlipYZ, FlipLR_Radiological, SkipPrefWriting: boolean;
          CustomDcm2niix, PyLib, MosaicStr, InitScript, PrevBackgroundImage: string;
          ClearColor: TRGBA;
          PrevFilename: TMRU;
@@ -71,6 +71,7 @@ begin
             LabelOrient := true;
             LoadFewVolumes := true;
             LandmarkPanel := false;
+            ScreenCaptureTransparentBackground := false;
             BitmapZoom := 2;
             FlipLR_Radiological := true;
             ColorbarSize := 50;
@@ -79,9 +80,7 @@ begin
        end;
   end;
   with lPrefs do begin
-    //clear
-      ColorbarVisible := true;
-
+    ColorbarVisible := true;
     ClearColor := setRGBA( 0, 0, 0, 255);
     //ClearColor := setRGBA( 255, 255, 255, 255);
     ColorBarPosition := 3;
@@ -89,6 +88,8 @@ begin
     FlipYZ := false;
     Quality1to10 := 5;
     MosaicStr := 'H 0.2 S 0.5 0.3 A 0.5; S 0.2 C 0.3 A 0.4';
+    if ScreenCaptureTransparentBackground then
+       ClearColor.A := 0;
   end;//with lPrefs
 end; //Proc SetDefaultPrefs
 

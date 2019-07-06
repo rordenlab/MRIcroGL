@@ -644,6 +644,7 @@ var
 begin
   isModified := true;
   isModifiedSinceSave := false;
+  dim3d[0] := 3;
   dim3d[1] := X;
   dim3d[2] := Y;
   dim3d[3] := Z;
