@@ -2,7 +2,6 @@ unit umat;
 
 //{$mode objfpc}{$H+}
 {$mode delphi}{$H+}
-
 interface
 
 uses

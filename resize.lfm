@@ -1,0 +1,288 @@
+object ResizeForm: TResizeForm
+  AnchorSideTop.Side = asrBottom
+  Left = 522
+  Height = 264
+  Top = 281
+  Width = 511
+  AutoSize = True
+  BorderWidth = 4
+  Caption = 'Resize Volume'
+  ClientHeight = 264
+  ClientWidth = 511
+  OnShow = FormShow
+  Position = poScreenCenter
+  LCLVersion = '2.1.0.0'
+  object InLabel: TLabel
+    AnchorSideLeft.Control = Owner
+    AnchorSideTop.Control = Owner
+    Left = 10
+    Height = 16
+    Top = 10
+    Width = 480
+    BorderSpacing.Left = 6
+    BorderSpacing.Top = 6
+    Caption = 'InLabel'
+    Constraints.MinWidth = 480
+    ParentColor = False
+  end
+  object OutLabel: TLabel
+    AnchorSideLeft.Control = InLabel
+    AnchorSideTop.Control = InLabel
+    AnchorSideTop.Side = asrBottom
+    Left = 10
+    Height = 16
+    Top = 30
+    Width = 480
+    BorderSpacing.Top = 4
+    Caption = 'OutLabel'
+    Constraints.MinWidth = 480
+    ParentColor = False
+  end
+  object XLabel: TLabel
+    AnchorSideLeft.Control = InLabel
+    AnchorSideTop.Control = XEdit
+    AnchorSideTop.Side = asrCenter
+    Left = 10
+    Height = 16
+    Top = 72
+    Width = 104
+    Caption = 'X-Scale Columns'
+    Constraints.MinWidth = 80
+    ParentColor = False
+  end
+  object YLabel: TLabel
+    AnchorSideLeft.Control = InLabel
+    AnchorSideTop.Control = YEdit
+    AnchorSideTop.Side = asrCenter
+    Left = 10
+    Height = 16
+    Top = 97
+    Width = 82
+    Caption = 'Y-Scale Rows'
+    Constraints.MinWidth = 80
+    ParentColor = False
+  end
+  object ZLabel: TLabel
+    AnchorSideLeft.Control = InLabel
+    AnchorSideTop.Control = ZEdit
+    AnchorSideTop.Side = asrCenter
+    Left = 10
+    Height = 16
+    Top = 122
+    Width = 87
+    Caption = 'Z-Scale Slices'
+    Constraints.MinWidth = 80
+    ParentColor = False
+  end
+  object YEdit: TEdit
+    AnchorSideLeft.Control = XLabel
+    AnchorSideLeft.Side = asrBottom
+    AnchorSideTop.Control = XEdit
+    AnchorSideTop.Side = asrBottom
+    Left = 120
+    Height = 21
+    Top = 95
+    Width = 128
+    BorderSpacing.Left = 6
+    BorderSpacing.Top = 4
+    Constraints.MinWidth = 128
+    OnChange = EditChange
+    TabOrder = 1
+    Text = '1'
+  end
+  object ZEdit: TEdit
+    AnchorSideLeft.Control = XLabel
+    AnchorSideLeft.Side = asrBottom
+    AnchorSideTop.Control = YEdit
+    AnchorSideTop.Side = asrBottom
+    Left = 120
+    Height = 21
+    Top = 120
+    Width = 128
+    BorderSpacing.Left = 6
+    BorderSpacing.Top = 4
+    Constraints.MinWidth = 128
+    OnChange = EditChange
+    TabOrder = 2
+    Text = '1'
+  end
+  object OKBtn: TButton
+    AnchorSideTop.Control = AllVolumesCheck
+    AnchorSideTop.Side = asrBottom
+    AnchorSideRight.Control = Owner
+    AnchorSideRight.Side = asrBottom
+    Left = 421
+    Height = 25
+    Top = 215
+    Width = 80
+    Anchors = [akTop, akRight]
+    BorderSpacing.Top = 4
+    BorderSpacing.Right = 6
+    Caption = 'OK'
+    Constraints.MinWidth = 80
+    ModalResult = 1
+    TabOrder = 7
+  end
+  object CancelBtn: TButton
+    AnchorSideTop.Control = OKBtn
+    AnchorSideTop.Side = asrCenter
+    AnchorSideRight.Control = OKBtn
+    Left = 335
+    Height = 25
+    Top = 215
+    Width = 80
+    Anchors = [akTop, akRight]
+    BorderSpacing.Top = 4
+    BorderSpacing.Right = 6
+    Caption = 'Cancel'
+    Constraints.MinWidth = 80
+    ModalResult = 2
+    TabOrder = 6
+  end
+  object IsotropicBtn: TButton
+    AnchorSideTop.Control = OKBtn
+    AnchorSideTop.Side = asrCenter
+    AnchorSideRight.Control = CancelBtn
+    Left = 200
+    Height = 20
+    Top = 217
+    Width = 111
+    Anchors = [akTop, akRight]
+    AutoSize = True
+    BorderSpacing.Top = 4
+    BorderSpacing.Right = 24
+    Caption = 'Isotropic Grow'
+    Constraints.MinWidth = 80
+    OnClick = IsotropicBtnClick
+    TabOrder = 4
+  end
+  object IsotropicShrinkBtn: TButton
+    AnchorSideTop.Control = OKBtn
+    AnchorSideTop.Side = asrCenter
+    AnchorSideRight.Control = IsotropicBtn
+    Left = 77
+    Height = 20
+    Top = 217
+    Width = 117
+    Anchors = [akTop, akRight]
+    AutoSize = True
+    BorderSpacing.Top = 4
+    BorderSpacing.Right = 6
+    Caption = 'Isotropic Shrink'
+    Constraints.MinWidth = 80
+    OnClick = IsotropicShrinkBtnClick
+    TabOrder = 5
+  end
+  object FilterDrop: TComboBox
+    AnchorSideLeft.Control = XEdit
+    AnchorSideTop.Control = ZEdit
+    AnchorSideTop.Side = asrBottom
+    Left = 120
+    Height = 20
+    Top = 145
+    Width = 238
+    BorderSpacing.Top = 4
+    ItemHeight = 26
+    ItemIndex = 6
+    Items.Strings = (
+      'Nearest Neighbor (Box)'
+      'Linear (Tent)'
+      'Hermite'
+      'Bell'
+      'Spline'
+      'Lanczos'
+      'Mitchell'
+    )
+    Style = csDropDownList
+    TabOrder = 3
+    Text = 'Mitchell'
+  end
+  object DataTypeDrop: TComboBox
+    AnchorSideLeft.Control = FilterDrop
+    AnchorSideTop.Control = FilterDrop
+    AnchorSideTop.Side = asrBottom
+    Left = 120
+    Height = 20
+    Top = 169
+    Width = 238
+    BorderSpacing.Top = 4
+    ItemHeight = 26
+    ItemIndex = 0
+    Items.Strings = (
+      'Unsigned char: 8-bit integer'
+      'Signed  short: 16-bit integer'
+      'Single: 32-bit float'
+    )
+    OnChange = EditChange
+    Style = csDropDownList
+    TabOrder = 8
+    Text = 'Unsigned char: 8-bit integer'
+  end
+  object InterpLabel: TLabel
+    AnchorSideLeft.Control = InLabel
+    AnchorSideTop.Control = FilterDrop
+    AnchorSideTop.Side = asrCenter
+    Left = 10
+    Height = 16
+    Top = 147
+    Width = 80
+    Caption = 'Interpolation'
+    Constraints.MinWidth = 80
+    ParentColor = False
+  end
+  object DataTypeLabel: TLabel
+    AnchorSideLeft.Control = InLabel
+    AnchorSideTop.Control = DataTypeDrop
+    AnchorSideTop.Side = asrCenter
+    Left = 10
+    Height = 16
+    Top = 171
+    Width = 80
+    Caption = 'Data Type'
+    Constraints.MinWidth = 80
+    ParentColor = False
+  end
+  object ChangeLabel: TLabel
+    AnchorSideLeft.Control = InLabel
+    AnchorSideTop.Control = OutLabel
+    AnchorSideTop.Side = asrBottom
+    Left = 10
+    Height = 16
+    Top = 50
+    Width = 480
+    BorderSpacing.Top = 4
+    Caption = 'ChangeLabel'
+    Constraints.MinWidth = 480
+    ParentColor = False
+  end
+  object XEdit: TEdit
+    AnchorSideLeft.Control = XLabel
+    AnchorSideLeft.Side = asrBottom
+    AnchorSideTop.Control = ChangeLabel
+    AnchorSideTop.Side = asrBottom
+    Left = 120
+    Height = 21
+    Top = 70
+    Width = 128
+    BorderSpacing.Left = 6
+    BorderSpacing.Top = 4
+    Constraints.MinWidth = 128
+    OnChange = EditChange
+    TabOrder = 0
+    Text = '1'
+  end
+  object AllVolumesCheck: TCheckBox
+    AnchorSideLeft.Control = InLabel
+    AnchorSideTop.Control = DataTypeDrop
+    AnchorSideTop.Side = asrBottom
+    Left = 10
+    Height = 18
+    Top = 193
+    Width = 88
+    BorderSpacing.Top = 4
+    Caption = 'All Volumes'
+    Checked = True
+    State = cbChecked
+    TabOrder = 9
+  end
+end

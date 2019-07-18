@@ -38,7 +38,7 @@ end;
 
 procedure TTimedDialogForm.ShowTimedDialog(Title, Prompt: string; ShowInterval: integer; X: integer = -1; Y: integer = - 1);
 begin
-     if (X < 0) or (Y < 0) then
+     if (X < 20) or (Y < 20) then
         Self.Position := poScreenCenter
      else begin
        Self.Position := poDesigned;

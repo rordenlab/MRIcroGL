@@ -372,7 +372,7 @@ procedure TGPUVolume.CreateDrawTex(Dim: TVec3i; Vals: TUInt8s);
 var
  volRegion: MTLRegion;
  volTexDesc: MTLTextureDescriptor;
- i, vx: integer;
+ i, vx: int64;
  v: TUInt8s;
 begin
   volTexDesc := MTLTextureDescriptor.alloc.init.autorelease;

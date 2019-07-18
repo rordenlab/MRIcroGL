@@ -5,11 +5,12 @@ object TimedDialogForm: TTimedDialogForm
   Width = 320
   AutoSize = True
   BorderIcons = []
-  BorderStyle = bsSizeToolWin
+  BorderStyle = bsDialog
   BorderWidth = 8
   Caption = 'TimedDialogForm'
   ClientHeight = 240
   ClientWidth = 320
+  FormStyle = fsStayOnTop
   Position = poScreenCenter
   LCLVersion = '2.1.0.0'
   object PromptLabel: TLabel

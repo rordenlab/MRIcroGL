@@ -29,21 +29,18 @@
       <FormatVersion Value="2"/>
       <Modes Count="0"/>
     </RunParams>
-    <RequiredPackages Count="4">
+    <RequiredPackages Count="3">
       <Item1>
-        <PackageName Value="lazmetalcontrol"/>
+        <PackageName Value="python4lazarus_package"/>
       </Item1>
       <Item2>
-        <PackageName Value="python4lazarus_package"/>
+        <PackageName Value="LazOpenGLContext"/>
       </Item2>
       <Item3>
-        <PackageName Value="LazOpenGLContext"/>
-      </Item3>
-      <Item4>
         <PackageName Value="LCL"/>
-      </Item4>
+      </Item3>
     </RequiredPackages>
-    <Units Count="7">
+    <Units Count="10">
       <Unit0>
         <Filename Value="MRIcroGL.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -88,6 +85,24 @@
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="TimedDialog"/>
       </Unit6>
+      <Unit7>
+        <Filename Value="nifti_resize.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit7>
+      <Unit8>
+        <Filename Value="resize.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="ResizeForm"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+      </Unit8>
+      <Unit9>
+        <Filename Value="crop.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="CropForm"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+      </Unit9>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -97,7 +112,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="../Metal-Demos/common;$(LazarusDir)/components/multithreadprocs"/>
+      <OtherUnitFiles Value="../Metal-Demos/common"/>
       <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <CodeGeneration>

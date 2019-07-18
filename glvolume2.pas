@@ -281,7 +281,7 @@ end;
 procedure TGPUVolume.CreateDrawTex(Dim: TVec3i; Vals: TUInt8s);
 //portion of voiCreate that requires OpenGL context
 var
-   vx,i: integer;
+   vx,i: int64;
    v: TUInt8s;
 begin
   if (drawTexture3D <> 0) then glDeleteTextures(1,@drawTexture3D);
@@ -967,18 +967,30 @@ end;
 
 function TGPUVolume.LoadTexture(var vol: TNIfTI): boolean;
 var
- i: GLint;
+ width, height, depth: GLint;
  gradData: TRGBAs;
  //startTime : TDateTime;
 begin
- result := true;
+ result := false;
  glControl.MakeCurrent();
  if (Vol.VolRGBA = nil) then exit;
  if (intensityTexture3D <> 0) then glDeleteTextures(1,@intensityTexture3D);
  if (gradientTexture3D <> 0) then glDeleteTextures(1,@gradientTexture3D);
- //next: see if our video card can show this texture
+ //next: see if our video card can show this intensity texture
  glTexImage3D(GL_PROXY_TEXTURE_3D, 0, GL_RGBA, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE, NIL);
- glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, @i);
+ glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, @width);
+ glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, @height);
+ glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, @depth);
+ //https://www.opengl.org/archives/resources/faq/technical/texture.htm
+ {$IFDEF UNIX}printf(format('intensityTexture3D proxy test %dx%dx%d',[width, height, depth]));{$ENDIF}
+ if (width < 1) then begin
+    {$IFDEF UNIX}writeln(format('Unable to large intensity texture (%dx%dx%d). Solution: adjust "MaxVox" or press "Reset" button in preferences.', [Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z]));{$ENDIF}
+    glControl.ReleaseContext;
+    {$IFNDEF LCLCocoa}
+    showmessage('Image too large. Try adjusting "MaxVox" or press "Reset" button in preferences.');
+    {$ENDIF}
+    exit;
+ end;
  //next copy the image to the GPU
  glPixelStorei(GL_UNPACK_ALIGNMENT,1);
  glGenTextures(1, @intensityTexture3D);
@@ -1002,6 +1014,21 @@ begin
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
  //startTime := Now;
+ //next: see if our video card can show this gradient texture
+ glTexImage3D(GL_PROXY_TEXTURE_3D, 0, GL_RGBA, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE, NIL);
+ glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, @width);
+ glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, @height);
+ glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, @depth);
+ //https://www.opengl.org/archives/resources/faq/technical/texture.htm
+ {$IFDEF UNIX}printf(format('gradientTexture3D proxy test %dx%dx%d',[width, height, depth]));{$ENDIF}
+ if (width < 1) then begin
+    {$IFDEF UNIX}writeln(format('Unable to large gradient texture (%dx%dx%d). Solution: adjust "MaxVox" or press "Reset" button in preferences.', [Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z]));{$ENDIF}
+    glControl.ReleaseContext;
+    {$IFNDEF LCLCocoa}
+    showmessage('Image too large. Try adjusting "MaxVox" or press "Reset" button in preferences.');
+    {$ENDIF}
+    exit;
+ end;
  {$IFDEF GPUGRADIENTS}
  SetLength (gradData, Vol.Dim.X*Vol.Dim.Y*Vol.Dim.Z);
  glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@gradData[0]);
@@ -1017,6 +1044,7 @@ begin
  maxDim := max(Vol.Dim.X,max(Vol.Dim.Y,Vol.Dim.Z));
  Vol.GPULoadDone;
  if (overlayIntensityTexture3D = 0) then CreateOverlayTextures(Vol.Dim, nil); //load blank overlay
+ result := true;
 end;
 
 procedure addFuzz (var v: TVec4); //avoid shader divide by zero error

@@ -26,13 +26,14 @@ uses
   {$IFDEF MYPY}PythonEngine,  {$ENDIF}
   {$IFDEF LCLCocoa} {$IFDEF NewCocoa} nsappkitext, UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
-  lcltype, GraphType, Graphics, dcm_load, nifti_tiff,
+  resize,
+  lcltype, GraphType, Graphics, dcm_load, nifti_tiff, crop,
   LCLIntf, slices2D, StdCtrls, SimdUtils, Classes, SysUtils, Forms, Controls,clipbrd,
   Dialogs, Menus, ExtCtrls, CheckLst, ComCtrls, Spin, Types, fileutil, ulandmarks, nifti_types,
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20190606'; //+fixes Metal memory leak
+  kVers = '1.2.20190707'; //+fixes Metal memory leak
 type
 
   { TGLForm1 }
@@ -56,7 +57,11 @@ type
     DisplayCorrelationR: TMenuItem;
     DisplayCorrelationZ: TMenuItem;
     MatCapDrop: TComboBox;
-    ReorientMenu: TMenuItem;
+    CropMenu1: TMenuItem;
+    ResizeMenu1: TMenuItem;
+    ReorientMenu1: TMenuItem;
+    ToolsMenu: TMenuItem;
+    OpenAltasMenu: TMenuItem;
     TBSplitter: TSplitter;
     LayerWidgetChangeTimer: TTimer;
     TopPanel: TPanel;
@@ -295,8 +300,11 @@ type
     X2TrackBar: TTrackBar;
     YTrackBar: TTrackBar;
     ZTrackBar: TTrackBar;
+    procedure UpdateCropMask(msk: TVec6);
     procedure CreateOverlapImageMenuClick(Sender: TObject);
     procedure CreateSubtractionPlotMenuClick(Sender: TObject);
+    procedure ApplyCrop(crop: TVec6i; cropVols: TPoint);
+    procedure CropMenuClick(Sender: TObject);
     procedure DisplayCorrelationRClick(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure FormKeyPress(Sender: TObject; var Key: char);
@@ -329,11 +337,12 @@ type
     procedure AnatOpenBtnClick(Sender: TObject);
     procedure AnatUpdateBtnClick(Sender: TObject);
     procedure AnimateTimerTimer(Sender: TObject);
-    procedure CreateStandardMenus;
+    procedure CreateStandardMenus (ParentMenu: TMenuItem);
     procedure DisplayAnimateMenuClick(Sender: TObject);
     function DisplayNextMenuClick(Sender: TObject): boolean;
     procedure DrawHintsMenuClick(Sender: TObject);
     procedure EditCopyMenuClick(Sender: TObject);
+    procedure UpdateColorBar;
     procedure ExitFullScreenMenuClick(Sender: TObject);
     procedure FileExitMenuClick(Sender: TObject);
     procedure FormCloseQuery(Sender: TObject; var CanClose: boolean);
@@ -364,6 +373,7 @@ type
     procedure InterpolateDrawMenuClick(Sender: TObject);
     procedure LayerFromZeroMenuClick(Sender: TObject);
     procedure HelpPrefMenuClick(Sender: TObject);
+    procedure ResizeMenuClick(Sender: TObject);
     procedure SaveMosaicBmp(bmpName: string);
     procedure DrawSaveMenuClick(Sender: TObject);
     procedure Save2Bmp(fnm: string);
@@ -391,7 +401,6 @@ type
     procedure TextAndCubeMenuClick(Sender: TObject);
     procedure ViewGPUgPrepare(Sender: TObject);
     procedure ToolPanelDblClick(Sender: TObject);
-    procedure UpdateColorBar;
     procedure SaveColorTable;
     procedure ClrbarVisibleClick(Sender: TObject);
     procedure CoordEditChange(Sender: TObject);
@@ -552,6 +561,12 @@ begin
   niftiVol.CX.NeedsUpdate := true;
 end;
 
+procedure TGLForm1.UpdateCropMask(msk: TVec6);
+begin
+  Vol1.Slices.CropMask := msk;
+  ViewGPU1.Invalidate;
+end;
+
 procedure TGLForm1.ZoomBtnClick(Sender: TObject);
 begin
   Vol1.Slices.ZoomCenter := Vec3(0.5, 0.5, 0.5);
@@ -605,28 +620,6 @@ begin
      result.z := vol1.Slices.SliceFrac.Z
 end;
 
-procedure TGLForm1.UpdateColorbar();
-var
- i, n: integer;
- niftiVol: TNIfTI;
-begin
-  {$IFDEF CLRBAR}
-  n := vols.NumLayers;
-  if n < 1 then exit;
-  if n < 2 then begin //with single background image show color range for background
-    if not vols.Layer(0,niftiVol) then exit;
-    gClrbar.SetLUT(1, niftiVol.ColorTable, niftiVol.DisplayMin,niftiVol.DisplayMax, niftiVol.CX.FromZero);
-    gClrbar.Number := 1;
-  end else begin //when overlays are loaded, show color range of overlays
-      for i := 1 to (n-1) do begin
-          if not vols.Layer(i,niftiVol) then exit;
-          gClrbar.SetLUT(i, niftiVol.ColorTable, niftiVol.DisplayMin,niftiVol.DisplayMax, niftiVol.CX.FromZero);
-      end;
-      gClrbar.Number := n - 1;
-  end;
-  {$ENDIF}
-end;
-
 function AddNiiExt(Filename: string): string;
 //does adding ".nii" or ".nii.gz" identify an eexisting file?
 begin
@@ -659,6 +652,11 @@ end;
 function StandardDir (): string;
 begin
 	result := ResourceDir + pathdelim + 'standard';
+end;
+
+function AtlasDir (): string;
+begin
+	result := ResourceDir + pathdelim + 'atlas';
 end;
 
 function GetFullPath(Filename: string): string;
@@ -2050,18 +2048,26 @@ begin
  UpdateOpenRecent();
 end;
 
-procedure TGLForm1.CreateStandardMenus;
+procedure TGLForm1.CreateStandardMenus (ParentMenu: TMenuItem);
 var
   standardNamesGZ, standardNames : TStringList;
-  standardName, ext: string;
+  dir, standardName, ext: string;
   i: integer;
   newMenu: TMenuItem;
 begin
-   OpenStandardMenu.Enabled:= false;
-   if not DirectoryExists(StandardDir) then exit;//showmessage('Unable to find folder "'+StandardDir+'"');
-   standardNames := FindAllFiles(StandardDir, '*.nii', false);
+   //OpenStandardMenu.Enabled:= false;
+   if ParentMenu.tag = 1 then
+      dir := AtlasDir
+   else
+       dir := StandardDir;
+   if not DirectoryExists(dir) then begin
+     ParentMenu.Enabled := false;
+     dwriteln('Unable to find folder "'+dir+'"');
+     exit;//showmessage('Unable to find folder "'+dir+'"');
+   end;
+   standardNames := FindAllFiles(dir, '*.nii', false);
    try
-    standardNamesGZ := FindAllFiles(StandardDir, '*.nii.gz', false);
+    standardNamesGZ := FindAllFiles(dir, '*.nii.gz', false);
     try
       standardNames.AddStrings(standardNamesGZ);
     finally
@@ -2080,7 +2086,8 @@ begin
           newMenu := TMenuItem.Create(MainMenu);
           newMenu.Caption := standardName;
           newMenu.OnClick:= @OpenStandardMenuClick;
-          OpenStandardMenu.Add(newMenu);
+          newMenu.tag := ParentMenu.tag;
+          ParentMenu.Add(newMenu);
       end;
     end;
    finally
@@ -2372,7 +2379,6 @@ begin
     dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
     dlg.DefaultExt := '*.nii';
     dlg.FilterIndex := 0;
-
     pct32 := niiPos.AsFloats();
     neg32 := niiNeg.AsFloats();
     for i := 0 to (vox -1) do
@@ -2434,12 +2440,20 @@ end;
 procedure TGLForm1.OpenStandardMenuClick(Sender: TObject);
 var
   ss: TShiftState;
+  dir: string;
+  isOpenAsOverlay: boolean;
 begin
   ss := getKeyshiftstate;
-  if (ssMeta in ss) or (ssCtrl in ss) then
-     AddLayer(StandardDir +pathdelim +(sender as TMenuItem).caption)
+  isOpenAsOverlay := (ssMeta in ss) or (ssCtrl in ss);
+  if (Sender as TMenuItem).tag = 1 then begin
+     dir := AtlasDir;
+     isOpenAsOverlay := not isOpenAsOverlay; //default behavior is to open template as overlay
+  end else
+      dir := StandardDir;
+  if isOpenAsOverlay then
+     AddLayer(dir +pathdelim +(sender as TMenuItem).caption)
   else
-      AddBackground(StandardDir +pathdelim +(sender as TMenuItem).caption, false);
+      AddBackground(dir +pathdelim +(sender as TMenuItem).caption, false);
 end;
 
 procedure TGLForm1.OpenRecentMenuClick(Sender: TObject);
@@ -2613,23 +2627,27 @@ end;
 procedure TGLForm1.ImportTIFFMenuClick(Sender: TObject);
 var
   lF: integer;
-  openDialog : TOpenDialog;
+  dlg : TOpenDialog;
   fnm: string;
 begin
-  openDialog := TOpenDialog.Create(self);
-  openDialog.InitialDir := ExtractFileDir(gPrefs.PrevBackgroundImage);//GetCurrentDir;
-  openDialog.Options := [ofAllowMultiSelect,ofFileMustExist];
-  openDialog.filter := 'TIFF/LSM Images|*.*';
-  if not openDialog.Execute then begin
-     openDialog.Free;
+  dlg := TOpenDialog.Create(self);
+  dlg.InitialDir := ExtractFileDir(gPrefs.PrevBackgroundImage);//GetCurrentDir;
+  {$IFDEF Darwin}
+  if PosEx('.app', dlg.InitialDir) > 0  then
+        dlg.InitialDir := HomeDir(false);
+  {$ENDIF}
+  dlg.Options := [ofAllowMultiSelect,ofFileMustExist];
+  dlg.filter := 'TIFF/LSM Images|*.*';
+  if not dlg.Execute then begin
+     dlg.Free;
      exit;
   end;
-  if openDialog.Files.Count < 1 then
+  if dlg.Files.Count < 1 then
      exit;
   fnm := '';
-  for lF := 0 to (openDialog.Files.Count-1) do
-      fnm := SaveTIFFAsNifti(openDialog.Files[lF]);
-  openDialog.Free;
+  for lF := 0 to (dlg.Files.Count-1) do
+      fnm := SaveTIFFAsNifti(dlg.Files[lF]);
+  dlg.Free;
   if fnm <> '' then
      AddBackground(fnm)
   else
@@ -3067,6 +3085,7 @@ begin
      exit;
   end;
  if not vols.Layer(0,niftiVol) then exit;
+
  //if not niftiVol.IsLabels then exit;
   strs := niftiVol.VoiDescriptives(Vols.Drawing.VolRawBytes);
   Clipboard.AsText:= strs.Text;
@@ -3085,6 +3104,9 @@ begin
   Memo.Lines.AddStrings(strs);
   strs.Free;
   Memo.Parent:=PrefForm;
+  {$IFDEF LCLCocoa}
+  if gPrefs.DarkMode then GLForm1.SetFormDarkMode(PrefForm);
+  {$ENDIF}
   PrefForm.ShowModal;
   //Memo.Free;
   FreeAndNil(PrefForm);
@@ -3134,6 +3156,10 @@ begin
   dlg := TSaveDialog.Create(self);
   dlg.Title := 'Save drawing';
   dlg.InitialDir := ExtractFileDir(niftiVol.Filename);//GetUserDir;
+  {$IFDEF Darwin}
+ if PosEx('.app', dlg.InitialDir) > 0  then
+       dlg.InitialDir := HomeDir(false);
+ {$ENDIF}
   dlg.Filter := 'Volume of interest|*.voi|NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
   dlg.DefaultExt := '.voi';
   dlg.FilterIndex := 0;
@@ -3466,6 +3492,7 @@ begin
   bmpEdit.Anchors := [akTop, akLeft];
   bmpEdit.Parent:=PrefForm;
   //BitmapAlphaCheck
+  {$IFDEF UNIX}  //as of Lazarus 2.0.2 the Windows bitmaps want have issues
   BitmapAlphaCheck:=TCheckBox.create(PrefForm);
   BitmapAlphaCheck.Checked := gPrefs.ScreenCaptureTransparentBackground;
   BitmapAlphaCheck.Caption:='Background transparent in bitmaps';
@@ -3479,12 +3506,17 @@ begin
   BitmapAlphaCheck.AnchorSide[akLeft].Control := PrefForm;
   BitmapAlphaCheck.BorderSpacing.Left := 6;
   BitmapAlphaCheck.Parent:=PrefForm;
+  {$ENDIF}
   //  RadiologicalCheck
   RadiologicalCheck:=TCheckBox.create(PrefForm);
   RadiologicalCheck.Checked := gPrefs.FlipLR_Radiological;
   RadiologicalCheck.Caption:='Radiological convention (left on right)';
   RadiologicalCheck.AnchorSide[akTop].Side := asrBottom;
+  {$IFDEF UNIX}
   RadiologicalCheck.AnchorSide[akTop].Control := BitmapAlphaCheck;
+  {$ELSE}
+  RadiologicalCheck.AnchorSide[akTop].Control := bmpLabel;
+  {$ENDIF}
   RadiologicalCheck.BorderSpacing.Top := 6;
   RadiologicalCheck.AnchorSide[akLeft].Side := asrLeft;
   RadiologicalCheck.AnchorSide[akLeft].Control := PrefForm;
@@ -3853,6 +3885,29 @@ begin
   ToolPanel.Width := 4;
 end;
 
+procedure TGLForm1.UpdateColorbar;
+var
+ i, n: integer;
+ niftiVol: TNIfTI;
+begin
+  {$IFDEF CLRBAR}
+  n := vols.NumLayers;
+  if n < 1 then exit;
+  if n < 2 then begin //with single background image show color range for background
+    if not vols.Layer(0,niftiVol) then exit;
+    gClrbar.SetLUT(1, niftiVol.ColorTable, niftiVol.DisplayMin,niftiVol.DisplayMax, niftiVol.CX.FromZero);
+    gClrbar.Number := 1;
+  end else begin //when overlays are loaded, show color range of overlays
+      for i := 1 to (n-1) do begin
+          if not vols.Layer(i,niftiVol) then exit;
+          gClrbar.SetLUT(i, niftiVol.ColorTable, niftiVol.DisplayMin,niftiVol.DisplayMax, niftiVol.CX.FromZero);
+      end;
+      gClrbar.Number := n - 1;
+  end;
+  {$ENDIF}
+end;
+
+
 procedure TGLForm1.ReportPositionXYZ(isUpdateYoke: boolean = false);
 var
    str: string;
@@ -4027,6 +4082,7 @@ var
 begin
   AnimateTimer.Enabled := false;
   DisplayAnimateMenu.Checked := false;
+  if CropForm.visible then CropForm.close;
   fnm := Filename;
   fnm := GetFullPath(fnm);
   if not Fileexists(fnm) then exit(false);
@@ -4048,13 +4104,13 @@ begin
   gPrefs.PrevBackgroundImage := fnm; //launch with last image, even if it is template/fsl image
   if (isAddToRecent) then AddOpenRecent(fnm);
   {$IFDEF MATT1}
-  if (ext = '.MAT') then begin
+  (*if (ext = '.MAT') then begin
      MatLoadForce(kMatForcefMRI);
      AddLayer(fnm);
      i := GLForm1.LayerColorDrop.Items.IndexOf('actc'); //search is case-insensitive!
      if i > 0 then
         GLForm1.LayerChange(1, i, -1, kNaNsingle, kNaNsingle); //kNaNsingle
-  end;
+  end;  *)
   {$ENDIF}
   //if not YokeMenu.Checked then begin
   if true then begin
@@ -4350,6 +4406,7 @@ begin
  {$ENDIF}
 end;
 
+
 procedure TGLForm1.LayerInvertColorMapMenuClick(Sender: TObject);
  var
      i: integer;
@@ -4406,54 +4463,158 @@ begin
  {$ENDIF}
 end;
 
+procedure TGLForm1.ResizeMenuClick(Sender: TObject);
+var
+   dlg : TSaveDialog;
+   nii: TNIfTI;
+   hdr: TNIFTIhdr;
+   filter, datatype: integer;
+   scale: TVec3;
+   isAllVolumes: boolean;
+begin
+ if not vols.Layer(0, nii) then exit;
+ //showmessage(format('%d %d', [nii.Header.dim[4], nii.VolumesLoaded])); exit;
+ //nii.SaveRescaled('fx.nii', 0.5, 0.5, 0.5, kDT_FLOAT, 6); exit;
+ //nii.SaveRescaled('fx.nii', 0.75, 0.75, 0.75, kDT_FLOAT, 6); exit;
+ //nii.SaveRescaled('fx.nii', 0.5, 0.5, 0.5, kDT_SIGNED_SHORT, 6); exit;
+ //nii.SaveRescaled('ax.nii', 2.0, 2.0, 2.0, kDT_SIGNED_SHORT, 6); exit;
+ //nii.SaveRescaled('ax.nii', 0.5, 0.5, 0.5, kDT_UNSIGNED_CHAR, 0); exit;
+ hdr := nii.Header;
+ scale := ResizeForm.GetScale(hdr, nii.isLabels, nii.ShortName, datatype, filter, isAllVolumes);
+ if scale.x <= 0 then exit;
+ if (scale.x = 1) and (scale.y = 1) and (scale.z = 1) and (datatype = hdr.datatype) then begin
+    showmessage('No change to volume size. ' +inttostr(datatype));
+    exit;
+ end;
+ //ResizeForm.ShowModal;
+ //if not GetScale(nii.Dim, mm, scale) then exit;
+ dlg := TSaveDialog.Create(self);
+ dlg.Title := 'Save NIfTI volume';
+ dlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+ {$IFDEF Darwin}
+ if PosEx('.app', dlg.InitialDir) > 0  then
+       dlg.InitialDir := HomeDir(false);
+ {$ENDIF}
+ dlg.FileName:= 'r'+extractfilename(gPrefs.PrevBackgroundImage);
+ dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
+ dlg.DefaultExt := '*.nii';
+ dlg.FilterIndex := 0;
+ if not dlg.Execute then exit;
+ nii.SaveRescaled(dlg.filename, scale.x, scale.y, scale.z, datatype, filter, isAllVolumes);
+ dlg.Free;
+end;
+
+procedure TGLForm1.ApplyCrop(crop: TVec6i; cropVols: TPoint);
+var
+   dlg : TSaveDialog;
+   nii: TNIfTI;
+begin
+ if crop.xLo < 0 then exit;
+ if not vols.Layer(0, nii) then exit;
+ dlg := TSaveDialog.Create(self);
+ dlg.Title := 'Save NIfTI volume';
+ dlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+ {$IFDEF Darwin}
+ if PosEx('.app', dlg.InitialDir) > 0  then
+       dlg.InitialDir := HomeDir(false);
+ {$ENDIF}
+ dlg.FileName:= 'r'+extractfilename(gPrefs.PrevBackgroundImage);
+ dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
+ dlg.DefaultExt := '*.nii';
+ dlg.FilterIndex := 0;
+ if not dlg.Execute then exit;
+ nii.SaveCropped(dlg.filename, crop, cropVols);
+ dlg.Free;
+end;
+
+procedure TGLForm1.CropMenuClick(Sender: TObject);
+var
+   nii: TNIfTI;
+   //crop: TVec6i;
+   dim4: TVec4i;
+   //cropVols: TPoint;
+   //dlg : TSaveDialog;
+begin
+ if not vols.Layer(0, nii) then exit;
+ if gPrefs.DisplayOrient <> kAxCorSagOrient then
+    MPRMenu.click;
+ dim4.x := nii.Dim.x;
+ dim4.y := nii.Dim.y;
+ dim4.z := nii.Dim.z;
+ dim4.t := nii.header.dim[4];
+
+ CropForm.GetCrop(dim4, nii.ShortName);
+ (*if crop.xLo < 0 then exit;
+ dlg := TSaveDialog.Create(self);
+ dlg.Title := 'Save NIfTI volume';
+ dlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+ {$IFDEF Darwin}
+ if PosEx('.app', dlg.InitialDir) > 0  then
+       dlg.InitialDir := HomeDir(false);
+ {$ENDIF}
+ dlg.FileName:= 'r'+extractfilename(gPrefs.PrevBackgroundImage);
+ dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
+ dlg.DefaultExt := '*.nii';
+ dlg.FilterIndex := 0;
+ if not dlg.Execute then exit;
+ nii.SaveCropped(dlg.filename, crop, cropVols);
+ dlg.Free; *)
+
+end;
+
 procedure TGLForm1.ReorientMenuClick(Sender: TObject);
 //{$DEFINE REORIENTDEBUG}
-//label
-//  245;
+label
+  245;
 var
-  //lImg: Bytep;
   dlg : TSaveDialog;
   niftiVol: TNIfTI;
-  //s: string;
-  //dx, dy, dz: single;
   perm: TVec3i;
   btn : array  [1..6] of string = ('red','green','blue','purple','orange','yellow');
-  //M, Mhdr: TMat4;
-  //i, dim1,dim2,dim3,
   btnR,btnA,btnS: integer;
-  //lHdr: TNIFTIHdr;
 begin
- (*perm.x := -1;
- perm.y := 2;
- perm.z := 3;
+ (*perm.x := 2;perm.y := 1; perm.z := 3;
+ //perm.x := -1;perm.y := 2; perm.z := 3;
  if not vols.Layer(0, niftiVol) then exit;
 
  niftiVol.SaveRotated('x.nii', perm);
- exit;  *)
+ exit; *)
+
+ (*if not vols.Layer(0, niftiVol) then exit;
+
+ niftiVol.SaveRescaled('r.nii', 0.5, 0.5, 0.5);
+ exit;*)
 
  Vol1.Slices.isOrientationTriangles := true;
- if gPrefs.DisplayOrient <> kMosaicOrient then
+ if gPrefs.DisplayOrient <> kAxCorSagOrient then
     MPRMenu.click;
  btnR := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s RIGHT?',
-      mtInformation,[ 1,btn[1], 2,btn[2], 3,btn[3], 4,btn[4], 5,btn[5], 6,btn[6] ],'');
+      mtInformation,[ 11,btn[1], 12,btn[2], 13,btn[3], 14,btn[4], 15,btn[5], 16,btn[6] ],'');
+ if btnR = mrCancel then exit;
+ btnR := btnR - 10;
  if (btnR <= 2) then
     btnA := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s ANTERIOR?',
-         mtCustom,[ 3,btn[3], 4,btn[4], 5,btn[5], 6,btn[6] ],'')
+         mtCustom,[ 13,btn[3], 14,btn[4], 15,btn[5], 16,btn[6] ],'')
  else if (btnR <= 4) then
     btnA := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s ANTERIOR?',
-         mtCustom,[ 1,btn[1], 2,btn[2], 5,btn[5], 6,btn[6] ],'')
+         mtCustom,[ 11,btn[1], 12,btn[2], 15,btn[5], 16,btn[6] ],'')
  else
      btnA := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s ANTERIOR?',
-         mtCustom,[ 1,btn[1], 2,btn[2], 3,btn[3], 4,btn[4] ],'');
+         mtCustom,[ 11,btn[1], 12,btn[2], 13,btn[3], 14,btn[4] ],'');
+ if btnA = mrCancel then exit;
+ btnA := btnA - 10;
  if (max(btnR,btnA) <= 4) then
     btnS := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s SUPERIOR?',
-         mtCustom,[5,btn[5], 6,btn[6] ],'')
+         mtCustom,[15,btn[5], 16,btn[6] ],'')
  else if (min(btnR,btnA) >= 3) then
     btnS := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s SUPERIOR?',
-         mtCustom,[1,btn[1], 2,btn[2] ],'')
+         mtCustom,[11,btn[1], 12,btn[2] ],'')
  else
      btnS := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s SUPERIOR?',
-          mtCustom,[3,btn[3], 4,btn[4] ],'');
+          mtCustom,[13,btn[3], 14,btn[4] ],'');
+ if btnS = mrCancel then exit;
+ btnS := btnS - 10;
+
  Vol1.Slices.isOrientationTriangles := false;
  if (btnR=2) and (btnA=4) and (btnS=6) then begin
     showmessage('Image already oriented');
@@ -4463,12 +4624,15 @@ begin
  if odd(btnR) then perm.x := -perm.x;
  if odd(btnA) then perm.y := -perm.y;
  if odd(btnS) then perm.z := -perm.z;
-
  //showmessage(format('%d %d %d', [perm.x, perm.y, perm.z]));
  if not vols.Layer(0, niftiVol) then exit;
  dlg := TSaveDialog.Create(self);
  dlg.Title := 'Save NIfTI volume';
  dlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+ {$IFDEF Darwin}
+ if PosEx('.app', dlg.InitialDir) > 0  then
+       dlg.InitialDir := HomeDir(false);
+ {$ENDIF}
  dlg.FileName:= 'r'+extractfilename(gPrefs.PrevBackgroundImage);
  dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
  dlg.DefaultExt := '*.nii';
@@ -4476,6 +4640,8 @@ begin
  if not dlg.Execute then exit;
  niftiVol.SaveRotated(dlg.filename, perm);
  dlg.Free;
+ 245:
+ Vol1.Slices.isOrientationTriangles := false;
 end;
 
 procedure UpdateMatCapDrop (var LUTdrop: TComboBox);
@@ -4829,7 +4995,7 @@ begin
      //metal only
 end;
 
-function ScreenShotGL(GLBox : TOpenGLControl): TBitmap;
+(*function ScreenShotGL(GLBox : TOpenGLControl): TBitmap;
 var
   RawImage: TRawImage;
   p: array of byte;
@@ -4906,6 +5072,103 @@ begin
      DestPtr[z] := DestPtr[z] and $FFFFFF00;
  end;
  {$ENDIF}
+ GLBox.disableTiledScreenShot();
+ GLbox.ReleaseContext;
+ Vol1.Quality1to10 := q;
+ setlength(p, 0);
+ ViewGPU1.Invalidate;
+end; *)
+function ScreenShotGL(GLBox : TOpenGLControl): TBitmap;
+var
+  RawImage: TRawImage;
+  p: array of byte;
+  tileW, tileH, nTileW, nTileH,
+  wOut, hOut,
+  q, w, w4, yOut, h, y, hR, wR, BytePerPixel: integer;
+  z: int64;
+  DestPtr: PInteger;
+begin
+ if (gPrefs.BitmapZoom = 1) and (gPrefs.DisplayOrient <> kMosaicOrient) then begin
+    result := ScreenShot(GLBox);
+    exit;
+ end;
+ w := GLBox.ClientWidth;
+ h := GLBox.ClientHeight;
+ GLForm1.OptimalMosaicPixels(wOut,hOut);
+ //showmessage(format('%d %d', [wOut, hOut])); exit;
+ wOut := wOut * gPrefs.BitmapZoom;
+ hOut := hOut * gPrefs.BitmapZoom;
+ if (wOut <= 0) or (hOut <= 0) or (w <= 0) or (h <= 0) then exit(nil);
+ nTileW := ceil(wOut/w);
+ nTileH := ceil(hOut/h);
+ //GLForm1.Caption := format('%d %d   %d %d',[h,w, hOut, wOut]);
+ Result:=TBitmap.Create;
+ Result.Width:= wOut;
+ Result.Height:= hOut;
+ if gPrefs.ScreenCaptureTransparentBackground then
+   Result.PixelFormat := pf32bit
+ else
+     Result.PixelFormat := pf24bit; //if pf32bit the background color is wrong, e.g. when alpha = 0
+ //Result.PixelFormat := pf24bit; //if pf32bit the background color is wrong, e.g. when alpha = 0
+ {$IFDEF Windows} //at least for Lazarus 2.0.2
+ Result.PixelFormat := pf32bit;
+ {$ENDIF}
+ RawImage := Result.RawImage;
+ BytePerPixel := RawImage.Description.BitsPerPixel div 8;
+ if (BytePerPixel = 3) and (RawImage.Description.BytesPerLine = (wOut *3)) then
+    //ok
+ else if (BytePerPixel = 4) and (RawImage.Description.BytesPerLine = (wOut *4)) then
+      //ok
+ else
+     showmessage('catastrophic error');
+ //GLForm1.caption := format('%d %d %d 3=%d 4=%d', [BytePerPixel,RawImage.Description.BytesPerLine, wOut, wOut * 3, wOut * 4]);
+ GLBox.MakeCurrent;
+ q := Vol1.Quality1to10;
+ Vol1.Quality1to10 := 10;
+ w4 := 4 * w;
+ yOut := 0;
+ hR := 0;
+ setlength(p, w4 * h);
+ for TileH := 0 to  (nTileH-1) do begin
+     for TileW := 0 to (nTileW-1) do begin
+        GLBox.enableTiledScreenShot(-TileW*w, -h*TileH,wOut, hOut); //tileLeft, tileBottom,totalWidth, totalHeight
+        GLForm1.ViewGPUPaint(nil);
+        glFlush;
+        glFinish;//<-this would pause until all jobs finished: generally a bad idea! required here
+        GLBox.SwapBuffers; //<- required by Windows
+
+        {$IFDEF Darwin} //http://lists.apple.com/archives/mac-opengl/2006/Nov/msg00196.html
+        glReadPixels(0, 0, w, h, $80E1, $8035, @p[0]); //OSX-Darwin   GL_BGRA = $80E1;  GL_UNSIGNED_INT_8_8_8_8_EXT = $8035;
+        {$ELSE} {$IFDEF Linux}
+         glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, @p[0]); //Linux-Windows   GL_RGBA = $1908; GL_UNSIGNED_BYTE
+        {$ELSE}
+         glReadPixels(0, 0, w, h, $80E1, GL_UNSIGNED_BYTE, @p[0]); //Linux-Windows   GL_RGBA = $1908; GL_UNSIGNED_BYTE
+        {$ENDIF} {$ENDIF}
+
+        DestPtr := PInteger(RawImage.Data);
+        hR := min(h, hOut-yOut);
+        wR := min(w, wOut-(TileW*w) ) ;
+        Inc(PByte(DestPtr), (hOut - yOut - hR) * RawImage.Description.BytesPerLine );
+        Inc(PByte(DestPtr), TileW * w * BytePerPixel );
+        z := hR * w4;
+        for y:= hR-1 downto 0 do begin
+            Dec(z,w4);
+            System.Move(p[z], DestPtr^, wR * BytePerPixel );
+            //if (y > 1) then
+            Inc(PByte(DestPtr), RawImage.Description.BytesPerLine);
+        end; //for y : each line in image
+   end;
+   yOut := yOut + hR;
+ end; //TileH
+
+ //{$DEFINE ISOPAQUE} //see pf24bit
+ {$IFDEF ISOPAQUE}
+ DestPtr := PInteger(RawImage.Data);
+ for z := 0 to ((w * h)-1) do begin
+     DestPtr[z] := DestPtr[z] and $FFFFFF00;
+ end;
+ {$ENDIF}
+
  GLBox.disableTiledScreenShot();
  GLbox.ReleaseContext;
  Vol1.Quality1to10 := q;
@@ -5237,9 +5500,13 @@ begin
   Memo.ReadOnly:=true;
   Memo.Lines.AddStrings(strs);
   strs.Free;
+  {$IFDEF LCLCocoa}
+  if gPrefs.DarkMode then GLForm1.SetFormDarkMode(PrefForm);
+  {$ENDIF}
   Memo.Parent:=PrefForm;
   PrefForm.ShowModal;
   //Memo.Free;
+
   FreeAndNil(PrefForm);
 end;
 
@@ -5429,6 +5696,8 @@ begin
               dwriteln('   -cm : Color map: "-cm actc"');
               dwriteln('   -dr : Display range: "-dr 2 5"');
               dwriteln('   -std : Load standard image: "-std" ');
+              dwriteln('   -m : Set MaxVox (downsample large images). n.b. retained in preferences: "-m 256" ');
+              dwriteln('   -r : Reset all preferences to defaults (recovery)');
               dwriteln(' Examples:');
               dwriteln('   MRIcroGL spm152 spmMotor  -cm actc -dr 2 5');
               dwriteln('   MRIcroGL spm152 -cm copper -dr 25 70 spmMotor  -cm actc -dr 2 5');
@@ -5950,7 +6219,7 @@ end;
 
 procedure TGLForm1.FormShow(Sender: TObject);
 var
- i: integer;
+ i, MaxVox: integer;
  c: char;
  isForceReset, isOK: boolean;
  s, shaderPath, shaderName: string;
@@ -5960,15 +6229,21 @@ begin
  {$IFDEF FPC} Application.ShowButtonGlyphs:= sbgNever; {$ENDIF}
  isForceReset := false;
  gPrefs.InitScript := '';
+ MaxVox := -1;
  //gPrefs.InitScript := '/Users/rorden/MRIcroGL12/MRIcroGL.app/Contents/Resources/script/basic.py';
  i := 1;
+ //{$IFDEF UNIX}writeln('>>>Setting MaxVox to '+inttostr(MaxVox));{$ENDIF}
  while i <= ParamCount do begin
     s := ParamStr(i);
     if (length(s)> 1) and (s[1]='-') then begin
         c := upcase(s[2]);
         if c='R' then
            isForceReset := true
-        else if (i < paramcount) and (c='S') then begin
+        else if (i < paramcount) and (c='M') then begin
+          inc(i);
+          MaxVox := strtointdef(ParamStr(i), -1);
+           {$IFDEF UNIX}writeln('Setting MaxVox to '+inttostr(MaxVox));{$ENDIF}
+        end else if (i < paramcount) and (c='S') then begin
           inc(i);
           //if fileexists(ParamStr(i)) then
           if (upcase(ExtractFileExt(ParamStr(i))) = '.PY') or (upcase(ExtractFileExt(ParamStr(i))) = '.TXT') then
@@ -5978,7 +6253,7 @@ begin
     inc(i);
   end; //for each parameter
   //check - on darwin form drop file
-  if (gPrefs.InitScript = '') and (ParamCount >= 1) and (not isForceReset) then //and (fileexists(ParamStr(ParamCount))) then
+  if (gPrefs.InitScript = '') and (MaxVox < 1) and (ParamCount >= 1) and (not isForceReset) then //and (fileexists(ParamStr(ParamCount))) then
      gPrefs.InitScript := '-';
   if (length(gPrefs.InitScript) > 0) and (gPrefs.InitScript <> '-') and (not fileexists(gPrefs.InitScript)) then begin
      {$IFDEF UNIX}writeln('Unable to find script '+gPrefs.InitScript);{$ENDIF}
@@ -5996,6 +6271,8 @@ begin
       if (gPrefs.DisplayOrient = kMosaicOrient) then
          gPrefs.DisplayOrient := kAxCorSagOrient;//kRenderOrient;
   end;
+  if MaxVox > 0 then
+     gPrefs.MaxVox := MaxVox;
   AnimateTimer.Interval:= gPrefs.AnimationIntervalMsec;
   if gPrefs.StartupWindowMode = 1 then begin
      GLForm1.BoundsRect := Screen.MonitorFromWindow(Handle).BoundsRect;
@@ -6033,7 +6310,8 @@ begin
   //prepare defaults
   gMouse.y := -1;
   gLandmark := TLandmark.Create();
-  CreateStandardMenus;
+  CreateStandardMenus(OpenStandardMenu);
+  CreateStandardMenus(OpenAltasMenu);
   if DirectoryExists(GetFSLdir+pathdelim+ 'data'+pathdelim+'standard') then
      OpenFSLMenu.Visible := true;
   s := gPrefs.PrevBackgroundImage;

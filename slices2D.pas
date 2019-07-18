@@ -62,9 +62,11 @@ type
     procedure DrawCor(L,B, W,H, YFrac: single);
     procedure DrawSag(L,B, W,H, XFrac: single);
     procedure DrawTri(V1, V2, V3: TVec2; clr : TVec4);
+    procedure DrawCropMask(L,B,W,H, tZ: single; orient: integer);
     procedure DrawArrow(L,B,W,H: single; orient: integer);
     procedure DrawSagMirror(L,B, W,H, XFrac: single);
     procedure DrawLine(startX,startY,endX,endY: single);
+    procedure DrawBar(left,bottom,width,height: single; clr : TVec4);
     procedure DrawLineLBWH(left,bottom,width,height: single);
     procedure DrawCross(L,B, W,H, Xfrac,Yfrac: single);
     procedure DrawCrossX(L,B, W,H, Xfrac,Yfrac: single);
@@ -73,6 +75,7 @@ type
     procedure TextLabelTop(X,Y: single; Caption: string);
   public
     isOrientationTriangles: boolean;
+    cropMask:TVec6;
     procedure DrawOutLine(L,T,R,B: single);
     property ZoomScale: single read fZoomScale write fZoomScale;
     property ZoomCenter: TVec3 read fZoomCenter write fZoomCenter;
@@ -298,6 +301,7 @@ begin
   fZoomScale := 1;
   isOrientationTriangles := false;
   fZoomCenter := Vec3(0.5, 0.5, 0.5);// ? ? Z
+  cropMask := Vec6(-1, 0, 0, 0, 0, 0);
   //zoom.sliceFrac2D := Vec3(0.5, 0.5, 0.5);
   isLabelOrient := true;
   isRadiological := false;
@@ -462,6 +466,61 @@ begin
   b := c;
 end;
 
+procedure TSlices2D.DrawBar(left,bottom,width,height: single; clr : TVec4);
+var
+  i: integer;
+begin
+  if (numLineVerts+6) > length(lineVerts) then
+     setlength(lineVerts, length(lineVerts)+kBlockSz);
+  for i := 0 to 5 do
+      lineVerts[numLineVerts +i].textureCoord := clr;
+  lineVerts[numLineVerts+0].position := Vec2(left,bottom+height);
+  lineVerts[numLineVerts+1].position := Vec2(left,bottom);
+  lineVerts[numLineVerts+2].position := Vec2(left+width,bottom+height);
+  lineVerts[numLineVerts+3].position := lineVerts[numLineVerts+1].position;
+  lineVerts[numLineVerts+4].position := lineVerts[numLineVerts+2].position;
+  lineVerts[numLineVerts+5].position := Vec2(left+width,bottom);
+  numLineVerts := numLineVerts + 6;
+
+end;
+
+procedure TSlices2D.DrawCropMask(L,B,W,H, tZ: single; orient: integer);
+var
+  clr : TVec4;
+  cL,cB,cW, cH: single;
+  msk: TVec6;
+begin
+  clr := vec4(0.8, 0.2, 0.2, 0.4);
+  //if (orient <> kCoronalOrient) then exit;
+  msk := cropMask;
+  if (orient = kAxialOrient) and ((tZ < msk.zLo) or (tZ > msk.zHi)) then exit;
+  if (orient = kCoronalOrient) and ((tZ < msk.yLo) or (tZ > msk.yHi)) then exit;
+  if ((orient = kSagRightOrient) or (orient = kSagLeftOrient)) and ((tZ < msk.xLo) or (tZ > msk.xHi)) then exit;
+  if isRadiological then begin
+     msk.xLo := 1.0 - cropMask.xHi;
+     msk.xHi := 1.0 - cropMask.xLo;
+  end;
+  if (orient = kAxialOrient) or (orient = kCoronalOrient) then begin//x = L>>R
+    cL := L + (msk.xLo * w);
+    cW := ((msk.xHi - msk.xLo) * w);
+  end else begin //sagittal x = A>>P
+    if (orient = kSagLeftOrient) then begin
+       msk.yLo := 1.0 - cropMask.yHi;
+       msk.yHi := 1.0 - cropMask.yLo;
+    end;
+    cL := L + (msk.yLo * w);
+    cW := ((msk.yHi - msk.yLo) * w);
+  end;
+  if (orient <> kAxialOrient) then begin//y = I>>S
+    cB := B + (msk.zLo * H);
+    cH := ((msk.zHi - msk.zLo) * H);
+  end else begin //axial y = A>>P
+  cB := B + (msk.yLo * H);
+  cH := ((msk.yHi - msk.yLo) * H);
+  end;
+  DrawBar(cL, cB, cW, cH, clr );
+end;
+
 procedure TSlices2D.DrawArrow(L,B,W,H: single; orient: integer);
 const
   kFrac = 0.07;
@@ -562,6 +621,8 @@ begin
   sliceVerts[numSliceVerts+4] := sliceVerts[numSliceVerts+2];
   sliceVerts[numSliceVerts+5] := sliceVerts[numSliceVerts+1];
   numSliceVerts := numSliceVerts + 6;
+  if CropMask.xLo >= 0 then
+     DrawCropMask(L,B,W,H,tZ, orient);
   if isOrientationTriangles then
       DrawArrow(L,B,W,H, orient);
   if lineWid <= 0 then exit;

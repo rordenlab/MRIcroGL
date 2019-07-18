@@ -7,8 +7,10 @@ uses
   // cthreads,  //<- if parallel NIfTI
   //cmem, // <- http://wiki.freepascal.org/Parallel_procedures
   {$ENDIF}{$ENDIF}
+  //{$ifdef windows},udark {$endif}
   Interfaces, // this includes the LCL widgetset
-  Forms, uscale, mainunit, TimedDialog, dcm2nii, drawVolume, autoroi, nifti_hdr_view;
+  Forms, uscale, mainunit, TimedDialog, dcm2nii, drawVolume, autoroi,
+  nifti_hdr_view, nifti_resize, resize, crop;
 
 {$R *.res}
 begin
@@ -20,6 +22,9 @@ begin
   Application.CreateForm(TTimedDialogForm, TimedDialogForm);
   Application.CreateForm(TAutoROIForm, AutoROIForm);
   Application.CreateForm(THdrForm, HdrForm);
+  Application.CreateForm(TResizeForm, ResizeForm);
+  Application.CreateForm(TCropForm, CropForm);
+  //{$ifdef windows} SetDarkTheme; {$endif}
   //ConstrainTrackBars();
   Application.Run;
   //Windows: if you get an error "Can't find object file" you can copy the 'static' folder from

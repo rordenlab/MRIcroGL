@@ -75,7 +75,7 @@ begin
             BitmapZoom := 2;
             FlipLR_Radiological := true;
             ColorbarSize := 50;
-            MaxVox := 640;
+            MaxVox := 512;
             Smooth2D := true;
        end;
   end;

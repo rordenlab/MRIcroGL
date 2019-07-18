@@ -6,7 +6,7 @@ uses
 
 LResources, Spin,
  {$IFNDEF Unix} ShellAPI, {$ENDIF}
-  SysUtils, Classes, Graphics, Controls, Forms, Dialogs,
+  SysUtils, Classes, Graphics, Controls, Forms, Dialogs, math,
   StdCtrls, Menus, ComCtrls, Buttons, nifti_types, SimdUtils;
 type
   { THdrForm }
@@ -26,7 +26,7 @@ type
     intent_nameEdit: TEdit;
     data_typeEdit: TEdit;
     CommentEdit: TEdit;
-    db_: TEdit;
+    db_nameEdit: TEdit;
     aux: TEdit;
     gmax: TSpinEdit;
     gmin: TSpinEdit;
@@ -320,7 +320,7 @@ begin
           xyzt_timeDrop.ItemIndex:=(time_units2DropItem(xyzt_units));
           CommentEdit.text := descrip;
           data_typeEdit.text := data_type;
-          db_.text := db_name;
+          db_nameEdit.text := db_name;
           aux.text := aux_file;
           intent_nameEdit.text := intent_name;
 	  ext.value := extents;
@@ -457,12 +457,31 @@ begin
      end; //with NIfTIhdr
 end; //proc ReadHdrDimensionsOnly
 
+type
+  kStr255 = string[255];
+
+function getStr(inStr: string; len: integer): kStr255;
+var
+    i, n: integer;
+begin
+     result := '';
+     for i := 1 to len do
+         result[i] := chr(0);
+     //showmessage(format('%d %d', [len, length(inStr)]));
+     n := min(len, length(inStr));
+     if n < 1 then exit;
+     for i := 1 to n do
+         result[i]  := inStr[i];
+end;
+
 procedure THdrForm.ReadHdrForm (var lHdr: TNIFTIhdr); //read the values the user has entered
 var
-    lInc: Integer;
+    i: Integer;
+    str: kStr255;
 begin
      NII_Clear(lHdr); //important: reset values like first 4 bytes = 348
      ReadHdrDimensionsOnly(lHdr);
+
      //StatusBar1.Panels[0].text := 'ImageData (bytes)= '+inttostr(ComputeImageDataBytes(lHdr));
      with lHdr do begin
           pixdim[1] := Xmm.Value;
@@ -480,37 +499,33 @@ begin
              Magic := kNIFTI_MAGIC_SEPARATE_HDR
           else
              Magic := 0; //not saed as NIFTI
-          for lInc := 1 to 80 do
-              descrip[lInc] := chr(0);
-          for lInc := 1 to length(CommentEdit.text) do
-              descrip[lInc]  := CommentEdit.text[lInc];
-          for lInc := 1 to 10 do
-              data_type[lInc] := chr(0);
-          for lInc := 1 to length(data_typeEdit.text) do
-              data_type[lInc] := data_typeEdit.text[lInc];
-          for lInc := 1 to 18 do
-              db_name[lInc] := chr(0);
-          for lInc := 1 to length(db_.text) do
-              db_name[lInc]  := db_.text[lInc];
-          for lInc := 1 to 24 do
-              aux_file[lInc] := chr(0);
-          for lInc := 1 to length(aux.text) do
-              aux_file[lInc]  := aux.text[lInc];
-          for lInc := 1 to 16 do
-              intent_name[lInc] := chr(0);
-          for lInc := 1 to length(intent_nameEdit.text) do
-              intent_name[lInc]  := intent_nameEdit.text[lInc];
+          str := getStr(CommentEdit.text, 80);
+          for i := 1 to 80 do
+              descrip[i] := str[i];
+          str := getStr(data_typeEdit.text, 10);
+          for i := 1 to 10 do
+              data_type[i] := str[i];
+          str := getStr(db_nameEdit.text, 18);
+          for i := 1 to 18 do
+              db_name[i] := str[i];
+          str := getStr(aux.text, 24);
+          for i := 1 to 24 do
+              aux_file[i] := str[i];
+          str := getStr(intent_nameEdit.text, 16);
+          for i := 1 to 16 do
+              intent_name[i] := str[i];
+
           xyzt_units := xyzt_sizeDrop.ItemIndex;
           xyzt_units := xyzt_units+ (DropItem2time_units(xyzt_timeDrop.ItemIndex));
-		  lInc := IntentCodeDrop.ItemIndex;
-		  if (lInc > 0) and (lInc < kNIFTI_LAST_STATCODE) then
-			 lInc := lInc + 1 //intent_codes start from 2 not 1
-		  else if (lInc >= kNIFTI_LAST_STATCODE)  then //add gap in numbers between last stat code and misc codes
-			 lInc := (lInc - kNIFTI_LAST_STATCODE)+kNIFTI_FIRST_NONSTATCODE
-		  else
-			  lInc := 0; //unknown
-		  intent_code := lInc;
-		  intent_p1 := intent_p1Edit.value;
+	  i := IntentCodeDrop.ItemIndex;
+	  if (i > 0) and (i < kNIFTI_LAST_STATCODE) then
+		 i := i + 1 //intent_codes start from 2 not 1
+	  else if (i >= kNIFTI_LAST_STATCODE)  then //add gap in numbers between last stat code and misc codes
+		 i := (i - kNIFTI_LAST_STATCODE)+kNIFTI_FIRST_NONSTATCODE
+	  else
+		  i := 0; //unknown
+	  intent_code := i;
+	  intent_p1 := intent_p1Edit.value;
           intent_p2 := intent_p2Edit.value;
           intent_p3 := intent_p3Edit.value;
           extents:= round(ext.value);

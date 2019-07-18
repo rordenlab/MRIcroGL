@@ -283,13 +283,23 @@ begin
 end;
 
 procedure TNIfTIs.SkippedVolumesWarning();
+var
+  isSkipped : boolean = false;
+  str: string;
 begin
-     if (fNumLayers = 0) and (niis[fNumLayers].VolumesLoaded > 1) and (niis[fNumLayers].VolumesLoaded < niis[fNumLayers].Header.dim[4]) then
-       {$IFDEF LCLCocoa}
-       DeliverUserNotification(format('Loaded %d of %d volumes', [niis[fNumLayers].VolumesLoaded, niis[fNumLayers].Header.dim[4]]), 'Adjust preferences to load all volumes.','','');
-       {$ELSE}
-       TimedDialogForm.ShowTimedDialog('MRIcroGL Warning', format('Only loaded %d of %d volumes. Adjust preferences to see all volumes (full graphs and calibration maps).', [niis[fNumLayers].VolumesLoaded, niis[fNumLayers].Header.dim[4]]), 3000, GLForm1.Left+20, GLForm1.Top+20);
-       {$ENDIF}
+  if (fNumLayers = 0) and (niis[fNumLayers].VolumesLoaded > 0) and (niis[fNumLayers].VolumesLoaded < niis[fNumLayers].Header.dim[4]) then
+  isSkipped := true;
+  if (not isSkipped) and (not niis[fNumLayers].IsShrunken) then exit;
+  str := '';
+  if (niis[fNumLayers].IsShrunken) then
+     str := 'Large image downsampled. ';
+  if isSkipped then
+     str := str + format('Loaded %d of %d volumes.', [niis[fNumLayers].VolumesLoaded, niis[fNumLayers].Header.dim[4]]);
+  {$IFDEF LCLCocoa}
+  DeliverUserNotification(str, 'Adjust preferences to load all volumes.','','');
+  {$ELSE}
+  TimedDialogForm.ShowTimedDialog('MRIcroGL Warning', str, 3000, GLForm1.Left+20, GLForm1.Top+20);
+  {$ENDIF}
      //TimedDialogForm.ShowTimedDialog('MRIcroGL Warning', format('Only loaded %d of %d volumes. Adjust preferences to see all volumes (full graphs and calibration maps).', [niis[fNumLayers].VolumesLoaded, niis[fNumLayers].Header.dim[4]]), 3000);
 end;
 
@@ -299,9 +309,11 @@ begin
      if (fNumLayers > kMaxOverlay) or (fNumLayers < 0) then exit;
      if fNumLayers = 0 then begin
         niis[fNumLayers] := TNIfTI.Create(niftiFileName, backColor, LoadFewVolumes, MaxVox, result);
-     end
-     else
+     end else begin
         niis[fNumLayers] := TNIfTI.Create(niftiFileName, backColor, niis[0].Mat, niis[0].Dim, fInterpolateOverlays, result);
+        if (result) and (niis[fNumLayers].IsLabels) then
+          niis[fNumLayers].OpacityPercent := 50;
+     end;
      SkippedVolumesWarning();
      if (not result) and (fNumLayers > 0) then
         niis[fNumLayers].Destroy //e.g. attempted to open RGB as overlay
