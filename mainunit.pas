@@ -3492,7 +3492,6 @@ begin
   bmpEdit.Anchors := [akTop, akLeft];
   bmpEdit.Parent:=PrefForm;
   //BitmapAlphaCheck
-  {$IFDEF UNIX}  //as of Lazarus 2.0.2 the Windows bitmaps want have issues
   BitmapAlphaCheck:=TCheckBox.create(PrefForm);
   BitmapAlphaCheck.Checked := gPrefs.ScreenCaptureTransparentBackground;
   BitmapAlphaCheck.Caption:='Background transparent in bitmaps';
@@ -3506,17 +3505,12 @@ begin
   BitmapAlphaCheck.AnchorSide[akLeft].Control := PrefForm;
   BitmapAlphaCheck.BorderSpacing.Left := 6;
   BitmapAlphaCheck.Parent:=PrefForm;
-  {$ENDIF}
   //  RadiologicalCheck
   RadiologicalCheck:=TCheckBox.create(PrefForm);
   RadiologicalCheck.Checked := gPrefs.FlipLR_Radiological;
   RadiologicalCheck.Caption:='Radiological convention (left on right)';
   RadiologicalCheck.AnchorSide[akTop].Side := asrBottom;
-  {$IFDEF UNIX}
   RadiologicalCheck.AnchorSide[akTop].Control := BitmapAlphaCheck;
-  {$ELSE}
-  RadiologicalCheck.AnchorSide[akTop].Control := bmpLabel;
-  {$ENDIF}
   RadiologicalCheck.BorderSpacing.Top := 6;
   RadiologicalCheck.AnchorSide[akLeft].Side := asrLeft;
   RadiologicalCheck.AnchorSide[akLeft].Control := PrefForm;
@@ -5001,12 +4995,12 @@ var
   p: array of byte;
   tileW, tileH, nTileW, nTileH,
   wOut, hOut,
-  q, w, w4, yOut, h, y, hR, wR, BytePerPixel: integer;
+  q, w, w4, yOut, h, x, y, hR, wR, BytePerPixel: integer;
   z: int64;
   DestPtr: PInteger;
 begin
  if (gPrefs.BitmapZoom = 1) and (gPrefs.DisplayOrient <> kMosaicOrient) then begin
-    result := ScreenShot(GLBox);
+    result := ScreenShot(GLBox, gPrefs.ScreenCaptureTransparentBackground); //if you get an error here, update your metal-demos
     exit;
  end;
  w := GLBox.ClientWidth;
@@ -5026,101 +5020,14 @@ begin
    Result.PixelFormat := pf32bit
  else
      Result.PixelFormat := pf24bit; //if pf32bit the background color is wrong, e.g. when alpha = 0
- //Result.PixelFormat := pf24bit; //if pf32bit the background color is wrong, e.g. when alpha = 0
- //Result.PixelFormat := pf32bit;
  RawImage := Result.RawImage;
  BytePerPixel := RawImage.Description.BitsPerPixel div 8;
- GLBox.MakeCurrent;
- q := Vol1.Quality1to10;
- Vol1.Quality1to10 := 10;
- w4 := 4 * w;
- yOut := 0;
- hR := 0;
- setlength(p, w4 * h);
- for TileH := 0 to  (nTileH-1) do begin
-     for TileW := 0 to (nTileW-1) do begin
-        GLBox.enableTiledScreenShot(-TileW*w, -h*TileH,wOut, hOut); //tileLeft, tileBottom,totalWidth, totalHeight
-        GLForm1.ViewGPUPaint(nil);
-        glFlush;
-        glFinish;//<-this would pause until all jobs finished: generally a bad idea! required here
-        GLBox.SwapBuffers; //<- required by Windows
-        {$IFDEF Darwin} //http://lists.apple.com/archives/mac-opengl/2006/Nov/msg00196.html
-        glReadPixels(0, 0, w, h, $80E1, $8035, @p[0]); //OSX-Darwin   GL_BGRA = $80E1;  GL_UNSIGNED_INT_8_8_8_8_EXT = $8035;
-        {$ELSE} {$IFDEF Linux}
-         glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, @p[0]); //Linux-Windows   GL_RGBA = $1908; GL_UNSIGNED_BYTE
-        {$ELSE}
-         glReadPixels(0, 0, w, h, $80E1, GL_UNSIGNED_BYTE, @p[0]); //Linux-Windows   GL_RGBA = $1908; GL_UNSIGNED_BYTE
-        {$ENDIF} {$ENDIF}
-        DestPtr := PInteger(RawImage.Data);
-        hR := min(h, hOut-yOut);
-        wR := min(w, wOut-(TileW*w) ) ;
-        Inc(PByte(DestPtr), (hOut - yOut - hR) * RawImage.Description.BytesPerLine );
-        Inc(PByte(DestPtr), TileW * w * 4 );
-        z := hR * w4;
-        for y:= hR-1 downto 0 do begin
-            Dec(z,w4);
-            System.Move(p[z], DestPtr^, wR * BytePerPixel );
-            Inc(PByte(DestPtr), RawImage.Description.BytesPerLine);
-        end; //for y : each line in image
-   end;
-   yOut := yOut + hR;
- end; //TileH
- //{$DEFINE ISOPAQUE} //see pf24bit
- {$IFDEF ISOPAQUE}
- DestPtr := PInteger(RawImage.Data);
- for z := 0 to ((w * h)-1) do begin
-     DestPtr[z] := DestPtr[z] and $FFFFFF00;
- end;
- {$ENDIF}
- GLBox.disableTiledScreenShot();
- GLbox.ReleaseContext;
- Vol1.Quality1to10 := q;
- setlength(p, 0);
- ViewGPU1.Invalidate;
-end; *)
-function ScreenShotGL(GLBox : TOpenGLControl): TBitmap;
-var
-  RawImage: TRawImage;
-  p: array of byte;
-  tileW, tileH, nTileW, nTileH,
-  wOut, hOut,
-  q, w, w4, yOut, h, y, hR, wR, BytePerPixel: integer;
-  z: int64;
-  DestPtr: PInteger;
-begin
- if (gPrefs.BitmapZoom = 1) and (gPrefs.DisplayOrient <> kMosaicOrient) then begin
-    result := ScreenShot(GLBox);
+ //note lines can be padded, on MacOS the results are evenly divisible by 16
+ // e.g. bmp=4 wOut=994 BytesPerLine=3984 (expected 3976)
+ if (RawImage.Description.BytesPerLine < (wOut *BytePerPixel)) then begin
+    Showmessage(format('Catastrophic bmp error bpp=%d wid=%d bytes=%d',[BytePerPixel, wOut, RawImage.Description.BytesPerLine])); //not sure if this is fatal - e.g. line lengths rounded up
     exit;
  end;
- w := GLBox.ClientWidth;
- h := GLBox.ClientHeight;
- GLForm1.OptimalMosaicPixels(wOut,hOut);
- //showmessage(format('%d %d', [wOut, hOut])); exit;
- wOut := wOut * gPrefs.BitmapZoom;
- hOut := hOut * gPrefs.BitmapZoom;
- if (wOut <= 0) or (hOut <= 0) or (w <= 0) or (h <= 0) then exit(nil);
- nTileW := ceil(wOut/w);
- nTileH := ceil(hOut/h);
- //GLForm1.Caption := format('%d %d   %d %d',[h,w, hOut, wOut]);
- Result:=TBitmap.Create;
- Result.Width:= wOut;
- Result.Height:= hOut;
- if gPrefs.ScreenCaptureTransparentBackground then
-   Result.PixelFormat := pf32bit
- else
-     Result.PixelFormat := pf24bit; //if pf32bit the background color is wrong, e.g. when alpha = 0
- //Result.PixelFormat := pf24bit; //if pf32bit the background color is wrong, e.g. when alpha = 0
- {$IFDEF Windows} //at least for Lazarus 2.0.2
- Result.PixelFormat := pf32bit;
- {$ENDIF}
- RawImage := Result.RawImage;
- BytePerPixel := RawImage.Description.BitsPerPixel div 8;
- if (BytePerPixel = 3) and (RawImage.Description.BytesPerLine = (wOut *3)) then
-    //ok
- else if (BytePerPixel = 4) and (RawImage.Description.BytesPerLine = (wOut *4)) then
-      //ok
- else
-     showmessage('catastrophic error');
  //GLForm1.caption := format('%d %d %d 3=%d 4=%d', [BytePerPixel,RawImage.Description.BytesPerLine, wOut, wOut * 3, wOut * 4]);
  GLBox.MakeCurrent;
  q := Vol1.Quality1to10;
@@ -5151,12 +5058,24 @@ begin
         Inc(PByte(DestPtr), (hOut - yOut - hR) * RawImage.Description.BytesPerLine );
         Inc(PByte(DestPtr), TileW * w * BytePerPixel );
         z := hR * w4;
-        for y:= hR-1 downto 0 do begin
-            Dec(z,w4);
-            System.Move(p[z], DestPtr^, wR * BytePerPixel );
-            //if (y > 1) then
-            Inc(PByte(DestPtr), RawImage.Description.BytesPerLine);
-        end; //for y : each line in image
+        if BytePerPixel = 3 then begin
+          for y:= hR-1 downto 0 do begin
+               DestPtr := PInteger(RawImage.Data);
+               Inc(PByte(DestPtr), y * RawImage.Description.BytesPerLine );
+               for x := 1 to wR do begin
+                   DestPtr^ := p[z] + (p[z+1] shl 8) + (p[z+2] shl 16);
+                   Inc(PByte(DestPtr), BytePerPixel);
+                   z := z + 4;
+               end;
+           end; //for y : each line in image
+        end else begin
+          for y:= hR-1 downto 0 do begin
+              Dec(z,w4);
+              System.Move(p[z], DestPtr^, wR * BytePerPixel );
+              //if (y > 1) then
+              Inc(PByte(DestPtr), RawImage.Description.BytesPerLine);
+          end; //for y : each line in image
+        end;
    end;
    yOut := yOut + hR;
  end; //TileH
@@ -5169,6 +5088,110 @@ begin
  end;
  {$ENDIF}
 
+ GLBox.disableTiledScreenShot();
+ GLbox.ReleaseContext;
+ Vol1.Quality1to10 := q;
+ setlength(p, 0);
+ ViewGPU1.Invalidate;
+end;*)
+
+function ScreenShotGL(GLBox : TOpenGLControl): TBitmap;
+var
+  RawImage: TRawImage;
+  p: array of byte;
+  tileW, tileH, nTileW, nTileH,
+  wOut, hOut,
+  q, w, w4, yOut, h, x, y, hR, wR, BytePerPixel: integer;
+  z: int64;
+  DestPtr: PInteger;
+begin
+ if (gPrefs.BitmapZoom = 1) and (gPrefs.DisplayOrient <> kMosaicOrient) then begin
+    result := ScreenShot(GLBox, gPrefs.ScreenCaptureTransparentBackground); //CRW
+    exit;
+ end;
+ w := GLBox.ClientWidth;
+ h := GLBox.ClientHeight;
+ GLForm1.OptimalMosaicPixels(wOut,hOut);
+ //showmessage(format('%d %d', [wOut, hOut])); exit;
+ wOut := wOut * gPrefs.BitmapZoom;
+ hOut := hOut * gPrefs.BitmapZoom;
+ if (wOut <= 0) or (hOut <= 0) or (w <= 0) or (h <= 0) then exit(nil);
+ nTileW := ceil(wOut/w);
+ nTileH := ceil(hOut/h);
+ //GLForm1.Caption := format('x%d %dx%d   %d %d',[gPrefs.BitmapZoom, w,h, wOut, hOut]);
+ Result:=TBitmap.Create;
+ Result.Width:= wOut;
+ Result.Height:= hOut;
+ //Result.PixelFormat := pf24bit; //if pf32bit the background color is wrong, e.g. when alpha = 0
+ {$IFDEF Windows} //at least for Lazarus 2.0.2
+ Result.PixelFormat := pf32bit;
+ {$ELSE}
+ if gPrefs.ScreenCaptureTransparentBackground then
+   Result.PixelFormat := pf32bit
+ else
+     Result.PixelFormat := pf24bit; //if pf32bit the background color is wrong, e.g. when alpha = 0
+ {$ENDIF}
+ RawImage := Result.RawImage;
+ BytePerPixel := RawImage.Description.BitsPerPixel div 8;
+ if (RawImage.Description.BytesPerLine <  (wOut *BytePerPixel)) then begin
+    showmessage(format('Catastrophic error bytes=%d bpp=%d w=%d', [RawImage.Description.BytesPerLine, BytePerPixel, wOut]));
+
+ end;
+ GLBox.MakeCurrent;
+ q := Vol1.Quality1to10;
+ Vol1.Quality1to10 := 10;
+ w4 := 4 * w;
+ yOut := 0;
+ hR := 0;
+ setlength(p, w4 * h);
+ for TileH := 0 to  (nTileH-1) do begin
+     for TileW := 0 to (nTileW-1) do begin
+        GLBox.enableTiledScreenShot(-TileW*w, -h*TileH,wOut, hOut); //tileLeft, tileBottom,totalWidth, totalHeight
+        GLForm1.ViewGPUPaint(nil);
+        glFlush;
+        glFinish;//<-this would pause until all jobs finished: generally a bad idea! required here
+        GLBox.SwapBuffers; //<- required by Windows
+        {$IFDEF Darwin} //http://lists.apple.com/archives/mac-opengl/2006/Nov/msg00196.html
+        glReadPixels(0, 0, w, h, $80E1, $8035, @p[0]); //OSX-Darwin   GL_BGRA = $80E1;  GL_UNSIGNED_INT_8_8_8_8_EXT = $8035;
+        {$ELSE} {$IFDEF Linux}
+         glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, @p[0]); //Linux-Windows   GL_RGBA = $1908; GL_UNSIGNED_BYTE
+        {$ELSE}
+         glReadPixels(0, 0, w, h, $80E1, GL_UNSIGNED_BYTE, @p[0]); //Linux-Windows   GL_RGBA = $1908; GL_UNSIGNED_BYTE
+        {$ENDIF} {$ENDIF}
+        DestPtr := PInteger(RawImage.Data);
+        hR := min(h, hOut-yOut);
+        wR := min(w, wOut-(TileW*w) ) ;
+        Inc(PByte(DestPtr), (hOut - yOut - hR) * RawImage.Description.BytesPerLine );
+        Inc(PByte(DestPtr), TileW * w * BytePerPixel );
+        z := hR * w4;
+        if BytePerPixel = 3 then begin
+          for y:= hR-1 downto 0 do begin
+               DestPtr := PInteger(RawImage.Data);
+               Inc(PByte(DestPtr), y * RawImage.Description.BytesPerLine );
+               for x := 1 to wR do begin
+                   DestPtr^ := p[z] + (p[z+1] shl 8) + (p[z+2] shl 16);
+                   Inc(PByte(DestPtr), BytePerPixel);
+                   z := z + 4;
+               end;
+           end; //for y : each line in image
+        end else begin
+          for y:= hR-1 downto 0 do begin
+              Dec(z,w4);
+              System.Move(p[z], DestPtr^, wR * BytePerPixel );
+              //if (y > 1) then
+              Inc(PByte(DestPtr), RawImage.Description.BytesPerLine);
+          end; //for y : each line in image
+        end;
+   end;
+   yOut := yOut + hR;
+ end; //TileH
+ //{$DEFINE ISOPAQUE} //see pf24bit
+ {$IFDEF ISOPAQUE}
+ DestPtr := PInteger(RawImage.Data);
+ for z := 0 to ((w * h)-1) do begin
+     DestPtr[z] := DestPtr[z] and $FFFFFF00;
+ end;
+ {$ENDIF}
  GLBox.disableTiledScreenShot();
  GLbox.ReleaseContext;
  Vol1.Quality1to10 := q;

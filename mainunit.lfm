@@ -38,7 +38,6 @@ object GLForm1: TGLForm1
       BorderStyle = bsNone
       ClientHeight = 641
       ClientWidth = 253
-      Constraints.MaxWidth = 268
       ParentFont = False
       TabOrder = 0
       OnDblClick = ToolPanelDblClick
@@ -377,7 +376,6 @@ object GLForm1: TGLForm1
           TickStyle = tsNone
           BorderSpacing.Left = 4
           BorderSpacing.Top = 2
-          Constraints.MaxWidth = 80
           ParentFont = False
           ParentShowHint = False
           ShowHint = True
@@ -1165,7 +1163,6 @@ object GLForm1: TGLForm1
           TickStyle = tsNone
           BorderSpacing.Left = 2
           BorderSpacing.Top = 2
-          Constraints.MaxWidth = 76
           OnMouseUp = CutoutMouseUp
           ParentFont = False
           TabOrder = 0
@@ -1183,7 +1180,6 @@ object GLForm1: TGLForm1
           Position = 1000
           TickStyle = tsNone
           BorderSpacing.Left = 2
-          Constraints.MaxWidth = 76
           OnMouseUp = CutoutMouseUp
           ParentFont = False
           TabOrder = 1
@@ -1213,7 +1209,6 @@ object GLForm1: TGLForm1
           Position = 1000
           TickStyle = tsNone
           BorderSpacing.Top = 2
-          Constraints.MaxWidth = 76
           OnMouseUp = CutoutMouseUp
           ParentFont = False
           TabOrder = 2
@@ -1231,7 +1226,6 @@ object GLForm1: TGLForm1
           Position = 1000
           TickStyle = tsNone
           BorderSpacing.Left = 2
-          Constraints.MaxWidth = 76
           OnMouseUp = CutoutMouseUp
           ParentFont = False
           TabOrder = 3
@@ -1261,7 +1255,6 @@ object GLForm1: TGLForm1
           Position = 1000
           TickStyle = tsNone
           BorderSpacing.Top = 2
-          Constraints.MaxWidth = 76
           OnMouseUp = CutoutMouseUp
           ParentFont = False
           TabOrder = 4
@@ -1279,7 +1272,6 @@ object GLForm1: TGLForm1
           Position = 1000
           TickStyle = tsNone
           BorderSpacing.Left = 2
-          Constraints.MaxWidth = 76
           OnMouseUp = CutoutMouseUp
           ParentFont = False
           TabOrder = 5

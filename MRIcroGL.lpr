@@ -7,9 +7,10 @@ uses
   // cthreads,  //<- if parallel NIfTI
   //cmem, // <- http://wiki.freepascal.org/Parallel_procedures
   {$ENDIF}{$ENDIF}
+  {$IFDEF LCLGtk2}uscale,{$ENDIF}
   //{$ifdef windows},udark {$endif}
   Interfaces, // this includes the LCL widgetset
-  Forms, uscale, mainunit, TimedDialog, dcm2nii, drawVolume, autoroi,
+  Forms, mainunit, TimedDialog, dcm2nii, drawVolume, autoroi,
   nifti_hdr_view, nifti_resize, resize, crop;
 
 {$R *.res}
@@ -25,7 +26,7 @@ begin
   Application.CreateForm(TResizeForm, ResizeForm);
   Application.CreateForm(TCropForm, CropForm);
   //{$ifdef windows} SetDarkTheme; {$endif}
-  //ConstrainTrackBars();
+  {$IFDEF LCLGtk2}ConstrainTrackBars();{$ENDIF}  //https://bugs.freepascal.org/view.php?id=35861
   Application.Run;
   //Windows: if you get an error "Can't find object file" you can copy the 'static' folder from
   //  https://github.com/synopse/mORMot

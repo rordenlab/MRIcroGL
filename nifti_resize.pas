@@ -1,6 +1,5 @@
 unit nifti_resize;
 
-//{$mode objfpc}
 {$mode delphi}
 {$H+}
 

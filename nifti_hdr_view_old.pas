@@ -2,16 +2,12 @@ unit nifti_hdr_view;
 interface
 {$H+}
 {$MODE DELPHI}
-//{$DEFINE MRIcron}
-
 uses
 
 LResources, Spin,
-{$IFNDEF MRIcron} SimdUtils, {$ENDIF}
-{$IFNDEF Unix} ShellAPI, {$ENDIF}
+ {$IFNDEF Unix} ShellAPI, {$ENDIF}
   SysUtils, Classes, Graphics, Controls, Forms, Dialogs, math,
-
-  StdCtrls, Menus, ComCtrls, Buttons, nifti_types;
+  StdCtrls, Menus, ComCtrls, Buttons, nifti_types, SimdUtils;
 type
   { THdrForm }
   THdrForm = class(TForm)
@@ -158,8 +154,7 @@ type
     procedure SaveHdrDlgClose(Sender: TObject);
     procedure DimensionSheetContextPopup(Sender: TObject; MousePos: TPoint;
       var Handled: Boolean);
-    procedure WriteHdrForm (lHdr: TNIFTIhdr; IsNativeEndian: boolean; filename: string); overload;
-    procedure WriteHdrForm (lHdr: TNIFTIhdr; IsNativeEndian: boolean; filename: string; DisplayDims: TVec3i); overload;
+    procedure WriteHdrForm (lHdr: TNIFTIhdr; IsNativeEndian: boolean; filename: string; DisplayDims: TVec3i);
     procedure ReadHdrDimensionsOnly (var lHdr: TNIFTIhdr); //reads only size dimensions: useful for computing estimated filesize
     procedure ReadHdrForm (var lHdr: TNIFTIhdr); //reads entire header
     procedure Save1Click(Sender: TObject);
@@ -280,20 +275,13 @@ begin
      end; //case
 end; //func DropItem2time_units
 
-procedure THdrForm.WriteHdrForm (lHdr: TNIFTIhdr; IsNativeEndian: boolean; filename: string; DisplayDims: TVec3i); overload; //writes a header to the various controls
-begin
-     WriteHdrForm (lHdr, IsNativeEndian, filename);
-     if (DisplayDims.X <> lHdr.dim[1]) or (DisplayDims.Y <> lHdr.dim[2]) or (DisplayDims.Z <> lHdr.dim[3]) then
-        StatusBar1.Panels[0].text := format('Resliced: %dx%dx%d', [DisplayDims.X,DisplayDims.Y,DisplayDims.Z]) ;
-
-end;
-
-procedure THdrForm.WriteHdrForm (lHdr: TNIFTIhdr; IsNativeEndian: boolean; filename: string); overload;//writes a header to the various controls
+procedure THdrForm.WriteHdrForm (lHdr: TNIFTIhdr; IsNativeEndian: boolean; filename: string; DisplayDims: TVec3i); //writes a header to the various controls
 var //lCStr: string[80];
     lInc: Integer;
 begin
-     StatusBar1.Panels[0].text := '';
      //caption := 'xx'+inttostr(lHdr.intent_code);
+     if (DisplayDims.X <> lHdr.dim[1]) or (DisplayDims.Y <> lHdr.dim[2]) or (DisplayDims.Z <> lHdr.dim[3]) then
+        StatusBar1.Panels[0].text := format('Resliced: %dx%dx%d', [DisplayDims.X,DisplayDims.Y,DisplayDims.Z]) ;
      StatusBar1.Panels[1].text := filename;
      with lHdr do begin
           XDim.Value := dim[1];

@@ -1,5 +1,5 @@
 unit nifti_foreign;
-
+//{$DEFINE MRIcron}
 interface
 {$H+}
 {$DEFINE GZIP}
@@ -10,10 +10,8 @@ interface
 {$Include isgui.inc}
 {$ENDIF}
 uses
-
-{$IFDEF GL10} define_types,
-        {$IFNDEF FPC}gziod,{$ELSE}gzio2,{$ENDIF}
-{$ENDIF}
+{$IFDEF MRIcron}define_types,{$ENDIF}
+{$IFDEF GL10} define_types, {$IFNDEF FPC}gziod,{$ELSE}gzio2,{$ENDIF}{$ENDIF}
 {$IFDEF GZIP}zstream, {$ENDIF}
 {$IFDEF GUI}
  dialogs,
@@ -28,10 +26,13 @@ procedure NII_Clear (out lHdr: TNIFTIHdr);
 procedure NII_SetIdentityMatrix (var lHdr: TNIFTIHdr); //create neutral rotation matrix
 {$ELSE}
 Type
+  mat44 = array [0..3, 0..3] of Single;
+  {$IFNDEF MRIcron}
     	ByteRA = array [1..1] of byte;
-        mat44 = array [0..3, 0..3] of Single;
+
 	Bytep = ^ByteRA;
-procedure UnGZip(const FileName: string; buffer: bytep; offset, sz: integer);
+        procedure UnGZip(const FileName: string; buffer: bytep; offset, sz: integer);
+  {$ENDIF}
 {$ENDIF}
 function readForeignHeader (var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean): boolean;
 procedure convertForeignToNifti(var nhdr: TNIFTIhdr);

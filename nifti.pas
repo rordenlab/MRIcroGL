@@ -450,7 +450,7 @@ end;
 {$IFDEF FASTCORREL} //~10% faster, but may be less precise for large values.
 function correl(var v: TFloat32s): double;
 var
-  i, n: integer;
+  i, n: int64;
   sum, mn: double;
 
 begin
@@ -541,7 +541,7 @@ function correl(var v: TFloat32s): double;
 //aka Welford’s method for computing variance
 //https://www.strchr.com/standard_deviation_in_one_pass
 var
-  i, n: integer;
+  i, n: int64;
   sd, mn, delta: double;
 begin
      n := length(v);
@@ -564,7 +564,7 @@ end;
 {$ELSE}
 function correl(var v: TFloat32s): double;
 var
-  i, n: integer;
+  i, n: int64;
   sd, sum, mn: double;
 begin
      n := length(v);
@@ -592,7 +592,7 @@ function correlR(var x, y: TFloat32s): single;
 //assumes X already processed with correl()
 // about 10% faster in practice than running correl() twice
 var
-  i, n: integer;
+  i, n: int64;
   r, sum, mn, sd: double;
 begin
   n := length(x);
@@ -1139,7 +1139,7 @@ end;
 
 procedure NormVol (var Vol: TFloat32s);
 var
-  n,i: integer;
+  n,i: int64;
   mx,mn: single;
 begin
   n := length(Vol);
@@ -1381,10 +1381,15 @@ var
    flp: TVec3i;
     inScale: TVec3;
     inDim, inStride, outStride : TVec3i;
+    i8: UInt8;
+    i16: Int16;
+    i32: Int32;
+    half, mx: integer;
     in8: TUInt8s;
     in16, out16: TInt16s;
     in32, out32: TInt32s;
     in24, out24: TRGBs;
+    inperm: TVec3i;
     xOffset, yOffset, zOffset: array of int64;
     voxOffset, byteOffset, volBytes,vol, volumesLoaded,  x,y,z, i: int64;
 begin
@@ -1392,7 +1397,9 @@ begin
      Mat2SForm(outR, fHdr); //could skip: no change!
     exit;
   end;
-  for i := 0 to 2 do begin
+  inperm := perm;
+  printf(format('Reorient Dimensions %d %d %d', [perm.x, perm.y, perm.z]));
+ for i := 0 to 2 do begin
        flp.v[i] := 0;
        if (perm.v[i] < 0) then flp.v[i] := 1;
        perm.v[i] := abs(perm.v[i]);
@@ -1416,8 +1423,73 @@ begin
  fScale.x := inScale.v[perm.x-1];
  fScale.y := inScale.v[perm.y-1];
  fScale.z := inScale.v[perm.z-1];
+ volBytes := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3]* (fHdr.bitpix shr 3);
+ volumesLoaded := length(rawVolBytes) div volBytes;
  Mat2SForm(outR, fHdr);
  Mat2QForm(outR, fHdr);
+ //
+ if (fHdr.bitpix <> 24) and (inperm.x = -1) and (inperm.y = 2) and (inperm.z = 3) then begin
+    //optimize most common case of left-right mirror: no need to copy memory, 240ms -> 170ms
+     half := trunc(fDim.x);
+     mx := fDim.x - 1;
+     i := 0;
+     {$DEFINE OLD8} //no benefit of line copies
+     {$IFDEF OLD8}
+     setlength(in8, fDim.x);
+     if (fHdr.bitpix = 8) then begin
+       for vol := 1 to volumesLoaded do
+           for z := 0 to (fDim.z - 1) do
+               for y := 0 to (fDim.y - 1) do begin
+                   for x := 0 to half do begin
+                       i8 := rawVolBytes[i+(mx-x)];
+                       rawVolBytes[i+(mx-x)] := rawVolBytes[i+x];
+                       rawVolBytes[i+x] := i8;
+                   end;
+                   i := i + fDim.x;
+               end;
+     end;
+     {$ELSE}
+     if (fHdr.bitpix = 8) then begin
+       setlength(in8, fDim.x);
+       for vol := 1 to volumesLoaded do
+          for z := 0 to (fDim.z - 1) do
+              for y := 0 to (fDim.y - 1) do begin
+                  in8 := Copy(rawVolBytes, i, mx+1);
+                  for x := 0 to mx do
+                      rawVolBytes[i+x] := rawVolBytes[i+(mx-x)];
+                  i := i + fDim.x;
+              end;
+       in8 := nil;
+     end;
+     {$ENDIF}
+     if (fHdr.bitpix = 16) then begin
+       out16 := TInt16s(rawVolBytes);
+       for vol := 1 to volumesLoaded do
+           for z := 0 to (fDim.z - 1) do
+               for y := 0 to (fDim.y - 1) do begin
+                   for x := 0 to half do begin
+                       i16 := out16[i+(mx-x)];
+                       out16[i+(mx-x)] := out16[i+x];
+                       out16[i+x] := i16;
+                   end;
+                   i := i + fDim.x;
+               end;
+     end;   // out32 := TInt32s(rawVolBytes);
+     if (fHdr.bitpix = 32) then begin
+       out32 := TInt32s(rawVolBytes);
+       for vol := 1 to volumesLoaded do
+           for z := 0 to (fDim.z - 1) do
+               for y := 0 to (fDim.y - 1) do begin
+                   for x := 0 to half do begin
+                       i32 := out32[i+(mx-x)];
+                       out32[i+(mx-x)] := out32[i+x];
+                       out32[i+x] := i32;
+                   end;
+                   i := i + fDim.x;
+               end;
+     end;
+     exit;
+ end;
  //setup lookup tables
  setlength(xOffset, fDim.x);
  if flp.x = 1 then begin
@@ -1441,8 +1513,6 @@ begin
      for z := 0 to (fDim.z - 1) do
          zOffset[z] := z*outStride.z;
  //copy data
- volBytes := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3]* (fHdr.bitpix shr 3);
- volumesLoaded := length(rawVolBytes) div volBytes;
  SetLength(in8, volBytes);
  if volumesLoaded < 1 then exit;
  for vol := 1 to volumesLoaded do begin
@@ -2001,7 +2071,7 @@ begin
  mStream.Write(fRawVolBytes[0], length(fRawVolBytes));
  {$ENDIF}
  mStream.Position := 0;
- FileMode := fmOpenWrite;   //FileMode := fmOpenRead;
+ FileMode := fmOpenWrite;
  NiftiOutName := fnm;
  lExt := uppercase(extractfileext(NiftiOutName));
  if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
@@ -2017,7 +2087,6 @@ begin
  end;
  mStream.Free;
  FileMode := fmOpenRead;
-
 end;
 
 function NIFTIhdr_SlicesToCoord (var lHdr: TNIFTIhdr; lXslice,lYslice,lZslice: integer): TVec3;
@@ -2071,8 +2140,7 @@ begin
  end;
  ovox := (oHdr.dim[1]*oHdr.dim[2]*oHdr.dim[3]*oHdr.dim[4]);
  setlength(orawVolBytes, ovox * lBPP);
- for v := 0 to (ovox -1) do
-     orawVolBytes[v] := (v mod 255) ;
+ //FillChar(orawVolBytes[0], ovox * lBPP, 0);
  ivox := 0;
  ovox := 0;
  i16s := TInt16s(fRawVolBytes);
@@ -2109,7 +2177,7 @@ begin
  mStream.Write(oRawVolBytes[0], length(orawVolBytes));
  oRawVolBytes := nil;
  mStream.Position := 0;
- FileMode := fmOpenWrite;   //FileMode := fmOpenRead;
+ FileMode := fmOpenWrite;
  NiftiOutName := fnm;
  lExt := uppercase(extractfileext(NiftiOutName));
  if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
@@ -2185,7 +2253,7 @@ begin
  mStream.Write(oRawVolBytes[0], length(oRawVolBytes));
  oRawVolBytes := nil;
  mStream.Position := 0;
- FileMode := fmOpenWrite;   //FileMode := fmOpenRead;
+ FileMode := fmOpenWrite;
  NiftiOutName := fnm;
  lExt := uppercase(extractfileext(NiftiOutName));
  if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
@@ -2208,7 +2276,7 @@ procedure TNIfTI.SaveAsSourceOrient(NiftiOutName, HdrDescrip, IntentName: string
 
 //for drawing rotate back to orientation of input image!
 var
-   nVox: integer;
+   nVox: int64;
    oHdr  : TNIFTIhdr;
    oDim, oPerm: TVec3i;
    oScale: TVec3;
@@ -2267,7 +2335,7 @@ begin
  mStream.Write(oPad32, 4);
  mStream.Write(rawVolBytes[0],nvox * (oHdr.bitpix div 8));
  mStream.Position := 0;
- FileMode := fmOpenWrite;   //FileMode := fmOpenRead;
+ FileMode := fmOpenWrite;
  lExt := uppercase(extractfileext(NiftiOutName));
  if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
     if (lExt = '.GZ') then
@@ -2283,7 +2351,6 @@ begin
  mStream.Free;
  FileMode := fmOpenRead;
 end;
-
 
 procedure TNIfTI.SaveAsSourceOrient(NiftiOutName: string; rawVolBytes: TUInt8s);
 //for drawing rotate back to orientation of input image!
@@ -2347,7 +2414,7 @@ begin
  mStream.Write(oPad32, 4);
  mStream.Write(rawVolBytes[0],length(rawVolBytes));
   mStream.Position := 0;
- FileMode := fmOpenWrite;   //FileMode := fmOpenRead;
+ FileMode := fmOpenWrite;
  lExt := uppercase(extractfileext(NiftiOutName));
  if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
     if (lExt = '.GZ') then
@@ -2825,117 +2892,6 @@ begin
   src := nil;
 end;
 
-(*function GetCompressedFileInfo(dat: TUint8s; out outSize: int64; out crc32: dword): integer;
-//read GZ footer https://www.forensicswiki.org/wiki/Gzip
-//  http://www.zlib.org/rfc-gzip.html
-type
-TGzHdr = packed record
-   Signature: Word;
-   Method, Flags: byte;
-   ModTime: DWord;
-   Extra, OS: byte;
- end;
-var
-  b: byte;
-  pos: integer;
-  xtra: word;
-  inSize : int64; //uncompressed, compressed size
-  uSz: dword;
-  Hdr: TGzHdr;
-begin
-  result := -1;
-  inSize := length(dat);
-  crc32 := 0;
-  if inSize < (18) then
-    exit;
-  pos := 0;
-  //blockread(F, Hdr, SizeOf(Hdr) );
-  Move(dat[pos],Hdr, SizeOf(Hdr));
-  pos := pos + SizeOf(Hdr);
-  //n.b. GZ header/footer is ALWAYS little-endian
-  {$IFDEF ENDIAN_BIG}
-  Hdr.Signature := Swap(Hdr.Signature);
-  {$ENDIF}
-  if Hdr.Signature = $9C78 then begin
-    result := 2;
-    exit;
-  end;
-  if Hdr.Signature <> $8B1F then //hex: 1F 8B
-    exit;
-  if ((Hdr.Flags and $04) = $04) then begin //FEXTRA
-        Move(dat[pos],xtra, SizeOf(xtra));
-        pos := pos + SizeOf(xtra);
-        {$IFDEF ENDIAN_BIG}
-  	xtra := Swap(xtra);
-  	{$ENDIF}
-        pos := pos + SizeOf(xtra) + xtra;
-  end;
-  if ((Hdr.Flags and $08) = $08) then begin //FNAME
-  	b := 1;
-  	while (b <> 0) and (pos < inSize) do begin
-  	      b := dat[pos];
-              pos := pos + 1;
-        end;
-  end;
-  if ((Hdr.Flags and $10) = $10) then begin //FCOMMENT
-  	b := 1;
-  	while (b <> 0) and (pos < inSize) do begin
-  	      b := dat[pos];
-              pos := pos + 1;
-        end;
-  end;
-  if ((Hdr.Flags and $02) = $02) then begin //FHCRC - 16 bit CRC appened to header
-     pos := pos + 2;
-  end;
-  Move(dat[inSize-8],crc32, SizeOf(crc32));
-  Move(dat[inSize-4],uSz, SizeOf(uSz));
-  {$IFDEF ENDIAN_BIG}
-  crc32 = Swap(crc32);
-  uSz = Swap(uSz);
-  {$ENDIF}
-  outSize := uSz; //note this is the MODULUS of the file size, beware for files > 2Gb
-  result := pos;
-end;
-
-function ExtractGzNoCrc(fnm: string; var mStream : TMemoryStream; skip: int64 = 0): boolean;
-//a bit faster: do not compute CRC check
-var
-   ret, inSize, outSize: int64;
-   crc32: dword;
-   src : TUint8s;
-   f: file of byte;
-begin
-  result := false;
-  AssignFile(f, fnm);
-  FileMode := fmOpenRead;
-  Reset(f,1);
-  inSize := FileSize(f) - skip;
-  if inSize < 1 then begin
-     CloseFile(f);
-     exit;
-  end;
-  setlength(src, inSize);
-  seek(f, skip);
-  blockread(f, src[0], inSize);
-  CloseFile(f);
-  result := false;
-  ret := GetCompressedFileInfo(src, outSize, crc32);
-  //showmessage(inttostr(skip)+' '+inttostr(ret)+' '+inttostr(outSize));
-  if (ret = 2) then begin //zraw: seen in some MGH - we do not know outsize...
-     UnCompressStream(@src[0], inSize, mStream, nil, true);
-     result := true;
-  end else if (ret > 0) then begin
-     mStream.setSize(outSize);
-     mStream.position := 0;
-     ret := UnCompressMem(@src[ret], mStream.memory, inSize-ret, outSize);
-     result := (ret = outSize);
-  end else begin //assume uncompressed
-      mStream.Write(src[0],inSize);
-      result := true;
-  end;
-  src := nil;
-end; *)
-
 function ExtractGz(fnm: string; var mStream : TMemoryStream): boolean;
 var
   gz: TGZRead;
@@ -3146,7 +3102,7 @@ end;
 
 function TNIfTI.SaveOsp(OspFileName: string): boolean;
 var
-  nByte: integer;
+  nByte: int64;
   Stream : TFileStream;
   fnm : string;
   txt : TextFile;
@@ -3885,7 +3841,8 @@ begin
 end;
 var
   vol32: TFloat32s;
-  thresh, sum, i,vx: integer;
+  //n0: int64;//masked images have huge numbers of zeros!
+  thresh, sum, i,vx: int64;
   mn : Single = 1.0 / 0.0;
   mx : Single = (- 1.0) / (0.0);
   v, slope: single;
@@ -3895,9 +3852,11 @@ begin
   //vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]*fVolumesLoaded);
   vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
   //{$DEFINE RESCALE32}
+  //n0 := 0;
   {$IFDEF RESCALE32}
   for i := 0 to (vx-1) do begin
      if (specialsingle(vol32[i])) then vol32[i] := 0.0;
+     //if (vol32[i] = 0) then n0 := n0 + 1;
      vol32[i] := (vol32[i] * fHdr.scl_slope) + fHdr.scl_inter;
      if vol32[i] < mn then
         mn := vol32[i];
@@ -3912,6 +3871,7 @@ begin
   for i := 0 to (vx-1) do begin
      if (specialsingle(vol32[i])) then vol32[i] := 0.0;
      v := (vol32[i] * fHdr.scl_slope) + fHdr.scl_inter;
+     //if (vol32[i] = 0) then n0 := n0 + 1;
      if v < mn then
         mn := v;
      if v > mx then
@@ -3955,12 +3915,15 @@ begin
   fAutoBalMax := (i/slope) + mn;
   fAutoBalMax := (fAutoBalMax * fHdr.scl_slope) + fHdr.scl_inter;
   {$ENDIF}
-  if (fAutoBalMax = fAutoBalMin) then
+  //if (fMax > 0.0) and (n0 > (10 * thresh)) then
+  //   fAutoBalMax := fMax; //masked image - huge number of zeros
+   if (fAutoBalMax = fAutoBalMin) then
      fAutoBalMax := ((i+1) * 1/slope) + mn;
   initHistogram(histo);
   histo := nil;
   {$IFDEF TIMER}
   //printf(format('float voxels %d slope %g inter %g',[vx, fHdr.scl_slope, fHdr.scl_inter]));
+  //printf(format('n0 = %d (%g)', [n0, n0/vx]));
   printf(format('float range %g..%g',[fMin,fMax]));
   printf(format('float window %g...%g', [ fAutoBalMin, fAutoBalMax]));
   {$ENDIF}
@@ -3976,7 +3939,7 @@ var
   histo, histo8: TUInt32s;
   vol16: TInt16s;
   slope: single;
-  i, j, vx, mn,mx, thresh, sum: integer;
+  i, j, vx, mn,mx, thresh, sum: int64;
 begin
   vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
   if vx < 1 then exit;
@@ -4060,7 +4023,7 @@ end;
 var
   vol16: TInt16s;
   histo: TUInt32s;
-  i, vx,mn,mx, thresh, sum: integer;
+  i, vx,mn,mx, thresh, sum: int64;
   slope: single;
 begin
   setlength(histo, kMaxBin+1); //0..kMaxBin
@@ -4302,7 +4265,7 @@ begin
  if fHdr.datatype = kDT_INT16 then begin //16 bit data
    vol16 := TInt16s(vol8);
    for v := 0 to (vx-1) do
-       fCache8[v] := ((vol16[v+skipVx]-1) mod 100)+1;//lCLUT8[((lTexture.RawUnscaledImg16^[lVox]-1) mod 100)+1];
+       fCache8[v] := ((vol16[v+skipVx]-1) mod 100)+1;
  end else begin
        for v := 0 to (vx-1) do
             fCache8[v] := vol8[v+skipVx];
