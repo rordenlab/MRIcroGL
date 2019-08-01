@@ -26,7 +26,7 @@ begin
   Application.CreateForm(TResizeForm, ResizeForm);
   Application.CreateForm(TCropForm, CropForm);
   //{$ifdef windows} SetDarkTheme; {$endif}
-  {$IFDEF LCLGtk2}ConstrainTrackBars();{$ENDIF}  //https://bugs.freepascal.org/view.php?id=35861
+  //{$IFDEF LCLGtk2}ConstrainTrackBars();{$ENDIF}  //if unpatched, see https://bugs.freepascal.org/view.php?id=35861
   Application.Run;
   //Windows: if you get an error "Can't find object file" you can copy the 'static' folder from
   //  https://github.com/synopse/mORMot

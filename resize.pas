@@ -91,8 +91,10 @@ begin
      OutLabel.Caption:= format('Output: %dx%dx%d voxels %.4gx%.4gx%.4g mm', [outDim.x, outDim.y, outDim.z, outMM.x, outMM.y, outMM.z]);
      inBytes := gDim.X * gDim.y * gDim.z * (gBPP div 8);
      if inBytes <= 0 then exit;
-     if DataTypeDrop.ItemIndex = 0 then
-     bpp := 8
+     if not DataTypeDrop.enabled then //DT_RGB
+        bpp := 24
+     else if DataTypeDrop.ItemIndex = 0 then
+        bpp := 8
      else if DataTypeDrop.ItemIndex = 1 then
           bpp := 16
      else
@@ -142,8 +144,12 @@ begin
      gBPP := hdr.bitpix;
      //gMM := mm;
      //gDim := Dim;
+     DataTypeDrop.Enabled := true;
      AllVolumesCheck.Enabled := hdr.dim[4] > 1;
-     if hdr.datatype = kDT_UNSIGNED_CHAR then
+     if hdr.datatype = kDT_RGB then begin
+        DataTypeDrop.ItemIndex := 0;
+        DataTypeDrop.Enabled := false;
+     end else if hdr.datatype = kDT_UNSIGNED_CHAR then
         DataTypeDrop.ItemIndex := 0
      else if hdr.datatype = kDT_SIGNED_SHORT then
           DataTypeDrop.ItemIndex := 1
@@ -152,7 +158,7 @@ begin
      if isLabel then
         FilterDrop.ItemIndex := 0 //Nearest
      else
-         FilterDrop.ItemIndex := 6; //Mitchell
+         FilterDrop.ItemIndex := 7; //Automatic Mitchell
      IsotropicBtn.Enabled := (gMM.x <> gMM.y) or (gMM.x <> gMM.z);
      IsotropicShrinkBtn.Enabled := IsotropicBtn.Enabled;
      Caption := 'Resize '+filename;
@@ -160,7 +166,9 @@ begin
      Self.showmodal;
      result := ReadScale();
      Filter :=  FilterDrop.ItemIndex;
-     if DataTypeDrop.ItemIndex = 0 then
+     if hdr.datatype = kDT_RGB then
+        datatype := kDT_RGB
+     else if DataTypeDrop.ItemIndex = 0 then
           datatype := kDT_UNSIGNED_CHAR
      else if DataTypeDrop.ItemIndex = 1 then
           datatype := kDT_SIGNED_SHORT

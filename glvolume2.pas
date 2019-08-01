@@ -17,6 +17,9 @@ uses
 const
  kDefaultDistance = 2.25;
  kMaxDistance = 40;
+ kGradientModeGPUFast = 0;
+ kGradientModeGPUSlow = 1;
+ kGradientModeCPUSlowest = 2;
 type
   TGPUVolume = class
       private
@@ -59,6 +62,7 @@ type
         procedure CreateOverlayTextures(Dim: TVec3i; volRGBA: TRGBAs);
       public
         matcapLoc: GLint;
+        gradientMode: integer;
         {$IFDEF VIEW2D}
         SelectionRect: TVec4;
         property ShowColorEditor: boolean read colorEditorVisible write colorEditorVisible;
@@ -85,6 +89,7 @@ type
         property LightPosition: TVec4 read fLightPos write fLightPos;
         property ClipPlane: TVec4 read fClipPlane write fClipPlane;
         procedure Prepare(shaderName: string);
+        procedure SetGradientMode(newMode: integer);
         constructor Create(fromView: TOpenGLControl);
         procedure Paint(var vol: TNIfTI);
         procedure SetShader(shaderName: string);
@@ -96,6 +101,7 @@ type
 implementation
 
 //uses mainunit;
+
 
 procedure printf (lS: AnsiString);
 begin
@@ -114,6 +120,28 @@ begin
   inherited;
 end;
 
+procedure GetErrorAll(p: integer; str: string = '');  //report OpenGL Error
+{$IFDEF UNIX}
+  var
+    Error: GLenum;
+    s: string;
+  begin
+   Error := glGetError();
+   if Error = GL_NO_ERROR then exit;
+    s := inttostr(p)+'->';
+   if Error = GL_INVALID_ENUM then
+      s := s+'GL_INVALID_ENUM'
+   else if Error = GL_INVALID_VALUE then
+      s := s+'GL_INVALID_VALUE' //out of range https://www.khronos.org/registry/OpenGL-Refpages/es2.0/xhtml/glGetError.xml
+   else
+       s := s + inttostr(Error);
+   writeln('>>OpenGL Error (reduce MaxVox) '+str+s);
+end;
+{$ELSE}
+begin
+  //
+end;
+{$ENDIF}
 
 procedure  TGPUVolume.SetTextContrast(clearclr: TRGBA);
 begin
@@ -192,9 +220,25 @@ begin
 end;
 
 {$IFDEF GPUGRADIENTS}
-function bindBlankGL(Xsz,Ysz,Zsz: integer): GLuint;
+function bindBlankGL(Xsz,Ysz,Zsz, gradientMode: integer): GLuint;
+var
+  width, height, depth: GLint;
 begin //creates an empty texture in VRAM without requiring memory copy from RAM
     //later run glDeleteTextures(1,&oldHandle);
+    GetErrorAll(101,'PreBindBlank');
+    if (gradientMode = kGradientModeGPUFast) then
+       glTexImage3D(GL_PROXY_TEXTURE_3D, 0, GL_RGBA8, XSz, YSz, ZSz, 0, GL_RGBA, GL_UNSIGNED_BYTE, NIL)
+    else
+       glTexImage3D(GL_PROXY_TEXTURE_3D, 0, GL_RGBA16, XSz, YSz, ZSz, 0, GL_RGBA, GL_UNSIGNED_BYTE, NIL);
+    glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, @width);
+    glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, @height);
+    glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, @depth);
+    //https://www.opengl.org/archives/resources/faq/technical/texture.htm
+    printf(format('blur proxy test %dx%dx%d',[width, height, depth]));
+    if (width < Xsz) then begin
+       {$IFDEF UNIX}writeln('Unable to generate gradient texture. Solution: adjust "MaxVox" or press "Reset" button in preferences.');{$ENDIF}
+       exit(0);
+    end;
     glGenTextures(1, @result);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glBindTexture(GL_TEXTURE_3D, result);
@@ -203,7 +247,11 @@ begin //creates an empty texture in VRAM without requiring memory copy from RAM
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); //, GL_CLAMP_TO_BORDER) will wrap
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA16, XSz, YSz, ZSz, 0, GL_RGBA, GL_UNSIGNED_BYTE, nil);
+    if (gradientMode = kGradientModeGPUFast) then
+       glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA8, XSz, YSz, ZSz, 0, GL_RGBA, GL_UNSIGNED_BYTE, nil)
+    else
+        glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA16, XSz, YSz, ZSz, 0, GL_RGBA, GL_UNSIGNED_BYTE, nil);
+    GetErrorAll(101,'BindBlank');
 end;
 
 procedure glUniform1ix(prog: GLuint; name: AnsiString; value: integer);
@@ -268,42 +316,6 @@ const kSobelFrag = '#version 330 core'
 +#10'  FragColor = gradientSample;'
 +#10'}';
 
-procedure TGPUVolume.UpdateDraw(Drawing: TDraw);
-begin
-     if not Drawing.NeedsUpdate then exit;
-     if Drawing.IsOpen then
-        CreateDrawTex(Drawing.Dim, Drawing.VolRawBytes)
-     else
-        CreateDrawTex(pti(4,4,4), nil);
-     Drawing.NeedsUpdate := false;
-end;
-
-procedure TGPUVolume.CreateDrawTex(Dim: TVec3i; Vals: TUInt8s);
-//portion of voiCreate that requires OpenGL context
-var
-   vx,i: int64;
-   v: TUInt8s;
-begin
-  if (drawTexture3D <> 0) then glDeleteTextures(1,@drawTexture3D);
-  glPixelStorei(GL_UNPACK_ALIGNMENT,1);
-  glGenTextures(1, @drawTexture3D);
-  glBindTexture(GL_TEXTURE_3D, drawTexture3D);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
-  if (Vals = nil) then begin
-     vx := prod(Dim);//Xsz * Ysz * Zsz;
-     setlength(v,vx);
-     for i := 0 to (vx -1) do
-         v[i] := random(3);
-     glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, Dim.X, Dim.Y, Dim.Z, 0, GL_RED, GL_UNSIGNED_BYTE,@v[0]);
-     v := nil;
-  end else
-      glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, Dim.X, Dim.Y, Dim.Z, 0, GL_RED, GL_UNSIGNED_BYTE,@Vals[0]);
-end;
-
 procedure TGPUVolume.CreateGradientVolumeGPU(Xsz,Ysz,Zsz: integer; var inTex, grTex: GLuint);
 //given 3D input texture inTex (with dimensions Xsz, Ysz, Zsz) generate 3D gradient texture gradTex
 //http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-14-render-to-texture/
@@ -314,25 +326,24 @@ var
    fb, tempTex3D: GLuint;{$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
 begin
   glFinish();//force update
-  {$IFDEF TIMER}startTime := now;
-  {$ELSE}
-  {$IFDEF UNIX}printf('Creating GPU gradients');{$ENDIF}
-  {$ENDIF}
+  {$IFDEF TIMER}startTime := now;{$ENDIF}
   glBindVertexArray(vao);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboBox3D);
   glGenFramebuffers(1, @fb);
   glBindFramebuffer(GL_FRAMEBUFFER, fb);
   glDisable(GL_CULL_FACE);
+  GetErrorAll(96,'CreateGradient');
   //{$IFNDEF COREGL}glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);{$ENDIF}// <- REQUIRED
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+  GetErrorAll(97,'CreateGradient');
   glViewport(0, 0, XSz, YSz);
-  glDisable(GL_TEXTURE_2D);
+  //glDisable(GL_TEXTURE_2D); //<- generates error!
   glDisable(GL_BLEND);
   //STEP 1: run smooth program gradientTexture -> tempTex3D
-  tempTex3D := bindBlankGL(Xsz,Ysz,Zsz);
+  tempTex3D := bindBlankGL(Xsz,Ysz,Zsz, gradientMode);
   glUseProgram(programBlur);
   glActiveTexture( GL_TEXTURE1);
   //glBindTexture(GL_TEXTURE_3D, gRayCast.gradientTexture3D);//input texture
@@ -354,7 +365,10 @@ begin
       {$ELSE}
       glDrawElements(GL_TRIANGLES, 2*3, GL_UNSIGNED_INT, nil);
       {$ENDIF}
+      //GetErrorAll(i,'dCreateGradient');
+      //xxxxxx glCheckFramebufferStatus
   end;
+  GetErrorAll(101,'CreateGradient');
   glUseProgram(0);
   //STEP 2: run sobel program gradientTexture -> tempTex3D
   //glUseProgramObjectARB(gRayCast.glslprogramSobel);
@@ -380,16 +394,54 @@ begin
     end;
     glUseProgram(0);
     glFinish();//force update
+    GetErrorAll(102,'CreateGradient');
      //clean up:
      glDeleteTextures(1,@tempTex3D);
      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    GetErrorAll(103,'CreateGradient');
      glDeleteFramebuffers(1, @fb);
      glActiveTexture( GL_TEXTURE0 );  //required if we will draw 2d slices next
     {$IFDEF TIMER}printf(format('GPU Gradient time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
 end;
 
 {$ENDIF}
+procedure TGPUVolume.UpdateDraw(Drawing: TDraw);
+begin
+     if not Drawing.NeedsUpdate then exit;
+     if Drawing.IsOpen then
+        CreateDrawTex(Drawing.Dim, Drawing.VolRawBytes)
+     else
+        CreateDrawTex(pti(4,4,4), nil);
+     Drawing.NeedsUpdate := false;
+end;
 
+procedure TGPUVolume.CreateDrawTex(Dim: TVec3i; Vals: TUInt8s);
+//portion of voiCreate that requires OpenGL context
+var
+   vx,i: int64;
+   v: TUInt8s;
+begin
+  GetErrorAll(96,'CreatDrawTex');
+  if (drawTexture3D <> 0) then glDeleteTextures(1,@drawTexture3D);
+  glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+  glGenTextures(1, @drawTexture3D);
+  glBindTexture(GL_TEXTURE_3D, drawTexture3D);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
+  if (Vals = nil) then begin
+     vx := prod(Dim);//Xsz * Ysz * Zsz;
+     setlength(v,vx);
+     for i := 0 to (vx -1) do
+         v[i] := random(3);
+     glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, Dim.X, Dim.Y, Dim.Z, 0, GL_RED, GL_UNSIGNED_BYTE,@v[0]);
+     v := nil;
+  end else
+      glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, Dim.X, Dim.Y, Dim.Z, 0, GL_RED, GL_UNSIGNED_BYTE,@Vals[0]);
+  GetErrorAll(102,'CreatDrawTex');
+end;
 const
  //This fall-back render shader is used if the shader folder is not found or is empty
 kVert = '#version 330 core'
@@ -808,9 +860,18 @@ begin
      clrbar := fromColorbar;
 end;
 
+procedure TGPUVolume.SetGradientMode(newMode: integer);
+begin
+  gradientMode := kGradientModeGPUSlow;
+  if (newMode = kGradientModeGPUFast) or (newMode = kGradientModeCPUSlowest) then
+     gradientMode := newMode;
+  //gradientMode := kGradientModeCPUSlowest;
+end;
+
 constructor TGPUVolume.Create(fromView: TOpenGLControl);
 begin
   glControl := fromView;
+  gradientMode := kGradientModeGPUSlow;
   clrbar := nil;
   fDistance := kDefaultDistance;
   fAzimuth := 110;
@@ -900,6 +961,7 @@ begin
   //GLForm1.LayerBox.Caption := ':>>'+inttostr(random(888));
   if (overlayIntensityTexture3D <> 0) then glDeleteTextures(1,@overlayIntensityTexture3D);
   if (overlayGradientTexture3D <> 0) then glDeleteTextures(1,@overlayGradientTexture3D);
+  GetErrorAll(101,'OverlayTexture');
   if (volRGBA = nil) then begin
     Dim := pti(1,1,1);
      setlength(volRGBA,1);
@@ -915,6 +977,7 @@ begin
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
  glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, Dim.X, Dim.Y, Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE, @volRGBA[0]);
+ GetErrorAll(103,'OverlayTexture');
  //if skipGradientCalc then exit; //faster - for real time drawing
  glPixelStorei(GL_UNPACK_ALIGNMENT,1);
  glGenTextures(1, @overlayGradientTexture3D);
@@ -927,22 +990,27 @@ begin
  //startTime := Now;
   if (Dim.X > 1) then begin
     {$IFDEF GPUGRADIENTS}
-    SetLength (gradData, Dim.X*Dim.Y*Dim.Z);
-    glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Dim.X, Dim.Y, Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@gradData[0]);
-    gradData := nil;
-    CreateGradientVolumeGPU (Dim.X, Dim.Y, Dim.Z, overlayIntensityTexture3D, overlayGradientTexture3D);
-    {$ELSE}
-    //Vol.CreateGradientVolume (volRGBA, Dim.X, Dim.Y, Dim.Z, gradData);
-    CreateGradientVolumeX (TUInt8s(volRGBA), Dim.X, Dim.Y, Dim.Z, 1, gradData);
-    glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Dim.X, Dim.Y, Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@gradData[0]);
-    gradData := nil;
-    //Form1.Caption := 'CPU gradients '+inttostr(MilliSecondsBetween(Now,startTime))+' ms ';
+    if (gradientMode <> kGradientModeCPUSlowest) then begin
+       SetLength (gradData, Dim.X*Dim.Y*Dim.Z);
+       glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Dim.X, Dim.Y, Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@gradData[0]);
+       gradData := nil;
+       CreateGradientVolumeGPU (Dim.X, Dim.Y, Dim.Z, overlayIntensityTexture3D, overlayGradientTexture3D);
+    end else begin
+    {$ENDIF}
+      //Calculate gradients on the CPU
+      //Vol.CreateGradientVolume (volRGBA, Dim.X, Dim.Y, Dim.Z, gradData);
+      CreateGradientVolumeX (TUInt8s(volRGBA), Dim.X, Dim.Y, Dim.Z, 1, gradData);
+      glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Dim.X, Dim.Y, Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@gradData[0]);
+      gradData := nil;
+      //Form1.Caption := 'CPU gradients '+inttostr(MilliSecondsBetween(Now,startTime))+' ms ';
+    {$IFDEF GPUGRADIENTS}
+    end;
     {$ENDIF}
   end else
       glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Dim.X, Dim.Y, Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@volRGBA[0]);
  overlayGradTexWidth := Dim.X;
+ GetErrorAll(104,'OverlayGradient');
  //GLForm1.LayerBox.Caption := ':>>'+inttostr(random(888));
-
  volRGBA := nil; //free
 end;
 
@@ -967,6 +1035,7 @@ end;
 
 function TGPUVolume.LoadTexture(var vol: TNIfTI): boolean;
 var
+ //i,j: int64;
  width, height, depth: GLint;
  gradData: TRGBAs;
  //startTime : TDateTime;
@@ -982,9 +1051,9 @@ begin
  glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, @height);
  glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, @depth);
  //https://www.opengl.org/archives/resources/faq/technical/texture.htm
- {$IFDEF UNIX}printf(format('intensityTexture3D proxy test %dx%dx%d',[width, height, depth]));{$ENDIF}
+ printf(format('intensityTexture3D proxy test %dx%dx%d',[width, height, depth]));
  if (width < 1) then begin
-    {$IFDEF UNIX}writeln(format('Unable to large intensity texture (%dx%dx%d). Solution: adjust "MaxVox" or press "Reset" button in preferences.', [Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z]));{$ENDIF}
+    printf(format('Unable to create large intensity texture (%dx%dx%d). Solution: adjust "MaxVox" or press "Reset" button in preferences.', [Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z]));
     glControl.ReleaseContext;
     {$IFNDEF LCLCocoa}
     showmessage('Image too large. Try adjusting "MaxVox" or press "Reset" button in preferences.');
@@ -1004,7 +1073,14 @@ begin
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);   //GL_CLAMP_TO_EDGE
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE); *)
+ //glFinish();//<<
+ (*j := (Vol.Dim.X * Vol.Dim.Y * Vol.Dim.Z) - 1;
+ for i := 0 to j do begin
+     Vol.VolRGBA[i].R := i mod 255;
+     Vol.VolRGBA[i].A := Vol.VolRGBA[i].R;
+ end; *)
  glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE, @Vol.VolRGBA[0]);
+ GetErrorAll(106,'LoadTexture');
  glPixelStorei(GL_UNPACK_ALIGNMENT,1);
  glGenTextures(1, @gradientTexture3D);
  glBindTexture(GL_TEXTURE_3D, gradientTexture3D);
@@ -1030,17 +1106,26 @@ begin
     exit;
  end;
  {$IFDEF GPUGRADIENTS}
- SetLength (gradData, Vol.Dim.X*Vol.Dim.Y*Vol.Dim.Z);
- glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@gradData[0]);
- gradData := nil;
- CreateGradientVolumeGPU (Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, intensityTexture3D, gradientTexture3D);
- {$ELSE}
+    if (gradientMode <> kGradientModeCPUSlowest) then begin
+       SetLength (gradData, Vol.Dim.X*Vol.Dim.Y*Vol.Dim.Z);
+       //glFinish();//<<
+       glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@gradData[0]);
+       GetErrorAll(107,'TextureGradient');
+       //glFinish();//<<
+       gradData := nil;
+       CreateGradientVolumeGPU (Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, intensityTexture3D, gradientTexture3D);
+       GetErrorAll(108,'TextureGradient'); //1286
+ end else begin
+ {$ENDIF}
  gradData := Vol.GenerateGradientVolume;
  //CreateGradientVolume (Vol.VolRGBA, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, gradData);
  glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Vol.Dim.X, Vol.Dim.Y,Vol.Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@gradData[0]);
  gradData := nil;
  //Form1.Caption := 'CPU gradients '+inttostr(MilliSecondsBetween(Now,startTime))+' ms ';
+ {$IFDEF GPUGRADIENTS}
+ end;
  {$ENDIF}
+ GetErrorAll(109,'TextureGradient');
  maxDim := max(Vol.Dim.X,max(Vol.Dim.Y,Vol.Dim.Z));
  Vol.GPULoadDone;
  if (overlayIntensityTexture3D = 0) then CreateOverlayTextures(Vol.Dim, nil); //load blank overlay

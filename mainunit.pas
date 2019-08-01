@@ -33,7 +33,7 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20190707'; //+fixes Metal memory leak
+  kVers = '1.2.20190720'; //+fixes Metal memory leak
 type
 
   { TGLForm1 }
@@ -300,6 +300,7 @@ type
     X2TrackBar: TTrackBar;
     YTrackBar: TTrackBar;
     ZTrackBar: TTrackBar;
+    procedure LayerContrastChange(Sender: TObject);
     procedure UpdateCropMask(msk: TVec6);
     procedure CreateOverlapImageMenuClick(Sender: TObject);
     procedure CreateSubtractionPlotMenuClick(Sender: TObject);
@@ -406,7 +407,7 @@ type
     procedure CoordEditChange(Sender: TObject);
     procedure CutNearBtnClick(Sender: TObject);
     procedure CutNoneBtnClick(Sender: TObject);
-    procedure SetFormDarkMode(var f: TForm);
+    procedure SetFormDarkMode(f: TForm);
     procedure SetToolPanelMaxWidth();
     procedure DisplayViewMenu(Sender: TObject);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
@@ -567,6 +568,7 @@ begin
   ViewGPU1.Invalidate;
 end;
 
+
 procedure TGLForm1.ZoomBtnClick(Sender: TObject);
 begin
   Vol1.Slices.ZoomCenter := Vec3(0.5, 0.5, 0.5);
@@ -593,6 +595,7 @@ var
  niftiVol: TNIfTI;
  mm: TVec3;
  clr: integer;
+ vol8:TUInt8s;
 begin
   //if not Vols.Drawing.IsOpen then exit;
   EnsureOpenVoi();
@@ -602,7 +605,12 @@ begin
   if not vols.Layer(0,niftiVol) then exit;
   EnsureOpenVoi();
   mm := Vec3(niftiVol.Header.pixdim[1], niftiVol.Header.pixdim[2], niftiVol.Header.pixdim[3]);
-  Vols.Drawing.voiMorphologyFill(niftiVol.DisplayMinMax2Uint8, clr, mm.X, mm.Y, mm.Z, Origin.X, Origin.Y, Origin.Z, dxOrigin, radiusMM, drawMode);
+  if niftiVol.Header.datatype = kDT_RGB then begin
+      vol8 := niftiVol.DisplayRGBGreen;
+      Vols.Drawing.voiMorphologyFill(vol8, clr, mm.X, mm.Y, mm.Z, Origin.X, Origin.Y, Origin.Z, dxOrigin, radiusMM, drawMode);
+      vol8 := nil; //free
+  end else
+      Vols.Drawing.voiMorphologyFill(niftiVol.DisplayMinMax2Uint8, clr, mm.X, mm.Y, mm.Z, Origin.X, Origin.Y, Origin.Z, dxOrigin, radiusMM, drawMode);
   ViewGPU1.Invalidate;
 end;
 
@@ -2479,7 +2487,7 @@ begin
      ToolPanel.Constraints.MaxWidth:= mx+8;
 end;
 
-procedure TGLForm1.SetFormDarkMode(var f: TForm);
+procedure TGLForm1.SetFormDarkMode(f: TForm);
 begin
  {$IFDEF LCLCocoa}{$IFDEF NewCocoa}
   if not gPrefs.DarkMode then exit;
@@ -2735,11 +2743,11 @@ begin
         if vols.NumLayers < 1 then exit;
         for i := 1 to vols.NumLayers do begin
             vols.Layer(i-1,v);
-            if v.Header.dim[4] > 1 then
+            if v.VolumesTotal > 1 then
                isMultiVol := true;
             s := v.ShortName;
-            if v.Header.dim[4] > 1 then
-               s := format('%d/%d: ', [v.VolumeDisplayed+1, v.Header.dim[4]] )+s;
+            if v.VolumesTotal > 1 then
+               s := format('%d/%d: ', [v.VolumeDisplayed+1, v.VolumesTotal] )+s;
             LayerList.Items.add(s);
             LayerList.Checked[i-1] := true;
         end;
@@ -2812,11 +2820,15 @@ begin
      UpdateLayerBox(false);
 end;
 
+procedure TGLForm1.LayerContrastChange(Sender: TObject);
+begin
+ LayerWidgetChangeTimer.enabled := true;
+end;
+
 procedure TGLForm1.LayerContrastKeyUp(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 begin
-     LayerWidgetChangeTimer.enabled := true;
-     //LayerWidgetChange(Sender);
+//     LayerWidgetChangeTimer.enabled := true;
 end;
 
 procedure TGLForm1.LineColorBtnClick(Sender: TObject);
@@ -3350,7 +3362,7 @@ begin
   LayerCutoutMenu.Checked := niftiVol.HiddenByCutout;
   LayerZeroIntensityInvisibleMenu.Checked := niftiVol.ZeroIntensityInvisible;
   LayerInvertColorMapMenu.Checked := niftiVol.CX.InvertColorMap;
-  LayerPrevVolumeMenu.Enabled := (niftiVol.Header.dim[4] > 1);
+  LayerPrevVolumeMenu.Enabled := (niftiVol.VolumesTotal > 1);
   LayerNextVolumeMenu.Enabled := LayerPrevVolumeMenu.Enabled;
   LayerShowBidsMenu.Enabled := (niftiVol.BidsName <> '');
   if (i = 0) then
@@ -3921,8 +3933,8 @@ begin
           exit;
        end;
        gGraph.HorizontalSelection:= niftiVol.VolumeDisplayed;
-       if (niftiVol.VolumesLoaded < niftiVol.Header.dim[4]) then
-          gGraph.AddLine(graphLine,format('%s (%d of %d) [%d %d %d]',[niftiVol.ShortName, niftiVol.VolumesLoaded, niftiVol.header.dim[4], vox.x, vox.y, vox.z]), true)
+       if (niftiVol.VolumesLoaded < niftiVol.VolumesTotal) then
+          gGraph.AddLine(graphLine,format('%s (%d of %d) [%d %d %d]',[niftiVol.ShortName, niftiVol.VolumesLoaded, niftiVol.VolumesTotal, vox.x, vox.y, vox.z]), true)
        else
            gGraph.AddLine(graphLine,format('%s [%d %d %d]',[niftiVol.ShortName, vox.x, vox.y, vox.z]), true);
        ViewGPUg.Invalidate;
@@ -4170,8 +4182,8 @@ begin
      exit;
   end;
   if (isDICOM(fnm)) then begin
-  //if (not isNifti(Filenames[0])) then begin
-     fnm := dcm2Nifti(dcm2niiForm.getCustomDcm2niix, fnm);
+     //if (not isNifti(Filenames[0])) then begin
+     fnm := dcm2Nifti(dcm2niiForm.getCurrentDcm2niix, fnm);
      if fnm = '' then exit;
      AddBackground(fnm, false, true);
      if fnm <> Filenames[0] then
@@ -4467,7 +4479,11 @@ var
    isAllVolumes: boolean;
 begin
  if not vols.Layer(0, nii) then exit;
- //showmessage(format('%d %d', [nii.Header.dim[4], nii.VolumesLoaded])); exit;
+ (*if (nii.Header.datatype= kDT_RGB) then begin
+    showmessage('This function does not yet support RGB images');
+    exit;
+ end;*)
+ //showmessage(format('%d %d', [nii.VolumesTotal], nii.VolumesLoaded])); exit;
  //nii.SaveRescaled('fx.nii', 0.5, 0.5, 0.5, kDT_FLOAT, 6); exit;
  //nii.SaveRescaled('fx.nii', 0.75, 0.75, 0.75, kDT_FLOAT, 6); exit;
  //nii.SaveRescaled('fx.nii', 0.5, 0.5, 0.5, kDT_SIGNED_SHORT, 6); exit;
@@ -4477,7 +4493,7 @@ begin
  scale := ResizeForm.GetScale(hdr, nii.isLabels, nii.ShortName, datatype, filter, isAllVolumes);
  if scale.x <= 0 then exit;
  if (scale.x = 1) and (scale.y = 1) and (scale.z = 1) and (datatype = hdr.datatype) then begin
-    showmessage('No change to volume size. ' +inttostr(datatype));
+    showmessage('Nothing to do: no change to volume.' );
     exit;
  end;
  //ResizeForm.ShowModal;
@@ -4535,8 +4551,7 @@ begin
  dim4.x := nii.Dim.x;
  dim4.y := nii.Dim.y;
  dim4.z := nii.Dim.z;
- dim4.t := nii.header.dim[4];
-
+ dim4.t := nii.volumesLoaded;//nii.header.dim[4];
  CropForm.GetCrop(dim4, nii.ShortName);
  (*if crop.xLo < 0 then exit;
  dlg := TSaveDialog.Create(self);
@@ -5106,7 +5121,7 @@ var
   DestPtr: PInteger;
 begin
  if (gPrefs.BitmapZoom = 1) and (gPrefs.DisplayOrient <> kMosaicOrient) then begin
-    result := ScreenShot(GLBox, gPrefs.ScreenCaptureTransparentBackground); //CRW
+    result := ScreenShot(GLBox, gPrefs.ScreenCaptureTransparentBackground); //update Metal-Demos if you get an error here
     exit;
  end;
  w := GLBox.ClientWidth;
@@ -5264,10 +5279,10 @@ var
 begin
   for i := 1 to vols.NumLayers do begin
     vols.Layer(i-1,v);
-    if v.Header.dim[4] < 2 then
+    if v.VolumesTotal < 2 then
        continue;
     v.SetDisplayVolume(v.VolumeDisplayed + 1);
-    //LayerBox.caption := format('%d %d/%d ',[i,v.VolumeDisplayed+1, v.Header.dim[4]]); //+1 as indexed from 1
+    //LayerBox.caption := format('%d %d/%d ',[i,v.VolumeDisplayed+1, v.VolumesTotal]); //+1 as indexed from 1
     UpdateLayerBox(true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
     //UpdateTimer.Enabled := true;
     UpdateTimerTimer(Sender);
@@ -5291,13 +5306,13 @@ begin
  result := false;
  for i := 1 to vols.NumLayers do begin
    vols.Layer(i-1,v);
-   if v.Header.dim[4] < 2 then
+   if v.VolumesTotal < 2 then
       continue;
    if (Sender as TMenuItem).Tag = 1 then
       v.SetDisplayVolume(v.VolumeDisplayed + 1)
    else
        v.SetDisplayVolume(v.VolumeDisplayed - 1);
-   //LayerBox.caption := format('%d %d/%d ',[i,v.VolumeDisplayed+1, v.Header.dim[4]]); //+1 as indexed from 1
+   //LayerBox.caption := format('%d %d/%d ',[i,v.VolumeDisplayed+1, v.VolumesTotal]); //+1 as indexed from 1
    UpdateLayerBox(true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
    UpdateTimer.Enabled := true;
    {$IFDEF GRAPH}
@@ -5337,9 +5352,8 @@ begin
      if (f < 0) or (f > 1) then exit;
      if f = 1 then f := f - 0.000001;
      if not vols.Layer(0,v) then exit;
-     //if (v.Header.dim[4] < 2 then exit;
      if (v.VolumesLoaded < 2) then exit;
-     vol := trunc(v.VolumesLoaded * f) ; // 0...(v.Header.dim[4]-1)
+     vol := trunc(v.VolumesLoaded * f) ; // 0...(v.VolumesTotal-1)
      v.SetDisplayVolume(vol);
      gGraph.HorizontalSelection:= v.VolumeDisplayed;
      gGraph.isRedraw := true;
@@ -5377,12 +5391,12 @@ begin
   i := LayerList.ItemIndex;
   if (i < 0) or (i >= LayerList.Count) then exit;
   if not vols.Layer(LayerList.ItemIndex,v) then exit;
-  if v.Header.dim[4] < 2 then exit;
+  if v.VolumesTotal < 2 then exit;
   if (Sender as TMenuItem).Tag = 1 then
      v.SetDisplayVolume(v.VolumeDisplayed + 1)
   else
       v.SetDisplayVolume(v.VolumeDisplayed - 1);
-  //caption := format('%d/%d ',[v.VolumeDisplayed+1, v.Header.dim[4]]); //+1 as indexed from 1
+  //caption := format('%d/%d ',[v.VolumeDisplayed+1, v.VolumesTotal]); //+1 as indexed from 1
   UpdateLayerBox(true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
   UpdateTimer.Enabled := true;
 end;
@@ -6388,6 +6402,7 @@ begin
   {$IFNDEF METALAPI}
   {$IFDEF LCLCocoa}
   HelpPrefMenu.Visible:= false;
+  Vol1.SetGradientMode(gPrefs.GradientMode);
   ViewGPU1.setRetina(gPrefs.RetinaDisplay);
   {$ENDIF}
   ViewGPU1.MakeCurrent(false);

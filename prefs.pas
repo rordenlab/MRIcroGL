@@ -9,7 +9,7 @@ const
 type
   TMRU =  array [1..knMRU] of string;
   TPrefs = record
-         AnimationIntervalMsec, LineWidth, StartupWindowMode,DisplayOrient, StartupDisplayOrient, ColorbarSize,ColorbarPosition, Quality1to10, BitmapZoom, MaxVox: integer;
+         GradientMode, AnimationIntervalMsec, LineWidth, StartupWindowMode,DisplayOrient, StartupDisplayOrient, ColorbarSize,ColorbarPosition, Quality1to10, BitmapZoom, MaxVox: integer;
          ScreenCaptureTransparentBackground, LandmarkPanel, LoadFewVolumes, LabelOrient, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay, FlipYZ, FlipLR_Radiological, SkipPrefWriting: boolean;
          CustomDcm2niix, PyLib, MosaicStr, InitScript, PrevBackgroundImage: string;
          ClearColor: TRGBA;
@@ -65,6 +65,7 @@ begin
             DisplayOrient:= kAxCorSagOrient; //kRenderOrient;
             StartupDisplayOrient := DisplayOrient;
             DarkMode := false;
+            GradientMode := 1; //kGradientModeGPUSlow
             StartupWindowMode := 0;
             LineWidth := 1;
             AnimationIntervalMsec:=100;
@@ -182,7 +183,7 @@ begin
   IniMRU(lRead,lIniFile,'PrevFilename', lPrefs.PrevFilename);
   IniStr(lRead, lIniFile, 'PyLib', lPrefs.PyLib);
   IniStr(lRead, lIniFile, 'PrevBackgroundImage', lPrefs.PrevBackgroundImage  );
-  IniStr(lRead, lIniFile, 'CustomDcm2niix', lPrefs.CustomDcm2niix);
+  IniStr(lRead, lIniFile, 'CustomDcm2niixExe', lPrefs.CustomDcm2niix);
   IniInt(lRead,lIniFile, 'Quality1to10', lPrefs.Quality1to10);
   IniInt(lRead,lIniFile, 'ColorbarPosition',lPrefs.ColorBarPosition);
   IniInt(lRead,lIniFile, 'ColorbarSize', lPrefs.ColorbarSize);
@@ -194,6 +195,7 @@ begin
   IniInt(lRead,lIniFile, 'LineWidth', lPrefs.LineWidth);
   IniInt(lRead,lIniFile, 'StartupWindowMode', lPrefs.StartupWindowMode);
   IniInt(lRead,lIniFile, 'AnimationIntervalMsec', lPrefs.AnimationIntervalMsec);
+  IniInt(lRead,lIniFile, 'GradientMode',lPrefs.GradientMode);
   {$IFDEF LCLCocoa}
         IniBool(lRead,lIniFile, 'RetinaDisplay',lPrefs.RetinaDisplay);
         IniBool(lRead,lIniFile, 'DarkMode',lPrefs.DarkMode);
