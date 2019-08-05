@@ -19,11 +19,7 @@
   <key>CFBundleSignature</key>
   <string>MRIc</string>
   <key>CFBundleShortVersionString</key>
-<<<<<<< HEAD
-  <string>1.0.20190720</string>
-=======
   <string>1.2.20190720</string>
->>>>>>> 96803676850ef432634e62d47b9a0ddbe8cef98a
   <key>CFBundleVersion</key>
   <string>1</string>
   <key>CSResourcesFileMapped</key>
