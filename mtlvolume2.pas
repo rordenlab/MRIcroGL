@@ -72,7 +72,7 @@ type
         property LightPosition: TVec4 read fLightPos write fLightPos;
         property ClipPlane: TVec4 read fClipPlane write fClipPlane;
         procedure Prepare(shaderName: string);
-        constructor Create(fromView: TMetalControl);
+        constructor Create(fromView: TMetalControl; IsBetterButSlowerLoads: boolean);
         procedure Paint(var vol: TNIfTI);
         procedure SetShader(shaderName: string);
         procedure SetShaderSlider(idx: integer; newVal: single);
@@ -214,7 +214,7 @@ begin
      clrbar := fromColorbar;
 end;
 
-constructor TGPUVolume.Create(fromView: TMetalControl);
+constructor TGPUVolume.Create(fromView: TMetalControl; IsBetterButSlowerLoads: boolean);
 begin
   mtlControl := fromView;
   clrbar := nil;

@@ -1,7 +1,7 @@
 object dcm2niiForm: Tdcm2niiForm
-  Left = 315
+  Left = 505
   Height = 525
-  Top = 93
+  Top = 54
   Width = 965
   ActiveControl = SelectFilesBtn
   AllowDropFiles = True
@@ -55,6 +55,7 @@ object dcm2niiForm: Tdcm2niiForm
         AnchorSideRight.Side = asrBottom
         Left = 4
         Height = 20
+        Hint = 'Create a BIDS text file with sequence details.'
         Top = 177
         Width = 326
         Anchors = [akTop, akLeft, akRight]
@@ -68,6 +69,8 @@ object dcm2niiForm: Tdcm2niiForm
           'Yes, with Personal Identifiers'
         )
         OnChange = UpdateCommand
+        ParentShowHint = False
+        ShowHint = True
         Style = csDropDownList
         TabOrder = 3
         Text = 'Yes, Anonymized'
@@ -191,13 +194,13 @@ object dcm2niiForm: Tdcm2niiForm
     end
     object AdvancedGroup: TGroupBox
       Left = 1
-      Height = 128
+      Height = 152
       Top = 216
       Width = 338
       Align = alTop
       AutoSize = True
       Caption = 'Advanced'
-      ClientHeight = 110
+      ClientHeight = 134
       ClientWidth = 330
       TabOrder = 1
       object IgnoreCheck: TCheckBox
@@ -230,37 +233,21 @@ object dcm2niiForm: Tdcm2niiForm
         ShowHint = True
         TabOrder = 1
       end
-      object MergeCheck: TCheckBox
+      object PhilipsPreciseCheck: TCheckBox
         AnchorSideLeft.Control = IgnoreCheck
         AnchorSideTop.Control = LosslessScaleCheck
         AnchorSideTop.Side = asrBottom
         Left = 4
         Height = 18
-        Hint = 'Merge 2D slices from same series regardless of study time, echo, coil, orientation, etc.'#10
-        Top = 48
-        Width = 140
-        BorderSpacing.Top = 4
-        Caption = 'Always Merge Series'
-        OnChange = UpdateCommand
-        ParentShowHint = False
-        ShowHint = True
-        TabOrder = 2
-      end
-      object PhilipsPreciseCheck: TCheckBox
-        AnchorSideLeft.Control = IgnoreCheck
-        AnchorSideTop.Control = MergeCheck
-        AnchorSideTop.Side = asrBottom
-        Left = 4
-        Height = 18
         Hint = 'Use Philips precise float scaling (not display) scaling.'#10
-        Top = 70
+        Top = 48
         Width = 149
         BorderSpacing.Top = 4
         Caption = 'Precise Philips Scaling'
         OnChange = UpdateCommand
         ParentShowHint = False
         ShowHint = True
-        TabOrder = 3
+        TabOrder = 2
       end
       object CropCheck: TCheckBox
         AnchorSideLeft.Control = IgnoreCheck
@@ -269,14 +256,56 @@ object dcm2niiForm: Tdcm2niiForm
         Left = 4
         Height = 18
         Hint = 'Remove excess neck from anatomical (e.g. T1) scans. This can improve spatial registration.'
-        Top = 92
+        Top = 70
         Width = 114
         BorderSpacing.Top = 4
         Caption = 'Crop 3D Images'
         OnChange = UpdateCommand
         ParentShowHint = False
         ShowHint = True
+        TabOrder = 3
+      end
+      object VerboseCheck: TCheckBox
+        AnchorSideLeft.Control = IgnoreCheck
+        AnchorSideTop.Control = CropCheck
+        AnchorSideTop.Side = asrBottom
+        Left = 4
+        Height = 18
+        Hint = 'Provide detailed notes on conversion'
+        Top = 92
+        Width = 69
+        BorderSpacing.Top = 4
+        Caption = 'Verbose'
+        OnChange = UpdateCommand
+        ParentShowHint = False
+        ShowHint = True
         TabOrder = 4
+      end
+      object MergeDrop: TComboBox
+        AnchorSideTop.Control = VerboseCheck
+        AnchorSideTop.Side = asrBottom
+        AnchorSideRight.Side = asrBottom
+        Left = 4
+        Height = 20
+        Hint = 'merge 2D slices from same series regardless of echo, exposure, etc.'
+        Top = 114
+        Width = 326
+        Anchors = [akTop, akLeft, akRight]
+        BorderSpacing.Top = 4
+        BorderSpacing.Right = 4
+        ItemHeight = 26
+        ItemIndex = 0
+        Items.Strings = (
+          'Automatic Series Merging'
+          'Always Merge Series Regardless of Differences'
+          'Never Merge Series with Differences'
+        )
+        OnChange = UpdateCommand
+        ParentShowHint = False
+        ShowHint = True
+        Style = csDropDownList
+        TabOrder = 5
+        Text = 'Automatic Series Merging'
       end
     end
     object UpdateBtn: TButton
@@ -287,7 +316,7 @@ object dcm2niiForm: Tdcm2niiForm
       AnchorSideRight.Side = asrBottom
       Left = 5
       Height = 25
-      Top = 348
+      Top = 372
       Width = 330
       Anchors = [akTop, akLeft, akRight]
       BorderSpacing.Left = 4
@@ -305,7 +334,7 @@ object dcm2niiForm: Tdcm2niiForm
       AnchorSideRight.Side = asrBottom
       Left = 5
       Height = 25
-      Top = 377
+      Top = 401
       Width = 330
       Anchors = [akTop, akLeft, akRight]
       BorderSpacing.Left = 4
@@ -323,7 +352,7 @@ object dcm2niiForm: Tdcm2niiForm
       AnchorSideRight.Side = asrBottom
       Left = 5
       Height = 20
-      Top = 406
+      Top = 430
       Width = 330
       Anchors = [akTop, akLeft, akRight]
       AutoSize = True

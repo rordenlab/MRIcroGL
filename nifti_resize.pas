@@ -798,7 +798,7 @@ begin
   if (lZi = lHdr.dim[3]) then goto 666; //e.g. 2D image
   //shrink the 3rd dimension
   lZo := lHdr.dim[3]; //reduce Z output
-  setlength(img8z,lXo*lYo*lZo*4);
+  setlength(img8z,lXo*lYo*lZo);
   //SetLength( tempImgZ,lXo*lYo*lZo); //8
   SetContrib(contrib, lZi, lZo, (lXo*lYo), zScale, fwidth, filter);
   i := kIdx1;
@@ -1064,11 +1064,6 @@ begin
      Resize16(lHdr, lImg8, xScale, yScale, zScale, fwidth, filter);
 end;
 
-function ShrinkOrEnlarge(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lFilter: integer; lScale: single): boolean; overload;
-begin
-  result := ShrinkOrEnlarge(lHdr, lBuffer, lFilter, lScale, lScale, lScale);
-end;
-
 function ShrinkLarge(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lMaxDim: integer; isLabels: boolean = false): boolean;
 //rescales images with any dimension larger than lMaxDim to have a maximum dimension of maxdim...
 var
@@ -1203,6 +1198,80 @@ begin
   exit(true);
 end;
 
+function ShrinkOrEnlarge(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lFilter: integer; lScale: single): boolean; overload;
+begin
+  result := ShrinkOrEnlarge(lHdr, lBuffer, lFilter, lScale, lScale, lScale);
+end;
+
+function ShrinkOrEnlargeRGB(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lFilter: integer; lScaleX, lScaleY, lScaleZ: single): boolean; overload;
+var
+   fwidth, z : single;
+   filter : TFilterProc;
+   lHdr8: TNIFTIhdr;
+   c, i, j, vxIn, vxOut: int64;
+   lBuffer8: array [0..2] of TUInt8s;
+begin
+     result := false;
+     if (lScaleX <= 0.0) or (lScaleY <= 0.0) or (lScaleZ <= 0.0) then exit;
+     if (lScaleX = 1.0) and (lScaleY = 1.0) and (lScaleZ = 1.0) then exit;
+     z := lScaleX * lScaleY * lScaleZ;
+     if ((lFilter < 0) or (lFilter > 6)) and (z < 1) then
+        lFilter := 5; //Lanczos nice for downsampling
+     if ((lFilter < 0) or (lFilter > 6))  and (z >= 1) then
+        lFilter := 6; //Mitchell nice for upsampling
+     if lFilter = 0 then begin
+        filter := @BoxFilter; fwidth := 0.5;
+     end else if lFilter = 1 then begin
+          filter := @TriangleFilter; fwidth := 1;
+     end else if lFilter = 2 then begin
+          filter := @HermiteFilter; fwidth := 1;
+     end else if lFilter = 3 then begin
+         filter := @BellFilter; fwidth := 1.5;
+     end else if lFilter = 4 then begin
+         filter := @SplineFilter; fwidth := 2;
+     end else if lFilter = 5 then begin
+         filter := @Lanczos3Filter; fwidth := 3;
+     end else begin
+         filter := @MitchellFilter; fwidth := 2;
+     end;
+     result := true;
+     vxIn := lHdr.dim[1] * lHdr.dim[2] * lHdr.dim[3];
+     //load 8 bit buffers
+     for c := 0 to 2 do begin //channel R,G,B
+         setlength(lBuffer8[c], vxIn);
+         j := 0;
+         for i := 0 to (vxIn-1) do begin
+             lBuffer8[c][i] := lBuffer[j+c];
+             j := j + 3;
+         end;
+     end;
+     lBuffer := nil; //free;
+     //resize each color channel
+     for c := 0 to 2 do begin //channel R,G,B
+         lHdr8 := lHdr;
+         lHdr8.datatype := kDT_UNSIGNED_CHAR;
+         lHdr8.bitpix := 8;
+         Resize8(lHdr8, lBuffer8[c], lScaleX, lScaleY, lScaleZ, fwidth, @filter);
+         if c = 0 then begin
+           //vxOut := length(lBuffer8[c]);
+           vxOut := lHdr8.dim[1] * lHdr8.dim[2] * lHdr8.dim[3];
+           setlength(lBuffer, vxOut * 3);
+         end;
+         j := 0;
+         for i := 0 to (vxOut-1) do begin
+             lBuffer[j+c] := lBuffer8[c][i];
+             j := j + 3;
+         end;
+     end;
+     //showmessage(format('%d %d %d = %d', [lHdr8.dim[1], lHdr8.dim[2], lHdr8.dim[3], vxOut]));
+     //free color channels
+     for c := 0 to 2 do
+         lBuffer8[c] := nil;
+     //reset header
+     lHdr := lHdr8;
+     lHdr.datatype := kDT_RGB;
+     lHdr.bitpix := 24;
+end;
 
 function ShrinkOrEnlarge(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lFilter: integer; lScaleX, lScaleY, lScaleZ: single; outDatatype : integer = -1): boolean; overload;
 var
@@ -1212,6 +1281,10 @@ begin
   result := false;
   if (lScaleX <= 0.0) or (lScaleY <= 0.0) or (lScaleZ <= 0.0) then exit;
   if (lScaleX = 1.0) and (lScaleY = 1.0) and (lScaleZ = 1.0) and (outDatatype = lHdr.datatype) then exit; //no resize
+  if (lHdr.datatype = kDT_RGB) then begin
+     result := ShrinkOrEnlargeRGB(lHdr, lBuffer, lFilter, lScaleX, lScaleY, lScaleZ);
+     exit;
+  end;
   if (lScaleX = 1.0) and (lScaleY = 1.0) and (lScaleZ = 1.0) then begin //change datatype only
     forceFloat32(lHdr, lBuffer);
     forceDataType(lHdr, lBuffer, outDatatype);

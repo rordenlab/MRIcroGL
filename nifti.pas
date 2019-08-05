@@ -9,7 +9,7 @@ interface
 {$ENDIF}
 //{$DEFINE PARALLEL}  //for parallel Unix also edit CThreads in LPR file
 {$DEFINE OPENFOREIGN}
-//{$DEFINE CPUGRADIENTS} //Computing volume gradients on the GPU is much faster than using the CPU
+{$DEFINE CPUGRADIENTS} //Computing volume gradients on the GPU is much faster than using the CPU
 {$DEFINE CACHEUINT8} //save 8-bit data: faster requires RAM
 uses
 
@@ -50,7 +50,7 @@ Type
         fhistogram: TLUT;
         fIsOverlay, fIsDrawing: boolean; //booleans do not generate 32-bit RGBA images
         {$IFDEF CACHEUINT8}
-        fVolumeDisplayed, fVolumesLoaded, fOpacityPctCache8: integer;
+        fVolumesTotal, fVolumeDisplayed, fVolumesLoaded, fOpacityPctCache8: integer;
         fWindowMinCache8, fWindowMaxCache8: single;
         fCache8: TUInt8s;
         {$ENDIF}
@@ -105,6 +105,7 @@ Type
         property IsNativeEndian: boolean read fIsNativeEndian;
         property VolumeDisplayed: integer read fVolumeDisplayed; //indexed from 0 (0..VolumesLoaded-1)
         property VolumesLoaded: integer read fVolumesLoaded; //1 for 3D data, for 4D 1..hdr.dim[4] depending on RAM
+        property VolumesTotal: integer read fVolumesTotal; //1 for 3D data, for 4D 1..hdr.dim[4] depending on RAM
         property KnownOrientation: boolean read fKnownOrientation;
         {$IFDEF CUSTOMCOLORS}
         property ColorTable: TLUT read clut.fLUT write clut.fLUT;
@@ -169,6 +170,7 @@ Type
         procedure SetDisplayMinMax(newMin, newMax: single); overload;
         procedure SetDisplayMinMaxNoUpdate(newMin, newMax: single); overload;
         procedure SetCutoutNoUpdate(CutoutLow, CutoutHigh: TVec3);
+        function DisplayRGBGreen(): TUInt8s;
         function DisplayMinMax2Uint8(isForceRefresh: boolean = false): TUInt8s;
         procedure SetDisplayColorScheme(clutFileName: string; cTag: integer);
         procedure SetDisplayVolume(newDisplayVolume: integer);
@@ -893,7 +895,7 @@ begin
      setlength(result, 0);
      if IsLabels then exit;
      if volumesLoaded < 2 then exit;
-     if fHdr.bitpix = 24 then exit;
+     if fHdr.bitpix = 24 then exit;  //>>
      nVx := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3];
      volBytes := nVx * (fHdr.bitpix shr 3);
      nVol := length(fRawVolBytes) div volBytes;
@@ -907,6 +909,11 @@ begin
      if fHdr.datatype = kDT_UINT8 then begin
         for vol := 0 to (nVol - 1) do
             result[vol] := vol8[vx + (vol * nVx)];
+     end else if fHdr.datatype = kDT_RGB then begin
+       nVx := nVx * 3;
+       vx := (vx * 3) + 1; //read green
+       for vol := 0 to (nVol - 1) do
+           result[vol] := vol16[vx + (vol * nVx)];
      end else if fHdr.datatype = kDT_INT16 then begin
        for vol := 0 to (nVol - 1) do
            result[vol] := vol16[vx + (vol * nVx)];
@@ -917,6 +924,39 @@ begin
      for vol := 0 to (nVol - 1) do
          result[vol] := (result[vol] * fHdr.scl_slope) + fHdr.scl_inter;
 end;
+
+function TNIfTI.VoxIntensity(vox: int64): single; overload; //return intensity of voxel at coordinate
+var
+  vol32 : TFloat32s;
+  vol16: TInt16s;
+  vol8: TUInt8s;
+begin
+     result := 0;
+     if (vox < 0) or (vox >= (dim.x * dim.y * dim.z)) then exit;
+     if fHdr.datatype = kDT_RGB then vox := (vox * 3) + 1; //read gread
+     vox := vox + skipVox;
+     vol8 := fRawVolBytes;
+     vol16 := TInt16s(vol8);
+     vol32 := TFloat32s(vol8);
+     if (fHdr.datatype = kDT_UINT8) or (fHdr.datatype = kDT_RGB) then
+       result := vol8[vox]
+     else if fHdr.datatype = kDT_INT16 then
+          result := vol16[vox]
+     else if fHdr.datatype = kDT_FLOAT then
+          result := vol32[vox];
+     result := (result * fHdr.scl_slope) + fHdr.scl_inter;
+end;
+
+function TNIfTI.VoxIntensity(vox: TVec3i): single; overload;//return intensity of voxel at coordinate
+var
+  i: int64;
+begin
+     result := 0;
+     i := vox.x + (vox.y * dim.x) + (vox.z * (dim.x * dim.y));
+     if (i < 0) or (i >= (dim.x * dim.y * dim.z)) then exit;
+     result := VoxIntensity(i);
+end;
+
 
 function TNIfTI.AsFloats(): TFloat32s; //volume where voxels non-zero voxels are set to 1, voxels with intensity zero set to 0
 var
@@ -973,37 +1013,6 @@ begin
               out16[i] := 1;
      end;
      result := out16;
-end;
-
-function TNIfTI.VoxIntensity(vox: int64): single; overload; //return intensity of voxel at coordinate
-var
-  vol32 : TFloat32s;
-  vol16: TInt16s;
-  vol8: TUInt8s;
-begin
-     result := 0;
-     if (vox < 0) or (vox >= (dim.x * dim.y * dim.z)) then exit;
-     vox := vox + skipVox;
-     vol8 := fRawVolBytes;
-     vol16 := TInt16s(vol8);
-     vol32 := TFloat32s(vol8);
-     if fHdr.datatype = kDT_UINT8 then
-       result := vol8[vox]
-     else if fHdr.datatype = kDT_INT16 then
-          result := vol16[vox]
-     else if fHdr.datatype = kDT_FLOAT then
-          result := vol32[vox];
-     result := (result * fHdr.scl_slope) + fHdr.scl_inter;
-end;
-
-function TNIfTI.VoxIntensity(vox: TVec3i): single; overload;//return intensity of voxel at coordinate
-var
-  i: int64;
-begin
-     result := 0;
-     i := vox.x + (vox.y * dim.x) + (vox.z * (dim.x * dim.y));
-     if (i < 0) or (i >= (dim.x * dim.y * dim.z)) then exit;
-     result := VoxIntensity(i);
 end;
 
 function TNIfTI.FracToSlice(Frac: TVec3): TVec3i;
@@ -2060,7 +2069,13 @@ begin
  {$ENDIF}
  mStream := TMemoryStream.Create;
  oHdr.vox_offset :=  sizeof(oHdr) + 4;
+ oHdr.dim[0] := 3;
+ if fVolumesLoaded > 1 then oHdr.dim[0] := 4;
  oHdr.dim[4] := fVolumesLoaded;
+ oHdr.dim[5] := 1;
+ oHdr.dim[6] := 1;
+ oHdr.dim[7] := 1;
+
  mStream.Write(oHdr,sizeof(oHdr));
  oPad32 := 4;
  mStream.Write(oPad32, 4);
@@ -2123,10 +2138,15 @@ begin
  if (cropVols.x >= cropVols.y) or (cropVols.y >  fVolumesLoaded) then
     exit(false);
  oHdr := fHdr;
+ oHdr.dim[0] := 3;
  oHdr.dim[1] := crop.xHi- crop.xLo;
  oHdr.dim[2] := crop.yHi- crop.yLo;
  oHdr.dim[3] := crop.zHi- crop.zLo;
  oHdr.dim[4] := cropVols.y - cropVols.x;
+ oHdr.dim[5] := 1;
+ oHdr.dim[6] := 1;
+ oHdr.dim[7] := 1;
+ if (oHdr.dim[4] > 1) then oHdr.dim[1] := 4;
  offsetMM := NIFTIhdr_SlicesToCoord (oHdr,crop.xLo,crop.yLo,crop.zLo);
  oHdr.srow_x[3] := oHdr.srow_x[3] + offsetMM.x;
  oHdr.srow_y[3] := oHdr.srow_y[3] + offsetMM.y;
@@ -2203,6 +2223,7 @@ var
   mStream : TMemoryStream;
   zStream: TGZFileStream;
   NiftiOutName, lExt: string;
+  m: TMat4;
   oPad32: Uint32; //nifti header is 348 bytes padded with 4
   orawVolBytes: TUInt8s;
   inVolBytes: int64;
@@ -2225,10 +2246,15 @@ begin
     orawVolBytes := nil;
     exit(false);
  end;
+ m := SForm2Mat(oHdr);
+ Mat2QForm(m, oHdr);
  mStream := TMemoryStream.Create;
  oHdr.vox_offset :=  sizeof(oHdr) + 4;
  oHdr.dim[0] := 3;
  oHdr.dim[4] := 1;
+ oHdr.dim[5] := 1;
+ oHdr.dim[6] := 1;
+ oHdr.dim[7] := 1;
  {$IFDEF 4DRESCALE}
  //showmessage(format('%d %d', [length(oRawVolBytes), fVolumesLoaded]));
  if (fVolumesLoaded > 1) and (isAllVolumes) then begin
@@ -2815,6 +2841,8 @@ begin
     exit;
   end;
   //http://www.zlib.org/rfc-gzip.html
+  if (Hdr.method <> 8) then
+     printf('Expected GZ method 8 (deflate) not '+inttostr(Hdr.method));
   if ((Hdr.Flags and $04) = $04) then begin //FEXTRA
   	blockread(F, xtra, SizeOf(xtra));
   	{$IFDEF ENDIAN_BIG}
@@ -2849,6 +2877,19 @@ begin
   Close (F);
 end;
 
+const
+     //kLoadFewVolumesBytes =  16777216 * 4;
+     kLoadFewVolumesBytes =  1677721 * 4;
+
+function HdrVolumes(hdr: TNIfTIhdr): integer;
+var
+  i: integer;
+begin
+     result := 1;
+     for i := 4 to 7 do
+         if hdr.dim[i] > 1 then
+            result := result * hdr.dim[i];
+end;
 
 {$IFDEF FASTGZ}
 function Nifti2to1(Stream:TMemoryStream): TNIFTIhdr; overload;
@@ -2870,7 +2911,7 @@ begin
   result := Nifti2to1(h2);
 end;
 
-function ExtractGzNoCrc(fnm: string; var mStream : TMemoryStream; skip: int64 = 0): boolean;
+function ExtractGzNoCrc(fnm: string; var mStream : TMemoryStream; skip: int64 = 0; expected: int64 = 0): boolean;
 //a bit faster: do not compute CRC check
 var
    ret, size, usize: int64;
@@ -2896,6 +2937,10 @@ begin
      UnCompressStream(@src[0], size, mStream, nil, true);
      result := true;
   end else if (ret > skip) then begin
+     if (usize < expected) and (expected > 0) then begin
+        printf(format('GZ footer reports %d bytes but expected %d (corrupt GZ)\n', [usize, expected]));
+        usize := expected;
+     end;
      mStream.setSize(usize);
      mStream.position := 0;
      ret := UnCompressMem(@src[ret], mStream.memory, size-ret, usize);
@@ -2931,10 +2976,6 @@ begin
   src := nil;
   gz.ZStreamDone;
 end;
-
-const
-     //kLoadFewVolumesBytes =  16777216 * 4;
-     kLoadFewVolumesBytes =  1677721 * 4;
 
 function TNIfTI.LoadFastGZ(FileName : AnsiString; out isNativeEndian: boolean): boolean;
 //FSL compressed nii.gz file
@@ -2977,21 +3018,22 @@ begin
   Quat2Mat(fHdr);
   //read the image data
   volBytes := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3]* (fHdr.bitpix div 8);
-  if  (fVolumeDisplayed > 0) and (fVolumeDisplayed < fHdr.dim[4]) and (fIsOverlay) then begin
+  if  (fVolumeDisplayed > 0) and (fVolumeDisplayed < HdrVolumes(fHdr)) and (fIsOverlay) then begin
       Stream.Seek(round(fHdr.vox_offset)+(fVolumeDisplayed*volBytes),soFromBeginning);
   end else begin
       fVolumeDisplayed := 0;
       Stream.Seek(round(fHdr.vox_offset),soFromBeginning);
   end;
-  fVolumesLoaded := max(fHdr.dim[4],1);
-  if (fHdr.dim[4] > 1) and (not fIsOverlay) then begin
+  fVolumesLoaded := max(HdrVolumes(fHdr),1);
+  fVolumesTotal :=  fVolumesLoaded;
+  if (HdrVolumes(fHdr) > 1) and (not fIsOverlay) then begin
      if LoadFewVolumes then
        //fVolumesLoaded :=  trunc((16777216.0 * 4) /volBytes)
        fVolumesLoaded :=  trunc((kLoadFewVolumesBytes) /volBytes)
      else
          fVolumesLoaded :=  trunc(2147483647.0 /volBytes);
      if fVolumesLoaded < 1 then fVolumesLoaded := 1;
-     if fVolumesLoaded > fHdr.dim[4] then fVolumesLoaded := fHdr.dim[4];
+     if fVolumesLoaded > HdrVolumes(fHdr) then fVolumesLoaded := HdrVolumes(fHdr);
      volBytes := volBytes * fVolumesLoaded;
   end;
   if (Stream.Position+ volBytes) > Stream.Size then begin
@@ -3059,21 +3101,22 @@ begin
   Quat2Mat(fHdr);
   //read the image data
   volBytes := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3]* (fHdr.bitpix div 8);
-  if  (fVolumeDisplayed > 0) and (fVolumeDisplayed < fHdr.dim[4]) and (fIsOverlay) then begin
+  if  (fVolumeDisplayed > 0) and (fVolumeDisplayed < HdrVolumes(fHdr)) and (fIsOverlay) then begin
       Stream.Seek(round(fHdr.vox_offset)+(fVolumeDisplayed*volBytes),soFromBeginning);
   end else begin
       fVolumeDisplayed := 0;
       Stream.Seek(round(fHdr.vox_offset),soFromBeginning);
   end;
-  fVolumesLoaded := max(fHdr.dim[4],1);
-  if (fHdr.dim[4] > 1) and (not fIsOverlay) then begin
+  fVolumesLoaded := max(HdrVolumes(fHdr),1);
+  fVolumesTotal :=  fVolumesLoaded;
+  if (HdrVolumes(fHdr) > 1) and (not fIsOverlay) then begin
      if LoadFewVolumes then
        //fVolumesLoaded :=  trunc((16777216.0 * 4) /volBytes)
         fVolumesLoaded :=  trunc((kLoadFewVolumesBytes) /volBytes)
      else
          fVolumesLoaded :=  trunc(2147483647.0 /volBytes);
      if fVolumesLoaded < 1 then fVolumesLoaded := 1;
-     if fVolumesLoaded > fHdr.dim[4] then fVolumesLoaded := fHdr.dim[4];
+     if fVolumesLoaded > HdrVolumes(fHdr) then fVolumesLoaded := HdrVolumes(fHdr);
      volBytes := volBytes * fVolumesLoaded;
   end;
   SetLength (fRawVolBytes, volBytes);
@@ -3305,14 +3348,15 @@ begin
        exit;
   end;
   volBytes := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3]* (fHdr.bitpix div 8);
-  if  (fVolumeDisplayed > 0) and (fVolumeDisplayed < fHdr.dim[4]) and (fIsOverlay) then begin
+  if  (fVolumeDisplayed > 0) and (fVolumeDisplayed < HdrVolumes(fHdr)) and (fIsOverlay) then begin
       Stream.Seek(round(fHdr.vox_offset)+(fVolumeDisplayed*volBytes),soFromBeginning);
   end else begin
       fVolumeDisplayed := 0;
       Stream.Seek(round(fHdr.vox_offset),soFromBeginning);
   end;
-  fVolumesLoaded := max(fHdr.dim[4],1);
-  if (fHdr.dim[4] > 1) and (not fIsOverlay) then begin
+  fVolumesLoaded := max(HdrVolumes(fHdr),1);
+  fVolumesTotal :=  fVolumesLoaded;
+  if (HdrVolumes(fHdr) > 1) and (not fIsOverlay) then begin
      if LoadFewVolumes then begin
        fVolumesLoaded :=  trunc(kLoadFewVolumesBytes /volBytes);
        //fVolumesLoaded :=  trunc((1677721.0 * 4) /volBytes);
@@ -3320,11 +3364,13 @@ begin
      else
          fVolumesLoaded :=  trunc(2147483647.0 /volBytes);
      if fVolumesLoaded < 1 then fVolumesLoaded := 1;
-     if fVolumesLoaded > fHdr.dim[4] then fVolumesLoaded := fHdr.dim[4];
+     if fVolumesLoaded > HdrVolumes(fHdr) then fVolumesLoaded := HdrVolumes(fHdr);
      volBytes := volBytes * fVolumesLoaded;
      //vol := SimpleGetInt(extractfilename(Filename)+' select volume',1,1,fHdr.dim[4]);
      //Stream.Seek((vol-1)*volBytes,soFromCurrent);
   end;
+  //showmessage(format('%d %d', [HdrVolumes(fHdr), fVolumesLoaded]));
+
   if (volBytes + Stream.Position) > FSz then begin
        Showmessage(format('File smaller than described in header (expected %d, found %d)', [volBytes + Stream.Position, FSz]));
        exit;
@@ -4095,7 +4141,7 @@ end;
 
 procedure TNIfTI.Mask(MaskingVolume: TUInt8s; isPreserveMask: boolean);
 var
-  mni, i,vx, skipVx: int64;
+  mni, i, j, vx, skipVx: int64;
   mn: single;
   vol8: TUInt8s;
   vol16: TInt16s;
@@ -4111,7 +4157,17 @@ begin
   mn := Scaled2RawIntensity(fHdr, fMin);
   mni := round(mn);
   if (isPreserveMask) then begin
-     if fHdr.datatype = kDT_UINT8 then begin
+     if fHdr.datatype = kDT_RGB then begin
+       j := 0;
+       for i := 0 to (vx-1) do begin
+            if MaskingVolume[i] = 0 then begin
+              vol8[skipVx+j+0] := 0;
+              vol8[skipVx+j+1] := 0;
+              vol8[skipVx+j+2] := 0;
+            end;
+            j := j + 3;
+       end;
+     end else if fHdr.datatype = kDT_UINT8 then begin
         for i := 0 to (vx-1) do
             if MaskingVolume[i] = 0 then vol8[skipVx+i] := 0;
      end else if fHdr.datatype = kDT_INT16 then begin
@@ -4122,7 +4178,17 @@ begin
            if MaskingVolume[i] = 0 then vol32[skipVx+i] := mn;
      end;
   end else begin
-    if fHdr.datatype = kDT_UINT8 then begin
+     if fHdr.datatype = kDT_RGB then begin
+       j := 0;
+       for i := 0 to (vx-1) do begin
+            if MaskingVolume[i] <> 0 then begin
+              vol8[skipVx+j+0] := 0;
+              vol8[skipVx+j+1] := 0;
+              vol8[skipVx+j+2] := 0;
+            end;
+            j := j + 3;
+       end;
+     end else if fHdr.datatype = kDT_UINT8 then begin
        for i := 0 to (vx-1) do
            if MaskingVolume[i] <> 0 then vol8[skipVx+i] := 0;
     end else if fHdr.datatype = kDT_INT16 then begin
@@ -4147,6 +4213,7 @@ var
    mn: single;
 begin
   vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+  //todo: DT_RGB
   if vx < 1 then exit;
   vol8 := DisplayMinMax2Uint8;
   if vol8 = nil then exit;
@@ -4184,7 +4251,7 @@ begin
   SetDisplayMinMax(true);
 end;
 
-procedure TNIfTI.SetDisplayMinMaxRGB24();
+(*procedure TNIfTI.SetDisplayMinMaxRGB24();
 var
    skipVx, i, vx: int64;
    vol24: TRGBs;
@@ -4194,6 +4261,42 @@ begin
   skipVx := skipVox();
   for i := 0 to (vx - 1) do begin
     fVolRGBA[i] := SetRGBA(vol24[skipVx+i].r,vol24[skipVx+i].g,vol24[skipVx+i].b,vol24[skipVx+i].g);
+  end;
+end;*)
+
+procedure TNIfTI.SetDisplayMinMaxRGB24();
+var
+   skipVx, i, vx, lC: int64;
+   vol24: TRGBs;
+   luts: array[0..255] of byte;
+   lV, bias, lSwap, lMin, lMax, lRng: single;
+begin
+  if fHdr.datatype <> kDT_RGB then exit;
+  lMin := Scaled2RawIntensity(fHdr, fWindowMin);
+  lMax := Scaled2RawIntensity(fHdr, fWindowMax);
+  if lMin > lMax then begin
+        lSwap := lMin;
+        lMin := lMax;
+        lMax := lSwap;
+  end;
+  lRng := abs(lMax - lMin);
+  if lRng <= 0.0 then lRng := 255;
+  bias := 1.0 - ( 0.5 * (lRng/ 255));
+  if (bias <= 0.0) then bias := 0.001;
+  if (bias >= 1.0) then bias := 0.999;
+  for lC := 0 to 255 do begin
+          lV := lC/255.0;
+          lV := (lV/ ((((1/bias) - 2)*(1 - lV))+1));
+          if (lV > 1.0) then lV := 1.0;
+          if (lV < 0.0) then lV := 0.0;
+          luts[lC] := round(255.0 * lV);
+   end; //for all indices
+  vol24 := TRGBs(fRawVolBytes);
+  vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+  skipVx := skipVox();
+  for i := 0 to (vx - 1) do begin
+    //fVolRGBA[i] := SetRGBA(luts[vol24[skipVx+i].r],luts[vol24[skipVx+i].g],luts[vol24[skipVx+i].b],luts[vol24[skipVx+i].g]);
+    fVolRGBA[i] := SetRGBA(luts[vol24[skipVx+i].r],luts[vol24[skipVx+i].g],luts[vol24[skipVx+i].b],clut.LUT[vol24[skipVx+i].g].A);
   end;
 end;
 
@@ -4356,6 +4459,25 @@ begin
 end;
 {$ENDIF}
 
+function TNIfTI.DisplayRGBGreen(): TUInt8s;
+//return green component as volume: must free memory!
+var
+  vol8:TUInt8s;
+  skipVx, i, j, vx: int64;
+begin
+     if (fHdr.datatype <> kDT_RGB) then exit(nil);
+     vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+     if vx < 1 then exit(nil);
+     skipVx := SkipVox();
+     setlength(vol8, vx);
+     j := 1;//0=R,1=G,2=B
+     for i := 0 to (vx-1) do begin
+         vol8[i] := fRawVolBytes[skipVx+j];
+         j := j + 3;
+     end;
+     result := vol8;
+end;
+
 function TNIfTI.DisplayMinMax2Uint8(isForceRefresh: boolean = false): TUInt8s;
 {$DEFINE LUT16}
 {$IFDEF LUT16}
@@ -4375,7 +4497,7 @@ var
   vol32: TFloat32s;
   luts: array[0..255] of byte;
 begin
-  if (fHdr.datatype = kDT_RGB) then exit(nil);
+  if (fHdr.datatype = kDT_RGB) then exit(nil); //DT_RGB: use DisplayRGBGreen
   vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
   if vx < 1 then exit(nil);
   if (not isForceRefresh) and (not NeedsUpdate) then// (not clut.NeedsUpdate) and (fHdr.datatype <> kDT_RGB) and (fCache8 <> nil) and (fWindowMinCache8 <> fWindowMaxCache8) and (fWindowMin = fWindowMinCache8) and (fWindowMax = fWindowMaxCache8) then begin
@@ -4535,7 +4657,7 @@ var
 begin
    //i := newDisplayVolume;
    if (fIsOverlay) then
-      n := fHdr.dim[4]
+      n := HdrVolumes(fHdr)
    else
       n := fVolumesLoaded;
   if (newDisplayVolume < 0) then
@@ -4621,8 +4743,8 @@ begin
   end;
   //read the image data
   volBytes := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3] * (lHdr.bitpix div 8);
-  if lHdr.dim[4] > 1 then
-    volBytes := volBytes * lHdr.dim[4];
+  if HdrVolumes(lHdr) > 1 then
+    volBytes := volBytes * HdrVolumes(lHdr);
   offset := round(lHdr.vox_offset);
   if lHdr.vox_offset < 0 then begin
      offset := StreamSize-volBytes;
@@ -4662,9 +4784,11 @@ begin
    printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
    exit;
  end;
+ volBytes := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3] * (lHdr.bitpix div 8);
+ volBytes := volBytes * HdrVolumes(lHdr);
  outStream := TMemoryStream.Create();
  {$IFDEF FASTGZ}
- result := ExtractGzNoCrc(Filename, outStream, round(lHdr.vox_offset));
+ result := ExtractGzNoCrc(Filename, outStream, round(lHdr.vox_offset), volBytes);
  {$ELSE}
  fStream := TFileStream.Create(Filename, fmOpenRead);
  fStream.seek(round(lHdr.vox_offset), soFromBeginning);
@@ -4673,11 +4797,13 @@ begin
  result := unzipStream(inStream, outStream);
  fStream.Free;
  inStream.Free;
+ if (not result) and (volBytes >=outStream.size) then begin
+   printf('unzipStream error but sufficient bytes extracted (perhaps GZ without length in footer)');
+   result := true;
+ end;
  {$ENDIF}
  if not result then goto 123;
- volBytes := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3] * (lHdr.bitpix div 8);
- if lHdr.dim[4] > 1 then
-   volBytes := volBytes * lHdr.dim[4];
+ //showmessage(format('%g  %dx%dx%dx%d ~= %d',[lHdr.vox_offset, lHdr.dim[1],lHdr.dim[2],lHdr.dim[3],lHdr.dim[4], HdrVolumes(lHdr) ]));
  if outStream.Size < volBytes then begin
     result := false;
     showmessage(format('GZ error expected %d found %d bytes: %s',[volBytes,outStream.Size, Filename]));
@@ -4702,10 +4828,10 @@ var
    i16, o16: TUInt16s;
    i32, o32: TUInt32s;
 begin
-     if lHdr.Dim[4] < 2 then exit;
+     if HdrVolumes(lHdr) < 2 then exit;
      if (lHdr.bitpix mod 8) <> 0 then exit;
      if (lHdr.bitpix <> 8) and (lHdr.bitpix <> 16) and (lHdr.bitpix <> 32) then exit;
-     nbytes := lHdr.Dim[1] * lHdr.Dim[2] * lHdr.Dim[3] * lHdr.Dim[4] * (lHdr.bitpix div 8);
+     nbytes := lHdr.Dim[1] * lHdr.Dim[2] * lHdr.Dim[3] * HdrVolumes(lHdr) * (lHdr.bitpix div 8);
      if nbytes < 4 then exit;
      setlength(i8, nbytes);
      i8 := copy(rawData, low(rawData), high(rawData));
@@ -4717,11 +4843,14 @@ begin
      t :=  lHdr.Dim[1];
      x :=  lHdr.Dim[2];
      y :=  lHdr.Dim[3];
-     z :=  lHdr.Dim[4];
+     z :=  HdrVolumes(lHdr);
      lHdr.Dim[1] := x;
      lHdr.Dim[2] := y;
      lHdr.Dim[3] := z;
      lHdr.Dim[4] := t;
+     lHdr.Dim[5] := 1;
+     lHdr.Dim[6] := 1;
+     lHdr.Dim[7] := 1;
      tInc := 1;
      xInc := t;
      yInc := t * x;
@@ -4820,6 +4949,7 @@ begin
  result := false;
  if (length(fFilename) < 1) or (not FileExists(fFilename)) then exit;
  fVolumesLoaded := 1;
+ fVolumesTotal :=  fVolumesLoaded;
  lExt := extractfileextX (fFilename);
  //lExt := uppercase(extractfileext(fFilename));
  if lExt = '.IMG' then begin
@@ -4846,6 +4976,7 @@ begin
     if result then begin
        fVolumesLoaded := length(fRawVolBytes) div (fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3] * (fHdr.bitpix div 8));
     end;
+    fVolumesTotal :=  fVolumesLoaded;
     exit;
  end;
  {$IFDEF TIMER}startTime := now;{$ENDIF}
@@ -5366,6 +5497,9 @@ begin
   fHdr.cal_min := 0;
   fHdr.dim[0] := 3;
   fHdr.dim[4] := 1;
+  fHdr.dim[5] := 1;
+  fHdr.dim[6] := 1;
+  fHdr.dim[7] := 1;
   if fHdr.intent_code = kNIFTI_INTENT_CORREL then begin
     fHdr.cal_min := 0.05;
     fHdr.cal_max := 1;
@@ -5379,7 +5513,8 @@ begin
         vol32[i] := img[i];
   fixBogusHeaders(fHdr);
   fHdrNoRotation := fHdr; //raw header without reslicing or orthogonal rotation
-  fVolumesLoaded := max(fHdr.dim[4],1);
+  fVolumesLoaded := max(HdrVolumes(fHdr),1);
+  fVolumesTotal :=  fVolumesLoaded;
   //showmessage(format('%d', [prod(tarDim)]));
   //IsLabels := true;
   if prod(tarDim) = 0 then //reduce size of huge background images
@@ -5481,7 +5616,7 @@ begin
      showmessage('Unable to load RGB image as overlay (overlays must be scalar).');
      exit(false);
   end;
-  if (PosEx(pathdelim+'atlases'+pathdelim, niftiFileName) > 0) and (fHdr.dim[4] < 2) then begin
+  if (PosEx(pathdelim+'atlases'+pathdelim, niftiFileName) > 0) and (HdrVolumes(fHdr) < 2) then begin
      fHdr.intent_code := kNIFTI_INTENT_LABEL;
   end;
   if (IsLabels) then begin
@@ -5636,6 +5771,7 @@ begin
  Nii_Clear(fHdrNoRotation);
  fVolumeDisplayed := 0;
  fVolumesLoaded := 1;
+ fVolumesTotal :=  fVolumesLoaded;
  fIsNativeEndian := true;
  fKnownOrientation := false;
  fIsOverlay := false;
@@ -5674,6 +5810,7 @@ begin
  Nii_Clear(fHdrNoRotation);
  fVolumeDisplayed := 0;
  fVolumesLoaded := 1;
+ fVolumesTotal :=  fVolumesLoaded;
  fIsNativeEndian := true;
  fKnownOrientation := false;
  fIsOverlay := false;

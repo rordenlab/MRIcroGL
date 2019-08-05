@@ -97,6 +97,7 @@ object GLForm1: TGLForm1
           Width = 116
           BorderSpacing.Left = 122
           BorderSpacing.Top = 4
+          OnChange = LayerContrastChange
           OnKeyUp = LayerContrastKeyUp
           ParentFont = False
           TabOrder = 3
@@ -113,6 +114,7 @@ object GLForm1: TGLForm1
           Width = 116
           BorderSpacing.Left = 122
           BorderSpacing.Top = 2
+          OnChange = LayerContrastChange
           OnKeyUp = LayerContrastKeyUp
           ParentFont = False
           TabOrder = 4
@@ -2430,7 +2432,7 @@ object GLForm1: TGLForm1
   end
   object LayerWidgetChangeTimer: TTimer
     Enabled = False
-    Interval = 120
+    Interval = 200
     OnTimer = LayerWidgetChangeTimerTimer
     left = 472
     top = 104

@@ -597,7 +597,6 @@ begin
      if (lExt = '.HDR') then lHdr.magic := kNIFTI_MAGIC_SEPARATE_HDR;
      result := false; //assume failure
 	 if lHdr.magic = kNIFTI_MAGIC_EMBEDDED_HDR then begin
-
 		 if (lExt = '.GZ') or (lExt = '.NII.GZ') then begin
 			showmessage('Unable to save .nii.gz headers (first ungzip your image if you wish to edit the header)');
 			exit;
@@ -627,7 +626,7 @@ begin
         lOverwrite := true;
      if lHdr.magic = kNIFTI_MAGIC_EMBEDDED_HDR then
         if lHdr.vox_offset < sizeof(TNIFTIHdr) then
-           lHdr.vox_offset := sizeof(TNIFTIHdr); //embedded images MUST start after header
+           lHdr.vox_offset := sizeof(TNIFTIHdr)+4; //352 embedded images MUST start after header
      if lHdr.magic = kNIFTI_MAGIC_SEPARATE_HDR then
            lHdr.vox_offset := 0; //embedded images MUST start after header
      result := true;
@@ -661,12 +660,12 @@ begin
   end;
   NII_Clear(lHdr);
   ReadHdrForm (lHdr);
-
   if (lExt <> '.HDR') and (lExt <> '.NII') then begin
      if lHdr.magic = kNIFTI_MAGIC_SEPARATE_HDR then
         SaveHdrDlg.Filename := SaveHdrDlg.Filename +'.hdr'
-     else
+     else begin
          SaveHdrDlg.Filename := SaveHdrDlg.Filename +'.nii';
+     end;
   end;
   lFilename := SaveHdrDlg.Filename;
   //999 ImgForm.SaveDialog1.InitialDir := extractfiledir(lFilename);
