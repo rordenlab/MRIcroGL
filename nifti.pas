@@ -2455,6 +2455,7 @@ begin
  d := voxelsPerDimension;
  fBidsName := '';
  NII_Clear(fhdr);
+ fhdr.dim[0] := 3;
  fhdr.dim[1] := d;
  fhdr.dim[2] := d;
  fhdr.dim[3] := d;
@@ -2462,6 +2463,20 @@ begin
  fhdr.datatype := kDT_UNSIGNED_CHAR;
  fhdr.intent_code:= kNIFTI_INTENT_NONE;
  fKnownOrientation := true;
+ fHdr.cal_min:= 0;
+ fHdr.cal_max:= 255;
+ for i := 0 to 3 do begin
+     fHdr.srow_x[i] := 0.0;
+     fHdr.srow_y[i] := 0.0;
+     fHdr.srow_z[i] := 0.0;
+ end;
+ fHdr.srow_x[0] := 1.0;
+ fHdr.srow_y[1] := 1.0;
+ fHdr.srow_z[2] := 1.0;
+ fHdr.srow_x[3] := -d/2.0;
+ fHdr.srow_y[3] := -d/2.0;
+ fHdr.srow_z[3] := -d/2.0;
+ fHdr.sform_code:= kNIFTI_XFORM_SCANNER_ANAT;
  if (voxelsPerDimension <= Border) then begin
     SetLength(fRawVolBytes, d*d*d);
     for I := 0 to d*d*d-1 do
@@ -5452,14 +5467,14 @@ begin
   fShortName := changefileextX(extractfilename(fFilename),'');
   result := true;
   if niftiFileName = '+' then begin
-    MakeBorg(4);
+    MakeBorg(64);
     fVolumeDisplayed := 0;
-    fShortName := 'Borg';
+    fShortName := 'Borg_Temp';
     result := false;
   end else if not OpenNIfTI() then begin
      MakeBorg(64);
      fVolumeDisplayed := 0;
-     fShortName := 'Borg';
+     fShortName := 'Borg_Error';
      result := false;
   end;
   if (fHdr.datatype = kDT_RGB) and (fIsOverlay) then begin
@@ -5537,7 +5552,7 @@ begin
     fMax := 100;
     fWindowMin := 0;
     fWindowMax := 100;
-    clut.SetLabels(niftiFileName);
+    clut.SetLabels();
     DisplayLabel2Uint8;
   end else if fHdr.datatype = kDT_UINT8 then
      initUInt8()

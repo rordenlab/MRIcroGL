@@ -5,7 +5,7 @@ unit crop;
 interface
 
 uses
-  Classes, SysUtils, Forms, Controls, Graphics, Dialogs, StdCtrls, ComCtrls, Math, SimdUtils, VectorMath, Prefs;
+  Classes, SysUtils, Forms, Controls, Graphics, Dialogs, StdCtrls, ComCtrls, Math, SimdUtils;//, VectorMath, Prefs;
 
 type
 

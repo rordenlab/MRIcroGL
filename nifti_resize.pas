@@ -11,7 +11,7 @@ uses
   {$IFDEF UNIX} DateUtils,{$ENDIF}
   Classes, SysUtils, nifti_types, SimdUtils, dialogs;
 
-function EnlargeIsotropic(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lFilter: integer): boolean;
+//function EnlargeIsotropic(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s): boolean;
 function ShrinkLarge(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lMaxDim: integer; isLabels: boolean = false): boolean;
 function ShrinkOrEnlarge(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lFilter: integer; lScale: single): boolean; overload;
 function ShrinkOrEnlarge(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lFilter: integer; lScaleX, lScaleY, lScaleZ: single; outDatatype : integer = -1): boolean; overload;
@@ -707,9 +707,7 @@ var
   mn, mx, mnT, mxT: byte;
   lineStart, x,y,z, lXo,lYo,lZo,lXi,lYi,lZi, i,j: int64;
   contrib: PCListList;
-  finalImg,
-  img8x, img8y, img8z, out8: TUInt8s;
-  //tempImgX, tempImgY, tempImgZ, out8: TFloat32s;
+  finalImg, img8x, img8y, img8z: TUInt8s;
 begin
   //bytesPerVox := 4;
   lXi := lHdr.dim[1]; //input X
@@ -860,7 +858,7 @@ var
   finalImg,
   img8x, img8y, img8z: TUInt8s;
   img16: TInt16s;
-  tempImgX, tempImgY, tempImgZ, out16: TInt16s;
+  tempImgX, tempImgY, tempImgZ: TInt16s;
 begin
   //bytesPerVox := 4;
   lXi := lHdr.dim[1]; //input X
@@ -913,7 +911,7 @@ begin
   FreeMem(contrib);
   setlength( lImg8, 0);
   finalImg := img8x;
-  out16 := tempImgX;
+  //out16 := tempImgX;
   {$IFDEF XONLY}
   goto 666;
   {$ENDIF}
@@ -954,7 +952,7 @@ begin
   SetLength( img8x,0);
   //{$DEFINE YONLY}
   finalImg := img8y;
-  out16 := tempImgY;
+  //out16 := tempImgY;
   {$IFDEF YONLY}
     goto 666;
   {$ENDIF}
@@ -988,7 +986,7 @@ begin
   FreeMem(contrib);
   Setlength( img8y,0);
   finalImg := img8z;
-  out16 := tempImgZ;
+  //out16 := tempImgZ;
 666:
   lHdr.dim[1] := lXo;
   lHdr.dim[2] := lYo;
@@ -1094,7 +1092,7 @@ begin
   {$ENDIF}
 end;
 
-function EnlargeIsotropic(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lFilter: integer): boolean;
+(*function EnlargeIsotropic(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s): boolean;
 var
   mmMx, mmMn, xScale, yScale, zScale: single;
 begin
@@ -1107,7 +1105,7 @@ begin
  yScale :=  lHdr.pixdim[2]/ mmMn;
  zScale :=  lHdr.pixdim[3]/ mmMn;
  result := ShrinkOrEnlarge(lHdr,lBuffer, -1, xScale, yScale, zScale);
-end;
+end;*)
 
 procedure forceDataType(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; const outDatatype: integer);
 var

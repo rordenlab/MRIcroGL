@@ -35,7 +35,7 @@ type
       property FullColorTable: TCLUTrec read CLUT;
       procedure ChangeNode(index, intensity, R,G,B,A: byte);
       procedure AddNode(intensity, A: byte);
-      procedure SetLabels(niftiFileName: string);
+      procedure SetLabels();
       procedure DeleteNode (index: integer);
       //procedure SetTag(cTag: integer);
       property LUT: TLUT read fLUT;
@@ -190,7 +190,7 @@ begin
     result := lut;
 end;
 
-procedure TCLUT.SetLabels(niftiFileName: string);
+procedure TCLUT.SetLabels();
 begin
      fIsLabels := true;
      fLUT := fLUTlabel;

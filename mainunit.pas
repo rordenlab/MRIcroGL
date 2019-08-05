@@ -4069,7 +4069,7 @@ function TGLForm1.AddBackground(Filename: string; isAddToRecent: boolean = true;
 var
    {$IFDEF MATT1}
    ext: string;
-   i: integer;
+ //  i: integer;
    {$ENDIF}
  fnm: string;
  FileNames: array of String ;

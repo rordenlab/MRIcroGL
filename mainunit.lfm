@@ -37,20 +37,20 @@ object GLForm1: TGLForm1
       Align = alLeft
       BorderStyle = bsNone
       ClientHeight = 641
-      ClientWidth = 253
+      ClientWidth = 268
       ParentFont = False
       TabOrder = 0
       OnDblClick = ToolPanelDblClick
       object LayerBox: TGroupBox
         Left = 0
-        Height = 183
+        Height = 184
         Top = 0
-        Width = 253
+        Width = 268
         Align = alTop
         AutoSize = True
         Caption = 'Layers'
         ClientHeight = 165
-        ClientWidth = 245
+        ClientWidth = 258
         Constraints.MinWidth = 10
         ParentFont = False
         ParentShowHint = False
@@ -61,7 +61,7 @@ object GLForm1: TGLForm1
           Height = 72
           Hint = 'Right-click for options'
           Top = 0
-          Width = 245
+          Width = 258
           Align = alTop
           Constraints.MaxHeight = 72
           ItemHeight = 0
@@ -200,14 +200,14 @@ object GLForm1: TGLForm1
       end
       object ClipBox: TGroupBox
         Left = 0
-        Height = 79
-        Top = 183
-        Width = 253
+        Height = 80
+        Top = 184
+        Width = 268
         Align = alTop
         AutoSize = True
         Caption = 'Clipping'
         ClientHeight = 61
-        ClientWidth = 245
+        ClientWidth = 258
         Constraints.MinWidth = 10
         ParentFont = False
         TabOrder = 1
@@ -316,13 +316,13 @@ object GLForm1: TGLForm1
       end
       object ShaderBox: TGroupBox
         Left = 0
-        Height = 276
-        Top = 740
-        Width = 253
+        Height = 277
+        Top = 746
+        Width = 268
         Align = alClient
         Caption = 'Render'
         ClientHeight = 258
-        ClientWidth = 245
+        ClientWidth = 258
         Constraints.MinWidth = 10
         ParentFont = False
         TabOrder = 2
@@ -832,14 +832,14 @@ object GLForm1: TGLForm1
       end
       object LineBox: TGroupBox
         Left = 0
-        Height = 44
-        Top = 262
-        Width = 253
+        Height = 45
+        Top = 264
+        Width = 268
         Align = alTop
         AutoSize = True
         Caption = 'Lines'
         ClientHeight = 26
-        ClientWidth = 245
+        ClientWidth = 258
         Constraints.MinWidth = 10
         ParentFont = False
         TabOrder = 3
@@ -890,14 +890,14 @@ object GLForm1: TGLForm1
       end
       object SliceBox: TGroupBox
         Left = 0
-        Height = 180
-        Top = 560
-        Width = 253
+        Height = 181
+        Top = 565
+        Width = 268
         Align = alTop
         AutoSize = True
         Caption = '2D Slice Selection'
         ClientHeight = 162
-        ClientWidth = 245
+        ClientWidth = 258
         Constraints.MinWidth = 10
         ParentFont = False
         TabOrder = 6
@@ -1126,14 +1126,14 @@ object GLForm1: TGLForm1
       end
       object CutoutBox: TGroupBox
         Left = 0
-        Height = 81
-        Top = 479
-        Width = 253
+        Height = 82
+        Top = 483
+        Width = 268
         Align = alTop
         AutoSize = True
         Caption = 'Cutout'
         ClientHeight = 63
-        ClientWidth = 245
+        ClientWidth = 258
         Constraints.MinWidth = 10
         ParentFont = False
         TabOrder = 4
@@ -1310,14 +1310,14 @@ object GLForm1: TGLForm1
       end
       object MosaicBox: TGroupBox
         Left = 0
-        Height = 173
-        Top = 306
-        Width = 253
+        Height = 174
+        Top = 309
+        Width = 268
         Align = alTop
         AutoSize = True
         Caption = 'Mosaic'
         ClientHeight = 155
-        ClientWidth = 245
+        ClientWidth = 258
         Constraints.MinWidth = 10
         ParentFont = False
         TabOrder = 5
@@ -1490,7 +1490,7 @@ object GLForm1: TGLForm1
           Left = 0
           Height = 66
           Top = 89
-          Width = 245
+          Width = 258
           Anchors = [akTop, akLeft, akRight]
           BorderSpacing.Top = 2
           Constraints.MaxHeight = 66
@@ -1521,17 +1521,17 @@ object GLForm1: TGLForm1
         Width = 10
         Align = alClient
         Caption = 'Scripting'
-        ClientHeight = 623
-        ClientWidth = 2
+        ClientHeight = 622
+        ClientWidth = 0
         Constraints.MinWidth = 10
         ParentFont = False
         TabOrder = 0
         OnDblClick = ScriptPanelDblClick
         object ScriptMemo: TMemo
           Left = 0
-          Height = 417
+          Height = 416
           Top = 0
-          Width = 2
+          Width = 0
           Align = alClient
           BorderStyle = bsNone
           Lines.Strings = (
@@ -1552,8 +1552,8 @@ object GLForm1: TGLForm1
         object ScriptOutputMemo: TMemo
           Left = 0
           Height = 200
-          Top = 423
-          Width = 2
+          Top = 422
+          Width = 0
           Align = alBottom
           BorderStyle = bsNone
           Lines.Strings = (
@@ -1569,8 +1569,8 @@ object GLForm1: TGLForm1
           Cursor = crVSplit
           Left = 0
           Height = 6
-          Top = 417
-          Width = 2
+          Top = 416
+          Width = 0
           Align = alBottom
           ResizeAnchor = akBottom
         end

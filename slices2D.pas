@@ -211,7 +211,7 @@ function TSlices2D.GetSlice2DFrac(mouseX, mouseY: integer; out orient: integer):
 //each quad composed of two triangles = six vertices 0..5: position 1=L,B, position 2=R,T
 // order 0=LT,1=LB,2=RT,3=RB,4=RT,5=LB
 var
-  lt,lb,rb,v2: TVertex2D;
+  lt,lb,rb: TVertex2D;
   up, right: TVec4;
   x, y, xFrac, yFrac: single;
   i: integer;
@@ -224,7 +224,7 @@ begin
      while (i < numSliceVerts) do begin
            lt := sliceVerts[i-3];
            lb := sliceVerts[i-2];
-           v2 := sliceVerts[i-1];
+           //v2 := sliceVerts[i-1];
            rb := sliceVerts[i];
            i := i + 6; //skip to next quad: each quad composed of two triangles = 6 vertices
            xFrac := (x-lb.position.x)/ (rb.position.x - lb.position.x);
@@ -841,51 +841,6 @@ begin
 end;
 
 {$ENDIF}
-
-
-(*procedure TSlices2D.DrawAx(L,B, W,H, ZFrac: single);
-var
-  tL, tR, tT, tB: single;
-begin
-  tT := 1;
-  tB := 0;
-  if isRadiological then begin
-   tL := 1;
-   tR := 0;
-  end else begin
-   tL := 0;
-   tR := 1;
-  end;
-  (*if zoom.scale > 1.0 then begin
-     TexR := 0.25;
-     TexL := 0.75;
-     //TexB := 0.25;
-     //TexT := 0.75;
-  end; *)
-  AddQuad(L,B, W, H, tL, tT, tR, TB, ZFrac, kAxialOrient);
-  (*if (length(sliceVerts) < (numSliceVerts + 6)) then
-     setlength(sliceVerts, (numSliceVerts + kBlockSz));
-  newSlices := true;
-  sliceVerts[numSliceVerts+0] := Vertex2D(V2(L, B+H), V4(TexL, TexT, ZFrac, 1), kAxialOrient);
-  sliceVerts[numSliceVerts+1] := Vertex2D(V2(L, B), V4(TexL, TexB, ZFrac, 1), kAxialOrient);
-  sliceVerts[numSliceVerts+2] := Vertex2D(V2(L+W, B+H), V4(TexR, TexT, ZFrac, 1), kAxialOrient);
-  sliceVerts[numSliceVerts+3] := Vertex2D(V2(L+W, B), V4(TexR, TexB, ZFrac, 1), kAxialOrient);
-  sliceVerts[numSliceVerts+4] := sliceVerts[numSliceVerts+2];
-  sliceVerts[numSliceVerts+5] := sliceVerts[numSliceVerts+1];
-  numSliceVerts := numSliceVerts + 6;*)
-  if lineWid <= 0 then exit;
-  if isRadiological then begin
-     DrawCross(L,B,W,H,1.0-sliceFrac2D.x,sliceFrac2D.y)
-  end else begin
-      DrawCross(L,B,W,H,sliceFrac2D.x,sliceFrac2D.y);
-  end;
-  if FontScale <= 0.0 then exit;
-  if isRadiological then
-     TextLabelLeft(L,B+(H * 0.5),'R')
-  else
-      TextLabelLeft(L,B+(H * 0.5),'L');
-  TextLabelTop(L+(W * 0.5),B+H,'A');
-end;*)
 
 procedure  TSlices2D.Update(volScale: TVec3; w,h: single; orient: integer; actualH : integer = -1);
 var
