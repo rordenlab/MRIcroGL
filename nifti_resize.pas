@@ -824,16 +824,12 @@ begin
   lHdr.dim[1] := lXo;
   lHdr.dim[2] := lYo;
   lHdr.dim[3] := lZo;
-  (*setlength(lImg8,  lXo * lYo * lZo);
-  for i := kIdx1 to ((lXo*lYo*lZo)-kEnd) do begin
-      //check image range - some interpolation can cause ringing
-      // e.g. if input range 0..1000 do not create negative values!
-      if finalImg[i] > mx then lImg8[i] := mx
-      else if finalImg[i] < mn then lImg8[i] := mn
-      else lImg8[i] := round(finalImg[i])
-  end;
-  finalImg := nil; *)
   lImg8 := finalImg;
+  //range check
+  (*for i := 0 to (lHdr.dim[1]*lHdr.dim[2]*lHdr.dim[3])-kEnd do begin
+      if lImg8[i] < mn then lImg8[i] := mn;
+      if lImg8[i] > mx then lImg8[i] := mx;
+  end; *)
 end; //Resize8()
 
 function Round16(v: double; mn, mx: Int16): Int16;
@@ -976,7 +972,7 @@ begin
             for j := 0 to contrib^[z].n - 1 do begin
               sum := sum + (contrib^[z].p^[j].weight * tempImgY[lineStart +contrib^[z].p^[j].pixel] );
             end;
-            tempImgZ[i] := round(sum);
+            tempImgZ[i] := round16(sum,mn,mx);
             i := i + 1;
         end; //for X
     end; //for Y
@@ -991,17 +987,13 @@ begin
   lHdr.dim[1] := lXo;
   lHdr.dim[2] := lYo;
   lHdr.dim[3] := lZo;
-  (*setlength(lImg8,  2 * lXo * lYo * lZo);
-  img16:= TInt16s(lImg8);
-  for i := kIdx1 to ((lXo*lYo*lZo)-kEnd) do begin
-      //check image range - some interpolation can cause ringing
-      // e.g. if input range 0..1000 do not create negative values!
-      if out16[i] > mx then img16[i] := mx
-      else if out16[i] < mn then img16[i] := mn
-      else img16[i] := round(out16[i])
-  end;
-  finalImg := nil; *)
   lImg8 := finalImg;
+  //range check
+  (*img16:= TInt16s(lImg8);
+  for i := 0 to (lHdr.dim[1]*lHdr.dim[2]*lHdr.dim[3])-kEnd do begin
+      if img16[i] < mn then img16[i] := mn;
+      if img16[i] > mx then img16[i] := mx;
+  end; *)
   //{$IFDEF UNIX}writeln(format('>resize mn/mx %d %d', [mn, mx]));{$ENDIF}
 end; //Resize16()
 {$ENDIF} //if native->float->native else native->native->native

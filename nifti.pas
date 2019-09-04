@@ -11,15 +11,20 @@ interface
 {$DEFINE OPENFOREIGN}
 {$DEFINE CPUGRADIENTS} //Computing volume gradients on the GPU is much faster than using the CPU
 {$DEFINE CACHEUINT8} //save 8-bit data: faster requires RAM
+{$DEFINE SSE}
+{$DEFINE TIF} //load bitmaps, e.g. PNG, BMP, TIFFs not handled by NIfTI_TIFF
+{$DEFINE BMP} //load bitmaps, e.g. PNG, BMP, TIFFs not handled by NIfTI_TIFF
 uses
 
   //{$IFDEF UNIX}cthreads, cmem,{$ENDIF}
+  {$IFDEF BMP} Graphics, GraphType,{$ENDIF}
   {$IFDEF PARALLEL}MTProcs,{$ENDIF}
   {$IFDEF TIMER} DateUtils,{$ENDIF}
   {$IFDEF FASTGZ} SynZip, {$ENDIF}
   {$IFDEF OPENFOREIGN} nifti_foreign, {$ENDIF}
   {$IFDEF CUSTOMCOLORS} colorTable,  {$ENDIF}
-  {$IFDEF GZIP}zstream, umat, {$IFNDEF FASTGZ}GZIPUtils,{$ENDIF} {$ENDIF} //Freepascal includes the handy zstream function for decompressing GZip files
+  {$IFDEF GZIP}zstream, umat, GZIPUtils, {$ENDIF} //Freepascal includes the handy zstream function for decompressing GZip files
+  {$IFDEF TIF} nifti_tiff, {$ENDIF} {$IFDEF SSE} sse2, {$ENDIF}
   strutils, dialogs, clipbrd, SimdUtils, sysutils,Classes, nifti_types, Math, VectorMath, otsuml;
 //Written by Chris Rorden, released under BSD license
 //This is the header NIfTI format http://nifti.nimh.nih.gov/nifti-1/
@@ -94,6 +99,7 @@ Type
         //function skipBytes(): int64; //if fVolumeDisplayed > 0, skip this many BYTES for first byte of data
         //function skipRawVolBytes(): TUInt8s;
         function VoiDescriptivesLabels(VoiRawBytes: TUInt8s): TStringList;
+
         //procedure robustMinMax(var rMin, rMax: single);
       public
         fRawVolBytes: TUInt8s;
@@ -119,6 +125,7 @@ Type
         function AsFloats(): TFloat32s;
         function NotZero(): TInt16s; //volume where voxels non-zero voxels are set to 1, voxels with intensity zero set to 0
         function NeedsUpdate(): boolean;
+        function DisplayMinMax2Uint8(isForceRefresh: boolean = false): TUInt8s;
         procedure SaveRotated(fnm: string; perm: TVec3i);
         function SaveCropped(fnm: string; crop: TVec6i; cropVols: TPoint): boolean;
         function SaveRescaled(fnm: string; xFrac, yFrac, zFrac: single; OutDataType, Filter: integer; isAllVolumes: boolean): boolean;
@@ -171,7 +178,6 @@ Type
         procedure SetDisplayMinMaxNoUpdate(newMin, newMax: single); overload;
         procedure SetCutoutNoUpdate(CutoutLow, CutoutHigh: TVec3);
         function DisplayRGBGreen(): TUInt8s;
-        function DisplayMinMax2Uint8(isForceRefresh: boolean = false): TUInt8s;
         procedure SetDisplayColorScheme(clutFileName: string; cTag: integer);
         procedure SetDisplayVolume(newDisplayVolume: integer);
         procedure ForceUpdate;
@@ -933,7 +939,7 @@ var
 begin
      result := 0;
      if (vox < 0) or (vox >= (dim.x * dim.y * dim.z)) then exit;
-     if fHdr.datatype = kDT_RGB then vox := (vox * 3) + 1; //read gread
+     if fHdr.datatype = kDT_RGB then vox := (vox * 3) + 1; //read green
      vox := vox + skipVox;
      vol8 := fRawVolBytes;
      vol16 := TInt16s(vol8);
@@ -1393,7 +1399,7 @@ var
     i8: UInt8;
     i16: Int16;
     i32: Int32;
-    half, mx: integer;
+    half, mx: int64;
     in8: TUInt8s;
     in16, out16: TInt16s;
     in32, out32: TInt32s;
@@ -1401,6 +1407,7 @@ var
     inperm: TVec3i;
     xOffset, yOffset, zOffset: array of int64;
     voxOffset, byteOffset, volBytes,vol, volumesLoaded,  x,y,z, i: int64;
+    xy, p8, p16: int64;
 begin
   if (perm.x = 1) and (perm.y = 2) and (perm.z = 3) then begin
      Mat2SForm(outR, fHdr); //could skip: no change!
@@ -1436,10 +1443,9 @@ begin
  volumesLoaded := length(rawVolBytes) div volBytes;
  Mat2SForm(outR, fHdr);
  Mat2QForm(outR, fHdr);
- //
- if (fHdr.bitpix <> 24) and (inperm.x = -1) and (inperm.y = 2) and (inperm.z = 3) then begin
+ if (fHdr.bitpix <> 24) and (inperm.x = -1) and (inperm.y = 2) and (inperm.z = 3) and (fDim.x > 2) then begin
     //optimize most common case of left-right mirror: no need to copy memory, 240ms -> 170ms
-     half := trunc(fDim.x);
+     half := (fDim.x-1) div 2; // [0 1 2]
      mx := fDim.x - 1;
      i := 0;
      {$DEFINE OLD8} //no benefit of line copies
@@ -1477,13 +1483,13 @@ begin
            for z := 0 to (fDim.z - 1) do
                for y := 0 to (fDim.y - 1) do begin
                    for x := 0 to half do begin
-                       i16 := out16[i+(mx-x)];
-                       out16[i+(mx-x)] := out16[i+x];
-                       out16[i+x] := i16;
+                      i16 := out16[i+(mx-x)];
+                      out16[i+(mx-x)] := out16[i+x];
+                      out16[i+x] := i16;
                    end;
                    i := i + fDim.x;
                end;
-     end;   // out32 := TInt32s(rawVolBytes);
+     end;
      if (fHdr.bitpix = 32) then begin
        out32 := TInt32s(rawVolBytes);
        for vol := 1 to volumesLoaded do
@@ -2048,21 +2054,32 @@ var
   oScale : TVec3;
   {$ENDIF}
 begin
+ //showmessage('Memory exhausted ' + inttostr(length(fRawVolBytes))); exit; xxx
+ if length(fRawVolBytes) < 1 then begin
+    showmessage(format('Load image to rotate %d %d %d',[fDim.x, fDim.y, fDim.z ] ));
+    exit;
+ end;
  oHdr := fHdr;
  oMat := EstimateResidual(fMat, perm);
  Mat2SForm(oMat, oHdr);
  Mat2QForm(oMat, oHdr);
  {$IFDEF RESLICE}
+ try
  setlength(orawVolBytes, length(fRawVolBytes));
+ except
+   showmessage(format('Memory exhausted (%d bytes) ',[length(fRawVolBytes)]));
+   exit;
+ end;
  orawVolBytes := copy(fRawVolBytes, low(fRawVolBytes), length(fRawVolBytes));
+ //orawVolBytes := copy(fRawVolBytes, 0, maxint);
  oDim := fDim;
  oScale := fScale;
  iMat := oMat;
- //showmessage( mStr('i', fMat)+chr(10)+mStr('o', oMat));
+ //showmessage( mStr('i!', fMat)+chr(10)+mStr('o', oMat));
  //showmessage(format('%d %d %d', [Perm.x, perm.y, perm.z]));
  if not EstimateReorient(oDim, iMat, oMat, Perm)  then exit;
  //showmessage(format('%d %d %d', [Perm.x, perm.y, perm.z]));
- //showmessage( mStr('i', fMat)+chr(10)+mStr('o', oMat));
+ //showmessage( mStr('i?', fMat)+chr(10)+mStr('o', oMat));
  //showmessage( mStr('i', fMat)+chr(10)+mStr('o', oMat));
  ApplyVolumeReorient(Perm, oMat, oDim, oScale, oHdr, orawVolBytes);
  //Clipboard.AsText := mStr('i', iMat)+chr(10)+mStr('o', oMat);
@@ -2075,7 +2092,6 @@ begin
  oHdr.dim[5] := 1;
  oHdr.dim[6] := 1;
  oHdr.dim[7] := 1;
-
  mStream.Write(oHdr,sizeof(oHdr));
  oPad32 := 4;
  mStream.Write(oPad32, 4);
@@ -2664,6 +2680,54 @@ begin
   lHdr.sform_code := kNIFTI_XFORM_SCANNER_ANAT;
 end;
 
+procedure fixHdr( var lHdr: TNIfTIHdr );
+//ensure bitpix and datatype match
+// fix headers where possible, e.g. ImageJ saves RGB images as bitpix=24, datatype=0 dt should be 128)
+var
+   bitpix: integer;
+begin
+     if (lHdr.bitpix = 1) and (lHdr.datatype = kDT_BINARY) then
+        exit;
+     if (lHdr.bitpix = 8) and ((lHdr.datatype = kDT_UINT8) or (lHdr.datatype = kDT_INT8)) then
+        exit;
+     if (lHdr.bitpix = 16) and ((lHdr.datatype = kDT_UINT16) or (lHdr.datatype = kDT_INT16)) then
+        exit;
+     if (lHdr.bitpix = 24) and (lHdr.datatype = kDT_RGB) then
+        exit;
+     if (lHdr.bitpix = 32) and ((lHdr.datatype = kDT_UINT32) or (lHdr.datatype = kDT_INT32) or (lHdr.datatype = kDT_FLOAT32) or (lHdr.datatype = kDT_RGBA32) ) then
+        exit;
+     if (lHdr.bitpix = 64) and ((lHdr.datatype = kDT_UINT64) or (lHdr.datatype = kDT_INT64) or (lHdr.datatype = kDT_FLOAT64) or (lHdr.datatype = kDT_COMPLEX)) then
+        exit;
+     if (lHdr.bitpix = 128) and ((lHdr.datatype = kDT_FLOAT128) or (lHdr.datatype = kDT_COMPLEX128)) then
+        exit;
+     if (lHdr.bitpix = 256) and (lHdr.datatype = kDT_COMPLEX256) then
+        exit;
+     if (lHdr.bitpix = 24) then
+       lHdr.datatype := kDT_RGB;
+     bitpix := lHdr.bitpix;
+     lHdr.bitpix := -1;
+     if (lHdr.datatype = kDT_BINARY) then
+        lHdr.bitpix := 1;
+     if (lHdr.datatype = kDT_UINT8) or (lHdr.datatype = kDT_INT8) then
+        lHdr.bitpix := 8;
+     if (lHdr.datatype = kDT_UINT16) or (lHdr.datatype = kDT_INT16) then
+        lHdr.bitpix := 16;
+     if (lHdr.datatype = kDT_RGB) then
+        lHdr.bitpix := 24;
+     if (lHdr.datatype = kDT_UINT32) or (lHdr.datatype = kDT_INT32) or (lHdr.datatype = kDT_FLOAT32) or (lHdr.datatype = kDT_RGBA32) then
+        lHdr.bitpix := 32;
+     if (lHdr.datatype = kDT_UINT64) or (lHdr.datatype = kDT_INT64) or (lHdr.datatype = kDT_FLOAT64) or (lHdr.datatype = kDT_COMPLEX) then
+        lHdr.bitpix := 64;
+     if (lHdr.datatype = kDT_FLOAT128) or (lHdr.datatype = kDT_COMPLEX128) then
+        lHdr.bitpix := 128;
+     if (lHdr.datatype = kDT_COMPLEX256) then
+        lHdr.bitpix := 256;
+     if lHdr.bitpix > 0 then exit; //correct match inferred from either datatype or bitpix
+     //unable to fix this - report this as an error
+     lHdr.bitpix := bitpix;
+     printf(format('Invalid NIfTI: Header bitpix (%d) does not match datatype (%d)', [lHdr.bitpix, lHdr.datatype])); // < this will not end well
+end;
+
 procedure NoMat( var lHdr: TNIfTIHdr );
 //situation where no matrix is provided
 //var
@@ -2677,15 +2741,15 @@ begin
      lHdr.srow_x[0] := lHdr.pixdim[1];
      lHdr.srow_x[1] := 0;
      lHdr.srow_x[2] := 0;
-     lHdr.srow_x[3] := 0;
+     lHdr.srow_x[3] := ((lHdr.dim[1]-1)*lHdr.pixdim[1]) * -0.5;
      lHdr.srow_y[0] := 0;
      lHdr.srow_y[1] := lHdr.pixdim[2];
      lHdr.srow_y[2] := 0;
-     lHdr.srow_y[3] := 0;
+     lHdr.srow_y[3] := ((lHdr.dim[2]-1)*lHdr.pixdim[2]) * -0.5;
      lHdr.srow_z[0] := 0;
      lHdr.srow_z[1] := 0;
      lHdr.srow_z[2] := lHdr.pixdim[3];
-     lHdr.srow_z[3] := 0;
+     lHdr.srow_z[3] := ((lHdr.dim[3]-1)*lHdr.pixdim[3]) * -0.5;
 end;
 
 function Nifti2to1(h2 : TNIFTI2hdr): TNIFTIhdr;
@@ -2754,42 +2818,92 @@ begin
   result := h1;
 end;
 
-function Nifti2to1(Stream:TFileStream): TNIFTIhdr; overload;
+procedure NIFTI2hdr_SwapBytes (var lAHdr: TNIFTI2hdr); //Swap Byte order for the Analyze type
+var
+   i: integer;
+begin
+    with lAHdr do begin
+         swap4(HdrSz);
+         datatype := swap(datatype);
+         bitpix := swap(bitpix);
+         for i := 0 to 7 do begin
+             swap8(dim[i]);
+             xswap8r(pixdim[i]);
+         end;
+         Xswap8r(intent_p1);
+         Xswap8r(intent_p2);
+         Xswap8r(intent_p3);
+         swap8(vox_offset);
+         Xswap8r(scl_slope);
+         Xswap8r(scl_inter);
+         Xswap8r(cal_max);
+         Xswap8r(cal_min);
+         Xswap8r(slice_duration);
+         Xswap8r(toffset);
+         swap8(slice_start);
+         swap8(slice_end);
+         swap4(qform_code);
+         swap4(sform_code);
+         Xswap8r(quatern_b);
+         Xswap8r(quatern_c);
+         Xswap8r(quatern_d);
+         Xswap8r(qoffset_x);
+         Xswap8r(qoffset_y);
+         Xswap8r(qoffset_z);
+         for i := 0 to 3 do begin
+             Xswap8r(srow_x[i]);
+             Xswap8r(srow_y[i]);
+             Xswap8r(srow_z[i]);
+
+         end;
+         swap4(slice_code);
+         swap4(xyzt_units);
+         swap4(intent_code);
+         //showmessage(format('offset %d datatype %d bitpix %d %dx%dx%d', [vox_offset, datatype, bitpix, dim[1], dim[2], dim[3]]));
+    end;
+
+end;
+
+function Nifti2to1(Stream:TFileStream; var isNativeEndian: boolean): TNIFTIhdr; overload;
 var
   h2 : TNIFTI2hdr;
   h1 : TNIFTIhdr;
   lSwappedReportedSz: LongInt;
 begin
   h1.HdrSz:= 0; //error
+  isNativeEndian := true;
   Stream.Seek(0,soFromBeginning);
   Stream.ReadBuffer (h2, SizeOf (TNIFTI2hdr));
   lSwappedReportedSz := h2.HdrSz;
   swap4(lSwappedReportedSz);
   if (lSwappedReportedSz = SizeOf (TNIFTI2hdr)) then begin
-    printf('Not yet able to handle byte-swapped NIfTI2');
-    //NIFTIhdr_SwapBytes(h2);
-    //isNativeEndian := false;
-    exit(h1);
+    //printf('Not yet able to handle byte-swapped NIfTI2');
+    NIFTI2hdr_SwapBytes(h2);
+    isNativeEndian := false;
+    //exit(h1);
   end;
   if (h2.HdrSz <> SizeOf (TNIFTI2hdr)) then exit(h1);
   result := Nifti2to1(h2);
 end;
 
 {$IFDEF GZIP}
-function Nifti2to1(Stream:TGZFileStream): TNIFTIhdr; overload;
+function Nifti2to1(Stream:TGZFileStream; var isNativeEndian: boolean): TNIFTIhdr; overload;
 var
   h2 : TNIFTI2hdr;
   h1 : TNIFTIhdr;
   lSwappedReportedSz: LongInt;
 begin
   h1.HdrSz:= 0; //error
+  isNativeEndian := true;
   Stream.Seek(0,soFromBeginning);
   Stream.ReadBuffer (h2, SizeOf (TNIFTI2hdr));
   lSwappedReportedSz := h2.HdrSz;
   swap4(lSwappedReportedSz);
   if (lSwappedReportedSz = SizeOf (TNIFTI2hdr)) then begin
-    printf('Not yet able to handle byte-swapped NIfTI2');
-    exit(h1);
+    //printf('Not yet able to handle byte-swapped NIfTI2');
+    NIFTI2hdr_SwapBytes(h2);
+    isNativeEndian := false;
+    //exit(h1);
   end;
   if (h2.HdrSz <> SizeOf (TNIFTI2hdr)) then exit(h1);
   result := Nifti2to1(h2);
@@ -2892,20 +3006,23 @@ begin
 end;
 
 {$IFDEF FASTGZ}
-function Nifti2to1(Stream:TMemoryStream): TNIFTIhdr; overload;
+function Nifti2to1(Stream:TMemoryStream; var isNativeEndian: boolean): TNIFTIhdr; overload;
 var
   h2 : TNIFTI2hdr;
   h1 : TNIFTIhdr;
   lSwappedReportedSz: LongInt;
 begin
   h1.HdrSz:= 0; //error
+  isNativeEndian := true;
   Stream.Seek(0,soFromBeginning);
   Stream.ReadBuffer (h2, SizeOf (TNIFTI2hdr));
   lSwappedReportedSz := h2.HdrSz;
   swap4(lSwappedReportedSz);
   if (lSwappedReportedSz = SizeOf (TNIFTI2hdr)) then begin
-    printf('Not yet able to handle byte-swapped NIfTI2');
-    exit(h1);
+    //printf('Not yet able to handle byte-swapped NIfTI2');
+    NIFTI2hdr_SwapBytes(h2);
+    isNativeEndian := false;
+    //exit(h1);
   end;
   if (h2.HdrSz <> SizeOf (TNIFTI2hdr)) then exit(h1);
   result := Nifti2to1(h2);
@@ -2913,13 +3030,37 @@ end;
 
 function ExtractGzNoCrc(fnm: string; var mStream : TMemoryStream; skip: int64 = 0; expected: int64 = 0): boolean;
 //a bit faster: do not compute CRC check
+{$DEFINE ROBUST} //handle ImageJ/Fiji MHA compression without GZ header : see cpts.mha
 var
+   {$IFDEF ROBUST}
+   fStream : TFileStream;
+   inStream : TMemoryStream;
+   {$ENDIF}
    ret, size, usize: int64;
    crc32: dword;
    src : array of byte;
    f: file of byte;
 begin
   result := false;
+  ret := GetCompressedFileInfo(fnm, usize, crc32, skip);
+  if ret < 0 then exit;
+  {$IFDEF ROBUST}
+  if (ret = 2)  then begin //zlib : no file size...
+      src := nil;
+      fStream := TFileStream.Create(fnm, fmOpenRead);
+      fStream.seek(skip, soFromBeginning);
+      inStream := TMemoryStream.Create();
+      inStream.CopyFrom(fStream, fStream.Size - skip);
+      result := unzipStream(inStream, mStream);
+      fStream.Free;
+      inStream.Free;
+      if (not result) and (expected >= mStream.size) then begin
+         printf('unzipStream error but sufficient bytes extracted (perhaps GZ without length in footer)');
+         result := true;
+      end;
+      exit;
+  end;
+  {$ENDIF}//ROBUST
   AssignFile(f, fnm);
   FileMode := fmOpenRead;
   Reset(f,1);
@@ -2932,10 +3073,9 @@ begin
   blockread(f, src[0], size );
   CloseFile(f);
   result := false;
-  ret := GetCompressedFileInfo(fnm, usize, crc32, skip);
   if (ret = 2)  then begin //zlib : no file size...
-     UnCompressStream(@src[0], size, mStream, nil, true);
-     result := true;
+      UnCompressStream(@src[0], size, mStream, nil, true);
+      result := true;
   end else if (ret > skip) then begin
      if (usize < expected) and (expected > 0) then begin
         printf(format('GZ footer reports %d bytes but expected %d (corrupt GZ)\n', [usize, expected]));
@@ -3005,12 +3145,13 @@ begin
      isNativeEndian := false;
   end;
   if fHdr.HdrSz <> SizeOf (TNIFTIHdr) then begin
-     fHdr := Nifti2to1(Stream);
+     fHdr := Nifti2to1(Stream, isNativeEndian);
      if fHdr.HdrSz <> SizeOf (TNIFTIHdr) then begin
        printf('Unable to read image '+Filename);
        exit;
      end;
   end;
+  fixHdr(fHdr);
   if (fHdr.bitpix <> 8) and (fHdr.bitpix <> 16) and (fHdr.bitpix <> 24) and (fHdr.bitpix <> 32) and (fHdr.bitpix <> 64) then begin
    printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
    exit;
@@ -3087,13 +3228,14 @@ begin
      isNativeEndian := false;
   end;
   if fHdr.HdrSz <> SizeOf (TNIFTIHdr) then begin
-    fHdr := Nifti2to1(Stream);
+    fHdr := Nifti2to1(Stream, isNativeEndian);
     if fHdr.HdrSz <> SizeOf (TNIFTIHdr) then begin
        printf('Unable to read image '+Filename);
        //Stream.Free; //Finally ALWAYS executed!
        exit;
     end;
   end;
+  fixHdr(fHdr);
   if (fHdr.bitpix <> 8) and (fHdr.bitpix <> 16) and (fHdr.bitpix <> 24) and (fHdr.bitpix <> 32) and (fHdr.bitpix <> 64) then begin
    printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
    exit;
@@ -3289,6 +3431,25 @@ begin
  result := true;
 end;
 
+function isGz(hdrSz: longint): boolean;
+var
+   b0, b1, b2: byte;
+begin
+ {$IFDEF ENDIAN_BIG}
+ b0 := (hdrSz shr 24) and 255;
+ b1 := (hdrSz shr 16) and 255;
+ b2 := (hdrSz shr 8) and 255;
+ {$ELSE}
+ b0 := (hdrSz shr 0) and 255;
+ b1 := (hdrSz shr 8) and 255;
+ b2 := (hdrSz shr 16) and 255;
+
+ {$ENDIF}
+ //https://www.filesignatures.net/index.php?page=search&search=GZ&mode=EXT
+ //showmessage(format('%2x %2x %2x', [b0,b1,b2]));
+ result := (b0 = $1F) and (b1 = $8B) and (b2 = $08);
+end;
+
 function TNIfTI.LoadRaw(FileName : AnsiString; out isNativeEndian: boolean): boolean;// Load 3D data                                 }
 //Uncompressed .nii or .hdr/.img pair
 const
@@ -3319,14 +3480,22 @@ begin
      NIFTIhdr_SwapBytes(fHdr);
      isNativeEndian := false;
   end;
+  {$IFDEF GZIP}
+  if (fHdr.HdrSz <> SizeOf (TNIFTIHdr))  and (isGz(fHdr.HdrSz)) then begin
+     printf('Wrong file extension: Should be .nii.gz: '+Filename);
+     result := LoadGz(FileName, isNativeEndian);
+     exit;
+  end;
+  {$ENDIF}
   if fHdr.HdrSz <> SizeOf (TNIFTIHdr) then begin
-    fHdr := Nifti2to1(Stream);
+    fHdr := Nifti2to1(Stream, isNativeEndian);
     if fHdr.HdrSz <> SizeOf (TNIFTIHdr) then begin
-       printf('Unable to read image '+Filename);
+       printf('Unable to read image (NIfTI Header Size incorrect) '+Filename);
        //Stream.Free; //Finally ALWAYS executed!
        exit;
     end;
   end;
+  fixHdr(fHdr);
   if (fHdr.bitpix <> 8) and (fHdr.bitpix <> 16) and (fHdr.bitpix <> 24) and (fHdr.bitpix <> 32) and (fHdr.bitpix <> 64) then begin
    printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
    exit;
@@ -3654,7 +3823,7 @@ begin
             else if fHdr.datatype = kDT_FLOAT then
                  v := vol32[i]
             else if fHdr.datatype = kDT_RGB then begin
-                 v := vol8[j];
+                 v := max(max(vol8[j], vol8[j+1]),vol8[j+2]);
                  j := j + 3;
             end;
             v := (v * fHdr.scl_slope) + fHdr.scl_inter;
@@ -3736,6 +3905,7 @@ var
   i, j, k, vx: int64;
 begin
   if (fHdr.datatype <> kDT_RGBA32) then exit;
+  //showmessage(format('%d %d %d %d', [fHdr.dim[1], fHdr.dim[2], fHdr.dim[3], fVolumesLoaded]));
   vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]*fVolumesLoaded);
   rgba8in := TUInt8s(fRawVolBytes);
   setlength(rgba8temp, vx * 4);
@@ -3757,7 +3927,7 @@ begin
   rgba8temp := nil;
   //change header
   fHdr.datatype := kDT_RGB;
-  fHdr.bitpix:= 8;
+  fHdr.bitpix:= 24;
   fHdrNoRotation.datatype := kDT_RGB;
   fHdrNoRotation.bitpix:= 24;
   printf('Converted RGBA -> RGB, Data type 2304 -> 128');
@@ -4269,6 +4439,7 @@ var
    skipVx, i, vx, lC: int64;
    vol24: TRGBs;
    luts: array[0..255] of byte;
+   alpha: integer;
    lV, bias, lSwap, lMin, lMax, lRng: single;
 begin
   if fHdr.datatype <> kDT_RGB then exit;
@@ -4295,8 +4466,12 @@ begin
   vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
   skipVx := skipVox();
   for i := 0 to (vx - 1) do begin
-    //fVolRGBA[i] := SetRGBA(luts[vol24[skipVx+i].r],luts[vol24[skipVx+i].g],luts[vol24[skipVx+i].b],luts[vol24[skipVx+i].g]);
-    fVolRGBA[i] := SetRGBA(luts[vol24[skipVx+i].r],luts[vol24[skipVx+i].g],luts[vol24[skipVx+i].b],clut.LUT[vol24[skipVx+i].g].A);
+      //alpha := (vol24[skipVx+i].r+vol24[skipVx+i].g+vol24[skipVx+i].g+vol24[skipVx+i].b) div 4;  //favor green
+      alpha := max(max(vol24[skipVx+i].r,vol24[skipVx+i].g), vol24[skipVx+i].b);
+      fVolRGBA[i] := SetRGBA(luts[vol24[skipVx+i].r], luts[vol24[skipVx+i].g], luts[vol24[skipVx+i].b], alpha);
+
+      //fVolRGBA[i] := SetRGBA(luts[vol24[skipVx+i].r],luts[vol24[skipVx+i].g],luts[vol24[skipVx+i].b]),clut.LUT[alpha].A);
+      //fVolRGBA[i] := SetRGBA(luts[vol24[skipVx+i].r],luts[vol24[skipVx+i].g],luts[vol24[skipVx+i].b],clut.LUT[vol24[skipVx+i].g].A);
   end;
 end;
 
@@ -4340,7 +4515,6 @@ begin
  if (xMx <= xMn) or (yMx <= yMn) or (zMx <= zMn) then exit;
  dX := fHdr.dim[1];
  dXY := fHdr.dim[1] * fHdr.dim[2];
- clr := setRGBA(0,0,0,0);
  if (length(fVolRGBA) < 1) and (DisplayMin < 0) and (DisplayMax < 0) then begin
     if (length(fCache8) < 1) then exit;
     for z := zMn to zMx do
@@ -4357,6 +4531,7 @@ begin
                 fCache8[x + (y*dX) + (z * dXY)] := 0;
     exit;
  end;
+ clr := setRGBA(0,0,0,0);
  for z := zMn to zMx do
      for y := yMn to yMx do
          for x := xMn to xMx do
@@ -4390,7 +4565,7 @@ begin
    end; //if 16bit else 8bit
 end;
 
-{$IFDEF PARALLEL}
+{$IFDEF PARALLEL16}
 const kMaxParallel = 4;
 
 procedure TNIfTI.SetDisplayMinMaxParallel(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
@@ -4470,9 +4645,14 @@ begin
      if vx < 1 then exit(nil);
      skipVx := SkipVox();
      setlength(vol8, vx);
-     j := 1;//0=R,1=G,2=B
+     (*j := 1;//0=R,1=G,2=B
      for i := 0 to (vx-1) do begin
          vol8[i] := fRawVolBytes[skipVx+j];
+         j := j + 3;
+     end;*)
+     j := 0;//0=R,1=G,2=B
+     for i := 0 to (vx-1) do begin
+         vol8[i] := (fRawVolBytes[skipVx+j]+fRawVolBytes[skipVx+j+1]+fRawVolBytes[skipVx+j+1]+fRawVolBytes[skipVx+j+2]) div 4;
          j := j + 3;
      end;
      result := vol8;
@@ -4515,7 +4695,7 @@ begin
     exit;
   end;
   setlength(fCache8, vx);
-  {$IFDEF PARALLEL}
+  {$IFDEF PARALLEL16}
   if (vx > (kMaxParallel*10)) and (kMaxParallel > 1) then begin
      ProcThreadPool.DoParallel(@SetDisplayMinMaxParallel,0,kMaxParallel-1,nil);
   end else {$ENDIF} begin
@@ -4571,7 +4751,10 @@ begin
              fCache8[i] := round((vol16[skipVx+i] - lMin) * slope);
         end;
     end else if fHdr.datatype = kDT_FLOAT then begin
-      //GLForm1.LayerBox.caption := format('%g %g  %g',[lMin, lMax, slope]);
+      {$IFDEF SSE} //54ms->29ms
+      //printf('---->SSE!!!');
+      float2byte(vol32, fCache8, lMin, lMax, skipVx);
+      {$ELSE}
         for i := 0 to (vx - 1) do begin
           if (vol32[skipVx+i] >= lMax) then
              fCache8[i] := 255
@@ -4580,6 +4763,7 @@ begin
           else
              fCache8[i] := round((vol32[skipVx+i] - lMin) * slope);
         end;
+      {$ENDIF}
     end;
     if ZeroIntensityInvisible then begin
        for i := 0 to (vx - 1) do
@@ -4611,34 +4795,70 @@ begin
   fWindowMaxCache8 := fWindowMax;
   fOpacityPctCache8 := fOpacityPct;
   clut.NeedsUpdate := false;
-  ApplyCutout();
+  ApplyCutout(); //run twice! also in SetDisplayMinMax
 end;
+
+{$IFDEF PARALLEL}
+const kMaxParallel = 6;
+
+procedure TNIfTI.SetDisplayMinMaxParallel(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
+//Compute transfer function across cores
+//http://wiki.lazarus.freepascal.org/Parallel_procedures
+//Remarkably little benefit, perhaps because
+// "Do not work on vast amounts of memory. On some systems one thread alone is fast enough to fill the memory bus speed."
+var
+  i, vx, vxLo, vxHi: int64;
+begin
+ vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+ vxLo := round((index/kMaxParallel) * vx);
+ vxHi := round(((index+1)/kMaxParallel) * vx)-1;
+ for i := vxLo to vxHi do
+  {$IFDEF CUSTOMCOLORS}
+  fVolRGBA[i] := clut.LUT[fCache8[i]];
+  {$ELSE}
+  fVolRGBA[i] := fLUT[fCache8[i]];
+  {$ENDIF}
+  printf(format('>%d..%d %d',[vxLo, vxHi, index]));
+end;
+{$ENDIF}
 
 procedure TNIfTI.SetDisplayMinMax(isForceRefresh: boolean = false); overload;
 var
+  {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
   i, vx: int64;
 begin
+ {$IFDEF TIMER}startTime := now;{$ENDIF}
   if (fIsOverlay) then exit; //overlays visualized using DisplayMinMax2Uint8
-  vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
-  if (vx < 1) then exit;
   if (not isForceRefresh) and (not NeedsUpdate) then //(not clut.NeedsUpdate) and (fHdr.datatype <> kDT_RGB) and (fCache8 <> nil) and (fWindowMinCache8 <> fWindowMaxCache8) and (fWindowMin = fWindowMinCache8) and (fWindowMax = fWindowMaxCache8) then
      exit; //no change
+  vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+  if (vx < 1) then exit;
   if fHdr.datatype = kDT_RGB then begin
     setlength(fVolRGBA, vx);
     SetDisplayMinMaxRGB24();
     ApplyCutout();
+    {$IFDEF TIMER}printf(format('Set Min/Max Window RGB time %d', [ MilliSecondsBetween(Now,startTime)]));{$ENDIF}
     exit;
   end;
-  {$IFDEF TIMER}printf(format(' Min/Max Window %g..%g', [fWindowMin, fWindowMax]));{$ENDIF}
   DisplayMinMax2Uint8(isForceRefresh);
+  {$IFDEF TIMER}
+  printf(format('Set Min/Max Window %g..%g time %d', [fWindowMin, fWindowMax, MilliSecondsBetween(Now,startTime)]));
+  startTime := now;
+  {$ENDIF}
   setlength(fVolRGBA, vx);
+  {$IFDEF PARALLEL}
+  ProcThreadPool.DoParallel(@SetDisplayMinMaxParallel,0,kMaxParallel-1,nil);
+  {$ELSE}
+  //next stage remarkably slow, even though just lookup table.
   for i := 0 to (vx - 1) do
      {$IFDEF CUSTOMCOLORS}
      fVolRGBA[i] := clut.LUT[fCache8[i]];
      {$ELSE}
      fVolRGBA[i] := fLUT[fCache8[i]];
      {$ENDIF}
+  {$ENDIF}
   ApplyCutout();
+  {$IFDEF TIMER}printf(format('Update RGBA time %d', [MilliSecondsBetween(Now,startTime)]));{$ENDIF}
 end;
 
 procedure TNIfTI.SetCutoutNoUpdate(CutoutLow, CutoutHigh: TVec3);
@@ -4883,16 +5103,210 @@ begin
      i8 := nil;
 end;
 
-function loadForeign(FileName : AnsiString; var  rawData: TUInt8s; var lHdr: TNIFTIHdr): boolean;// Load 3D data                                 }
+{$IFDEF BMP}
+{$IFDEF Darwin}
+function xRGB(i: TRGB): TRGB;
+begin
+     result.r := i.B;
+     result.g := i.G;
+     result.b := i.R;
+end;
+
+function xRGBA(i: TRGBA): TRGBA;
+begin
+     result.r := i.B;
+     result.g := i.G;
+     result.b := i.R;
+     result.a := i.a;
+end;
+
+(*function xYCbCR(i: TRGBA): TRGBA;
+var
+   Y,Cr,Cb: byte;
+begin
+ //https://en.wikipedia.org/wiki/YCbCr
+ Y := i.B;
+ Cr := i.G;
+ Cb := i.R;
+ result.r := round(Y + 1.402 * (Cr-128));
+ result.g := round(Y - 0.344136 * (Cb-128) - 0.714136 * (Cr-128) );
+ result.b := round(Y + 1.772 * (Cb-128));
+end;*)
+{$ENDIF}
+
+function LoadBmpAsNifti(fnm: string; var  rawData: TUInt8s; var nhdr: TNIFTIHdr): boolean;
+var
+   pic : TPicture;
+   RawImage: TRawImage;
+   SrcPtr, DestPtr: PInteger;
+   y,i,nBytes: integer;
+   //Bmp : TBitmap;
+   LTempBitmap : TBitmap;
+   {$IFDEF Darwin}
+   v24s: TRGBs;
+   v32s: TRGBAs;
+   {$ENDIF}
+begin
+ result := false;
+ pic := TPicture.create;
+ //pic.Bitmap.PixelFormat := pf24bit;
+ try
+    pic.Loadfromfile(fnm);
+ except
+   pic.free;
+   exit;
+ end;
+ NII_Clear(nhdr);
+  (*if pic.Bitmap.PixelFormat = pf32bit then begin
+    //https://forum.lazarus.freepascal.org/index.php?topic=29701.0
+    LTempBitmap := TBitmap.Create;
+    try
+      LTempBitmap.PixelFormat := pf24bit;
+      LTempBitmap.SetSize(pic.Bitmap.Width, pic.Bitmap.Height);
+      LTempBitmap.Canvas.Draw(0, 0, pic.Bitmap);
+      pic.Bitmap.PixelFormat := pf24bit;
+      pic.Bitmap.Canvas.Draw(0, 0, LTempBitmap);
+    finally
+      FreeAndNil(LTempBitmap);
+    end;
+  end; *)
+  //Assert( pic.Bitmap.PixelFormat = pf24bit); //<- does nothing!
+ case pic.Bitmap.PixelFormat of
+     pf8bit: nhdr.bitpix:=8;
+     pf16bit: nhdr.bitpix:=16;
+     pf24bit: nhdr.bitpix:=24;
+     pf32bit: nhdr.bitpix:=32;
+     else begin
+      pic.free;
+      exit;
+     end;
+ end;
+ case pic.Bitmap.PixelFormat of
+   pf8bit: nhdr.datatype:=kDT_UINT8;
+   pf16bit: nhdr.datatype:=kDT_UINT16;
+   pf24bit: nhdr.datatype:=kDT_RGB;
+   pf32bit: nhdr.datatype:=kDT_RGBA32;
+ end;
+ nhdr.dim[0] := 2;
+ nhdr.dim[1] := pic.Width;
+ nhdr.dim[2] := pic.Height;
+ nhdr.dim[3] := 1;
+ nBytes :=  nhdr.dim[1] * nhdr.dim[2] * (nhdr.bitpix div 8);
+ setlength(rawData, nBytes);
+ //https://wiki.freepascal.org/Fast_direct_pixel_access
+ RawImage := pic.Bitmap.RawImage;
+ SrcPtr := PInteger(RawImage.Data);
+ {$DEFINE FLIPBMP}
+ {$IFDEF FLIPBMP}
+ Inc(PByte(SrcPtr), (nhdr.dim[2] - 1) * RawImage.Description.BytesPerLine);
+ {$ENDIF}
+ DestPtr := PInteger(@rawData[0]);
+ nBytes :=  nhdr.dim[1] * (nhdr.bitpix div 8);
+ for y := 0 to nhdr.dim[2] - 1 do begin
+     System.Move(SrcPtr^, DestPtr^, nBytes);
+     {$IFDEF FLIPBMP}
+     Dec(PByte(SrcPtr), RawImage.Description.BytesPerLine);
+     {$ELSE}
+     Inc(PByte(SrcPtr), RawImage.Description.BytesPerLine);
+     {$ENDIF}
+     Inc(PByte(DestPtr), nBytes);
+ end;
+ {$IFDEF Darwin} //MacOS RGBA order
+ if nhdr.bitpix = 24 then begin
+    nBytes := nhdr.dim[1] * nhdr.dim[2];
+    v24s := TRGBs(rawData);
+    for i := 0 to (nBytes-1) do
+        v24s[i] := xRGB(v24s[i]);
+ end;
+ if nhdr.bitpix = 32 then begin
+    nBytes := nhdr.dim[1] * nhdr.dim[2];
+    v32s := TRGBAs(rawData);
+    for i := 0 to (nBytes-1) do
+        v32s[i] := xRGBA(v32s[i]);
+        //v32s[i] := xYCbCR(v32s[i]);
+ end;
+ {$ENDIF}
+ result := true;
+ pic.free;
+end;
+
+{$ENDIF}
+
+(*procedure planar2RGB8(var  rawData: TUInt8s; var lHdr: TNIFTIHdr);
+var
+   img: TUInt8s;
+   xy, xys, z, i, j, k,  s, nBytes, SamplesPerPixel: integer;
+begin
+  if lHdr.datatype <> kDT_RGBplanar then exit;
+  lHdr.datatype := kDT_RGB;
+  SamplesPerPixel := 3;
+  xy := lHdr.dim[1] * lHdr.dim[2];
+  xys := xy *  SamplesPerPixel;
+  nBytes := xys * lHdr.dim[3] ;
+  setlength(img, nBytes);
+  img := Copy(rawData, Low(rawData), Length(rawData));
+  j := 0;
+  for z := 0 to (lHdr.dim[3]-1) do begin
+      k := z * xys;
+      for i := 0 to (xy-1) do begin
+          for s := 0 to (SamplesPerPixel-1) do begin
+              rawData[j] := img[k+i+(s * xy)] ;
+              j := j + 1;
+          end;
+          //
+      end;
+  end;
+  img := nil;
+end; *)
+
+procedure planar3D2RGB8(var  rawData: TUInt8s; var lHdr: TNIFTIHdr);
+var
+   img: TUInt8s;
+   xy, xys, z, i, j, k,  s, xyz, nBytesS, SamplesPerPixel: int64;
+begin
+  if lHdr.datatype <> kDT_RGBplanar3D then exit;
+  lHdr.datatype := kDT_RGB;
+  SamplesPerPixel := 3;
+  xy := lHdr.dim[1] * lHdr.dim[2];
+  xyz := xy * lHdr.dim[3];
+  xys := xy *  SamplesPerPixel;
+  nBytesS := xys * lHdr.dim[3] ;
+  setlength(img, nBytesS);
+  img := Copy(rawData, Low(rawData), Length(rawData));
+  j := 0;
+  for i := 0 to (xyz-1) do begin
+      for s := 0 to (SamplesPerPixel-1) do begin
+          rawData[j] := img[i+(s * xyz)] ;
+          j := j + 1;
+      end;
+  end;
+  img := nil;
+end;
+
+function loadForeign(FileName : AnsiString; var  rawData: TUInt8s; var lHdr: TNIFTIHdr): boolean;// Load 3D data
 //Uncompressed .nii or .hdr/.img pair
 var
    Stream : TFileStream;
    gzBytes, volBytes, FSz: int64;
    swapEndian, isDimPermute2341: boolean;
+   {$IFDEF BMP}lExt: string; {$ENDIF}
 begin
  if not fileexists(FileName) then exit(false);
+ {$IFDEF TIF}
+ if (isTIFF(FileName)) then begin
+    result := LoadTIFFAsNifti(FileName, rawData, lHdr);
+    if result then exit;
+ end;
+ {$ENDIF}
+ {$IFDEF BMP}
+ lExt := UpCase(ExtractFileExt(Filename));
+ if (lExt = '.PNG') or (lExt = '.BMP') or (lExt = '.TIF') or (lExt = '.TIFF') then begin
+    result := LoadBmpAsNifti(FileName, rawData, lHdr);
+    if result then exit;
+ end;
+ {$ENDIF}
  result := readForeignHeader (FileName, lHdr,  gzBytes, swapEndian, isDimPermute2341);
- if not result then exit;
+ if not result then exit(false);
  if (lHdr.bitpix <> 8) and (lHdr.bitpix <> 16) and (lHdr.bitpix <> 24) and (lHdr.bitpix <> 32) and (lHdr.bitpix <> 64) then begin
   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
   exit(false);
@@ -4922,10 +5336,12 @@ begin
    Finally
     Stream.Free;
    End;
+   //showmessage(format('%d  %d',[length(rawData), lHdr.bitpix div 8])); //x24bit
    if swapEndian then
-    SwapImg(rawData, lHdr.bitpix);
+      SwapImg(rawData, lHdr.bitpix);
  end;
- if not result then exit;
+ if not result then exit(false);
+ planar3D2RGB8(rawData, lHdr);
  if isDimPermute2341 then
     DimPermute2341(rawData, lHdr);
  result := true;
@@ -5002,9 +5418,6 @@ begin
  if not Fileexists(fBidsName) then
     fBidsName := '';
  result := true;
-
- //showmessage(format('%d %d',[fHdr.dim[4], fVolumesLoaded]));
-
 end;
 
 {$DEFINE OVERLAY}
@@ -5036,8 +5449,6 @@ begin
      result[2,2] := k;
      result[2,3] := l;
 end;  //matrix3D()
-
-
 
 function Voxel2Voxel (lDestMat, lSrcMat: TMat4): TMat4;
 //returns matrix for transforming voxels from one image to the other image
@@ -5517,7 +5928,7 @@ begin
   fVolumesTotal :=  fVolumesLoaded;
   //showmessage(format('%d', [prod(tarDim)]));
   //IsLabels := true;
-  if prod(tarDim) = 0 then //reduce size of huge background images
+  if (prod(tarDim) = 0) and (fHdr.dim[3] > 1) then //reduce size of huge background images
      if ShrinkLarge(fHdr,fRawVolBytes, MaxVox, true) then begin
         fVolumesLoaded := 1;
         IsShrunken := true;
@@ -5576,9 +5987,9 @@ begin
      fWindowMin := 1;
      fWindowMax := 1;
   end;
-  {$IFDEF TIMER}startTime := now;{$ENDIF}
+  //{$IFDEF TIMER}startTime := now;{$ENDIF}
   SetDisplayMinMax();
-  {$IFDEF TIMER}printf(format('Set Min/Max time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+  //{$IFDEF TIMER}printf(format('Set Min/Max time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
 end;
 
 
@@ -5639,11 +6050,11 @@ begin
   fixBogusHeaders(fHdr);
   ConvertUint16Int16();
   fHdrNoRotation := fHdr; //raw header without reslicing or orthogonal rotation
-  if prod(tarDim) = 0 then //reduce size of huge background images
-       if ShrinkLarge(fHdr,fRawVolBytes, MaxVox, IsLabels) then begin
+  if (prod(tarDim) = 0) and (fHdr.dim[3] > 1) then //reduce size of huge background images
+  if ShrinkLarge(fHdr,fRawVolBytes, MaxVox, IsLabels) then begin
         fVolumesLoaded := 1;
         IsShrunken := true;
-       end;
+  end;
 
   //showmessage(format('todo>> %d %d %d', [MaxVox, prod(tarDim), fVolumesLoaded]));
   scaleMx := max(max(abs(fHdr.Dim[1]*fHdr.PixDim[1]),abs(fHdr.Dim[2]*fHdr.pixDim[2])),abs(fHdr.Dim[3]*fHdr.pixDim[3]));
@@ -5665,6 +6076,7 @@ begin
   Convert2UInt8();
   if (fHdr.datatype = kDT_UINT16) or (fHdr.datatype = kDT_INT32) or (fHdr.datatype = kDT_UINT32) or (fHdr.datatype = kDT_DOUBLE)  then
      Convert2Float();
+  //printf(format('->> %d', [length(fRawVolBytes)]));  //saveRotat
   if prod(tarDim) > 0 then begin
     if IsLabels then
        VolumeReslice(tarMat, tarDim, false)
@@ -5677,6 +6089,7 @@ begin
     exit;
   end;
   {$IFDEF TIMER}printf(format('Reorient time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+  //printf(format('-->> %d', [length(fRawVolBytes)]));  //saveRotat
   fMat := SForm2Mat(fHdr);
   fInvMat := fMat.inverse;
   {$IFDEF TIMER}startTime := now;{$ENDIF}
@@ -5739,9 +6152,9 @@ begin
      fWindowMin := 1;
      fWindowMax := 1;
   end;
-  {$IFDEF TIMER}startTime := now;{$ENDIF}
+  //{$IFDEF TIMER}startTime := now;{$ENDIF}
   SetDisplayMinMax();
-  {$IFDEF TIMER}printf(format('Set Min/Max time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+  //{$IFDEF TIMER}printf(format('Set Min/Max time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
 end;
 
 function TNIfTI.Load(niftiFileName: string): boolean; overload;

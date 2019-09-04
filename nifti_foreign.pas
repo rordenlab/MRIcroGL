@@ -52,6 +52,12 @@ Type
   vect3 = array [0..2] of Single;
   ivect3 = array [0..2] of integer;
 
+(*procedure printf(str: string);
+begin
+  {$IFDEF UNIX} writeln(str);{$ENDIF}
+end;*)
+
+
 {$IFDEF GL10}
 procedure NII_SetIdentityMatrix (var lHdr: TNIFTIHdr); //create neutral rotation matrix
 var lInc: integer;
@@ -464,6 +470,7 @@ begin
    result := r1 ;
 end;
 
+
 procedure fromMatrix33 (m: mat33; var r11,r12,r13,r21,r22,r23,r31,r32,r33: double);
 begin
   r11 := m[0,0];
@@ -722,6 +729,44 @@ begin
      result := true;
 end;
 
+procedure  vCoord(var lV: vect3; lMat: mat33);
+//transform X Y Z by matrix
+var
+  lXi,lYi,lZi: single;
+begin
+  lXi := lV[0]; lYi := lV[1]; lZi := lV[2];
+  lV[0] := (lXi*lMat[0,0]+lYi*lMat[0,1]+lZi*lMat[0,2]);
+  lV[1] := (lXi*lMat[1,0]+lYi*lMat[1,1]+lZi*lMat[1,2]);
+  lV[2] := (lXi*lMat[2,0]+lYi*lMat[2,1]+lZi*lMat[2,2]);
+end;
+
+procedure SetCenter(var nhdr: TNIFTIhdr);
+var
+   v: vect3;
+   m: mat33;
+   i: integer;
+begin
+  for i := 0 to 2 do begin
+      m[0,i] := nhdr.srow_x[i];
+      m[1,i] := nhdr.srow_y[i];
+      m[2,i] := nhdr.srow_z[i];
+      v[i] := nhdr.dim[i+1]*0.5;
+  end;
+  vCoord(v,m);
+  //Voxel2mm
+  //nhdr.srow_x[3]:=-0.5 * (d[0]*m[0,0]+ d[1]*m[0,1]+d[2]*m[0,2]);
+  nhdr.srow_x[3] := -v[0];
+  nhdr.srow_y[3] := -v[1];
+  nhdr.srow_z[3] := -v[2];
+end;
+
+procedure SetSForm(var nhdr: TNIFTIhdr);
+begin
+  nhdr.srow_x[0]:=nhdr.pixdim[1]; nhdr.srow_x[1]:=0; nhdr.srow_x[2]:=0; nhdr.srow_x[3]:=-(nhdr.dim[1]-2.0)/2.0*nhdr.pixdim[1];
+  nhdr.srow_y[0]:=0; nhdr.srow_y[1]:=nhdr.pixdim[2]; nhdr.srow_y[2]:=0; nhdr.srow_y[3]:=-(nhdr.dim[2]-2.0)/2.0*nhdr.pixdim[2];
+  nhdr.srow_z[0]:=0; nhdr.srow_z[1]:=0; nhdr.srow_z[2]:=nhdr.pixdim[3]; nhdr.srow_z[3]:=-(nhdr.dim[3]-2.0)/2.0*nhdr.pixdim[3];
+end;
+
 procedure convertForeignToNifti(var nhdr: TNIFTIhdr);
 var
   i,nonSpatialMult: integer;
@@ -745,6 +790,7 @@ begin
   end;
   nhdr.bitpix := 8;
   if (nhdr.datatype = 4) or (nhdr.datatype = 512) then nhdr.bitpix := 16;
+  if (nhdr.datatype = kDT_RGB) or (nhdr.datatype = kDT_RGBplanar3D) then nhdr.bitpix := 24;
   if (nhdr.datatype = 8) or (nhdr.datatype = 16) or (nhdr.datatype = 768) then nhdr.bitpix := 32;
   if (nhdr.datatype = 32) or (nhdr.datatype = 64) or (nhdr.datatype = 1024) or (nhdr.datatype = 1280) then nhdr.bitpix := 64;
   LOAD_MAT44(qto_xyz, nhdr.srow_x[0], nhdr.srow_x[1], nhdr.srow_x[2], nhdr.srow_x[3],
@@ -883,14 +929,176 @@ begin
   end;
   nhdr.vox_offset := HSz;
   nhdr.sform_code := 1;
-  nhdr.srow_x[0]:=nhdr.pixdim[1];nhdr.srow_x[1]:=0.0;nhdr.srow_x[2]:=0.0;nhdr.srow_x[3]:=0.0;
+  (*nhdr.srow_x[0]:=nhdr.pixdim[1];nhdr.srow_x[1]:=0.0;nhdr.srow_x[2]:=0.0;nhdr.srow_x[3]:=0.0;
   nhdr.srow_y[0]:=0.0;nhdr.srow_y[1]:=nhdr.pixdim[2];nhdr.srow_y[2]:=0.0;nhdr.srow_y[3]:=0.0;
-  nhdr.srow_z[0]:=0.0;nhdr.srow_z[1]:=0.0;nhdr.srow_z[2]:=-nhdr.pixdim[3];nhdr.srow_z[3]:=0.0;
+  nhdr.srow_z[0]:=0.0;nhdr.srow_z[1]:=0.0;nhdr.srow_z[2]:=-nhdr.pixdim[3];nhdr.srow_z[3]:=0.0;*)
+  SetSForm(nhdr);
   convertForeignToNifti(nhdr);
   //nhdr.scl_inter:= 1;
   //nhdr.scl_slope := -1;
   result := true;
 end; //nii_readVmr()
+
+function nii_readV3draw (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+//https://www.povray.org/documentation/view/3.6.1/374/
+//The df3 format consists of a 6 byte header of three 16-bit integers (big endian)
+//The header is followed by x*y*z unsigned integer bytes of data with a resolution of 8, 16 or 32 bit.
+// The data are written with high order byte first (big-endian)
+Type
+  Tdf_header = packed record //Next: PIC Format Header structure
+        variant: array [1..24] of char;
+        endian: char;
+        dataTypeSize: int16;
+        nx, ny, nz, nc: uint32;
+  end; // Tbv_header;
+var
+   dhdr : Tdf_header;
+   lHdrFile: file;
+   FSz : integer;
+   nBytes : Int64;
+begin
+  result := false;
+  {$I-}
+  AssignFile(lHdrFile, fname);
+  FileMode := fmOpenRead;  //Set file access to read only
+  Reset(lHdrFile, 1);
+  {$I+}
+  if ioresult <> 0 then begin
+        NSLog('Error in reading v3draw header.'+inttostr(IOResult));
+        FileMode := 2;
+        exit;
+  end;
+  FSz := Filesize(lHdrFile);
+  BlockRead(lHdrFile, dhdr, sizeof(Tdf_header));
+  CloseFile(lHdrFile);
+  if (dhdr.endian <> 'B') and (dhdr.endian <> 'L') then begin
+     NSLog('Unknown v3draw endian');
+     exit;
+  end;
+  {$IFDEF ENDIAN_LITTLE}
+  if (dhdr.endian = 'B') then swapEndian := true;
+  {$ELSE}
+  if (dhdr.endian = 'L') then swapEndian := true;
+  {$ENDIF}
+  if swapEndian then begin
+     pswap4i(int32(dhdr.nx));
+     pswap4i(int32(dhdr.ny));
+     pswap4i(int32(dhdr.nz));
+     pswap4i(int32(dhdr.nc));
+     dhdr.dataTypeSize := swap(dhdr.dataTypeSize);
+  end;
+  if (dhdr.dataTypeSize <> 1) and (dhdr.dataTypeSize <> 2) and (dhdr.dataTypeSize <> 4) then begin
+     NSLog('Unknown v3draw datatype');
+     exit;
+  end;
+  if (dhdr.variant[1] <> 'r') or (dhdr.variant[2] <> 'a') or (dhdr.variant[3] <> 'w') then begin
+     NSLog('Unsupported v3draw compression');
+     exit;
+  end;
+  nBytes := dhdr.dataTypeSize * dhdr.nx * dhdr.ny * dhdr.nz * dhdr.nc; //assume 8-bit
+  if (nBytes + sizeof(Tdf_header) ) <> FSz then begin
+     NSLog(format('Not a valid v3draw file: %d bytes not expected filesize of %d bytes (%dx%dx%d)',[FSz, nBytes+sizeof(Tdf_header), dhdr.nx, dhdr.ny, dhdr.nz]));
+     exit;
+  end;
+  nhdr.dim[0]:=3;//3D
+  nhdr.dim[1]:= dhdr.nx;
+  nhdr.dim[2]:= dhdr.ny;
+  nhdr.dim[3]:= dhdr.nz;
+  nhdr.pixdim[1]:=1.0;
+  nhdr.pixdim[2]:=1.0;
+  nhdr.pixdim[3]:=1.0;
+  nhdr.datatype := kDT_UINT8;
+  nhdr.bitpix := dhdr.dataTypeSize * 8;
+  if (dhdr.dataTypeSize = 1) and (dhdr.nc = 3) then begin
+     nhdr.datatype := kDT_RGBplanar3D;
+     nhdr.bitpix := 24;
+     dhdr.nc := 1;
+  end;
+
+  if (dhdr.nc > 1) then begin
+     nhdr.dim[0]:=4;//4D
+     nhdr.dim[4]:= dhdr.nc;
+  end;
+  if dhdr.dataTypeSize = 2 then
+     nhdr.datatype := kDT_UINT16;
+  if dhdr.dataTypeSize = 4 then
+     nhdr.datatype := kDT_FLOAT;
+  nhdr.vox_offset := sizeof(Tdf_header);
+  //showmessage(format('%d %d %d  -> %d',[nhdr.dim[1],nhdr.dim[2],nhdr.dim[3],  nhdr.bitpix]));
+  nhdr.sform_code := 1;
+  SetSForm(nhdr);
+  convertForeignToNifti(nhdr);
+  //nhdr.scl_inter:= 1;
+  //nhdr.scl_slope := -1;
+  result := true;
+end; //nii_readV3draw
+
+function nii_readDf3 (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+//https://www.povray.org/documentation/view/3.6.1/374/
+//The df3 format consists of a 6 byte header of three 16-bit integers (big endian)
+//The header is followed by x*y*z unsigned integer bytes of data with a resolution of 8, 16 or 32 bit.
+// The data are written with high order byte first (big-endian)
+Type
+  Tdf_header = packed record //Next: PIC Format Header structure
+        nx, ny, nz: word;
+  end; // Tbv_header;
+var
+   dhdr : Tdf_header;
+   lHdrFile: file;
+   nvox, nvoxswap, FSz : integer;
+begin
+  result := false;
+  {$I-}
+  AssignFile(lHdrFile, fname);
+  FileMode := fmOpenRead;  //Set file access to read only
+  Reset(lHdrFile, 1);
+  {$I+}
+  if ioresult <> 0 then begin
+        NSLog('Error in reading DF3 header.'+inttostr(IOResult));
+        FileMode := 2;
+        exit;
+  end;
+  FSz := Filesize(lHdrFile);
+  BlockRead(lHdrFile, dhdr, sizeof(Tdf_header));
+  CloseFile(lHdrFile);
+  swapEndian := false;
+  {$IFDEF ENDIAN_LITTLE}
+  swapEndian := true;
+  dhdr.nx := swap(dhdr.nx);
+  dhdr.ny := swap(dhdr.ny);
+  dhdr.nz := swap(dhdr.nz);
+  {$ENDIF}
+
+  nVox := dhdr.nx * dhdr.ny * dhdr.nz; //assume 8-bit
+  if (nVox + sizeof(Tdf_header) ) > FSz then begin
+     NSLog(format('Not a valid DF3 file: %d bytes not expected filesize of %d bytes (%dx%dx%d)',[FSz, nVox+sizeof(Tdf_header), dhdr.nx, dhdr.ny, dhdr.nz]));
+     exit;
+  end;
+  nhdr.dim[0]:=3;//3D
+  nhdr.dim[1]:= dhdr.nx;
+  nhdr.dim[2]:= dhdr.ny;
+  nhdr.dim[3]:= dhdr.nz;
+  nhdr.pixdim[1]:=1.0;
+  nhdr.pixdim[2]:=1.0;
+  nhdr.pixdim[3]:=1.0;
+  nhdr.datatype := kDT_UINT8;
+  if ((nVox*2) + sizeof(Tdf_header) ) <= FSz then
+     nhdr.datatype := kDT_UINT16;
+  if ((nVox*4) + sizeof(Tdf_header) ) <= FSz then
+     nhdr.datatype := kDT_UINT32;
+
+
+  nhdr.vox_offset := sizeof(Tdf_header);
+  nhdr.sform_code := 1;
+  (*nhdr.srow_x[0]:=nhdr.pixdim[1];nhdr.srow_x[1]:=0.0;nhdr.srow_x[2]:=0.0;nhdr.srow_x[3]:=0.0;
+  nhdr.srow_y[0]:=0.0;nhdr.srow_y[1]:=nhdr.pixdim[2];nhdr.srow_y[2]:=0.0;nhdr.srow_y[3]:=0.0;
+  nhdr.srow_z[0]:=0.0;nhdr.srow_z[1]:=0.0;nhdr.srow_z[2]:=-nhdr.pixdim[3];nhdr.srow_z[3]:=0.0; *)
+  SetSForm(nhdr);
+  convertForeignToNifti(nhdr);
+  //nhdr.scl_inter:= 1;
+  //nhdr.scl_slope := -1;
+  result := true;
+end; //nii_readDf3
 
 function nii_readBVox (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 //http://pythology.blogspot.com/2014/08/you-can-do-cool-stuff-with-manual.html
@@ -946,9 +1154,10 @@ begin
   nhdr.datatype := kDT_FLOAT32;
   nhdr.vox_offset := sizeof(Tbv_header);
   nhdr.sform_code := 1;
-  nhdr.srow_x[0]:=nhdr.pixdim[1];nhdr.srow_x[1]:=0.0;nhdr.srow_x[2]:=0.0;nhdr.srow_x[3]:=0.0;
+  (*nhdr.srow_x[0]:=nhdr.pixdim[1];nhdr.srow_x[1]:=0.0;nhdr.srow_x[2]:=0.0;nhdr.srow_x[3]:=0.0;
   nhdr.srow_y[0]:=0.0;nhdr.srow_y[1]:=nhdr.pixdim[2];nhdr.srow_y[2]:=0.0;nhdr.srow_y[3]:=0.0;
-  nhdr.srow_z[0]:=0.0;nhdr.srow_z[1]:=0.0;nhdr.srow_z[2]:=-nhdr.pixdim[3];nhdr.srow_z[3]:=0.0;
+  nhdr.srow_z[0]:=0.0;nhdr.srow_z[1]:=0.0;nhdr.srow_z[2]:=-nhdr.pixdim[3];nhdr.srow_z[3]:=0.0;*)
+  SetSForm(nhdr);
   convertForeignToNifti(nhdr);
   //nhdr.scl_inter:= 1;
   //nhdr.scl_slope := -1;
@@ -1036,9 +1245,10 @@ begin
   nhdr.datatype := kDT_UINT16;
   nhdr.vox_offset := kDV_HEADER_SIZE + bhdr.ExtendedHeaderSize;
   nhdr.sform_code := 1;
-  nhdr.srow_x[0]:=nhdr.pixdim[1];nhdr.srow_x[1]:=0.0;nhdr.srow_x[2]:=0.0;nhdr.srow_x[3]:=0.0;
+  (*nhdr.srow_x[0]:=nhdr.pixdim[1];nhdr.srow_x[1]:=0.0;nhdr.srow_x[2]:=0.0;nhdr.srow_x[3]:=0.0;
   nhdr.srow_y[0]:=0.0;nhdr.srow_y[1]:=nhdr.pixdim[2];nhdr.srow_y[2]:=0.0;nhdr.srow_y[3]:=0.0;
-  nhdr.srow_z[0]:=0.0;nhdr.srow_z[1]:=0.0;nhdr.srow_z[2]:=-nhdr.pixdim[3];nhdr.srow_z[3]:=0.0;
+  nhdr.srow_z[0]:=0.0;nhdr.srow_z[1]:=0.0;nhdr.srow_z[2]:=-nhdr.pixdim[3];nhdr.srow_z[3]:=0.0;*)
+  SetSForm(nhdr);
   convertForeignToNifti(nhdr);
   result := true;
 end; //nii_readDeltaVision
@@ -1156,9 +1366,10 @@ begin
      nhdr.pixdim[3] := bhdr.pixdim[3] + bhdr.interslicegap;
   nhdr.vox_offset := sizeof(Tdv_header);
   nhdr.sform_code := 1;
-  nhdr.srow_x[0]:=nhdr.pixdim[1];nhdr.srow_x[1]:=0.0;nhdr.srow_x[2]:=0.0;nhdr.srow_x[3]:=0.0;
+  (*nhdr.srow_x[0]:=nhdr.pixdim[1];nhdr.srow_x[1]:=0.0;nhdr.srow_x[2]:=0.0;nhdr.srow_x[3]:=0.0;
   nhdr.srow_y[0]:=0.0;nhdr.srow_y[1]:=nhdr.pixdim[2];nhdr.srow_y[2]:=0.0;nhdr.srow_y[3]:=0.0;
-  nhdr.srow_z[0]:=0.0;nhdr.srow_z[1]:=0.0;nhdr.srow_z[2]:=nhdr.pixdim[3];nhdr.srow_z[3]:=0.0;
+  nhdr.srow_z[0]:=0.0;nhdr.srow_z[1]:=0.0;nhdr.srow_z[2]:=nhdr.pixdim[3];nhdr.srow_z[3]:=0.0; *)
+  SetSForm(nhdr);
   convertForeignToNifti(nhdr);
   FSzX := sizeof(Tdv_header) + ( bhdr.dim[1]*bhdr.dim[2]*bhdr.dim[3]*bhdr.dim[4]*(nhdr.bitpix div 8));
   if (nhdr.bitpix <> 1) and (FSz <> FSzX) then begin
@@ -1268,9 +1479,10 @@ begin
   end;
   CloseFile(lHdrFile);
   nhdr.sform_code := 1;
-  nhdr.srow_x[0]:=nhdr.pixdim[1];nhdr.srow_x[1]:=0.0;nhdr.srow_x[2]:=0.0;nhdr.srow_x[3]:=0.0;
+  (*nhdr.srow_x[0]:=nhdr.pixdim[1];nhdr.srow_x[1]:=0.0;nhdr.srow_x[2]:=0.0;nhdr.srow_x[3]:=0.0;
   nhdr.srow_y[0]:=0.0;nhdr.srow_y[1]:=nhdr.pixdim[2];nhdr.srow_y[2]:=0.0;nhdr.srow_y[3]:=0.0;
-  nhdr.srow_z[0]:=0.0;nhdr.srow_z[1]:=0.0;nhdr.srow_z[2]:=-nhdr.pixdim[3];nhdr.srow_z[3]:=0.0;
+  nhdr.srow_z[0]:=0.0;nhdr.srow_z[1]:=0.0;nhdr.srow_z[2]:=-nhdr.pixdim[3];nhdr.srow_z[3]:=0.0;*)
+  SetSForm(nhdr);
   convertForeignToNifti(nhdr);
   result := true;
 end;
@@ -1446,9 +1658,10 @@ begin
   nhdr.pixdim[3]:=ihdr.z_pixel_size;
   nhdr.vox_offset := img1_StartBytes;
   nhdr.sform_code := 0;
-  nhdr.srow_x[0]:=nhdr.pixdim[1]; nhdr.srow_x[1]:=0; nhdr.srow_x[2]:=0; nhdr.srow_x[3]:=-(ihdr.x_dimension-2.0)/2.0*ihdr.x_pixel_size;
+  (*nhdr.srow_x[0]:=nhdr.pixdim[1]; nhdr.srow_x[1]:=0; nhdr.srow_x[2]:=0; nhdr.srow_x[3]:=-(ihdr.x_dimension-2.0)/2.0*ihdr.x_pixel_size;
   nhdr.srow_y[0]:=0; nhdr.srow_y[1]:=nhdr.pixdim[2]; nhdr.srow_y[2]:=0; nhdr.srow_y[3]:=-(ihdr.y_dimension-2.0)/2.0*ihdr.y_pixel_size;
-  nhdr.srow_z[0]:=0; nhdr.srow_z[1]:=0; nhdr.srow_z[2]:=nhdr.pixdim[3]; nhdr.srow_z[3]:=-(ihdr.z_dimension-2.0)/2.0*ihdr.z_pixel_size;
+  nhdr.srow_z[0]:=0; nhdr.srow_z[1]:=0; nhdr.srow_z[2]:=nhdr.pixdim[3]; nhdr.srow_z[3]:=-(ihdr.z_dimension-2.0)/2.0*ihdr.z_pixel_size;*)
+  SetSForm(nhdr);
   convertForeignToNifti(nhdr);
   result := true;
 666:
@@ -1817,8 +2030,6 @@ begin
             matElementsOrient := nItems;
             for i := 0 to (nItems-1) do
               transformMatrix[i] :=  strtofloat(mArray[i]);
-
-
             if (matElementsOrient >= 12) then
                 LOAD_MAT33(matOrient, transformMatrix[0],transformMatrix[1],transformMatrix[2],
                            transformMatrix[4],transformMatrix[5],transformMatrix[6],
@@ -1877,7 +2088,6 @@ begin
             if AnsiContainsText(mArray[0], 'True') then swapEndian := true;
             {$ENDIF}
         end else if AnsiContainsText(tagName, 'ElementType') then begin
-
             //convert metaImage format to NIfTI http://portal.nersc.gov/svn/visit/tags/2.2.1/vendor_branches/vtk/src/IO/vtkMetaImageWriter.cxx
             //set NIfTI datatype http://nifti.nimh.nih.gov/pub/dist/src/niftilib/nifti1.h
             if AnsiContainsText(mArray[0], 'MET_UCHAR') then
@@ -1948,13 +2158,15 @@ begin
       nhdr.srow_z[3] := offset[2];
   end else begin
       //NSLog('Warning: unable to determine image orientation (unable to decode metaIO "TransformMatrix" tag)')};
-      nhdr.sform_code:=0;
+      (*nhdr.sform_code:=0;
       nhdr.srow_x[0] := 0;
       nhdr.srow_x[1] := 0;
-      nhdr.srow_x[2] := 0;
+      nhdr.srow_x[2] := 0;  *)
+      SetSForm(nhdr);
   end;
   //end transform
   convertForeignToNifti(nhdr);
+  {$IFDEF UNIX} writeln(format('MHA format offset=%d bpp=%d %dx%dx%d', [round(nhdr.vox_offset), nhdr.bitpix, nhdr.dim[1], nhdr.dim[2], nhdr.dim[3]]));{$ENDIF}
   if (compressedData) then
       gzBytes := K_gzBytes_onlyImageCompressed;
   if (nhdr.vox_offset < 0) then begin
@@ -2617,10 +2829,10 @@ var
   ch: char;
   mArray: TStringList;
   pth, str,tagName,elementNames, str2: string;
-  lineskip,byteskip,i,s,nItems,headerSize,matElements,fileposBytes: integer;
+  lineskip,byteskip, i, j, s,nItems,headerSize,matElements,fileposBytes: integer;
   mat: mat33;
   rot33: mat33;
-  isOK, isDetachedFile,isFirstLine: boolean;
+  isMicron, isOK, isDetachedFile,isFirstLine, isOffset: boolean;
   offset: array[0..3] of single;
   vSqr, flt: single;
   transformMatrix: array [0..11] of single;
@@ -2629,8 +2841,12 @@ begin
   //gX := gX + 1; GLForm1.caption := inttostr(gX);
   //LOAD_MAT33(rot33, 1,0,0, 0,1,0, 0,0,1);
   LOAD_MAT33(rot33, -1,0,0, 0,-1,0, 0,0,1);
+  for i := 0 to 2 do
+    offset[i] := 0.0;
   oldMin := NaN;
   oldMax := NaN;
+  isOffset := false;
+  isMicron := false;
   isDimPermute2341 := false;
   pth := ExtractFilePath(fname);
   isOK := true;
@@ -2664,7 +2880,6 @@ begin
       //if (ch = chr($0D)) or (ch = chr($0A)) then break;
       if (ch = chr($0D)) then continue;
       if (ch = chr($0A)) then break;
-
       str := str+ch;
     end;
     if str = '' then break; //if str = '' then continue;
@@ -2677,6 +2892,11 @@ begin
     splitstrStrict(':',str,mArray);
     if (mArray.count < 2) then continue;
     tagName := mArray[0];
+    if AnsiStartsText('space units',tagName) then begin
+        if PosEx('microns',  str) > 0 then
+          isMicron := true;
+        continue;
+    end;
     //showmessage(inttostr(length(tagName))+':'+tagName);
     elementNames := mArray[1];
     splitstr(',',elementNames,mArray);
@@ -2777,6 +2997,7 @@ begin
       byteskip := strtointdef(mArray.Strings[0],0);
     end else if AnsiStartsText('space origin', tagName) then begin
       if (nItems > 3) then nItems :=3;
+      isoffset := true;
       for i:=0 to (nItems-1) do
           offset[i] := strtofloat(mArray.Strings[i]);
     end else if (nItems > 0) and AnsiStartsText('space', tagName) then begin //must do this after "space origin" check
@@ -2868,6 +3089,13 @@ begin
   nhdr.vox_offset := headerSize;
   if (matElements >= 9) then begin
       //mat := nifti_mat33_mul( mat , rot33);
+      if isMicron then begin
+         for i := 0 to 2 do
+           for j := 0 to 2 do
+               mat[i,j] := mat[i,j] * 0.001;
+         for i := 0 to 2 do
+             offset[i] := offset[i] * 0.001;
+      end;
       if rot33[0,0] < 0 then offset[0] := -offset[0]; //origin L<->R
       if rot33[1,1] < 0 then offset[1] := -offset[1]; //origin A<->P
       if rot33[2,2] < 0 then offset[2] := -offset[2]; //origin S<->I
@@ -2891,7 +3119,10 @@ begin
             for i :=0 to 2 do
                 vSqr := vSqr+ ( mat[s,i]*mat[s,i]);
             nhdr.pixdim[s+1] :=sqrt(vSqr);
-        end //for each dimension
+        end; //for each dimension
+        if not (isoffset) then
+           SetCenter(nhdr);
+
   end;
   (*showmessage(format('m = [%g %g %g %g; %g %g %g %g; %g %g %g %g; 0 0 0 1]',[
     nhdr.srow_x[0], nhdr.srow_x[1], nhdr.srow_x[2], nhdr.srow_x[3],
@@ -2965,6 +3196,98 @@ begin
     nhdr.srow_z[0] :=qto_xyz[2,0]; nhdr.srow_z[1] :=qto_xyz[2,1]; nhdr.srow_z[2] :=qto_xyz[2,2]; nhdr.srow_z[3] :=qto_xyz[2,3];
     nhdr.sform_code := kNIFTI_XFORM_SCANNER_ANAT;
 end;
+
+//readSPRHeader
+function readSPRHeader (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
+label
+  666;
+var
+  FP: TextFile;
+  str: string;
+  sList: TStringList;
+  i : integer;
+  isOK: boolean;
+begin
+  {$IFDEF FPC}
+   DefaultFormatSettings.DecimalSeparator := '.' ;
+   {$ELSE}
+   DecimalSeparator := '.';
+   {$ENDIF}
+  isOK := false;
+  swapEndian := true;
+  result := false;
+  AssignFile(fp,fname);
+  reset(fp);
+  sList := TStringList.Create;
+  sList.Delimiter := ' ';        // Each list item will be blank separated
+  fname := ChangeFileExt(fname, '.sdt');
+  if not fileexists(fname) then begin
+     NSLog('Unable to find '+fname);
+     goto 666;
+  end;
+  nhdr.datatype := kDT_UINT8;
+  while (not EOF(fp))  do begin
+      readln(fp,str);
+      if length(str) < 1 then continue;
+      sList.DelimitedText := str;
+      if sList.Count < 2 then continue;
+      //if posex('numDim:', sList[0]) = 1 then begin
+      //   showmessage('x');
+      //end;
+      if posex('dim:', sList[0]) = 1 then begin
+         nhdr.dim[0] := sList.Count - 1;
+         isOK := true;
+         for i := 1 to (sList.Count - 1) do
+             nhdr.dim[i] := strtointdef(sList[i],-1);
+      end;
+      if posex('dataType:', sList[0]) = 1 then begin
+         if posex('BTYE', sList[1]) = 1 then
+            nhdr.datatype := kDT_UINT8  //Mango error
+         else if posex('BYTE', sList[1]) = 1 then
+            nhdr.datatype := kDT_UINT8
+         else if posex('WORD', sList[1]) = 1 then
+            nhdr.datatype := kDT_UINT16
+         else if posex('LWORD', sList[1]) = 1 then
+            nhdr.datatype := kDT_UINT32
+         else if posex('REAL', sList[1]) = 1 then
+            nhdr.datatype := kDT_FLOAT
+         else begin
+              NSLog('Unsupported datatype "'+sList[1]+'"');
+              goto 666;
+         end;
+      end; //dataType
+      if (posex('interval:', sList[0]) = 1) and (sList.Count > 3) then begin
+         nhdr.pixdim[1] := strtofloatdef(sList[1],1.0);
+         nhdr.pixdim[2] := strtofloatdef(sList[2],1.0);
+         nhdr.pixdim[3] := strtofloatdef(sList[3],1.0);
+         for i := 0 to 3 do begin
+             nhdr.srow_x[i] := 0.0;
+             nhdr.srow_y[i] := 0.0;
+             nhdr.srow_z[i] := 0.0;
+         end;
+         nhdr.srow_x[0] := nhdr.pixdim[1];
+         nhdr.srow_y[1] := nhdr.pixdim[2];
+         nhdr.srow_z[2] := nhdr.pixdim[3];
+
+      end;
+      if (posex('origin:', sList[0]) = 1) and (sList.Count > 3) then begin
+         nhdr.srow_x[3] := -1 * strtofloatdef(sList[1],1.0);
+         nhdr.srow_y[3] := -1 * strtofloatdef(sList[2],1.0);
+         nhdr.srow_z[3] := strtofloatdef(sList[3],1.0);
+         //showmessage(format('%g %g %g', [nhdr.srow_x[3], nhdr.srow_y[3], nhdr.srow_z[3]]));
+         //showmessage('xxx');
+      end;
+  end; //while not end
+  if isOK then
+     result := true;
+666:
+  if not result then exit; //error - code jumped to 666 without setting result to true
+  convertForeignToNifti(nhdr);
+  CloseFile(FP);
+  Filemode := 2;
+  sList.Free;
+end;
+
 
 function readAFNIHeader (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
 label
@@ -3133,7 +3456,7 @@ begin
   //gzBytes := false;
   isDimPermute2341 := false;
   result := false;
-  if FSize(lFilename) < 140 then
+  if FSize(lFilename) < 32 then //NRRD headers can be very short
       exit;
   lExt := UpCaseExt(lFilename);
   lExt2GZ := '';
@@ -3149,6 +3472,8 @@ begin
        result := nii_readVmr(lFilename, false, lHdr, swapEndian)
   else if (lExt = '.V16') then
        result := nii_readVmr(lFilename, true, lHdr, swapEndian)
+  else if (lExt = '.DF3') then
+       result := nii_readDf3(lFilename, lHdr, swapEndian)
   else if (lExt = '.BVOX') then
        result := nii_readBVox(lFilename, lHdr, swapEndian)
   else if (lExt = '.GIPL') then
@@ -3168,7 +3493,11 @@ begin
   else if (lExt = '.NRRD') or (lExt = '.NHDR') then
        result := readNRRDHeader(lFilename, lHdr, gzBytes, swapEndian, isDimPermute2341)
   else if (lExt = '.HEAD') then
-    result := readAFNIHeader(lFilename, lHdr, gzBytes, swapEndian);
+    result := readAFNIHeader(lFilename, lHdr, gzBytes, swapEndian)
+  else if (lExt = '.SPR') then
+    result := readSPRHeader(lFilename, lHdr, gzBytes, swapEndian)
+  else if (lExt = '.V3DRAW') then
+    result := nii_readV3draw(lFilename, lHdr, swapEndian);
   if (not result) and (isTIFF(lFilename)) then
     NSLog('Use the Import menu (or ImageJ/Fiji) to convert TIFF and LSM files to NIfTI (or NRRD) for viewing')
   else if (not result) then begin

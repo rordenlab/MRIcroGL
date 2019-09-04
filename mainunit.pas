@@ -26,14 +26,14 @@ uses
   {$IFDEF MYPY}PythonEngine,  {$ENDIF}
   {$IFDEF LCLCocoa} {$IFDEF NewCocoa} nsappkitext, UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
-  resize,
+  resize, nifti_foreign,
   lcltype, GraphType, Graphics, dcm_load, nifti_tiff, crop,
   LCLIntf, slices2D, StdCtrls, SimdUtils, Classes, SysUtils, Forms, Controls,clipbrd,
   Dialogs, Menus, ExtCtrls, CheckLst, ComCtrls, Spin, Types, fileutil, ulandmarks, nifti_types,
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20190720'; //+fixes Metal memory leak
+  kVers = '1.2.20190902'; //+fixes Metal memory leak
 type
 
   { TGLForm1 }
@@ -58,8 +58,10 @@ type
     DisplayCorrelationZ: TMenuItem;
     MatCapDrop: TComboBox;
     CropMenu1: TMenuItem;
+    EditPasteMenu: TMenuItem;
     ResizeMenu1: TMenuItem;
     ReorientMenu1: TMenuItem;
+    InvalidateTImer: TTimer;
     ToolsMenu: TMenuItem;
     OpenAltasMenu: TMenuItem;
     TBSplitter: TSplitter;
@@ -300,6 +302,8 @@ type
     X2TrackBar: TTrackBar;
     YTrackBar: TTrackBar;
     ZTrackBar: TTrackBar;
+    procedure EditPasteMenuClick(Sender: TObject);
+    procedure InvalidateTImerTimer(Sender: TObject);
     procedure LayerContrastChange(Sender: TObject);
     procedure UpdateCropMask(msk: TVec6);
     procedure CreateOverlapImageMenuClick(Sender: TObject);
@@ -533,6 +537,7 @@ var
  gSliceMM : TVec3 = (x: 0; y: 0; z: 0);
  Vol1: TGPUVolume;
  isBusy: boolean = false;
+ isBusyCore: boolean = false;
  vols: TNIfTIs;
  gLandmark : TLandmark;
  {$IFDEF METALAPI}
@@ -2633,7 +2638,8 @@ begin
 end;
 
 procedure TGLForm1.ImportTIFFMenuClick(Sender: TObject);
-var
+begin
+(*var
   lF: integer;
   dlg : TOpenDialog;
   fnm: string;
@@ -2659,7 +2665,7 @@ begin
   if fnm <> '' then
      AddBackground(fnm)
   else
-     showmessage('Unable to convert image(s): make sure they are TIFF format');
+     showmessage('Unable to convert image(s): make sure they are TIFF format');*)
 end;
 
 procedure TGLForm1.FormClose(Sender: TObject; var CloseAction: TCloseAction);
@@ -2822,6 +2828,7 @@ end;
 
 procedure TGLForm1.LayerContrastChange(Sender: TObject);
 begin
+ LayerWidgetChangeTimer.enabled := false;
  LayerWidgetChangeTimer.enabled := true;
 end;
 
@@ -3658,7 +3665,17 @@ begin
   if isDarkModeChanged then
        GLForm1.SetDarkMode();
   if isRetinaChanged then begin
+     //ViewGPU1.MakeCurrent(false);
+
      GLForm1.SetRetina;
+     ViewGPU1.Align:= alNone;
+     ViewGPU1.width := 30;
+     ViewGPU1.Align:= alClient;
+
+
+     //ViewGPU1.ReleaseContext;
+
+     //
   end;
   {$ENDIF}
   ViewGPU1.Invalidate;
@@ -4154,6 +4171,11 @@ begin
         result := false;
 end;
 
+procedure printf(s: string);
+begin
+{$IFDEF UNIX}writeln(s); {$ENDIF}
+end;
+
 procedure TGLForm1.FormDropFiles(Sender: TObject; const FileNames: array of String);
 var
  ss: TShiftState;
@@ -4181,9 +4203,20 @@ begin
      GraphOpen(fnm);
      exit;
   end;
-  if (isDICOM(fnm)) then begin
+  (*if (isTIFF(fnm)) then begin
+     fnm := SaveTIFFAsNifti(fnm);
+     if fnm <> '' then
+        AddBackground(fnm)
+     else
+         showmessage('Unable to convert image(s): make sure they are TIFF format');
+     exit;
+  end;*)
+
+  if (isDICOM(fnm)) or (ext = '.DCM') then begin //part-10 compliant DICOM images should have "DICM" signature, but this is missing for some DICOM meta data
      //if (not isNifti(Filenames[0])) then begin
+     //printf('>drop:'+fnm);
      fnm := dcm2Nifti(dcm2niiForm.getCurrentDcm2niix, fnm);
+     //printf('>got:'+fnm);
      if fnm = '' then exit;
      AddBackground(fnm, false, true);
      if fnm <> Filenames[0] then
@@ -4488,7 +4521,11 @@ begin
  //nii.SaveRescaled('fx.nii', 0.75, 0.75, 0.75, kDT_FLOAT, 6); exit;
  //nii.SaveRescaled('fx.nii', 0.5, 0.5, 0.5, kDT_SIGNED_SHORT, 6); exit;
  //nii.SaveRescaled('ax.nii', 2.0, 2.0, 2.0, kDT_SIGNED_SHORT, 6); exit;
- //nii.SaveRescaled('ax.nii', 0.5, 0.5, 0.5, kDT_UNSIGNED_CHAR, 0); exit;
+ //{$DEFINE zDEBUG}
+ {$IFDEF zDEBUG}
+ nii.SaveRescaled('ax.nii', 0.5, 1, 0.5, kDT_SIGNED_SHORT, -1, true);
+ exit;
+ {$ENDIF}
  hdr := nii.Header;
  scale := ResizeForm.GetScale(hdr, nii.isLabels, nii.ShortName, datatype, filter, isAllVolumes);
  if scale.x <= 0 then exit;
@@ -4582,12 +4619,15 @@ var
   btn : array  [1..6] of string = ('red','green','blue','purple','orange','yellow');
   btnR,btnA,btnS: integer;
 begin
- (*perm.x := 2;perm.y := 1; perm.z := 3;
- //perm.x := -1;perm.y := 2; perm.z := 3;
+ //perm.x := 2;perm.y := 1; perm.z := 3;
+ //{$DEFINE zDEBUG}
+ {$IFDEF zDEBUG}
+ perm.x := -1;perm.y := 2; perm.z := -3;
  if not vols.Layer(0, niftiVol) then exit;
 
- niftiVol.SaveRotated('x.nii', perm);
- exit; *)
+ niftiVol.SaveRotated('~\x.nii', perm);
+ exit;
+ {$ENDIF}
 
  (*if not vols.Layer(0, niftiVol) then exit;
 
@@ -4595,11 +4635,12 @@ begin
  exit;*)
 
  Vol1.Slices.isOrientationTriangles := true;
+ ViewGPU1.Invalidate;
  if gPrefs.DisplayOrient <> kAxCorSagOrient then
     MPRMenu.click;
  btnR := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s RIGHT?',
       mtInformation,[ 11,btn[1], 12,btn[2], 13,btn[3], 14,btn[4], 15,btn[5], 16,btn[6] ],'');
- if btnR = mrCancel then exit;
+ if btnR = mrCancel then goto 245;
  btnR := btnR - 10;
  if (btnR <= 2) then
     btnA := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s ANTERIOR?',
@@ -4610,7 +4651,7 @@ begin
  else
      btnA := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s ANTERIOR?',
          mtCustom,[ 11,btn[1], 12,btn[2], 13,btn[3], 14,btn[4] ],'');
- if btnA = mrCancel then exit;
+ if btnA = mrCancel then goto 245;
  btnA := btnA - 10;
  if (max(btnR,btnA) <= 4) then
     btnS := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s SUPERIOR?',
@@ -4621,9 +4662,8 @@ begin
  else
      btnS := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s SUPERIOR?',
           mtCustom,[13,btn[3], 14,btn[4] ],'');
- if btnS = mrCancel then exit;
+ if btnS = mrCancel then goto 245;
  btnS := btnS - 10;
-
  Vol1.Slices.isOrientationTriangles := false;
  if (btnR=2) and (btnA=4) and (btnS=6) then begin
     showmessage('Image already oriented');
@@ -4647,6 +4687,7 @@ begin
  dlg.DefaultExt := '*.nii';
  dlg.FilterIndex := 0;
  if not dlg.Execute then exit;
+ //showmessage(format('%d %d %d', [perm.x, perm.y, perm.z]));
  niftiVol.SaveRotated(dlg.filename, perm);
  dlg.Free;
  245:
@@ -5251,11 +5292,25 @@ begin
   ExitFullScreenMenu.Visible := false;
 end;
 
+
+procedure TGLForm1.EditPasteMenuClick(Sender: TObject);
+begin
+ if Clipboard.HasFormat(PredefinedClipboardFormat(pcfText)) and (ScriptMemo.Width > 20) and (ScriptMemo.Focused) then begin
+    ScriptMemo.PasteFromClipboard;
+    exit;
+ end;
+ showmessage('Use paste to insert text from clipboard into scripts');
+end;
+
 procedure TGLForm1.EditCopyMenuClick(Sender: TObject);
 {$IFNDEF METALAPI}
 var
   bmp: TBitmap;
 begin
+ if (ScriptMemo.Width > 20) and (ScriptMemo.SelLength > 0) then begin
+    ScriptMemo.CopyToClipboard;
+    exit;
+ end;
  bmp := ScreenShotGL(ViewGPU1);
  if (bmp = nil) then exit;
  Clipboard.Assign(bmp);
@@ -6201,7 +6256,6 @@ begin
   {$IFDEF METALAPI}
   ViewGPUg.SetPreferredFrameRate(0);
   ViewGPUg.InvalidateOnResize := true;
-
   {$ENDIF}
   {$ENDIF}
 end;
@@ -6383,7 +6437,12 @@ begin
   //ViewGPU1.Parent := CenterPanel;
   ViewGPU1.OpenGLMajorVersion := 3;
   ViewGPU1.OpenGLMinorVersion := 3;
-  ViewGPU1.MultiSampling := 4;
+  if gPrefs.MultiSample then
+     ViewGPU1.MultiSampling := 4
+  else begin
+    {$IFDEF UNIX}writeln('Multisampling disabled: faster but lower quality');{$ENDIF}
+    ViewGPU1.MultiSampling := 1;
+  end;
   {$ENDIF}
   //ViewGPU1.Parent := GLForm1;
   ViewGPU1.Parent := CenterPanel;
@@ -6478,6 +6537,7 @@ begin
   DrawUndoMenu.ShortCut  := ShortCut(Word('U'), [ssModifier]);
   DrawCloneMenu.ShortCut  := ShortCut(Word('Z'), [ssModifier]);
   EditCopyMenu.ShortCut  := ShortCut(Word('C'), [ssModifier]);
+  EditPasteMenu.ShortCut  := ShortCut(Word('V'), [ssModifier]);
   DrawNoneMenu.ShortCut  := ShortCut(Word('D'), [ssModifier]);
   DrawEraseMenu.ShortCut  := ShortCut(Word('E'), [ssModifier]);
   DrawRedMenu.ShortCut  := ShortCut(Word('1'), [ssModifier]);
@@ -6513,7 +6573,6 @@ begin
     SetXHairPosition(0,0,0 );
   end;
   SetToolPanelMaxWidth();
-
 end;
 
 procedure TGLForm1.ViewGPUPrepare(Sender: TObject);
@@ -6546,18 +6605,35 @@ begin
   LineWidthEdit.Value := gPrefs.LineWidth;
 end;
 
+procedure TGLForm1.InvalidateTImerTimer(Sender: TObject);
+begin
+    if isBusyCore then exit;
+    InvalidateTimer.enabled := false;
+    ViewGPUPaint(sender);
+end;
+
 procedure TGLForm1.ViewGPUPaint(Sender: TObject);
 var
    niftiVol: TNIfTI;
 begin
-  if isBusy then exit;
+  if isBusy then exit; //invalidateTimer
+  (*if isBusy then begin
+     InvalidateTimer.enabled := true;
+     exit;
+  end;*)
+  if isBusyCore then begin
+     InvalidateTimer.Enabled := true;
+    exit;
+  end;
   if not vols.Layer(0,niftiVol) then exit;
+  isBusyCore := true;
   {$IFDEF METALAPI}
  if not isPrepared then ViewGPUPrepare(Sender);
  MTLSetClearColor(MTLClearColorMake(gPrefs.ClearColor.r/255, gPrefs.ClearColor.g/255, gPrefs.ClearColor.b/255, gPrefs.ClearColor.A/255));
  {$ELSE}
  ViewGPU1.MakeCurrent(false);
  glClearColor(gPrefs.ClearColor.R/255, gPrefs.ClearColor.G/255, gPrefs.ClearColor.B/255, gPrefs.ClearColor.A/255);
+ //glClearColor(random(256)/255, gPrefs.ClearColor.G/255, gPrefs.ClearColor.B/255, gPrefs.ClearColor.A/255);
  {$ENDIF}
   if gPrefs.DisplayOrient = kMosaicOrient then
        Vol1.PaintMosaic2D(niftiVol, vols.Drawing, gPrefs.MosaicStr)
@@ -6565,6 +6641,7 @@ begin
     Vol1.Paint(niftiVol)
  else
      Vol1.Paint2D(niftiVol, vols.Drawing, gPrefs.DisplayOrient);
+ isBusyCore := false;
 end;
 
 procedure TGLForm1.FormDestroy(Sender: TObject);

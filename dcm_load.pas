@@ -18,18 +18,30 @@ implementation
 uses mainunit; //darkmode
 {$ENDIF}
 
-function seriesNum (s: string): single; //"601 myName" returns 601
-begin
-  result := StrToFloatDef(Copy(s, 1, pos(' ',s)-1),-1);
-end;
-
 function seriesName (s: string): string; //"601 myName" returns 'myName'
+const
+  kTab = chr(9);
 var
     delimPos: integer;
 begin
-  delimPos := pos(' ',s);
+  //delimPos := pos(' ',s);
+  delimPos := pos(kTab,s);
   if (delimPos < 1) or (delimPos >= length(s)) then exit(s);
   result := Copy(s, delimPos+1, maxInt);
+end;
+
+function seriesNum (s: string): single; //"601 myName" returns 'myName'
+const
+  kTab = chr(9);
+var
+    delimPos: integer;
+    s2: string;
+begin
+  //delimPos := pos(' ',s);
+  delimPos := pos(kTab,s);
+  if (delimPos < 1) or (delimPos >= length(s)) then exit(-1);
+  s2 := Copy(s, delimPos+1, maxInt);
+  result := StrToFloatDef(Copy(s2, 1, pos('_',s2)-1),-1);
 end;
 
 function compareSeries(List: TStringList; Index1, Index2: Integer): Integer;
@@ -45,22 +57,69 @@ begin
   //result := n1 - n2;
 end;
 
+function seriesCrc (s: string): double; //"601 myName" returns 601
+const
+  kTab = chr(9);
+begin
+  //result := StrToFloatDef(Copy(s, 1, pos(' ',s)-1),-1);
+  result := StrToFloatDef(Copy(s, 1, pos(kTab,s)-1),-1);
+end;
+
 function dcmStr(s: string): string;
+const
+  kTab = chr(9);
 var
      sl: TStringList;
+     //s2: string;
+     //i: integer;
 begin
   result := '';
   if (length(s) < 1) or (s[1] <> chr(9)) then exit;
   sl := TStringList.Create;
   sl.Delimiter := #9; //TAB
+  sl.StrictDelimiter := true;
   sl.DelimitedText := s;
   if sl.Count >= 2 then begin
-    result := sl[0]+' '+extractfilename(sl[1]) ;
+     //result := sl[1]+' '+extractfilename(sl[sl.Count-1]) ;
+     result := sl[1]+kTab+extractfilename(sl[sl.Count-1]) ;
+
+     //s2 := sl[sl.Count-1];
+     //result := sl[1]+kTab+extractfilename(s2) ;
+     //showmessage(format('*%s*%s*', [result, s2]));
   end else
    result := '';
   sl.Free;
 end;
 
+(*function dcmStr(s: string): string;
+var
+     sl: TStringList;
+     s2: string;
+     i: integer;
+begin
+  result := '';
+  if (length(s) < 1) or (s[1] <> chr(9)) then exit;
+  sl := TStringList.Create;
+  sl.Delimiter := #9; //TAB
+  sl.StrictDelimiter := false;
+  sl.DelimitedText := s;
+  if sl.Count >= 2 then begin
+     s2 := sl[1];
+     i := 2;
+     while (i < sl.Count) do begin //in case of space in directory name
+           s2 := s2 + ' ' + sl[i];
+           i := i + 1;
+     end;
+     result := sl[0]+' '+extractfilename(s2) ;
+  end else
+   result := '';
+  sl.Free;
+end;*)
+
+(*procedure printf(s: string);
+begin
+{$IFDEF UNIX}writeln(s);{$ENDIF}
+end;*)
 
 function dcmList(dcm2niixExe, dicomDir: string): TStringList;
 //make sure to free result!
@@ -80,10 +139,16 @@ Begin
   if dcm2niixExe = '' then exit;
    hProcess := TProcess.Create(nil);
    hProcess.Executable := dcm2niixExe;
+   hprocess.Parameters.Add('-b');
+   hprocess.Parameters.Add('n');
    hprocess.Parameters.Add('-n');
    hprocess.Parameters.Add('-1');
    hprocess.Parameters.Add('-f');
-   hprocess.Parameters.Add('%p_%t');
+   hprocess.Parameters.Add('%s_%p_%t');
+   {$IFDEF UNIX}
+   hprocess.Parameters.Add('-o');
+   hprocess.Parameters.Add(HomeDir);
+   {$ENDIF}
    hprocess.Parameters.Add(dicomDir);
    hProcess.Options := hProcess.Options + [ poUsePipes, poNoConsole];
    //code below fails on Windows: http://wiki.freepascal.org/Executing_External_Programs#Reading_large_output
@@ -103,6 +168,7 @@ Begin
    OutputStream.Free;
    for x := 0 to sData.Count -1 do begin
        s := dcmStr(sData[x]);
+       //printf(s);
        if (s <> '') then
            result.Add(s);
    end;
@@ -142,95 +208,15 @@ begin
 end;
 {$ENDIF}
 
-(*function dcmSeriesSelectForm(dcm2niixExe, dicomDir: string): string;
-const
-  kMaxItems = 16;
-var
-  PrefForm: TForm;
-  rg: TRadioGroup;
-  dcmStrings: TStringlist;
-  OKBtn, CancelBtn: TButton;
-  w,h: integer;
-label
-  123;
-begin
-  result := '';
-  dcmStrings := dcmList(dcm2niixExe, dicomDir);
-  if dcmStrings.Count < 1 then goto 123; //no files
-  if dcmStrings.Count = 1 then begin
-    result := dcmStrings[0];//seriesNum(dcmStrings[0]);
-    goto 123;
-  end;
-  PrefForm:=TForm.Create(nil);
-  PrefForm.BorderWidth := 8;
-  PrefForm.Caption:='Save converted images to '+HomeDir;
-  PrefForm.Position := poScreenCenter;
-  PrefForm.BorderStyle := bsDialog;
-  PrefForm.AutoSize:=true;
-  {$IFNDEF FPC}PrefForm.AutoSize := true;{$ENDIF}
-  //radio group
-  rg := TRadioGroup.create(PrefForm);
-  rg.align := alTop;
-  rg.AutoSize:=false;
-  rg.parent := PrefForm;
-  rg.caption := 'Select DICOM Series';
-  if dcmStrings.Count > (kMaxItems) then begin
-     rg.caption := rg.caption + ' (Partial Listing)';
-     while (dcmStrings.Count > kMaxItems) do
-           dcmStrings.Delete(dcmStrings.Count-1);
-  end;
-  rg.items := dcmStrings;
-  rg.BorderSpacing.Around := 8;
-  rg.AutoSize := true;
-  rg.HandleNeeded;
-  rg.GetPreferredSize(w, h);
-  rg.Align := alTop;
-  rg.Height := h;
-  rg.ItemIndex:=0;
-  //OK button
-  OkBtn:=TButton.create(PrefForm);
-  OkBtn.Caption:='OK';
-  OkBtn.AutoSize := true;
-  OkBtn.AnchorSideTop.Control := rg;
-  OkBtn.AnchorSideTop.Side := asrBottom;
-  OkBtn.AnchorSideRight.Control := PrefForm;
-  OkBtn.AnchorSideRight.Side := asrBottom;
-  OkBtn.BorderSpacing.Right := 4;
-  OkBtn.Anchors := [akTop, akRight];
-  OkBtn.Parent:=PrefForm;
-  OkBtn.ModalResult:= mrOK;
-  //Cancel button
-  CancelBtn:=TButton.create(PrefForm);
-  CancelBtn.Caption:='Cancel';
-  CancelBtn.AutoSize := true;
-  CancelBtn.AnchorSideTop.Control := OkBtn;
-  CancelBtn.AnchorSideTop.Side := asrCenter;
-  CancelBtn.AnchorSideRight.Control := OkBtn;
-  CancelBtn.BorderSpacing.Right := 4;
-  CancelBtn.Anchors := [akTop, akRight];
-  CancelBtn.Parent:=PrefForm;
-  CancelBtn.ModalResult:= mrCancel;
-  PrefForm.Height:= OkBtn.Top + OkBtn.Height+4;
-  {$IFDEF LCLCocoa}GLForm1.SetFormDarkMode(PrefForm); {$ENDIF}
-  PrefForm.BorderWidth:=4;
-  PrefForm.ShowModal;
-  result := rg.Items[rg.ItemIndex];
-  if PrefForm.ModalResult = mrCancel then
-    result :=  '';
-  FreeAndNil(PrefForm);
- 123: //cleanup
-  dcmStrings.Free;
-end; // PrefMenuClick()  *)
-
 function dcmSeriesSelectForm(dcm2niixExe, dicomDir: string): string;
 const
   kMaxItems = 16;  //https://bugs.freepascal.org/view.php?id=35789
 var
   PrefForm: TForm;
   rg: TRadioGroup;
-  dcmStrings: TStringlist;
+  dcmStrings, dcmStringsSeries: TStringlist;
   OKBtn, CancelBtn: TButton;
-  w,h: integer;
+  i, w,h: integer;
 label
   123;
 begin
@@ -253,13 +239,23 @@ begin
   rg.align := alTop;
   //rg.AutoSize:=false;
   rg.parent := PrefForm;
-  rg.caption := 'Select DICOM Series';
+  rg.caption := 'Select DICOM Series (Series_Protocol_Date)';
   if dcmStrings.Count > (kMaxItems) then begin
      rg.caption := rg.caption + ' (Partial Listing)';
      while (dcmStrings.Count > kMaxItems) do
            dcmStrings.Delete(dcmStrings.Count-1);
   end;
+  {$IFDEF SHOWCRC}
   rg.items := dcmStrings;
+  {$ELSE}
+  dcmStringsSeries := Tstringlist.Create;
+  for i := 0 to (dcmStrings.count -1) do begin
+      //dcmStringsSeries.add(dcmStrings[i]+'*'+seriesName(dcmStrings[i]));
+      dcmStringsSeries.add(seriesName(dcmStrings[i]));
+  end;
+  rg.items := dcmStringsSeries;
+  dcmStringsSeries.Free;
+  {$ENDIF}
   //rg.Constraints.MaxWidth:= 300; //https://bugs.freepascal.org/view.php?id=35789
   rg.BorderSpacing.Around := 8;
   rg.AutoSize := true;
@@ -295,7 +291,7 @@ begin
   PrefForm.AutoSize:=true;
   {$IFDEF LCLCocoa}GLForm1.SetFormDarkMode(PrefForm); {$ENDIF}
   PrefForm.ShowModal;
-  result := rg.Items[rg.ItemIndex];
+  result := dcmStrings[rg.ItemIndex];
   if PrefForm.ModalResult = mrCancel then
     result :=  '';
   FreeAndNil(PrefForm);
@@ -319,12 +315,12 @@ end;
 function dcm2niiSeries(dcm2niixExe, dicomDir, series_name: string): string;
 var
     hprocess: TProcess;
-    series: single;
+    seriesCR: double;
 Begin
   result := '';
   if dcm2niixExe = '' then exit;
-  series := seriesNum(series_name);
-  if series < 1 then exit;
+  seriesCR := seriesCRC(series_name);
+  if seriesCR < 1 then exit;
   result := seriesName(series_name);
   if result = '' then exit;
   result := HomeDir+ result+'.nii';
@@ -340,12 +336,12 @@ Begin
    hProcess := TProcess.Create(nil);
    hProcess.Executable := dcm2niixExe;
    hprocess.Parameters.Add('-n');
-   hprocess.Parameters.Add(format('%g', [series]));
+   hprocess.Parameters.Add(format('%g', [seriesCR]));
    hprocess.Parameters.Add('-f');
    //if isTemp then
    //   hprocess.Parameters.Add(kdcmLoadTempStr+'%p_%t')
    //else
-   hprocess.Parameters.Add('%p_%t');
+   hprocess.Parameters.Add('%s_%p_%t');
    hprocess.Parameters.Add('-b');
    hprocess.Parameters.Add('n');
    hprocess.Parameters.Add('-z');

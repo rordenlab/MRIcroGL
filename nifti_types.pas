@@ -89,7 +89,10 @@ kDT_FLOAT                 =16;     // float (32 bits/voxel)
 kDT_FLOAT32 = kDT_FLOAT;
 kDT_COMPLEX               =32;     // complex (64 bits/voxel)
 kDT_DOUBLE                =64;     // double (64 bits/voxel)
+kDT_FLOAT64 = kDT_DOUBLE;
 kDT_RGB                   =128;     // RGB triple (24 bits/voxel)
+kDT_RGBplanar3D             =129; //RRR..RGGG..GBBBB...B  (24 bits/voxel) entire 3D volume continguous
+kDT_RGBplanar2D             =129; //RRR..RGGG..GBBBB...B  (24 bits/voxel) each 2D slice saved sequentially
 kDT_INT8                  =256;     // signed char (8 bits)
 kDT_UINT16                =512;     // unsigned short (16 bits)
 kDT_UINT32                =768;     // unsigned int (32 bits)
@@ -184,6 +187,7 @@ kNIFTI_INTENT_QUATERNION =1010;
  procedure NIFTIhdr_SwapBytes (var lAHdr: TNIFTIhdr); //Swap Byte order for the Analyze type
  function Swap2(s : SmallInt): smallint;
  procedure swap4(var s : LongInt);
+ procedure swap8(var s : int64);
  procedure Xswap8r(var s : double);
  procedure NII_Clear (out lHdr: TNIFTIHdr);
  procedure NII_SetIdentityMatrix (var lHdr: TNIFTIHdr); //create neutral rotation matrix
@@ -308,6 +312,29 @@ begin
   inguy := @s; //assign address of s to inguy
   outguy.Word1 := swap(inguy^.Word1);
   result :=outguy.Small1;
+end;
+
+procedure swap8(var s : int64);
+type
+  swaptype = packed record
+    case byte of
+      0:(Word1,Word2,Word3,Word4 : word); //word is 16 bit
+      //1:(float:double);
+  end;
+  swaptypep = ^swaptype;
+var
+  inguy:swaptypep;
+  outguy:swaptype;
+begin
+  inguy := @s; //assign address of s to inguy
+  outguy.Word1 := swap(inguy^.Word4);
+  outguy.Word2 := swap(inguy^.Word3);
+  outguy.Word3 := swap(inguy^.Word2);
+  outguy.Word4 := swap(inguy^.Word1);
+  inguy^.Word1 := outguy.Word1;
+  inguy^.Word2 := outguy.Word2;
+  inguy^.Word3 := outguy.Word3;
+  inguy^.Word4 := outguy.Word4;
 end;
 
 procedure Xswap8r(var s : double);

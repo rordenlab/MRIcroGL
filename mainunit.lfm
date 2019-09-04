@@ -1,7 +1,7 @@
 object GLForm1: TGLForm1
-  Left = 519
+  Left = 468
   Height = 653
-  Top = 64
+  Top = 115
   Width = 761
   AllowDropFiles = True
   Caption = 'MRIcroGL'
@@ -37,7 +37,7 @@ object GLForm1: TGLForm1
       Align = alLeft
       BorderStyle = bsNone
       ClientHeight = 641
-      ClientWidth = 268
+      ClientWidth = 253
       ParentFont = False
       TabOrder = 0
       OnDblClick = ToolPanelDblClick
@@ -45,12 +45,12 @@ object GLForm1: TGLForm1
         Left = 0
         Height = 184
         Top = 0
-        Width = 268
+        Width = 253
         Align = alTop
         AutoSize = True
         Caption = 'Layers'
         ClientHeight = 165
-        ClientWidth = 258
+        ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
         ParentShowHint = False
@@ -61,7 +61,7 @@ object GLForm1: TGLForm1
           Height = 72
           Hint = 'Right-click for options'
           Top = 0
-          Width = 258
+          Width = 243
           Align = alTop
           Constraints.MaxHeight = 72
           ItemHeight = 0
@@ -204,12 +204,12 @@ object GLForm1: TGLForm1
         Left = 0
         Height = 80
         Top = 184
-        Width = 268
+        Width = 253
         Align = alTop
         AutoSize = True
         Caption = 'Clipping'
         ClientHeight = 61
-        ClientWidth = 258
+        ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
         TabOrder = 1
@@ -320,11 +320,11 @@ object GLForm1: TGLForm1
         Left = 0
         Height = 277
         Top = 746
-        Width = 268
+        Width = 253
         Align = alClient
         Caption = 'Render'
         ClientHeight = 258
-        ClientWidth = 258
+        ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
         TabOrder = 2
@@ -836,12 +836,12 @@ object GLForm1: TGLForm1
         Left = 0
         Height = 45
         Top = 264
-        Width = 268
+        Width = 253
         Align = alTop
         AutoSize = True
         Caption = 'Lines'
         ClientHeight = 26
-        ClientWidth = 258
+        ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
         TabOrder = 3
@@ -894,12 +894,12 @@ object GLForm1: TGLForm1
         Left = 0
         Height = 181
         Top = 565
-        Width = 268
+        Width = 253
         Align = alTop
         AutoSize = True
         Caption = '2D Slice Selection'
         ClientHeight = 162
-        ClientWidth = 258
+        ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
         TabOrder = 6
@@ -1130,12 +1130,12 @@ object GLForm1: TGLForm1
         Left = 0
         Height = 82
         Top = 483
-        Width = 268
+        Width = 253
         Align = alTop
         AutoSize = True
         Caption = 'Cutout'
         ClientHeight = 63
-        ClientWidth = 258
+        ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
         TabOrder = 4
@@ -1314,12 +1314,12 @@ object GLForm1: TGLForm1
         Left = 0
         Height = 174
         Top = 309
-        Width = 268
+        Width = 253
         Align = alTop
         AutoSize = True
         Caption = 'Mosaic'
         ClientHeight = 155
-        ClientWidth = 258
+        ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
         TabOrder = 5
@@ -1492,7 +1492,7 @@ object GLForm1: TGLForm1
           Left = 0
           Height = 66
           Top = 89
-          Width = 258
+          Width = 243
           Anchors = [akTop, akLeft, akRight]
           BorderSpacing.Top = 2
           Constraints.MaxHeight = 66
@@ -1687,6 +1687,11 @@ object GLForm1: TGLForm1
         ShortCut = 16451
         OnClick = EditCopyMenuClick
       end
+      object EditPasteMenu: TMenuItem
+        Caption = 'Edit'
+        ShortCut = 16470
+        OnClick = EditPasteMenuClick
+      end
       object StoreFMRIMenu: TMenuItem
         Caption = 'Store FMRI Coordinates'
         ShortCut = 4171
@@ -1702,6 +1707,7 @@ object GLForm1: TGLForm1
       end
       object ImportTIFFMenu: TMenuItem
         Caption = 'Convert TIFF to NIfTI'
+        Visible = False
         OnClick = ImportTIFFMenuClick
       end
       object ToolsMenu: TMenuItem
@@ -2436,5 +2442,12 @@ object GLForm1: TGLForm1
     OnTimer = LayerWidgetChangeTimerTimer
     left = 472
     top = 104
+  end
+  object InvalidateTImer: TTimer
+    Enabled = False
+    Interval = 2
+    OnTimer = InvalidateTImerTimer
+    left = 351
+    top = 292
   end
 end

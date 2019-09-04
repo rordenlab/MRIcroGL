@@ -844,8 +844,9 @@ end;
 
 procedure  TSlices2D.Update(volScale: TVec3; w,h: single; orient: integer; actualH : integer = -1);
 var
-  texL,texB,texW,texH, texwhratio, whratio: single;
-  scale1col, scale1row, scale: single;
+  texL,texB,texW,texH, texwhratio, whratio, w1row, w2row, w3row, h1row, h2row, h3row: single;
+  //scale1col, texwhratio1,
+  scale1row, scale2row, scale3row, scale: single;
 begin
   if (actualH  > 0) then
      viewPixelHeight := actualH
@@ -891,7 +892,37 @@ begin
        else
            DrawSagMirror(texL,texB, texW,texH, sliceFrac2D.x);
   end else begin //default to multislice view (orient = kAxCorSagOrient)
+    //1-row w = x+x+y, h= max(y,z)
+    //2-row w = x+y, h = z + y
+    //3-row w = max(x,y), h= z+z+y
+    w1row := texw/(volScale.x+volScale.x+volScale.y);
+    w2row := texw/(volScale.x+volScale.y);
+    w3row := texw/max(volScale.x,volScale.y);
+    h1row := texh/max(volScale.y,volScale.z);
+    h2row := texh/(volScale.y+volScale.z);
+    h3row := texh/(volScale.y+volScale.z+volScale.z);
+    //GLForm1.Caption := format('%g %g', [h3row, w3row]);
+    scale1row := min(h1row, w1row);
+    scale2row := min(h2row, w2row);
+    scale3row := min(h3row, w3row);
+    //GLForm1.Caption := format('%g %g', [w,h]);
+    //GLForm1.Caption := format('%g %g %g', [scale1row,scale2row,scale3row]);
+    //GLForm1.Caption := format('%g %g %g', [volScale.x, volScale.y, volScale.z]);
+    if (scale3row > scale1row) and (scale3row > scale2row) then begin
+       scale1row := 0;
+       scale2row := 0;
+    end else if (scale1row > scale2row) then begin
+       scale2row := 0;
+       scale3row := 0;
+    end else begin
+        scale1row := 0;
+        scale3row := 0;
+    end;
+    //GLForm1.Caption := format('%g %g %g', [scale1row,scale2row,scale3row]);
+    scale := max(max(scale1row, scale2row), scale3row);
+    (*
     texwhratio := (volScale.x+volScale.y) / (volScale.y+volScale.z);
+    texwhratio1 := max(volScale.x,volScale.y) / (volScale.y+volScale.z+volScale.z);
     scale1row := 0;
     scale1col := 0;
     if texwhratio > whratio then begin
@@ -918,7 +949,7 @@ begin
           scale := scale1row
        else
            scale1row := 0;
-    end;
+    end;  *)
     //axial
     texH := volScale.y * scale;
     texW := volScale.x * scale;
@@ -931,7 +962,7 @@ begin
     texH := volScale.z * scale;
     DrawCor(texL,texB, texW,texH, sliceFrac2D.y);
     //sagittal
-    if (scale1col <> 0) then
+    if (scale3row <> 0) then
         texB := texB+texH
     else
         texL := texL+texW;

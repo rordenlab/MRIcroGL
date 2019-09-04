@@ -103,9 +103,8 @@ void main() {
 	float alphaTerminate = 0.95;
 	if ( overlays > 0 ) alphaTerminate = 2.0; //impossible value: no early termination with overlays
 	for(int i = 0; i < loops; i++) {
-		if ((lengthAcc <= clipStart) || (lengthAcc > clipEnd)) {
-			colorSample.a = 0.0;
-		} else {
+		colorSample = vec4(0.0,0.0,0.0,0.0);
+		if ((lengthAcc > clipStart) && (lengthAcc < clipEnd)) {
 			colorSample = texture(intensityVol,samplePos);
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
 			if ((colorSample.a > 0.01) && (lengthAcc > stepSizeX2)) {

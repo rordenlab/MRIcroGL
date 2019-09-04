@@ -4,10 +4,10 @@ program MRIcroGL;
 {$DEFINE UseCThreads}
 uses
   {$IFDEF UNIX}{$IFDEF UseCThreads}
-  // cthreads,  //<- if parallel NIfTI
-  //cmem, // <- http://wiki.freepascal.org/Parallel_procedures
+  cthreads,  //<- if parallel NIfTI
+  cmem, // <- http://wiki.freepascal.org/Parallel_procedures
   {$ENDIF}{$ENDIF}
-  {$IFDEF LCLGtk2}uscale,{$ENDIF}
+  //{$IFDEF LCLGtk2}uscale,{$ENDIF}
   //{$ifdef windows},udark {$endif}
   Interfaces, // this includes the LCL widgetset
   Forms, mainunit, TimedDialog, dcm2nii, drawVolume, autoroi,

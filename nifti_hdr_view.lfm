@@ -233,9 +233,11 @@ object HdrForm: THdrForm
           '64-bit real*'
           '128-bit real'
           '24-bit rgb'
-          '64-bit com'
+          '32-bit rgba'
+          '64-bit complex'
           '128-bit complex'
           '256-bit complex'
+          ''
         )
         Style = csDropDownList
         TabOrder = 17

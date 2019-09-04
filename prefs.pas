@@ -10,7 +10,7 @@ type
   TMRU =  array [1..knMRU] of string;
   TPrefs = record
          GradientMode, AnimationIntervalMsec, LineWidth, StartupWindowMode,DisplayOrient, StartupDisplayOrient, ColorbarSize,ColorbarPosition, Quality1to10, BitmapZoom, MaxVox: integer;
-         ScreenCaptureTransparentBackground, LandmarkPanel, LoadFewVolumes, LabelOrient, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay, FlipYZ, FlipLR_Radiological, SkipPrefWriting: boolean;
+         MultiSample, ScreenCaptureTransparentBackground, LandmarkPanel, LoadFewVolumes, LabelOrient, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay, FlipYZ, FlipLR_Radiological, SkipPrefWriting: boolean;
          CustomDcm2niix, PyLib, MosaicStr, InitScript, PrevBackgroundImage: string;
          ClearColor: TRGBA;
          PrevFilename: TMRU;
@@ -62,10 +62,11 @@ begin
             PrevBackgroundImage := '';
             CustomDcm2niix := '';
             RetinaDisplay := false;
+            MultiSample := true;
             DisplayOrient:= kAxCorSagOrient; //kRenderOrient;
             StartupDisplayOrient := DisplayOrient;
             DarkMode := false;
-            GradientMode := 1; //kGradientModeGPUSlow
+            GradientMode := 2; //kGradientModeGPUSlow
             StartupWindowMode := 0;
             LineWidth := 1;
             AnimationIntervalMsec:=100;
@@ -195,11 +196,12 @@ begin
   IniInt(lRead,lIniFile, 'LineWidth', lPrefs.LineWidth);
   IniInt(lRead,lIniFile, 'StartupWindowMode', lPrefs.StartupWindowMode);
   IniInt(lRead,lIniFile, 'AnimationIntervalMsec', lPrefs.AnimationIntervalMsec);
-  IniInt(lRead,lIniFile, 'GradientMode',lPrefs.GradientMode);
+  IniInt(lRead,lIniFile, 'GradientMode_Fast0_Slow3',lPrefs.GradientMode);
   {$IFDEF LCLCocoa}
         IniBool(lRead,lIniFile, 'RetinaDisplay',lPrefs.RetinaDisplay);
         IniBool(lRead,lIniFile, 'DarkMode',lPrefs.DarkMode);
     {$ENDIF}
+  IniBool(lRead,lIniFile, 'MultiSample',lPrefs.MultiSample);
   IniBool(lRead,lIniFile, 'ColorbarVisible',lPrefs.ColorbarVisible);
   IniBool(lRead,lIniFile, 'Smooth2D',lPrefs.Smooth2D);
   IniBool(lRead,lIniFile, 'LabelOrient',lPrefs.LabelOrient);

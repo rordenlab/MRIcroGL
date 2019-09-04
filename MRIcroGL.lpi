@@ -112,11 +112,13 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="../Metal-Demos/common;..\static\x86_64-win64"/>
+      <OtherUnitFiles Value="../Metal-Demos/common;..\static\x86_64-win64;../lazarus/components/multithreadprocs"/>
       <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <CodeGeneration>
       <SmartLinkUnit Value="True"/>
+      <TargetProcessor Value="ATHLON64"/>
+      <TargetCPU Value="x86_64"/>
       <Optimizations>
         <OptimizationLevel Value="3"/>
       </Optimizations>
@@ -124,7 +126,7 @@
     <Linking>
       <Debugging>
         <GenerateDebugInfo Value="False"/>
-        <DebugInfoType Value="dsDwarf2Set"/>
+        <DebugInfoType Value="dsDwarf2"/>
         <UseLineInfoUnit Value="False"/>
         <StripSymbols Value="True"/>
       </Debugging>
@@ -136,7 +138,8 @@
       </Options>
     </Linking>
     <Other>
-      <CustomOptions Value="-dDisableLCLGIF -dDisableLCLJPEG -dDisableLCLPNM -dDisableLCLTIFF"/>
+      <CustomOptions Value="-dDisableLCLGIF 
+-dDisableLCLPNM"/>
     </Other>
   </CompilerOptions>
   <Debugging>

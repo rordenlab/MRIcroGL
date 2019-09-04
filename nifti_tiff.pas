@@ -4,8 +4,9 @@ unit nifti_tiff;
 interface
 
 uses
-   nifti_types, dialogs, nifti_foreign, sysutils, classes, clipbrd;
-   function SaveTIFFAsNifti(fnm: string): string;
+   SimdUtils, nifti_types, dialogs, nifti_foreign, sysutils, classes, clipbrd;
+   //function SaveTIFFAsNifti(fnm: string): string;
+   function LoadTIFFAsNifti(fnm: string; var  rawData: TUInt8s; var nhdr: TNIFTIHdr): boolean;
 
 implementation
 
@@ -14,12 +15,59 @@ Type
   Bytep0 = ^ByteRA0;
   WordRA0 = array [0..0] of Word;
   Wordp0 = ^WordRA0;
-
+  DWordRA0 = array [0..0] of Int32; //DWord
+  DWordp0 = ^DWordRA0;
 {$ifndef fpc}
 Type
   PtrInt = integer;
 {$endif}
 
+procedure DecodePackBits(var Buffer: Pointer; var Count, CountDecompressed: PtrInt);
+label
+  124;
+var
+  OutBuffer: Pointer;
+  pack, unpack: Bytep0;
+  i, o, k: integer;
+  packLen: integer;
+  packByte: byte;
+begin
+  GetMem(OutBuffer, CountDecompressed);
+  unpack := Bytep0(OutBuffer);
+  pack := Bytep0(Buffer);
+  i := 0;
+  o := 0;
+  while (i < (Count-1)) do begin
+        packLen := int8(pack[i]);
+        i := i + 1;
+        if packLen = -128 then begin //no op
+           i := i + 1;
+        end else if packLen < 0 then begin
+           packByte := pack[i];
+           i := i + 1;
+           for k := 0 to abs(packLen) do begin
+               unpack[o] := packByte;
+               o := o + 1;
+               if o >= CountDecompressed then goto 124;
+           end;
+        end else begin
+            for k := 0 to packLen do begin
+                unpack[o] := pack[i];
+                i := i + 1;
+                o := o + 1;
+                if i >= Count then goto 124;
+                if o >= CountDecompressed then goto 124;
+            end;
+        end;
+  end;
+  124:
+  FreeMem(Buffer);
+  Buffer:=OutBuffer;
+  //for i := 0 to (o-1) do
+  //    write(format('%d,', [unpack[i]]));
+  Count := o;
+  CountDecompressed := o;
+end;
 
 {$DEFINE GRAPHICEX_LZW}
 {$IFDEF GRAPHICEX_LZW}
@@ -48,6 +96,22 @@ begin
   Count:=NewCount;
 end;
 {$ENDIF}
+
+procedure swapVoxels32(var img8: ByteP0; var nhdr: TNIfTIhdr);
+var
+   i, nVox: integer;
+   img32 : DWordP0;
+begin
+    if (nhdr.datatype <> kDT_UINT32) and (nhdr.datatype <> kDT_INT32) then exit;
+    nVox := 1;
+    for i := 1 to 7 do
+        if nhdr.dim[i] > 1 then
+          nVox := nVox * nhdr.dim[i];
+    img32 := DWordP0(img8 );
+    i := 0;
+    for i := 0 to (nVox - 1) do
+        img32[i] := swap(img32[i]);
+end;
 
 procedure swapVoxels(var img8: ByteP0; var nhdr: TNIfTIhdr);
 var
@@ -83,7 +147,6 @@ begin
                   img16^[i] := img16^[i]+img16^[i-SamplesPerPixel];
                   i := i + 1;
               end;//S
-
           end; //X
       end; //Y
   end; //Z
@@ -220,6 +283,34 @@ end;
 
 function planar2RGB8(var img: ByteP0; SamplesPerPixel, nX, nY, nZ: integer ): boolean;
 var
+   oimg: ByteP0;
+   xy, xys, z, i, j, k,  s, nBytes: integer;
+begin
+  result := true;
+  if SamplesPerPixel <= 1 then exit;
+  result := false;
+  xy := nX * nY;
+  xys := xy *  SamplesPerPixel;
+  nBytes := xys * nZ ;
+  GetMem(oimg, nBytes);
+  j := 0;
+  for z := 0 to (nZ-1) do begin
+      k := z * xys;
+      for i := 0 to (xy-1) do begin
+          for s := 0 to (SamplesPerPixel-1) do begin
+              oimg[j] := img[k+i+(s * xy)] ;
+              j := j + 1;
+          end;
+          //
+      end;
+  end;
+  FreeMem(img);
+  img:=oimg;
+  result := true;
+end;
+
+(*function planar2RGB8(var img: ByteP0; SamplesPerPixel, nX, nY, nZ: integer ): boolean;
+var
   o, s, XY,Z, nXY, nXYS: integer;
   imgXY: byteP0;
 begin
@@ -242,7 +333,7 @@ begin
   end; //Z
   freemem(imgXY);
   result := true;
-end;
+end; *)
 
 Type TLSMINF2 = packed record //224 bytes
     //https://www.mathworks.com/matlabcentral/fileexchange/8412-lsm-file-toolbox
@@ -294,8 +385,7 @@ type
         //ImageDescription,
         StripOffsets, StripByteCounts, ColorMap,PageNum: TTIFFTag;
         XResolution, YResolution: single;
-        isLZW: boolean;
-        ImageHeight, ImageWidth,
+        Compression, ImageHeight, ImageWidth,
         bpp, PhotometricInterpretation, Orientation,SamplesPerPixel,
         RowsPerStrip, MinSampleValue, MaxSampleValue,
         PlanarConfig, SampleFormat,
@@ -308,12 +398,14 @@ type
         nX, nY, nZ, nT, nC: uint32;
         spacing: single;
         isImageJ: boolean;
-
   end;
 const
   kMaxIFD = 2048;
   kPREDICTOR_NONE = 1;
   kPREDICTOR_HORIZONTAL = 2;
+  kCOMPRESS_NONE = 1;
+  kCOMPRESS_LZW = 5;
+  kCOMPRESS_PACKBITS = 32773;
 var
   tTag: TTIFFTag;
   lsm: TLSMINF2;
@@ -329,6 +421,7 @@ var
   eStr: string;
   swapEndian, isLSM, isOME: boolean;
   hdr: array[1..kMaxIFD] of TTIFFhdr;
+
 function readU16: word;
 begin
   result := 0;
@@ -341,6 +434,7 @@ begin
   BlockRead(f, result, sizeof(result));
   if swapEndian then pswap4ui(result);
 end;
+
 function readIFD: TTIFFTag;
 begin
     BlockRead(f, result, sizeof(result));
@@ -362,6 +456,7 @@ var
   b: byte;
   p,i: integer;
 begin
+    vals := nil;
     if lTag.Count < 1 then exit;
     setlength(vals, lTag.Count);
     if lTag.Count = 1 then begin
@@ -489,7 +584,7 @@ end;
 
 //http://www.fileformat.info/format/tiff/egff.htm
 //tagType 1=uint8, 2=ASCISS, 3=uint16, 4=uint32, 5=(rational)uint32/uint32
-function readBpp: integer;//sum of all Bytes-per-pixel
+function readBpp(): integer;//sum of all Bytes-per-pixel
 var
   lVals: TU32s;
   i: integer;
@@ -580,15 +675,23 @@ begin
     eStr := 'nTag'+inttostr(nTag);
     if nTag < 1 then goto 666;
     //memo1.lines.Add(format('niFD = %d', [nIFD]));
+
+    hdr[nIFD].Compression := kCOMPRESS_NONE;
     hdr[nIFD].ImageWidth := 0;
     hdr[nIFD].ImageHeight := 0;
-    hdr[nIFD].PlanarConfig := 0;
+    hdr[nIFD].PlanarConfig := 1;  //1=RGBRGB... 2=RRR..RGGG..GBBBB..B https://www.awaresystems.be/imaging/tiff/tifftags/planarconfiguration.html
     hdr[nIFD].XResolution := 1.0;
     hdr[nIFD].YResolution := 1.0;
     hdr[nIFD].Predictor := kPREDICTOR_NONE;
+    hdr[nIFD].RowsPerStrip := 0; //assume all
+    hdr[nIFD].SampleFormat := 1; //unsigned integer https://www.awaresystems.be/imaging/tiff/tifftags/sampleformat.html
     hdr[nIFD].OK := true;
     for i := 1 to nTag do begin
         tTag := readIFD;
+        //{$DEFINE VERBOSETIF}
+        {$IFDEF VERBOSETIF}
+        msgTIFF(format('id %x type %d n %d = %d', [tTag.tagID, tTag.tagType, tTag.count, tTag.offset]));
+        {$ENDIF}
         //memo1.lines.Add(format('%x %d %d %d', [IFD.tagID,IFD.tagType, IFD.count, IFD.offset]));
         case tTag.tagID of
           //http://www.fileformat.info/format/tiff/corion.htm
@@ -597,14 +700,19 @@ begin
           $00FE : hdr[nIFD].NewSubfileType := tTag.offset;
           $0100 : hdr[nIFD].ImageWidth := tTag.offset;
           $0101 : hdr[nIFD].ImageHeight := tTag.offset;
-          $0102 : hdr[nIFD].bpp := readBpp;
-          $0103 : begin
+          $0102 : begin
+                hdr[nIFD].bpp := readBpp();
+          end;
+          $0103 : begin //Compression
+               //https://www.awaresystems.be/imaging/tiff/tifftags/compression.html
+               //1 = none, 32773 = packbits, 5 = LZW
                //memo1.lines.Add(format('format %x %d %d %d', [tTag.tagID,tTag.tagType, tTag.count, tTag.offset]));
-               if (tTag.offset <> 1) and (tTag.offset <> 5) then begin
-                  eStr := 'Unsupported compression format '+inttostr(tTag.offset)+' try Fiji/ImageJ';
+              hdr[nIFD].Compression := tTag.offset;
+               if (hdr[nIFD].Compression <> kCOMPRESS_NONE) and (hdr[nIFD].Compression <> kCOMPRESS_LZW) and (hdr[nIFD].Compression <> kCOMPRESS_PACKBITS) then begin
+                  //eStr := 'Unsupported compression format '+inttostr(tTag.offset)+' try Fiji/ImageJ';
+                  eStr := '-'; //silent error - Lazarus inbuilt TIFF decoder might handle this, e.g. Z deflate
                   goto 666;
                end;
-               hdr[nIFD].isLZW := (tTag.offset = 5);
             end;
           $0106 : hdr[nIFD].PhotometricInterpretation := tTag.offset;
           $010E :  begin
@@ -625,7 +733,7 @@ begin
           $0128 : hdr[nIFD].ResolutionUnit := tTag.offset;
           $0131 : hdr[nIFD].Software := tTag.offset;
           $013D : begin //http://www.awaresystems.be/imaging/tiff/tifftags/predictor.html
-                    hdr[nIFD].Predictor := tTag.offset;
+                    hdr[nIFD].Predictor := tTag.offset;  //1=unsigned,2=signed,3=float
                     if (hdr[nIFD].Predictor <> kPREDICTOR_NONE) and (hdr[nIFD].Predictor <> kPREDICTOR_HORIZONTAL) then begin
                        eStr := 'Unsupported predictor '+inttostr(hdr[nIFD].Predictor);
                        goto 666;
@@ -636,18 +744,30 @@ begin
                eStr := 'TIFF tiles not supported';
                goto 666;
             end;
-          $0153 : hdr[nIFD].SampleFormat := tTag.offset;
+          $0153 : begin
+              hdr[nIFD].SampleFormat := tTag.offset;  //1=unsigned,2=signed,3=float
+              if (hdr[nIFD].SampleFormat < 1) and (hdr[nIFD].SampleFormat > 3) then begin
+                 eStr := 'Unsupported SampleFormat '+inttostr(hdr[nIFD].SampleFormat);
+                 goto 666;
+              end;
+          end;
           34412: readLSM;
-          else msgTIFF(format('tagID %4x %d %d %d', [tTag.tagID,tTag.tagType, tTag.count, tTag.offset]));
+          else begin
+              {$IFNDEF VERBOSETIF}
+              msgTIFF(format('id %x type %d n %d = %d', [tTag.tagID, tTag.tagType, tTag.count, tTag.offset]));
+              //msgTIFF(format('tagID %4x %d %d %d', [tTag.tagID,tTag.tagType, tTag.count, tTag.offset]));
+              {$ENDIF}
+          end;
           //8639, 863A, 8652
         end; //case
         //form1.memo1.lines.Add(format('tagID %4x %d %d %d', [tTag.tagID,tTag.tagType, tTag.count, tTag.offset]));
-
     end;
     IFDstart := readU32; //offset to IFD
     //form1.Memo1.lines.add(format('%d %d', [hdr[nIFD].ImageWidth,hdr[nIFD].ImageHeight]));
     //IFDstart := 0;//xxx
+    if (hdr[nIFD].RowsPerStrip = 0) then hdr[nIFD].RowsPerStrip :=  hdr[nIFD].ImageHeight;//2^32-1 https://www.awaresystems.be/imaging/tiff/tifftags/rowsperstrip.html
   end; //for each IFD
+  //if (hdr[nIFD].RowsPerStrip = 0) then hdr[nIFD].RowsPerStrip :=  66535;
   //memo1.lines.add(inttostr(iIFD));
   //remove thumbnails - find biggest image
   ok1 := 1;
@@ -676,43 +796,53 @@ begin
   //decode image
    nImgBytes := (hdr[ok1].bpp div 8) * hdr[ok1].ImageHeight * hdr[ok1].ImageWidth * nOK;
    imgBytes := 0;
-
-
    GetMem(img, nImgBytes);
    for i := 1 to nIFD do begin
        if not (hdr[i].OK) then continue;
        readTagArray(hdr[i].StripOffsets, lOffsets);
        readTagArray(hdr[i].StripByteCounts, lCounts);
-       if (length(lOffsets) <> length(lCounts)) or (length(lOffsets) < 1) then exit;
-       outCount := (hdr[ok1].bpp div 8) * hdr[ok1].ImageWidth * hdr[ok1].RowsPerStrip;
+       eStr := format('Expected Offsets and Counts to match ',[length(lOffsets), length(lCounts)]);
+       if (length(lOffsets) <> length(lCounts)) or (length(lOffsets) < 1) then goto 666;
+       //if hdr[ok1].RowsPerStrip < 1 then
+       //   hdr[ok1].RowsPerStrip := hdr[ok1].ImageWidth;
        sliceBytesLeft :=  (hdr[ok1].bpp div 8) * hdr[ok1].ImageHeight * hdr[ok1].ImageWidth;
+       outCount := (hdr[ok1].bpp div 8) * hdr[ok1].ImageWidth * hdr[ok1].RowsPerStrip;
+       if (hdr[ok1].SamplesPerPixel > 1) and (length(lOffsets) = hdr[ok1].SamplesPerPixel) then
+          outCount := hdr[ok1].ImageWidth * hdr[ok1].RowsPerStrip;
        for j := 0 to (length(lOffsets)-1) do begin
            seek(f,lOffsets[j]);
-           if hdr[i].isLZW then begin
+           if (hdr[i].Compression <> kCOMPRESS_NONE) then begin
+              //msgTIFF(format('decompress n= %d offset= %d count= %d', [nIFD, lOffsets[j], lCounts[j] ]));
               getmem(lzw, lCounts[j]);
               blockread(f,lzw^, lCounts[j]);
               lzwCount := lCounts[j];
               if outCount > sliceBytesLeft then
                  outCount := sliceBytesLeft;
-              DecodeLZW(lzw, lzwCount, outCount);
+              if (hdr[i].Compression = kCOMPRESS_PACKBITS) then begin
+                 DecodePackbits(lzw, lzwCount, outCount);
+              end else
+                  DecodeLZW(lzw, lzwCount, outCount);
+              //msgTIFF(format('%d %d', [lzwCount, outCount]));
               sliceBytesLeft := sliceBytesLeft - outCount;
-              //DecompressLZW(@stripLzw, lCounts[j], unZipBuffer, unZipBytes);//out NewBuffer: PByte; out NewCount: PtrInt);
-              //memo1.Lines.Add(format('%d -> %d %d',[lCounts[j],lzwCount, lOffsets[j]]) );
-              move(lzw^,img[imgBytes], lzwCount);
-              imgBytes := imgBytes + lzwCount;
+              move(lzw^,img[imgBytes], outCount);
+              imgBytes := imgBytes + outCount;
+              //sliceBytesLeft := sliceBytesLeft - outCount;
+              //move(lzw^,img[imgBytes], lzwCount);
+              //imgBytes := imgBytes + lzwCount;
               freemem(lzw);
-
            end else begin
                blockread(f,img[imgBytes], lCounts[j]);
                imgBytes := imgBytes + lCounts[j];
            end;
        end;
-
    end;
    //convert planar RRR..RGGG...GBBB..B to triplesRGBRGBRGB
-   if (not hdr[i].isLZW) and (hdr[ok1].PlanarConfig = 2) and (hdr[ok1].SamplesPerPixel > 1) and ((hdr[ok1].bpp div hdr[ok1].SamplesPerPixel) = 8)  then begin
+   msgTIFF(format('PlanarConfig %d SamplesPerPixel %d',[hdr[ok1].PlanarConfig, hdr[ok1].SamplesPerPixel])); //1=RGBRGB... 2=RRR..RGGG..GBBBB..B
+   //if (hdr[i].Compression <> kCOMPRESS_LZW) and (hdr[ok1].PlanarConfig = 2) and (hdr[ok1].SamplesPerPixel > 1) and ((hdr[ok1].bpp div hdr[ok1].SamplesPerPixel) = 8)  then begin
+
+   if  (hdr[ok1].PlanarConfig = 2) and (hdr[ok1].SamplesPerPixel > 1) and ((hdr[ok1].bpp div hdr[ok1].SamplesPerPixel) = 8)  then begin
      //see sample "Oxford" - added "not hdr[i].isLZW"
-     msgTIFF(format('deplane %d',[hdr[ok1].PlanarConfig]));
+     msgTIFF(format('Deplane %d',[hdr[ok1].PlanarConfig]));
       eStr := 'planar to RGB';
       if not planar2RGB8(img, hdr[ok1].SamplesPerPixel, hdr[ok1].ImageWidth, hdr[ok1].ImageHeight, nOK ) then
          goto 666;
@@ -733,10 +863,13 @@ begin
   nhdr.dim[0]:=3;//3D
   nhdr.dim[1]:=hdr[ok1].ImageWidth;
   nhdr.dim[2]:=hdr[ok1].ImageHeight;
-  msgTIFF(format('-> %d',[hdr[ok1].SamplesPerPixel]));
+  //msgTIFF(format('-> %d',[hdr[ok1].SamplesPerPixel]));
+  msgTIFF(format('xyz %d %d %d bpp %d components %d',[hdr[ok1].ImageWidth, hdr[ok1].ImageHeight, nOK, hdr[ok1].bpp, hdr[ok1].SamplesPerPixel]));
   if (hdr[ok1].SamplesPerPixel > 3) then begin
+     {$IFDEF PLANAR}
      hdr[ok1].bpp := hdr[ok1].bpp div hdr[ok1].SamplesPerPixel;
      if (hdr[ok1].SamplesPerPixel = 4)  and (hdr[ok1].PlanarConfig = 1) and (hdr[ok1].bpp = 8) then begin
+
       msgTIFF(format('replane %d',[hdr[ok1].PlanarConfig]));
       eStr := 'planar to RGB';
       if not RGB2planar8(img, hdr[ok1].SamplesPerPixel, hdr[ok1].ImageWidth, hdr[ok1].ImageHeight, nOK ) then
@@ -744,6 +877,7 @@ begin
      end;
      nhdr.dim[3]:=hdr[ok1].SamplesPerPixel;
      nhdr.dim[4]:=nOK;
+     {$ENDIF}
   end else if isOME then begin
      msgTIFF(format('OME slices=%d Z=%d  T=%d C=%d',[nOK, ome.nZ, ome.nT, ome.nC]));
      if ome.isImageJ then begin
@@ -763,12 +897,14 @@ begin
       nhdr.dim[3]:=nOK;
       nhdr.dim[4]:=1;
   end;
+  //msgTIFF(format('>pixdim %g %g %g',[nhdr.pixdim[1],nhdr.pixdim[2],nhdr.pixdim[3]]));
   if isOme and ome.isImageJ then
      nhdr.pixdim[1]:=ome.Spacing
   else
       nhdr.pixdim[1]:=1.0;
   nhdr.pixdim[2]:=nhdr.pixdim[1];
   nhdr.pixdim[3]:=nhdr.pixdim[1];
+  //msgTIFF(format('>>pixdim %g %g %g',[nhdr.pixdim[1],nhdr.pixdim[2],nhdr.pixdim[3]]));
   if isLsm then begin
      msgTIFF(format('ZT %d %d',[nhdr.dim[3], nhdr.dim[4]]));
      msgTIFF(format('ZCT %d %d %d',[lsm.DimensionZ, lsm.DimensionChannels, lsm.DimensionTime]));
@@ -785,25 +921,70 @@ begin
      nhdr.xyzt_units:= kNIFTI_UNITS_MICRON +kNIFTI_UNITS_SEC;
      msgTIFF(format('pixdim %g %g %g',[nhdr.pixdim[1],nhdr.pixdim[2],nhdr.pixdim[3]]));
   end;
-  eStr:= 'unsupported dataType '+inttostr(hdr[ok1].bpp);
+  eStr:= format('unsupported dataType %d bits, sample format %d, samples per pixel %d', [hdr[ok1].bpp, hdr[ok1].sampleFormat, hdr[ok1].SamplesPerPixel]);
+  //goto 666;
+  nhdr.datatype := 0;
   case hdr[ok1].bpp of
-       8: nhdr.datatype := kDT_UINT8;
-       16: nhdr.datatype := kDT_UINT16;
+       8: begin
+          if hdr[ok1].SamplesPerPixel = 3 then
+              nhdr.datatype := kDT_RGB
+          else if hdr[ok1].SamplesPerPixel = 4 then
+              nhdr.datatype := kDT_RGBA32
+          else if hdr[ok1].sampleFormat = 1 then
+             nhdr.datatype := kDT_UINT8
+          else if hdr[ok1].sampleFormat = 2 then
+             nhdr.datatype := kDT_INT8;
+       end;
+       16: begin
+           if hdr[ok1].sampleFormat = 1 then
+              nhdr.datatype := kDT_UINT16;
+           if hdr[ok1].sampleFormat = 2 then
+              nhdr.datatype := kDT_INT16;
+       end;
        24: nhdr.datatype := kDT_RGB;
+       //32: nhdr.datatype := kDT_INT32;
+       32: begin
+           ////1=unsigned,2=signed,3=float
+           if hdr[ok1].SamplesPerPixel = 4 then
+              nhdr.datatype := kDT_RGBA32
+           else if hdr[ok1].sampleFormat = 1 then
+              nhdr.datatype := kDT_UINT32
+           else if hdr[ok1].sampleFormat = 2 then
+              nhdr.datatype := kDT_INT32
+           else if hdr[ok1].sampleFormat = 3 then
+              nhdr.datatype := kDT_FLOAT32; //Created by Slicer - not integer!
+         end;
        else goto 666;
   end;
+  if  (nhdr.datatype = 0) then goto 666;
+  if (swapEndian) and (nhdr.datatype = kDT_FLOAT32) then
+     swapVoxels32(img, nhdr);
   if (swapEndian) and (nhdr.datatype = kDT_UINT16) then
      swapVoxels(img, nhdr);
   if isOME then
      swizzleDims(nhdr, img, ome.oZ, ome.oT, ome.oC);
-  if isLSM then
+  if isLSM then begin
      swizzleDims(nhdr, img, 4, 3, 5);
+     msgTIFF(format('%d %d', [lsm.DimensionZ , lsm.DimensionTime]));
+     if ((lsm.DimensionZ * lsm.DimensionTime) = nhdr.dim[3]) and (nhdr.dim[4] <= 1) then begin
+        nhdr.dim[3] := lsm.DimensionZ;
+        nhdr.dim[4] := lsm.DimensionTime;
+     end;
+
+  end;
+  msgTIFF(format('dims %d %d %d %d %d',[nhdr.dim[1],nhdr.dim[2],nhdr.dim[3],nhdr.dim[4],nhdr.dim[5]]));
 
   nhdr.vox_offset := 352;
   nhdr.sform_code := 1;
-  nhdr.srow_x[0]:=nhdr.pixdim[1];nhdr.srow_x[1]:=0.0;nhdr.srow_x[2]:=0.0;nhdr.srow_x[3]:=0.0;
-  nhdr.srow_y[0]:=0.0;nhdr.srow_y[1]:=-nhdr.pixdim[2];nhdr.srow_y[2]:=0.0;nhdr.srow_y[3]:=0.0;
-  nhdr.srow_z[0]:=0.0;nhdr.srow_z[1]:=0.0;nhdr.srow_z[2]:=nhdr.pixdim[3];nhdr.srow_z[3]:=0.0;
+  for i := 0 to 3 do begin
+      nhdr.srow_x[i] := 0.0;
+      nhdr.srow_y[i] := 0.0;
+      nhdr.srow_z[i] := 0.0;
+  end;
+  nhdr.srow_x[0]:=nhdr.pixdim[1];
+  //nhdr.srow_y[1]:=-nhdr.pixdim[2]; // <-todo
+  nhdr.srow_y[1]:=-nhdr.pixdim[2];
+  nhdr.srow_z[2]:=nhdr.pixdim[3];
   convertForeignToNifti(nhdr);
   eStr := ''; //no error
   msgTIFF(format('bytes %d',[nImgBytes]));
@@ -813,7 +994,7 @@ begin
   result := eStr;
 end;
 
-function Save2Nii(fnm: string; nhdr: TNIFTIhdr; img: byteP0): string;
+(*function Save2Nii(fnm: string; nhdr: TNIFTIhdr; img: byteP0): string;
 var
   f: file;
   outFnm: string;
@@ -857,6 +1038,44 @@ begin
      exit;
   end;
   result := save2nii(fnm, nhdr, img);
+end;*)
+
+function LoadTIFFAsNifti(fnm: string; var  rawData: TUInt8s; var nhdr: TNIFTIHdr): boolean;
+var
+  s: string;
+  img: byteP0;
+  i,
+  nImgBytes: integer;
+begin
+  result := false;
+  if not isTIFF(fnm) then exit;
+  s := readTiff(fnm, nhdr, img);
+  if s = '-' then exit; //silent error
+  if s <> '' then begin
+     showmessage('TIFF error '+s);
+     exit;
+  end;
+  //writeln('>>>>'+inttostr(nhdr.bitpix));
+  if (nhdr.datatype = kDT_RGB) then nhdr.bitpix := 24;
+  if (nhdr.datatype = kDT_RGBA32) then nhdr.bitpix := 32;
+  nImgBytes := (nhdr.bitpix div 8) * nhdr.dim[1] * nhdr.dim[2] * nhdr.dim[3];
+  if (nhdr.dim[4] > 1) then nImgBytes := nImgBytes * nhdr.dim[4];
+  if (nhdr.dim[5] > 1) then nImgBytes := nImgBytes * nhdr.dim[5];
+  setlength(rawData, nImgBytes);
+  {$IFDEF UNIX}
+  writeln(format('%dx%dx%dx%dx%d  %d', [nhdr.dim[1],nhdr.dim[2],nhdr.dim[3], nhdr.dim[4], nhdr.dim[5], nhdr.bitpix]));
+  {$ENDIF}
+  //for i := 0 to nImgBytes -1 do
+  //    rawData[i] := img[i];
+  Move(img[0], rawData[0], nImgBytes);
+  (*if (nhdr.datatype = kDT_RGBA32) then
+     for i := 0 to nImgBytes -1 do
+         rawData[i] := (i mod 4) *64; *)
+
+  Freemem(img);
+  //setlength(rawData, );
+  //img
+  result := true;
 end;
 
 end.

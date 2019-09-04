@@ -1,13 +1,13 @@
 //pref
-ambient|float|0.0|1.0|1
-diffuse|float|0.0|0.3|1
-specular|float|0.0|0.25|1
-shininess|float|0.01|10.0|30
-boundThresh|float|0.0|0.5|0.95
-edgeBoundMix|float|0|0|1
-overDistance|float|0.0|0.3|1
-overAlpha|float|0.0|1.6|2.0
-overShade|float|0.0|0.3|1.0
+ambient|float|0.0|1.0|1|Illuminate surface regardless of lighting
+diffuse|float|0.0|0.3|1|Illuminate surface based on light position
+specular|float|0.0|0.25|1|Glint from shiny surfaces
+shininess|float|0.01|10.0|30|Specular reflections can be rough or precise
+boundThresh|float|0.0|0.5|0.95|Boundary threshold (requires high edgeBoundMix)
+edgeBoundMix|float|0|0|1|Mixture of edge and boundary opacity
+overDistance|float|0.0|0.3|1|Ability to see overlays beneath the background surface
+overAlpha|float|0.0|1.6|2.0|Ability to see overlay images added to background
+overShade|float|0.0|0.3|1.0|Control lighting applied to overlays
 //vert
 #version 330 core
 layout(location = 0) in vec3 vPos;
@@ -103,9 +103,8 @@ void main() {
 	float alphaTerminate = 0.95;
 	if ( overlays > 0 ) alphaTerminate = 2.0; //impossible value: no early termination with overlays
 	for(int i = 0; i < loops; i++) {
-		if ((lengthAcc <= clipStart) || (lengthAcc > clipEnd)) {
-			colorSample.a = 0.0;
-		} else {
+		colorSample = vec4(0.0,0.0,0.0,0.0);
+		if ((lengthAcc > clipStart) && (lengthAcc < clipEnd)) {
 			colorSample = texture(intensityVol,samplePos);
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
 			if ((colorSample.a > 0.01) && (lengthAcc > stepSizeX2)) {

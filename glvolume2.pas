@@ -17,9 +17,10 @@ uses
 const
  kDefaultDistance = 2.25;
  kMaxDistance = 40;
- kGradientModeGPUFast = 0;
- kGradientModeGPUSlow = 1;
- kGradientModeCPUSlowest = 2;
+ kGradientModeGPUFastest = 0;  //no gradient smooth
+ kGradientModeGPUFast = 1; //low precision smooth
+ kGradientModeGPUSlow = 2; //high precision smooth
+ kGradientModeCPUSlowest = 3; //highest precision
 type
   TGPUVolume = class
       private
@@ -28,7 +29,7 @@ type
         prefLoc: array [1..kMaxUniform] of GLint;
         slices2D: TSlices2D;
         uniform_drawTex, uniform_drawLUT, uniform_drawAlpha,
-        uniform_viewportSizeLine, uniform_viewportSizeTex, uniform_backAlpha, uniform_tex, uniform_overlay: GLint;
+        uniform_viewportSizeLine, uniform_viewportSizeTex, uniform_backAlpha, uniform_tex, uniform_overlay, uniform_overlaysLoc: GLint;
         colorEditor: TColorEditor;
         isSmooth2D, colorEditorVisible: boolean;
         txt: TGPUFont;
@@ -53,9 +54,10 @@ type
         {$IFDEF CUBE} gCube :TGPUCube; {$ENDIF}
         {$IFDEF GPUGRADIENTS}programSobel, programBlur: GLuint;
         procedure CreateGradientVolumeGPU(Xsz,Ysz,Zsz: integer; var inTex, grTex: GLuint);
+        procedure GenerateGradient(var inTex, grTex: GLuint);
         {$ENDIF}
         procedure LoadCube();
-        function LoadTexture(var vol: TNIfTI): boolean;
+        function LoadTexture(var vol: TNIfTI; deferGradients: boolean): boolean;
         procedure CreateDrawColorTable;//1D texture for drawing
         procedure CreateDrawTex(Dim: TVec3i; Vals: TUInt8s);
         procedure UpdateDraw(Drawing: TDraw);
@@ -165,6 +167,7 @@ kVertTex2D = '#version 330'
 +#10'    gl_Position = vec4((pixelPosition / (ViewportSize/2.0)), 0.0, 1.0);'
 +#10'}';
 //Simple Fragment Shader
+
 kFragTex2D = '#version 330'
 +#10'in vec4 texCoord;'
 +#10'out vec4 color;'
@@ -172,17 +175,19 @@ kFragTex2D = '#version 330'
 +#10'uniform sampler3D tex, drawTex, overlay;'
 +#10'uniform sampler1D drawLUT;'
 +#10'uniform float drawAlpha = 0.0;'
++#10'uniform int overlays = 0;'
 +#10'void main() {'
 +#10'    color = texture(tex,texCoord.xyz);'
 +#10'    color.a = smoothstep(0.0, 0.1, color.a);'
 +#10'    //color.a = smoothstep(0.0, 0.00001, color.a);'
 +#10'    color.a *= backAlpha;'
++#10'    //if ((overlays == 0) && (drawAlpha == 0.0)) color.r = 1.0; //test case where neither overlay or draw is visible'
++#10'    if ((overlays == 0) && (drawAlpha == 0.0)) return;'
 +#10'    //if (color.a > 0.0) color.a = backAlpha;'
 +#10'    vec4 ocolor = texture(overlay, texCoord.xyz);'
 +#10'    //vec4 ocolor = texture(drawLUT, texture(overlay, texCoord.xyz).r).rgba;'
 +#10'    //vec4 ocolor = texture(drawLUT, texture(drawTex, texCoord.xyz).r).rgba;'
 +#10'    color.rgb = mix(color.rgb, ocolor.rgb, ocolor.a);'
-+#10'    //color.a = min(color.a, 0.5);'
 +#10'    color.a = max(color.a, ocolor.a);'
 +#10'    if (drawAlpha == 0.0) return;'
 +#10'    ocolor = texture(drawLUT, texture(drawTex, texCoord.xyz).r).rgba;'
@@ -320,10 +325,13 @@ procedure TGPUVolume.CreateGradientVolumeGPU(Xsz,Ysz,Zsz: integer; var inTex, gr
 //given 3D input texture inTex (with dimensions Xsz, Ysz, Zsz) generate 3D gradient texture gradTex
 //http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-14-render-to-texture/
 //http://www.opengl.org/wiki/Framebuffer_Object_Examples
+//{$DEFINE SMOOTHGRAD}
 var
    i: integer;
    coordZ: single;
-   fb, tempTex3D: GLuint;{$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
+   fb , tempTex3D: GLuint;
+   isSmoothGrad: boolean;
+   {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
 begin
   glFinish();//force update
   {$IFDEF TIMER}startTime := now;{$ENDIF}
@@ -342,6 +350,8 @@ begin
   glViewport(0, 0, XSz, YSz);
   //glDisable(GL_TEXTURE_2D); //<- generates error!
   glDisable(GL_BLEND);
+  isSmoothGrad :=  gradientMode > kGradientModeGPUFastest;
+  if (isSmoothGrad) then begin
   //STEP 1: run smooth program gradientTexture -> tempTex3D
   tempTex3D := bindBlankGL(Xsz,Ysz,Zsz, gradientMode);
   glUseProgram(programBlur);
@@ -370,12 +380,16 @@ begin
   end;
   GetErrorAll(101,'CreateGradient');
   glUseProgram(0);
+  end; //isSmoothGrad
   //STEP 2: run sobel program gradientTexture -> tempTex3D
   //glUseProgramObjectARB(gRayCast.glslprogramSobel);
   glUseProgram(programSobel);
   glActiveTexture(GL_TEXTURE1);
   //x glBindTexture(GL_TEXTURE_3D, gRayCast.intensityTexture3D);//input texture
-  glBindTexture(GL_TEXTURE_3D, tempTex3D);//input texture
+  if isSmoothGrad then
+     glBindTexture(GL_TEXTURE_3D, tempTex3D)//input texture
+  else
+      glBindTexture(GL_TEXTURE_3D, inTex);//input texture is overlay
     glUniform1ix(programSobel, 'intensityVol', 1);
     glUniform1fx(programSobel, 'dX', 1.2/XSz ); //1.0 for SOBEL - center excluded
     glUniform1fx(programSobel, 'dY', 1.2/YSz);
@@ -396,14 +410,14 @@ begin
     glFinish();//force update
     GetErrorAll(102,'CreateGradient');
      //clean up:
-     glDeleteTextures(1,@tempTex3D);
+     if isSmoothGrad then
+        glDeleteTextures(1,@tempTex3D);
      glBindFramebuffer(GL_FRAMEBUFFER, 0);
     GetErrorAll(103,'CreateGradient');
      glDeleteFramebuffers(1, @fb);
      glActiveTexture( GL_TEXTURE0 );  //required if we will draw 2d slices next
     {$IFDEF TIMER}printf(format('GPU Gradient time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
 end;
-
 {$ENDIF}
 procedure TGPUVolume.UpdateDraw(Drawing: TDraw);
 begin
@@ -422,6 +436,7 @@ var
    v: TUInt8s;
 begin
   GetErrorAll(96,'CreatDrawTex');
+  //printf(format('Creating draw texture %dx%dx%d %d', [Dim.X, Dim.Y, Dim.Z]));
   if (drawTexture3D <> 0) then glDeleteTextures(1,@drawTexture3D);
   glPixelStorei(GL_UNPACK_ALIGNMENT,1);
   glGenTextures(1, @drawTexture3D);
@@ -823,6 +838,7 @@ begin
   uniform_drawAlpha := glGetUniformLocation(programTex2D, pAnsiChar('drawAlpha'));
   uniform_backAlpha := glGetUniformLocation(programTex2D, pAnsiChar('backAlpha'));
   uniform_viewportSizeTex := glGetUniformLocation(programTex2D, pAnsiChar('ViewportSize'));
+  uniform_overlaysLoc := glGetUniformLocation(programTex2D, pAnsiChar('overlays'));
   CreateDrawTex(pti(4,4,4), nil);
   CreateDrawColorTable;
   //setup VAO for lines
@@ -863,7 +879,7 @@ end;
 procedure TGPUVolume.SetGradientMode(newMode: integer);
 begin
   gradientMode := kGradientModeGPUSlow;
-  if (newMode = kGradientModeGPUFast) or (newMode = kGradientModeCPUSlowest) then
+  if (newMode >= kGradientModeGPUFastest) and (newMode <= kGradientModeCPUSlowest) then
      gradientMode := newMode;
   //gradientMode := kGradientModeCPUSlowest;
 end;
@@ -964,9 +980,9 @@ begin
   GetErrorAll(101,'OverlayTexture');
   if (volRGBA = nil) then begin
     Dim := pti(1,1,1);
-     setlength(volRGBA,1);
-     volRGBA[0] := setrgba(0,0,0,0);
-     overlayNum := 0; //perhaps overlays loaded but made transparent
+    setlength(volRGBA,1);
+    volRGBA[0] := setrgba(0,0,0,0);
+    overlayNum := 0; //perhaps overlays loaded but made transparent
   end;
   glPixelStorei(GL_UNPACK_ALIGNMENT,1);
  glGenTextures(1, @overlayIntensityTexture3D);
@@ -1033,7 +1049,54 @@ begin
   CreateOverlayTextures(Vol.Dim, intensityData);
 end;
 
-function TGPUVolume.LoadTexture(var vol: TNIfTI): boolean;
+{$IFDEF GPUGRADIENTS}
+procedure TGPUVolume.GenerateGradient(var inTex, grTex: GLuint);
+var
+  w, h, d: GLint;
+  gradData: TRGBAs;
+begin
+  if grTex <> 0 then exit;
+  if inTex = 0 then exit;
+  glBindTexture(GL_TEXTURE_3D, inTex);
+  glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, @w);
+  glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, @h);
+  glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, @d);
+  if (w < 1) or (h < 1) or (d < 1) then exit;
+  glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+  glGenTextures(1, @grTex);
+  glBindTexture(GL_TEXTURE_3D, grTex);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
+  glTexImage3D(GL_PROXY_TEXTURE_3D, 0, GL_RGBA, w, h, d, 0, GL_RGBA, GL_UNSIGNED_BYTE, NIL);
+  glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, @w);
+  glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, @h);
+  glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, @d);
+  {$IFDEF UNIX}printf(format('gradientTexture3D proxy test %dx%dx%d',[w, h, d]));{$ENDIF}
+   if (w < 1) then begin
+      {$IFDEF UNIX}writeln(format('Gradient texture error (%dx%dx%d). Solution: adjust "MaxVox" or press "Reset" button in preferences.', [w, h, d]));{$ENDIF}
+      glControl.ReleaseContext;
+      {$IFNDEF LCLCocoa}
+      showmessage('Image too large. Try adjusting "MaxVox" or press "Reset" button in preferences.');
+      {$ENDIF}
+      exit;
+   end;
+  SetLength (gradData, w*h*d);
+  //glFinish();//<<
+  glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, w, h, d, 0, GL_RGBA, GL_UNSIGNED_BYTE,@gradData[0]);
+  GetErrorAll(107,'TextureGradient');
+  //glFinish();//<<
+  gradData := nil;
+  CreateGradientVolumeGPU (w, h, d, inTex, grTex);
+  GetErrorAll(108,'TextureGradient'); //1286
+end;
+{$ENDIF}
+
+function TGPUVolume.LoadTexture(var vol: TNIfTI; deferGradients: boolean): boolean;
+label
+  123;
 var
  //i,j: int64;
  width, height, depth: GLint;
@@ -1042,9 +1105,16 @@ var
 begin
  result := false;
  glControl.MakeCurrent();
+ {$IFDEF GPUGRADIENTS}
+ //see if gradients were previously deferred but now required
+ if (Vol.VolRGBA = nil) and (gradientTexture3D = 0) and (not deferGradients) then GenerateGradient(intensityTexture3D, gradientTexture3D);
+ {$ENDIF}
  if (Vol.VolRGBA = nil) then exit;
  if (intensityTexture3D <> 0) then glDeleteTextures(1,@intensityTexture3D);
- if (gradientTexture3D <> 0) then glDeleteTextures(1,@gradientTexture3D);
+ if (gradientTexture3D <> 0) then begin
+    glDeleteTextures(1,@gradientTexture3D);
+    gradientTexture3D := 0;
+ end;
  //next: see if our video card can show this intensity texture
  glTexImage3D(GL_PROXY_TEXTURE_3D, 0, GL_RGBA, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE, NIL);
  glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, @width);
@@ -1069,17 +1139,14 @@ begin
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
- (*  //CLAMP_TO_BORDER avoids pinochio nose when panning
- glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);   //GL_CLAMP_TO_EDGE
- glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
- glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE); *)
- //glFinish();//<<
- (*j := (Vol.Dim.X * Vol.Dim.Y * Vol.Dim.Z) - 1;
- for i := 0 to j do begin
-     Vol.VolRGBA[i].R := i mod 255;
-     Vol.VolRGBA[i].A := Vol.VolRGBA[i].R;
- end; *)
  glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE, @Vol.VolRGBA[0]);
+ {$IFDEF GPUGRADIENTS}
+ if (gradientMode <> kGradientModeCPUSlowest) then begin
+   if not deferGradients then
+      GenerateGradient(intensityTexture3D, gradientTexture3D);
+   goto 123;
+ end;
+ {$ENDIF}
  GetErrorAll(106,'LoadTexture');
  glPixelStorei(GL_UNPACK_ALIGNMENT,1);
  glGenTextures(1, @gradientTexture3D);
@@ -1098,14 +1165,14 @@ begin
  //https://www.opengl.org/archives/resources/faq/technical/texture.htm
  {$IFDEF UNIX}printf(format('gradientTexture3D proxy test %dx%dx%d',[width, height, depth]));{$ENDIF}
  if (width < 1) then begin
-    {$IFDEF UNIX}writeln(format('Unable to large gradient texture (%dx%dx%d). Solution: adjust "MaxVox" or press "Reset" button in preferences.', [Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z]));{$ENDIF}
+    {$IFDEF UNIX}writeln(format('Gradient texture error (%dx%dx%d). Solution: adjust "MaxVox" or press "Reset" button in preferences.', [Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z]));{$ENDIF}
     glControl.ReleaseContext;
     {$IFNDEF LCLCocoa}
     showmessage('Image too large. Try adjusting "MaxVox" or press "Reset" button in preferences.');
     {$ENDIF}
     exit;
  end;
- {$IFDEF GPUGRADIENTS}
+ (*{$IFDEF GPUGRADIENTS}
     if (gradientMode <> kGradientModeCPUSlowest) then begin
        SetLength (gradData, Vol.Dim.X*Vol.Dim.Y*Vol.Dim.Z);
        //glFinish();//<<
@@ -1116,16 +1183,17 @@ begin
        CreateGradientVolumeGPU (Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, intensityTexture3D, gradientTexture3D);
        GetErrorAll(108,'TextureGradient'); //1286
  end else begin
- {$ENDIF}
- gradData := Vol.GenerateGradientVolume;
- //CreateGradientVolume (Vol.VolRGBA, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, gradData);
- glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Vol.Dim.X, Vol.Dim.Y,Vol.Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@gradData[0]);
- gradData := nil;
- //Form1.Caption := 'CPU gradients '+inttostr(MilliSecondsBetween(Now,startTime))+' ms ';
- {$IFDEF GPUGRADIENTS}
+ {$ENDIF}*)
+   gradData := Vol.GenerateGradientVolume;
+   //CreateGradientVolume (Vol.VolRGBA, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, gradData);
+   glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Vol.Dim.X, Vol.Dim.Y,Vol.Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@gradData[0]);
+   gradData := nil;
+   //Form1.Caption := 'CPU gradients '+inttostr(MilliSecondsBetween(Now,startTime))+' ms ';
+ (*{$IFDEF GPUGRADIENTS}
  end;
- {$ENDIF}
+ {$ENDIF} *)
  GetErrorAll(109,'TextureGradient');
+123:
  maxDim := max(Vol.Dim.X,max(Vol.Dim.Y,Vol.Dim.Z));
  Vol.GPULoadDone;
  if (overlayIntensityTexture3D = 0) then CreateOverlayTextures(Vol.Dim, nil); //load blank overlay
@@ -1156,12 +1224,33 @@ begin
     f := 0.25;
   if f > 10 then
     f := 10;
+  //f := (f)/10;
+  //f := lerp (0.0,slices*2,f);
+
+  f := f/10;
+  if (f < 0.5) then
+    f := lerp (slices*0.25,slices*1.75, f)
+  else
+      f := lerp (0.0,slices*2.0,f);
+  if f < 10 then
+    f := 10;
+  result := 1/f;
+end;
+(*function ComputeStepSize (Quality1to10, Slices: integer): single;
+var
+  f: single;
+begin
+  f := Quality1to10;
+  if f <= 1 then
+    f := 0.25;
+  if f > 10 then
+    f := 10;
   f := f/10;
   f := lerp (slices*0.25,slices*2.0,f);
   if f < 10 then
     f := 10;
   result := 1/f;
-end;
+end; *)
 {$IFDEF VIEW2D}
 function TGPUVolume.Slice2Dmm(var vol: TNIfTI; out vox: TVec3i): TVec3;
 begin
@@ -1232,7 +1321,7 @@ begin
      glUniform1f(backAlphaLoc, 1)
    else
      glUniform1f(backAlphaLoc, vol.OpacityPercent/100);
-  glUniform1f(sliceSizeLoc, 1/maxDim);
+  glUniform1f(sliceSizeLoc, 1.0/maxDim);
   glUniform1i(loopsLoc,round(maxDim*2.2));
   {$IFDEF MATCAP}
   //printf(format('>>matcapLoc %d matcap %d',[matcapLoc, matcap2D]));
@@ -1319,8 +1408,8 @@ var
 begin
   if vao = 0 then // only once
     LoadCube();
-  if (vol.VolRGBA <> nil) then
-     LoadTexture(vol);
+  //if (vol.VolRGBA <> nil) then
+     LoadTexture(vol, false);
   if (intensityTexture3D = 0) then
     exit;
   UpdateDraw(Drawing);
@@ -1377,7 +1466,6 @@ begin
        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
      end;
-
     if (not Drawing.IsOpen) or (Drawing.OpacityFraction <= 0.0) then
        glUniform1f(uniform_drawAlpha, 0.0)
     else
@@ -1386,6 +1474,7 @@ begin
     glBindTexture(GL_TEXTURE_1D, drawTexture1D);
     glUniform1i(uniform_drawLUT, 4);
     //other uniforms
+    glUniform1i(uniform_overlaysLoc, overlayNum); //0 if no overlays
     if vol.IsLabels then
        glUniform1f(uniform_backAlpha, 1)
     else
@@ -1430,14 +1519,14 @@ begin
   if vao = 0 then // only once
     LoadCube();
   if (vol.VolRGBA <> nil) then
-     LoadTexture(vol);
+     LoadTexture(vol, true);
   if (intensityTexture3D = 0) then
     exit;
   UpdateDraw(Drawing);
   //if vao = 0 then // only once
   //  LoadCube(fromView);
   if (vol.VolRGBA <> nil) then
-     LoadTexture(vol);
+     LoadTexture(vol, true);
   if (intensityTexture3D = 0) then
     exit;
   w := glControl.clientwidth;
@@ -1500,6 +1589,7 @@ begin
   else
       glUniform1f(uniform_drawAlpha, Drawing.OpacityFraction); //<- loaded!
   //other uniforms
+  glUniform1i(uniform_overlaysLoc, overlayNum); //0 if no overlays
   if vol.IsLabels then
      glUniform1f(uniform_backAlpha, 1)
   else
@@ -1545,6 +1635,7 @@ begin
 end;
 {$ENDIF}
 
+
 procedure TGPUVolume.Paint(var vol: TNIfTI);
 var
   //modelViewProjectionMatrixInverse,
@@ -1557,8 +1648,8 @@ var
 begin
   if vao = 0 then // only once
     LoadCube();
-  if (vol.VolRGBA <> nil) then
-     LoadTexture(vol);
+  //if (vol.VolRGBA <> nil) then
+     LoadTexture(vol, false);
   if (intensityTexture3D = 0) then
     exit;
   glUseProgram(programRaycast);
@@ -1566,13 +1657,17 @@ begin
   //bind background intensity (color)
   glActiveTexture(GL_TEXTURE2);
   glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
+  //glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  //glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
   glUniform1i(intensityVolLoc, 2);
   //bind background gradient (edges)
   glActiveTexture(GL_TEXTURE3);
   glBindTexture(GL_TEXTURE_3D, gradientTexture3D);
   glUniform1i(gradientVolLoc, 3);
   //bind overlay intensity (color)
-  glUniform1i(overlaysLoc, overlayIntensityTexture3D); //0 if no overlays
+  glUniform1i(overlaysLoc, overlayNum); //0 if no overlays
+  //glUniform1i(overlaysLoc, overlayIntensityTexture3D); //0 if no overlays
   glActiveTexture(GL_TEXTURE4);
   glBindTexture(GL_TEXTURE_3D, overlayIntensityTexture3D);
   glUniform1i(overlayIntensityVolLoc, 4);
@@ -1610,7 +1705,6 @@ begin
   if (shaderPrefs.nUniform > 0) then
      for i := 1 to shaderPrefs.nUniform do
          glUniform1f(prefLoc[i], shaderPrefs.Uniform[i].DefaultV);
-
   //bind matcap
   {$IFDEF MATCAP}
   //printf(format('>>matcapLoc %d matcap %d',[matcapLoc, matcap2D]));
@@ -1643,6 +1737,7 @@ begin
   //x glUniformMatrix4fv(imvLoc, 1, GL_FALSE, @modelViewProjectionMatrixInverse);
   glUniform3f(rayDirLoc,rayDir.x,rayDir.y,rayDir.z);
   //glViewport(0, 0, glControl.ClientWidth, glControl.ClientHeight); //required for form resize
+
   glControl.SetViewport();
   glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT);
   glEnable (GL_BLEND);
@@ -1659,7 +1754,6 @@ begin
   {$ENDIF}
   glDisable(GL_CULL_FACE);
   //draw color editor
-
   if clrbar <> nil then
    clrbar.Draw();
   if colorEditorVisible then begin
@@ -1677,6 +1771,9 @@ begin
   end;
   {$IFDEF CUBE}
   if Slices.LabelOrient then begin
+     {$IFNDEF STRIP}
+     glCullFace(GL_BACK);
+     {$ENDIF}
      //gCube.Size := 0.02;
      gCube.Azimuth:=fAzimuth;
      gCube.Elevation:=-fElevation;
@@ -1685,6 +1782,7 @@ begin
   {$ENDIF}
   glControl.SwapBuffers;
 end;
+
 
 end.
 

@@ -198,9 +198,10 @@ begin
      10: result := 64; //64-bit real*
      11: result := 1536; //128-bit real
      12: result := 128; //24-bit rgb
-     13: result := 32; //64-bit complex
-     14: result := 1792; //128-bit complex
-     15: result := 2048; //256-bit complex
+     13: result := kDT_RGBA32;
+     14: result := 32; //64-bit complex
+     15: result := 1792; //128-bit complex
+     16: result := 2048; //256-bit complex
      else
        result := 0;
   end; //case
@@ -222,9 +223,10 @@ begin
      64: result := 10; //64-bit real*
      1536: result := 11; //128-bit real
      128: result := 12; //24-bit rgb
-     32: result := 13; //64-bit complex
-     1792: result := 14; //128-bit complex
-     2048: result := 15; //256-bit complex
+     kDT_RGBA32: result := 13;
+     32: result := 14; //64-bit complex
+     1792: result := 15; //128-bit complex
+     2048: result := 16; //256-bit complex
      else
        result := 0;
   end; //case

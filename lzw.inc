@@ -208,8 +208,10 @@ begin
       // mask it
       Data := Data shl CodeSize;
       Dec(Bits, CodeSize);
-      if Code = EOICode then
+      if Code = EOICode then begin
+        //writeln(format('-->>%d',[UnpackedSize]));
         Exit;
+      end;
       // handling of clear codes
       if Code = ClearCode then
       begin
@@ -276,4 +278,5 @@ begin
     Inc(SourcePtr);
     Dec(PackedSize);
   end;
+  //writeln(format('>>%d',[UnpackedSize]));
 end;
