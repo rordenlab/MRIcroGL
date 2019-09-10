@@ -96,7 +96,7 @@ type
     constructor Create(sdffont: TSDFFont);
     destructor Destroy; override;
     //constructor Create();
-    procedure Update(volScale: TVec3; w,h: single; Orient: integer; actualH : integer = -1);
+    function Update(volScale: TVec3; w,h: single; Orient: integer; actualH : integer = -1): single;
     function GetSlice2DFrac(mouseX, mouseY: integer; out Orient: integer): TVec3;
     function GetSlice2DMaxXY(mouseX, mouseY: integer; var Lo: TPoint): TPoint;
     function FracMM(Mat: TMat4; Dim: TVec3i; out Vox: TVec3i): TVec3;
@@ -842,12 +842,14 @@ end;
 
 {$ENDIF}
 
-procedure  TSlices2D.Update(volScale: TVec3; w,h: single; orient: integer; actualH : integer = -1);
+function  TSlices2D.Update(volScale: TVec3; w,h: single; orient: integer; actualH : integer = -1): single;
+//returns scale factor
 var
   texL,texB,texW,texH, texwhratio, whratio, w1row, w2row, w3row, h1row, h2row, h3row: single;
   //scale1col, texwhratio1,
   scale1row, scale2row, scale3row, scale: single;
 begin
+  result := 0.0;
   if (actualH  > 0) then
      viewPixelHeight := actualH
   else
@@ -855,7 +857,7 @@ begin
   numLineVerts := 0;
   //numQuads := 0;
   numSliceVerts := 0;
-  if (w < 0.1) or (h < 0.1) then exit;
+  if (volScale.x = 0) or (volScale.y = 0) or (volScale.z = 0) or (w < 0.1) or (h < 0.1) then exit;
   txt.ClearText;
   whratio := w/h;
   if isLabelOrient then
@@ -874,6 +876,7 @@ begin
     else
         texH := texW * 1/texwhratio;
     DrawAx(texL,texB,texW,texH, sliceFrac2D.z);
+    result := fZoomScale * texW/volScale.x;
   end else if (orient = kCoronalOrient) then begin //coronl
     texwhratio := volScale.x / volScale.z;
     if texwhratio < whratio then
@@ -881,6 +884,7 @@ begin
     else
        texH := texW * 1/texwhratio;
     DrawCor(texL,texB, texW,texH,  sliceFrac2D.y);
+    result := fZoomScale * texW/volScale.x;
   end else if (orient = kSagRightOrient) or (orient = kSagLeftOrient) then begin //sagittal
        texwhratio := volScale.y / volScale.z;
        if texwhratio < whratio then
@@ -891,6 +895,7 @@ begin
           DrawSag(texL,texB, texW,texH, sliceFrac2D.x)
        else
            DrawSagMirror(texL,texB, texW,texH, sliceFrac2D.x);
+       result := fZoomScale * texW/volScale.y;
   end else begin //default to multislice view (orient = kAxCorSagOrient)
     //1-row w = x+x+y, h= max(y,z)
     //2-row w = x+y, h = z + y
@@ -954,6 +959,7 @@ begin
     texH := volScale.y * scale;
     texW := volScale.x * scale;
     DrawAx(texL,texB, texW,texH, sliceFrac2D.z);
+    result := fZoomScale * texW/volScale.x;
     //coronal
     if (scale1row <> 0) then
        texL := texL + texW

@@ -81,6 +81,7 @@ void main() {
 	vec4 prevGrad = vec4(0.0,0.0,0.0,0.0);
 	vec4 samplePos;
 	//background pass
+	float noClipLen = len;
 	samplePos = vec4(start.xyz +deltaDir.xyz*ran, 0.0);
 	if (clipPlane.a > -0.5) {
 		bool frontface = (dot(dir , clipPlane.xyz) > 0.0);
@@ -102,7 +103,7 @@ void main() {
 	vec4 clipPos = samplePos;
 	float stepSizeX2 = samplePos.a + (stepSizeX * 2.0);
 	//fast pass - optional
-	deltaDir = vec4(dir.xyz * max(stepSizeX, sliceSize), max(stepSizeX, sliceSize));
+	deltaDir = vec4(dir.xyz * max(stepSizeX, sliceSize * 1.95), max(stepSizeX, sliceSize  * 1.95));
 	while (samplePos.a <= len) {
 		if ((texture(intensityVol,samplePos.xyz).a) > 0.0) break;
 		samplePos += deltaDir;
@@ -113,6 +114,8 @@ void main() {
 		return;		
 	}
 	samplePos -= deltaDir;
+	if (samplePos.a < clipPos.a)
+		samplePos = clipPos;
 	deltaDir = vec4(dir.xyz * stepSizeX, stepSizeX);
 	//end fastpass - optional
 	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
@@ -159,15 +162,20 @@ void main() {
 	prevGrad = vec4(0.0,0.0,0.0,0.0);
 	if (overlayClip > 0)
 		samplePos = clipPos;
-	else
+	else {
+		len = noClipLen;
 		samplePos = vec4(start.xyz +deltaDir.xyz* ran, 0.0);
+	}
 	//fast pass - optional
-	deltaDir = vec4(dir.xyz * max(stepSizeX, sliceSize), max(stepSizeX, sliceSize));
+	clipPos = samplePos;
+	deltaDir = vec4(dir.xyz * max(stepSizeX, sliceSize * 1.95), max(stepSizeX, sliceSize * 1.95));
 	while (samplePos.a <= len) {
 		if ((texture(intensityOverlay,samplePos.xyz).a) > 0.0) break;
 		samplePos += deltaDir;
 	}
 	samplePos -= deltaDir;
+	if (samplePos.a < clipPos.a)
+		samplePos = clipPos;
 	deltaDir = vec4(dir.xyz * stepSizeX, stepSizeX);
 	//end fastpass - optional
 	while (samplePos.a <= len) {

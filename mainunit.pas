@@ -26,8 +26,8 @@ uses
   {$IFDEF MYPY}PythonEngine,  {$ENDIF}
   {$IFDEF LCLCocoa} {$IFDEF NewCocoa} nsappkitext, UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
-  resize, nifti_foreign,
-  lcltype, GraphType, Graphics, dcm_load, nifti_tiff, crop,
+  resize,
+  lcltype, GraphType, Graphics, dcm_load, crop,
   LCLIntf, slices2D, StdCtrls, SimdUtils, Classes, SysUtils, Forms, Controls,clipbrd,
   Dialogs, Menus, ExtCtrls, CheckLst, ComCtrls, Spin, Types, fileutil, ulandmarks, nifti_types,
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
@@ -59,9 +59,12 @@ type
     MatCapDrop: TComboBox;
     CropMenu1: TMenuItem;
     EditPasteMenu: TMenuItem;
+    AddOverlayClusterMenu: TMenuItem;
+    RemoveSmallClusterMenu: TMenuItem;
     ResizeMenu1: TMenuItem;
     ReorientMenu1: TMenuItem;
     InvalidateTImer: TTimer;
+    RulerCheck: TCheckBox;
     ToolsMenu: TMenuItem;
     OpenAltasMenu: TMenuItem;
     TBSplitter: TSplitter;
@@ -302,9 +305,13 @@ type
     X2TrackBar: TTrackBar;
     YTrackBar: TTrackBar;
     ZTrackBar: TTrackBar;
+    procedure AddOverlayClusterMenuClick(Sender: TObject);
     procedure EditPasteMenuClick(Sender: TObject);
     procedure InvalidateTImerTimer(Sender: TObject);
     procedure LayerContrastChange(Sender: TObject);
+    procedure RemoveSmallClusterMenuClick(Sender: TObject);
+    procedure RulerVisible();
+    procedure RulerCheckChange(Sender: TObject);
     procedure UpdateCropMask(msk: TVec6);
     procedure CreateOverlapImageMenuClick(Sender: TObject);
     procedure CreateSubtractionPlotMenuClick(Sender: TObject);
@@ -400,7 +407,7 @@ type
     procedure ScriptPanelDblClick(Sender: TObject);
     procedure SetColorBarPosition;
     procedure SliceZoomChange(Sender: TObject);
-    procedure Smooth2DCheckChange(Sender: TObject);
+    procedure SmoothCheckChange(Sender: TObject);
     procedure SmoothMenuClick(Sender: TObject);
     procedure StoreFMRIMenuClick(Sender: TObject);
     procedure TextAndCubeMenuClick(Sender: TObject);
@@ -672,7 +679,7 @@ begin
 	result := ResourceDir + pathdelim + 'atlas';
 end;
 
-function GetFullPath(Filename: string): string;
+function GetFullPath( Filename: string): string;
 // "motor" -> /home/smith/myDir/motor.nii.gz
 var
    i: integer;
@@ -1684,6 +1691,8 @@ begin
       clr := Vol1.Slices.LineColor;
       clr := Vec4(R/255.0, G/255.0, B/255.0, clr.a);
       Vol1.Slices.LineColor := clr;
+      gClrbar.RulerColor := SetRGBA(Vol1.Slices.LineColor);
+      GLFOrm1.RulerVisible();
     end;
 end;
 
@@ -2832,6 +2841,27 @@ begin
  LayerWidgetChangeTimer.enabled := true;
 end;
 
+procedure TGLForm1.RulerVisible();
+var
+    clr: TRGBA;
+begin
+  if vols = nil then exit; //mungo : mosaic selected before image is loaded
+  clr := gClrBar.RulerColor;
+  if (RulerCheck.checked) then
+      clr.A := 255
+   else
+       clr.A := 0;
+   gClrbar.RulerColor := clr;
+
+end;
+
+procedure TGLForm1.RulerCheckChange(Sender: TObject);
+begin
+  if vols = nil then exit; //mungo : mosaic selected before image is loaded
+ RulerVisible();
+ ViewGPU1.Invalidate;
+end;
+
 procedure TGLForm1.LayerContrastKeyUp(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 begin
@@ -2846,8 +2876,10 @@ begin
  clr *= 255;
  ColorDialog1.Color:= RGBToColor(round(clr.r), round(clr.g), round(clr.b));
  if not ColorDialog1.Execute then exit;
- clr := Vec4(Red(ColorDialog1.Color)/255.0, Green(ColorDialog1.Color)/255.0, Blue(ColorDialog1.Color)/255.0, clr.a);
+ clr := Vec4(Red(ColorDialog1.Color)/255.0, Green(ColorDialog1.Color)/255.0, Blue(ColorDialog1.Color)/255.0, clr.a/255.0);
  Vol1.Slices.LineColor := clr;
+ gClrbar.RulerColor := SetRGBA(clr);
+ RulerVisible();
  ViewGPU1.Invalidate;
 end;
 
@@ -3234,6 +3266,7 @@ begin
      end;
      UpdateTimer.Enabled := true;
 end;
+
 
 function GetFloat(prompt: string; min,def,max: double): double;
 var
@@ -3857,7 +3890,7 @@ begin
   ViewGPU1.Invalidate;
 end;
 
-procedure TGLForm1.Smooth2DCheckChange(Sender: TObject);
+procedure TGLForm1.SmoothCheckChange(Sender: TObject);
 begin
  if vols = nil then exit; //mungo : mosaic selected before image is loaded
  Vol1.ShowSmooth2D:= Smooth2DCheck.checked;
@@ -4239,6 +4272,21 @@ begin
    AddBackground(OpenDialog1.filename);
 end;
 
+
+
+procedure TGLForm1.AddOverlayClusterMenuClick(Sender: TObject);
+(*var
+   thresh, mm: double;
+begin
+   GetThresh(thresh, mm);
+   if thresh = kNaN then exit;
+   if not OpenDialog1.execute then
+      exit;
+   AddLayer(OpenDialog1.filename);*)
+begin
+     //Use option pull down instead!
+end;
+
 procedure TGLForm1.AddOverlayMenuClick(Sender: TObject);
 begin
    if not OpenDialog1.execute then
@@ -4475,7 +4523,7 @@ begin
 end;
 
 procedure TGLForm1.LayerZeroIntensityInvisibleMenuClick(Sender: TObject);
- var
+var
      i: integer;
      niftiVol: TNIfTI;
  begin
@@ -4485,6 +4533,121 @@ procedure TGLForm1.LayerZeroIntensityInvisibleMenuClick(Sender: TObject);
    niftiVol.ZeroIntensityInvisible:= LayerZeroIntensityInvisibleMenu.Checked;
    niftiVol.ForceUpdate(); //defer time consuming work
    updateTimer.enabled := true;
+end;
+
+procedure GetThresh(var thresh: double; out mm: double);  //TResliceForm
+var
+    PrefForm: TForm;
+    CancelBtn,OkBtn: TButton;
+    threshLabel, ClusterLabel: TLabel;
+    threshEdit, ClusterEdit: TEdit;
+begin
+  PrefForm:=TForm.Create(nil);
+  //PrefForm.SetBounds(100, 100, 512, 212);
+  PrefForm.AutoSize := True;
+  PrefForm.BorderWidth := 8;
+  PrefForm.Caption:='Overlay Settings';
+  PrefForm.Position := poScreenCenter;
+  PrefForm.BorderStyle := bsDialog;
+  //label
+  threshLabel:=TLabel.create(PrefForm);
+  threshLabel.Caption:= 'Threshold intensity';
+  threshLabel.AutoSize := true;
+  threshLabel.AnchorSide[akTop].Side := asrTop;
+  threshLabel.AnchorSide[akTop].Control := PrefForm;
+  threshLabel.BorderSpacing.Top := 6;
+  threshLabel.AnchorSide[akLeft].Side := asrLeft;
+  threshLabel.AnchorSide[akLeft].Control := PrefForm;
+  threshLabel.BorderSpacing.Left := 6;
+  threshLabel.Parent:=PrefForm;
+  //edit
+  threshEdit:=TEdit.create(PrefForm);
+  threshEdit.Caption := FloatToStrF(thresh, ffGeneral, 8, 4);
+  threshEdit.Constraints.MinWidth:= 300;
+  threshEdit.AutoSize := true;
+  threshEdit.AnchorSide[akTop].Side := asrBottom;
+  threshEdit.AnchorSide[akTop].Control := threshLabel;
+  threshEdit.BorderSpacing.Top := 6;
+  threshEdit.AnchorSide[akLeft].Side := asrLeft;
+  threshEdit.AnchorSide[akLeft].Control := PrefForm;
+  threshEdit.BorderSpacing.Left := 6;
+  threshEdit.Parent:=PrefForm;
+
+  //label
+  clusterLabel:=TLabel.create(PrefForm);
+  clusterLabel.Caption:= 'Minimum cluster size (mm^3)';
+  clusterLabel.AutoSize := true;
+  clusterLabel.AnchorSide[akTop].Side := asrBottom;
+  clusterLabel.AnchorSide[akTop].Control := threshEdit;
+  clusterLabel.BorderSpacing.Top := 6;
+  clusterLabel.AnchorSide[akLeft].Side := asrLeft;
+  clusterLabel.AnchorSide[akLeft].Control := PrefForm;
+  clusterLabel.BorderSpacing.Left := 6;
+  clusterLabel.Parent:=PrefForm;
+  //edit
+  clusterEdit:=TEdit.create(PrefForm);
+  clusterEdit.Caption := '8';
+  clusterEdit.Constraints.MinWidth:= 300;
+  clusterEdit.AutoSize := true;
+  clusterEdit.AnchorSide[akTop].Side := asrBottom;
+  clusterEdit.AnchorSide[akTop].Control := clusterLabel;
+  clusterEdit.BorderSpacing.Top := 6;
+  clusterEdit.AnchorSide[akLeft].Side := asrLeft;
+  clusterEdit.AnchorSide[akLeft].Control := PrefForm;
+  clusterEdit.BorderSpacing.Left := 6;
+  clusterEdit.Parent:=PrefForm;
+  //Cancel Btn
+  CancelBtn:=TButton.create(PrefForm);
+  CancelBtn.Caption:='Cancel';
+  CancelBtn.AutoSize := true;
+  CancelBtn.AnchorSide[akTop].Side := asrBottom;
+  CancelBtn.AnchorSide[akTop].Control := clusterEdit;
+  CancelBtn.BorderSpacing.Top := 6;
+  CancelBtn.AnchorSide[akLeft].Side := asrLeft;
+  CancelBtn.AnchorSide[akLeft].Control := PrefForm;
+  CancelBtn.BorderSpacing.Left := 200;
+  CancelBtn.Parent:=PrefForm;
+  CancelBtn.ModalResult:= mrCancel;
+  //OK button
+  OkBtn:=TButton.create(PrefForm);
+  OkBtn.Caption:='OK';
+  OkBtn.AutoSize := true;
+  OkBtn.AnchorSide[akTop].Side := asrBottom;
+  OkBtn.AnchorSide[akTop].Control := clusterEdit;
+  OkBtn.BorderSpacing.Top := 6;
+  OkBtn.AnchorSide[akLeft].Side := asrRight;
+  OkBtn.AnchorSide[akLeft].Control := CancelBtn;
+  OkBtn.BorderSpacing.Left := 6;
+  OkBtn.Parent:=PrefForm;
+  OkBtn.ModalResult:= mrOK;
+  //OK button
+  {$IFDEF LCLCocoa}
+  if gPrefs.DarkMode then GLForm1.SetFormDarkMode(PrefForm);
+  {$ENDIF}
+  PrefForm.ShowModal;
+  thresh := kNaN;
+  if (PrefForm.ModalResult = mrOK) then begin
+    thresh := StrToFloatDef(threshEdit.Caption, 4);
+    mm :=  StrToFloatDef(clusterEdit.Caption, 0);
+  end;
+  FreeAndNil(PrefForm);
+end; //GetThresh()
+
+procedure TGLForm1.RemoveSmallClusterMenuClick(Sender: TObject);
+var
+     i: integer;
+     niftiVol: TNIfTI;
+     thresh, mm: double;
+begin
+ i := LayerList.ItemIndex;
+ if (i < 0) or (i >= LayerList.Count) then exit;
+ if not vols.Layer(LayerList.ItemIndex,niftiVol) then exit;
+ thresh := (0.5*(niftiVol.DisplayMax-niftiVol.DisplayMin))+niftiVol.DisplayMin;
+ GetThresh(thresh, mm);
+ if thresh = kNaN then exit;
+ niftiVol.RemoveSmallClusters(thresh,mm);
+ niftiVol.ForceUpdate(); //defer time consuming work
+ updateTimer.enabled := true;
 end;
 
 procedure TGLForm1.MatCapDropChange(Sender: TObject);
@@ -4842,6 +5005,7 @@ begin
   //gPrefs.colorbar := gClrbar.isVisible;
   VisibleClrbarMenu.Checked := gPrefs.ColorbarVisible;
   Smooth2DCheck.Checked := gPrefs.Smooth2D;
+  RulerCheck.checked := gPrefs.RulerVisible;
   gClrbar.isVisible := VisibleClrbarMenu.checked;
   TransBlackClrbarMenu.Checked := true;
   ClrbarClr(4);
@@ -4868,10 +5032,11 @@ begin
   if (Sender <> nil) and (ssShift in ss) then begin
     LineWidthEdit.value := 1;
     gPrefs.DisplayOrient := kRenderOrient;
-
     gPrefs.LineWidth := 1;
     Vol1.Slices.LineWidth := 1;
     Vol1.Slices.LineColor := Vec4(0.5, 0.5, 0.7, 1.0);
+    gClrbar.RulerColor := SetRGBA(Vol1.Slices.LineColor);
+    RulerVisible();
     SetDefaultPrefs(gPrefs,true);
     UpdateOpenRecent();
   end;
@@ -6590,9 +6755,12 @@ begin
   {$ENDIF}
   gClrbar:= TGPUClrbar.Create(ViewGPU1);
   Vol1.SetColorBar(gClrBar);
+  gClrbar.RulerColor := SetRGBA(Vol1.Slices.LineColor);
+  RulerVisible();
   gClrbar.isVisible := gPrefs.ColorbarVisible;
   VisibleClrbarMenu.checked := gPrefs.ColorbarVisible;
   Smooth2DCheck.Checked := gPrefs.Smooth2D;
+  RulerCheck.checked := gPrefs.RulerVisible;
   TextAndCubeMenu.Checked := gPrefs.LabelOrient;
   SetColorBarPosition;
   gClrbar.SizeFraction := gPrefs.ColorbarSize/1000;

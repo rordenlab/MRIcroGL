@@ -13,6 +13,7 @@ procedure ApplyOtsuBinary(var Img: TUInt8s; nVox,levels: integer);
 procedure PreserveLargestCluster(var lImg: TUInt8s; Xi,Yi,Zi: integer; lClusterValue,ValueForSmallClusters: byte  );
 procedure SimpleMaskDilate(var lImg: TUInt8s; lXi,lYi,lZi: integer);
 procedure SimpleMaskErode(var lImg: TUInt8s; lXi,lYi,lZi: integer);
+procedure RemoveAllSmallClusters(var lImg: TUInt8s; Xi,Yi,Zi: integer; lClusterValue,ValueForSmallClusters: byte; ThresholdVox:integer);
 
 implementation
 
@@ -26,6 +27,80 @@ type
     Bytep = ^ByteRA;
     LongIntRA = array [1..1] of LongInt;
     LongIntp = ^LongIntRA;
+
+procedure RemoveAllSmallClusters(var lImg: TUInt8s; Xi,Yi,Zi: integer; lClusterValue,ValueForSmallClusters: byte; ThresholdVox:integer);
+var
+  i, j, XY, XYZ, qlo, qhi: integer;
+  qimg, img32: TInt32s;
+procedure checkPixel(vxl: integer);
+begin
+     if img32[vxl] <> -1 then exit; //already found or not a target
+     qhi := qhi + 1;
+     img32[vxl] := 1; //found
+     qimg[qhi] := vxl; //location
+end;//nested checkPixel()
+procedure retirePixel();
+var
+  vxl: integer;
+begin
+     vxl := qimg[qlo];
+     checkPixel(vxl-1);
+     checkPixel(vxl+1);
+     checkPixel(vxl-Xi);
+     checkPixel(vxl+Xi);
+     checkPixel(vxl-XY);
+     checkPixel(vxl+XY);
+     qlo := qlo + 1;
+end;//nested retirePixel()
+begin //main RemoveSmallClusters()
+  if (Zi < 1) then exit;
+  XY := Xi * Yi;
+  XYZ := XY * Zi;
+  setlength(img32, XYZ);
+  setlength(qimg, XYZ);
+  //set target voxels
+  for i := 0 to (XYZ-1) do begin
+      img32[i] := 0;
+      if lImg[i] = lClusterValue then
+         img32[i] := -1;
+  end;
+  //clear bottom and top slices
+  for i := 0 to (XY-1) do
+    img32[i] := 0;
+  for i := (XYZ-1-XY) to (XYZ-1) do
+    img32[i] := 0;
+  //now seed each voxel
+  for i := (XY) to (XYZ-1-XY) do begin
+      if (img32[i] < 0) then begin //voxels not yet part of any region
+         qlo := 0;
+         qhi := -1;
+         checkPixel(i);
+         while qlo <= qhi do
+           retirePixel();
+         for j := 0 to qhi do
+             img32[qimg[j]] := qhi + 1;
+      end;
+  end;
+  //delete voxels not part of largest cluster
+  for i := 0 to (XYZ-1) do
+      if img32[i] < ThresholdVox then
+         img32[i] := 0;
+  //recover bottom and top slices
+  for i := 0 to (XY-1) do
+      if (img32[i+XY] >= ThresholdVox) then
+         img32[i] := 1;
+  for i := (XYZ-1-XY) to (XYZ-1) do
+      if (img32[i-XY] >=  ThresholdVox) then
+         img32[i] := 1;
+  //apply filter to input image
+  for i := 0 to (XYZ-1) do
+      if img32[i] = 0 then
+         lImg[i] := 0;
+  qimg := nil;
+  img32 := nil;
+end;// RemoveSmallClusters()
+
+
 
 procedure PreserveLargestCluster(var lImg: TUInt8s; Xi,Yi,Zi: integer; lClusterValue,ValueForSmallClusters: byte);
 var

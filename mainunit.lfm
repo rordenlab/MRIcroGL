@@ -1,7 +1,7 @@
 object GLForm1: TGLForm1
-  Left = 468
+  Left = 585
   Height = 653
-  Top = 115
+  Top = 113
   Width = 761
   AllowDropFiles = True
   Caption = 'MRIcroGL'
@@ -1118,12 +1118,33 @@ object GLForm1: TGLForm1
           BorderSpacing.Top = 4
           Caption = 'Smooth'
           Checked = True
-          OnChange = Smooth2DCheckChange
+          OnChange = SmoothCheckChange
           ParentFont = False
           ParentShowHint = False
           ShowHint = True
           State = cbChecked
           TabOrder = 12
+        end
+        object RulerCheck: TCheckBox
+          AnchorSideLeft.Control = Smooth2DCheck
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = Smooth2DCheck
+          AnchorSideTop.Side = asrCenter
+          Left = 74
+          Height = 18
+          Hint = 'Show Ruler (10 cm)'
+          Top = 144
+          Width = 52
+          BorderSpacing.Left = 6
+          BorderSpacing.Top = 4
+          Caption = 'Ruler'
+          Checked = True
+          OnChange = RulerCheckChange
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+          State = cbChecked
+          TabOrder = 13
         end
       end
       object CutoutBox: TGroupBox
@@ -1663,6 +1684,11 @@ object GLForm1: TGLForm1
         Caption = 'Add Overlay'
         ShortCut = 16449
         OnClick = AddOverlayMenuClick
+      end
+      object AddOverlayClusterMenu: TMenuItem
+        Caption = 'Add Overlay (Remove Small Clusters)'
+        Visible = False
+        OnClick = AddOverlayClusterMenuClick
       end
       object SaveMenu: TMenuItem
         Caption = 'Save Bitmap'
@@ -2383,6 +2409,10 @@ object GLForm1: TGLForm1
       AutoCheck = True
       Caption = 'Hide voxels with zero intensity'
       OnClick = LayerZeroIntensityInvisibleMenuClick
+    end
+    object RemoveSmallClusterMenu: TMenuItem
+      Caption = 'Remove Small Clusters'
+      OnClick = RemoveSmallClusterMenuClick
     end
     object LayerInvertColorMapMenu: TMenuItem
       AutoCheck = True

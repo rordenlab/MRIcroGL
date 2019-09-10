@@ -82,7 +82,8 @@ void main() {
 	}
 	float stepSizeX2 = samplePos.a + (stepSize * 2.0);
 	//fast pass - optional
-	deltaDir = vec4(dir.xyz * max(stepSize, sliceSize), max(stepSize, sliceSize));
+	vec4 clipPos = samplePos;
+	deltaDir = vec4(dir.xyz * max(stepSize, sliceSize * 1.95), max(stepSize, sliceSize * 1.95));
 	while (samplePos.a <= len) {
 		if ((texture(intensityVol,samplePos.xyz).a) > 0.0) break;
 		samplePos += deltaDir;
@@ -93,6 +94,8 @@ void main() {
 		return;		
 	}
 	samplePos -= deltaDir;
+	if (samplePos.a < clipPos.a)
+		samplePos = clipPos;
 	deltaDir = vec4(dir.xyz * stepSize, stepSize);
 	//end fastpass - optional
 	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);

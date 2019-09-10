@@ -64,6 +64,7 @@ void main() {
 	vec4 boundColor = vec4(boundBrightness, boundBrightness, boundBrightness, 1.0);
 	vec4 samplePos;
 	//background pass
+	float noClipLen = len;
 	samplePos = vec4(start.xyz +deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)), 0.0);
 	if (clipPlane.a > -0.5) {
 		bool frontface = (dot(dir , clipPlane.xyz) > 0.0);
@@ -149,8 +150,10 @@ void main() {
 	prevGrad = vec4(0.0,0.0,0.0,0.0);
 	if (overlayClip > 0)
 		samplePos = clipPos;
-	else
+	else {
+		len = noClipLen;
 		samplePos = vec4(start.xyz +deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)), 0.0);
+	}
 	//fast pass - optional
 	deltaDir = vec4(dir.xyz * max(stepSize, sliceSize), max(stepSize, sliceSize));
 	while (samplePos.a <= len) {

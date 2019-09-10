@@ -104,7 +104,6 @@ implementation
 
 //uses mainunit;
 
-
 procedure printf (lS: AnsiString);
 begin
 {$IFNDEF WINDOWS} writeln(lS); {$ENDIF}
@@ -350,36 +349,37 @@ begin
   glViewport(0, 0, XSz, YSz);
   //glDisable(GL_TEXTURE_2D); //<- generates error!
   glDisable(GL_BLEND);
+  tempTex3D := 0;
   isSmoothGrad :=  gradientMode > kGradientModeGPUFastest;
   if (isSmoothGrad) then begin
-  //STEP 1: run smooth program gradientTexture -> tempTex3D
-  tempTex3D := bindBlankGL(Xsz,Ysz,Zsz, gradientMode);
-  glUseProgram(programBlur);
-  glActiveTexture( GL_TEXTURE1);
-  //glBindTexture(GL_TEXTURE_3D, gRayCast.gradientTexture3D);//input texture
-  glBindTexture(GL_TEXTURE_3D, inTex);//input texture is overlay
-  glUniform1ix(programBlur, 'intensityVol', 1);
-  glUniform1fx(programBlur, 'dX', 0.7/XSz); //0.5 for smooth - center contributes
-  glUniform1fx(programBlur, 'dY', 0.7/YSz);
-  glUniform1fx(programBlur, 'dZ', 0.7/ZSz);
-  glBindVertexArray(vao);
-  for i := 0 to (ZSz-1) do begin
-      coordZ := 1/ZSz * (i + 0.5);
-      glUniform1fx(programBlur, 'coordZ', coordZ);
-      //glFramebufferTexture3D(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, tempTex3D, 0, i);//output texture
-      //Ext required: Delphi compile on Winodws 32-bit XP with NVidia 8400M
-      glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, tempTex3D, 0, i);//output texture
-      glClear(GL_DEPTH_BUFFER_BIT);  // clear depth bit (before render every layer)
-      {$IFDEF STRIP}
-      glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, nil);
-      {$ELSE}
-      glDrawElements(GL_TRIANGLES, 2*3, GL_UNSIGNED_INT, nil);
-      {$ENDIF}
-      //GetErrorAll(i,'dCreateGradient');
-      //xxxxxx glCheckFramebufferStatus
-  end;
-  GetErrorAll(101,'CreateGradient');
-  glUseProgram(0);
+    //STEP 1: run smooth program gradientTexture -> tempTex3D
+    tempTex3D := bindBlankGL(Xsz,Ysz,Zsz, gradientMode);
+    glUseProgram(programBlur);
+    glActiveTexture( GL_TEXTURE1);
+    //glBindTexture(GL_TEXTURE_3D, gRayCast.gradientTexture3D);//input texture
+    glBindTexture(GL_TEXTURE_3D, inTex);//input texture is overlay
+    glUniform1ix(programBlur, 'intensityVol', 1);
+    glUniform1fx(programBlur, 'dX', 0.7/XSz); //0.5 for smooth - center contributes
+    glUniform1fx(programBlur, 'dY', 0.7/YSz);
+    glUniform1fx(programBlur, 'dZ', 0.7/ZSz);
+    glBindVertexArray(vao);
+    for i := 0 to (ZSz-1) do begin
+        coordZ := 1/ZSz * (i + 0.5);
+        glUniform1fx(programBlur, 'coordZ', coordZ);
+        //glFramebufferTexture3D(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, tempTex3D, 0, i);//output texture
+        //Ext required: Delphi compile on Winodws 32-bit XP with NVidia 8400M
+        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, tempTex3D, 0, i);//output texture
+        glClear(GL_DEPTH_BUFFER_BIT);  // clear depth bit (before render every layer)
+        {$IFDEF STRIP}
+        glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, nil);
+        {$ELSE}
+        glDrawElements(GL_TRIANGLES, 2*3, GL_UNSIGNED_INT, nil);
+        {$ENDIF}
+        //GetErrorAll(i,'dCreateGradient');
+        //xxxxxx glCheckFramebufferStatus
+    end;
+    GetErrorAll(101,'CreateGradient');
+    glUseProgram(0);
   end; //isSmoothGrad
   //STEP 2: run sobel program gradientTexture -> tempTex3D
   //glUseProgramObjectARB(gRayCast.glslprogramSobel);
@@ -1418,6 +1418,7 @@ begin
   w := glControl.clientwidth;
   h := glControl.clientheight;
   //load
+  clrbar.RulerPixels:= 0;
   if clrbar <> nil then begin
        f := clrbar.PanelFraction;
        if (f > 0.0) and (f < 0.5) then begin
@@ -1514,7 +1515,7 @@ end;
 
 procedure TGPUVolume.Paint2D(var vol: TNIfTI; Drawing: TDraw; DisplayOrient: integer);
 var
- w,h: single;
+ w,h, scale, rulerPx: single;
 begin
   if vao = 0 then // only once
     LoadCube();
@@ -1537,11 +1538,11 @@ begin
         w := round(w * (1.0-clrbar.PanelFraction))
      else
          h := round(h * (1.0-clrbar.PanelFraction));
-   slices2D.Update(vol.Scale, w, h, DisplayOrient, glControl.clientheight);
-   w := glControl.clientwidth;
-   h := glControl.clientheight;
+     scale := slices2D.Update(vol.Scale, w, h, DisplayOrient, glControl.clientheight);
+     w := glControl.clientwidth;
+     h := glControl.clientheight;
   end else
-      slices2D.Update(vol.Scale, w, h, DisplayOrient);
+      scale := slices2D.Update(vol.Scale, w, h, DisplayOrient);
   if SelectionRect.x > 0 then
      slices2D.DrawOutLine(SelectionRect.X,h-SelectionRect.Y, SelectionRect.Z,h-SelectionRect.W);
   if slices2D.NumberOfVertices < 3 then exit; //nothing to do
@@ -1620,6 +1621,10 @@ begin
     end;
   end;
   txt.DrawText(); //D888
+  //GLForm1.LayerBox.caption := format('%g %g', [scale, vol.MaxMM]);    //uses mainunit
+  rulerPx := (scale)/vol.MaxMM ;//pixels per mm
+  rulerPx := rulerPx * 100; //ruler is 10cm = 100mm
+  clrbar.RulerPixels:= rulerPx;
   if clrbar <> nil then
    clrbar.Draw();
   glControl.SwapBuffers;
@@ -1754,6 +1759,7 @@ begin
   {$ENDIF}
   glDisable(GL_CULL_FACE);
   //draw color editor
+  clrbar.RulerPixels:= 0;
   if clrbar <> nil then
    clrbar.Draw();
   if colorEditorVisible then begin

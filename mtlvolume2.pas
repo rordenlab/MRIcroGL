@@ -72,7 +72,7 @@ type
         property LightPosition: TVec4 read fLightPos write fLightPos;
         property ClipPlane: TVec4 read fClipPlane write fClipPlane;
         procedure Prepare(shaderName: string);
-        constructor Create(fromView: TMetalControl; IsBetterButSlowerLoads: boolean);
+        constructor Create(fromView: TMetalControl);
         procedure Paint(var vol: TNIfTI);
         procedure SetShader(shaderName: string);
         procedure SetShaderSlider(idx: integer; newVal: single);
@@ -214,7 +214,7 @@ begin
      clrbar := fromColorbar;
 end;
 
-constructor TGPUVolume.Create(fromView: TMetalControl; IsBetterButSlowerLoads: boolean);
+constructor TGPUVolume.Create(fromView: TMetalControl);
 begin
   mtlControl := fromView;
   clrbar := nil;
@@ -585,7 +585,7 @@ procedure TGPUVolume.Paint2D(var vol: TNIfTI; Drawing: TDraw; DisplayOrient: int
 var
  vertUniforms: TVertUniforms2D;
  fragUniforms: TFragUniforms2D;
- w,h: single;
+ w,h, scale, rulerPx: single;
 begin
   if vertexBuffer = nil then // only once
     LoadCube();
@@ -600,11 +600,11 @@ begin
         w := round(w * (1.0-clrbar.PanelFraction))
      else
          h := round(h * (1.0-clrbar.PanelFraction));
-   slices2D.Update(vol.Scale, w, h, DisplayOrient, mtlControl.clientheight);
+   scale := slices2D.Update(vol.Scale, w, h, DisplayOrient, mtlControl.clientheight);
    w := mtlControl.clientwidth;
    h := mtlControl.clientheight;
   end else
-      slices2D.Update(vol.Scale, w, h, DisplayOrient);
+      scale := slices2D.Update(vol.Scale, w, h, DisplayOrient);
   if SelectionRect.x > 0 then
      slices2D.DrawOutLine(SelectionRect.X,h-SelectionRect.Y,SelectionRect.Z,h-SelectionRect.W);
 
@@ -668,6 +668,9 @@ begin
       end;
     end;
     txt.DrawText();
+    rulerPx := (scale)/vol.MaxMM ;//pixels per mm
+    rulerPx := rulerPx * 100; //ruler is 10cm = 100mm
+    clrbar.RulerPixels:= rulerPx;
     if clrbar <> nil then
      clrbar.Draw();
   MTLEndFrame;
@@ -950,6 +953,7 @@ procedure TGPUVolume.PaintMosaic2D(var vol: TNIfTI; Drawing: TDraw; MosaicString
         MTLSetVertexBytes(@vertUniforms, sizeof(vertUniforms), 1);
         MTLDraw(MTLPrimitiveTypeTriangle, 0, slices2D.NumberOfLineVertices);
       end;
+      clrbar.RulerPixels:= 0;
       if clrbar <> nil then
        clrbar.Draw();
       //we do not know the background color - might be nice to have black text if background is white!
@@ -1046,6 +1050,7 @@ begin
     end;
     {$ENDIF}
     //draw render
+    clrbar.RulerPixels:= 0;
     if clrbar <> nil then
        clrbar.Draw();
     {$IFDEF CUBE}

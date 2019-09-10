@@ -108,6 +108,7 @@ Type
         IsShrunken : boolean;
         ZeroIntensityInvisible: boolean;
         MaxVox: integer; //maximum number of voxels in any dimension
+        MaxMM: single; //maximum mm in any dimension
         property IsNativeEndian: boolean read fIsNativeEndian;
         property VolumeDisplayed: integer read fVolumeDisplayed; //indexed from 0 (0..VolumesLoaded-1)
         property VolumesLoaded: integer read fVolumesLoaded; //1 for 3D data, for 4D 1..hdr.dim[4] depending on RAM
@@ -127,6 +128,7 @@ Type
         function NeedsUpdate(): boolean;
         function DisplayMinMax2Uint8(isForceRefresh: boolean = false): TUInt8s;
         procedure SaveRotated(fnm: string; perm: TVec3i);
+        procedure RemoveSmallClusters(thresh, mm: double);
         function SaveCropped(fnm: string; crop: TVec6i; cropVols: TPoint): boolean;
         function SaveRescaled(fnm: string; xFrac, yFrac, zFrac: single; OutDataType, Filter: integer; isAllVolumes: boolean): boolean;
         procedure SaveAsSourceOrient(NiftiOutName: string; rawVolBytes: TUInt8s);  overload;
@@ -4372,6 +4374,58 @@ begin
   SetDisplayMinMax(true);
 end;
 
+procedure TNIfTI.RemoveSmallClusters(thresh, mm: double);
+var
+  mnVx, i, vx, skipVx: int64;
+  vol8, out8: TUInt8s;
+  mni: int16;
+  vol16: TInt16s;
+  vol32: TFloat32s;
+  rthresh, mn: single;
+  mmPerVox: double;
+
+begin
+ vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+ //todo: DT_RGB
+ if vx < 1 then exit;
+ skipVx := skipVox();
+ out8 := fRawVolBytes;
+ vol16 := TInt16s(out8);
+ vol32 := TFloat32s(out8);
+ rthresh := Scaled2RawIntensity(fHdr, thresh);
+ setlength(vol8,vx);
+ FillChar(vol8[0], vx, 0);
+ if fHdr.datatype = kDT_UINT8 then begin
+    for i := 0 to (vx-1) do
+        if out8[skipVx+i] >= rthresh then vol8[i] := 255;
+ end else if fHdr.datatype = kDT_INT16 then begin
+   for i := 0 to (vx-1) do
+       if vol16[skipVx+i] >= rthresh then vol8[i] := 255;
+ end else if fHdr.datatype = kDT_FLOAT then begin
+   for i := 0 to (vx-1) do
+       if vol32[skipVx+i] >= rthresh then vol8[i] := 255;
+ end;
+ //clusterize
+ mmPerVox := fHdr.pixdim[1] * fHdr.pixdim[2] * fHdr.pixdim[3];
+ if (mmPerVox = 0) then mmPerVox := 1;
+ mnVx := round(mm/mmPerVox);
+ if mnVx > 0 then
+    RemoveAllSmallClusters(vol8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3],255,0 , mnVx);
+ mn := Scaled2RawIntensity(fHdr, fMin);
+ mni := round(mn);
+ if fHdr.datatype = kDT_UINT8 then begin
+    for i := 0 to (vx-1) do
+        if vol8[i] = 0 then out8[skipVx+i] := 0;
+ end else if fHdr.datatype = kDT_INT16 then begin
+   for i := 0 to (vx-1) do
+       if vol8[i] = 0 then vol16[skipVx+i] := mni;
+ end else if fHdr.datatype = kDT_FLOAT then begin
+   for i := 0 to (vx-1) do
+       if vol8[i] = 0 then vol32[skipVx+i] := mn;
+ end;
+ vol8 := nil;
+end;
+
 procedure TNIfTI.RemoveHaze(isSmoothEdges: boolean);
 const
  kOtsuLevels = 5;
@@ -6063,7 +6117,7 @@ begin
     fScale.Y := abs((fHdr.Dim[2]*fHdr.PixDim[2]) / scaleMx);
     fScale.Z := abs((fHdr.Dim[3]*fHdr.PixDim[3]) / scaleMx);
   end;
-
+  MaxMM := max(max(fHdr.Dim[1]*fHdr.PixDim[1], fHdr.Dim[2]*fHdr.PixDim[2]), fHdr.Dim[3]*fHdr.PixDim[3] );
   fDim.x := fHdr.Dim[1];
   fDim.y := fHdr.Dim[2];
   fDim.z := fHdr.Dim[3];

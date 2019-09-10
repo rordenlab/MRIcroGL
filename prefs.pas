@@ -10,7 +10,10 @@ type
   TMRU =  array [1..knMRU] of string;
   TPrefs = record
          GradientMode, AnimationIntervalMsec, LineWidth, StartupWindowMode,DisplayOrient, StartupDisplayOrient, ColorbarSize,ColorbarPosition, Quality1to10, BitmapZoom, MaxVox: integer;
-         MultiSample, ScreenCaptureTransparentBackground, LandmarkPanel, LoadFewVolumes, LabelOrient, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay, FlipYZ, FlipLR_Radiological, SkipPrefWriting: boolean;
+         MultiSample, ScreenCaptureTransparentBackground, LandmarkPanel, LoadFewVolumes,
+         //LabelOrientCube,
+         LabelOrient, RulerVisible, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay,
+         FlipYZ, FlipLR_Radiological, SkipPrefWriting: boolean;
          CustomDcm2niix, PyLib, MosaicStr, InitScript, PrevBackgroundImage: string;
          ClearColor: TRGBA;
          PrevFilename: TMRU;
@@ -71,6 +74,7 @@ begin
             LineWidth := 1;
             AnimationIntervalMsec:=100;
             LabelOrient := true;
+            //LabelOrientCube := true;
             LoadFewVolumes := true;
             LandmarkPanel := false;
             ScreenCaptureTransparentBackground := false;
@@ -83,6 +87,7 @@ begin
   end;
   with lPrefs do begin
     ColorbarVisible := true;
+    RulerVisible := false;
     ClearColor := setRGBA( 0, 0, 0, 255);
     //ClearColor := setRGBA( 255, 255, 255, 255);
     ColorBarPosition := 3;
@@ -203,8 +208,10 @@ begin
     {$ENDIF}
   IniBool(lRead,lIniFile, 'MultiSample',lPrefs.MultiSample);
   IniBool(lRead,lIniFile, 'ColorbarVisible',lPrefs.ColorbarVisible);
+  IniBool(lRead,lIniFile, 'RulerVisible',lPrefs.RulerVisible);
   IniBool(lRead,lIniFile, 'Smooth2D',lPrefs.Smooth2D);
   IniBool(lRead,lIniFile, 'LabelOrient',lPrefs.LabelOrient);
+  //LabelOrientCube
   IniBool(lRead,lIniFile, 'LoadFewVolumes',lPrefs.LoadFewVolumes);
   IniBool(lRead,lIniFile, 'LandmarkPanel',lPrefs.LandmarkPanel);
   IniBool(lRead,lIniFile, 'FlipYZ',lPrefs.FlipYZ);

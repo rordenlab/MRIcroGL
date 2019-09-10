@@ -60,6 +60,7 @@ void main() {
 	vec4 prevGrad = vec4(0.0,0.0,0.0,0.0);
 	vec4 samplePos;
 	//background pass
+	float noClipLen = len;
 	samplePos = vec4(start.xyz +deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)), 0.0);
 	if (clipPlane.a > -0.5) {
 		bool frontface = (dot(dir , clipPlane.xyz) > 0.0);
@@ -81,7 +82,7 @@ void main() {
 	vec4 clipPos = samplePos;
 	float stepSizeX2 = samplePos.a + (stepSize * 2.0);
 	//fast pass - optional
-	deltaDir = vec4(dir.xyz * max(stepSize, sliceSize), max(stepSize, sliceSize));
+	deltaDir = vec4(dir.xyz * max(stepSize, sliceSize * 1.95), max(stepSize, sliceSize * 1.95));
 	while (samplePos.a <= len) {
 		if ((texture(intensityVol,samplePos.xyz).a) > 0.0) break;
 		samplePos += deltaDir;
@@ -92,6 +93,8 @@ void main() {
 		return;		
 	}
 	samplePos -= deltaDir;
+	if (samplePos.a < clipPos.a)
+		samplePos = clipPos;
 	deltaDir = vec4(dir.xyz * stepSize, stepSize);
 	//end fastpass - optional
 	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
@@ -133,15 +136,20 @@ void main() {
 	prevGrad = vec4(0.0,0.0,0.0,0.0);
 	if (overlayClip > 0)
 		samplePos = clipPos;
-	else
+	else {
+		len = noClipLen;
 		samplePos = vec4(start.xyz +deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)), 0.0);
+	}
 	//fast pass - optional
-	deltaDir = vec4(dir.xyz * max(stepSize, sliceSize), max(stepSize, sliceSize));
+	clipPos = samplePos;
+	deltaDir = vec4(dir.xyz * max(stepSize, sliceSize * 1.95), max(stepSize, sliceSize * 1.95));
 	while (samplePos.a <= len) {
 		if ((texture(intensityOverlay,samplePos.xyz).a) > 0.0) break;
 		samplePos += deltaDir;
 	}
 	samplePos -= deltaDir;
+	if (samplePos.a < clipPos.a)
+		samplePos = clipPos;
 	deltaDir = vec4(dir.xyz * stepSize, stepSize);
 	//end fastpass - optional
 	while (samplePos.a <= len) {

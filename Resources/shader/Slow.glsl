@@ -134,8 +134,6 @@ void main() {
 					boundAcc2 += (1.0 - boundAcc2) * boundAlpha;
 				}
 				colorSample.rgb = a + d + s;
-
-
 			}
 		}
 		if ( overlays > 0 ) {
