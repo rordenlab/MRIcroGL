@@ -4012,9 +4012,13 @@ procedure TGLForm1.SetXHairPosition (lXmm,lYmm,lZmm: single; isUpdateYoke: boole
 var
    vFrac: TVec3;
    niftiVol: TNIfTI;
+   sliceMove: TVec3i;
 begin
      if not vols.Layer(0,niftiVol) then exit;
      vFrac := niftiVol.MMFrac(Vec3(lXmm,lYmm,lZmm));
+     //next 2 lines constrain 2D images
+     sliceMove:= pti(0,0,0);
+     vFrac := niftiVol.FracShiftSlice(vFrac, sliceMove); //move a desired number of slices
      vol1.SetSlice2DFrac(vFrac);
      ReportPositionXYZ(isUpdateYoke);
      ViewGPU1.Invalidate;

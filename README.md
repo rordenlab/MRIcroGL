@@ -8,7 +8,18 @@ MRIcroGL 1.2 requires OpenGL 3.3 (released in 2009) or later. If you only have O
 
 ## Installation
 
-Get the latest release from [Github](https://github.com/neurolabusc/MRIcroGL/releases) or [NITRC](https://www.nitrc.org/projects/mricrogl). Download the latest release for your operating system (MacOS, Linux, Windows). Extract the archive and run the executable. Visit the [wiki](https://www.nitrc.org/plugins/mwiki/index.php/mricrogl:MainPage) for a full manual that includes troubleshooting.
+You can get MRIcroGL using three methods:
+
+ - Download from [NITRC](https://www.nitrc.org/projects/mricrogl/).
+ - Download from [Github](https://github.com/neurolabusc/MRIcroGL/releases).
+ - Run the following command to get the latest version for Linux, Macintosh or Windows: 
+   * `curl -fLO https://github.com/rordenlab/MRIcroGL12/releases/latest/download/MRIcroGL_linux.zip`
+   * `curl -fLO https://github.com/rordenlab/MRIcroGL12/releases/latest/download/MRIcroGL_macOS.dmg`
+   * `curl -fLO https://github.com/rordenlab/MRIcroGL12/releases/latest/download/MRIcroGL_windows.zip`
+
+  
+Once you have downloaded the software, extract the archive and run the executable. Visit the [wiki](https://www.nitrc.org/plugins/mwiki/index.php/mricrogl:MainPage) for a full manual that includes troubleshooting.
+
 
 ## Compiling
 
@@ -18,10 +29,10 @@ It is generally recommended that [download a pre-compiled executable](https://gi
  - Get the [Metal-Demos repository](https://github.com/neurolabusc/Metal-Demos), for example: `git clone https://github.com/neurolabusc/Metal-Demos`.
  - Get the [MRIcroGL12 repository]( https://github.com/rordenlab/MRIcroGL12.git), for example: `git clone https://github.com/neurolabusc/MRIcroGL12`.
  - If you are using MacOS and want to build for Apple Metal (instead of OpenGL):
- ⋅⋅* Get the [lazmetalcontrol repository](https://github.com/genericptr/Metal-Framework).
- ⋅⋅* Use the Lazarus Package menu to open and install the lazmetal control.
- ⋅⋅* Open the MRIcroGL project with Lazarus and use the "Project Inspector" to add lazmetalcontrol as a dependency.
- ⋅⋅* Uncomment the line '{$DEFINE METALAPI}' in mainunit.pas.
+   * Get the [lazmetalcontrol repository](https://github.com/genericptr/Metal-Framework).
+   * Use the Lazarus Package menu to open and install the lazmetal control.
+   * Open the MRIcroGL project with Lazarus and use the "Project Inspector" to add lazmetalcontrol as a dependency.
+   * Uncomment the line '{$DEFINE METALAPI}' in mainunit.pas.
  - You will need [python4lazarus_package](https://github.com/Alexey-T/Python-for-Lazarus), but hopefully Lazarus will detect and install this for you automatically.
  - Use the "Run" command to compile and run your project.
  - Note you can also compile from the command line - [the MRIcroGL 1.0 web page provides details](https://github.com/neurolabusc/MRIcroGL).

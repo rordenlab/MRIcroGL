@@ -1,6 +1,8 @@
 unit dcm_load;
 
 {$mode objfpc}{$H+}
+{$DEFINE isGL}
+
 
 interface
 
@@ -14,9 +16,9 @@ function HomeDir(useTmp: boolean = true): string; //set path to home if not prov
 
 implementation
 
-{$ifdef LCLCocoa}
+{$ifdef LCLCocoa} {$IFDEF isGL}
 uses mainunit; //darkmode
-{$ENDIF}
+{$ENDIF}  {$ENDIF}
 
 function seriesName (s: string): string; //"601 myName" returns 'myName'
 const
@@ -289,7 +291,9 @@ begin
   CancelBtn.ModalResult:= mrCancel;
   //PrefForm.Height:= OkBtn.Top + OkBtn.Height+4;
   PrefForm.AutoSize:=true;
+   {$IFDEF isGL}
   {$IFDEF LCLCocoa}GLForm1.SetFormDarkMode(PrefForm); {$ENDIF}
+  {$ENDIF}
   PrefForm.ShowModal;
   result := dcmStrings[rg.ItemIndex];
   if PrefForm.ModalResult = mrCancel then
@@ -361,6 +365,7 @@ function dcm2Nifti(dcm2niixExe, dicomDir: string): string;
 begin
   result := '';
   if dcm2niixExe = '' then exit;
+  if not fileexists(dcm2niixExe) then exit;
   result := dcmSeriesSelectForm(dcm2niixExe, dicomDir);
   if result = '' then exit;
   result := dcm2niiSeries(dcm2niixExe, dicomDir, result);

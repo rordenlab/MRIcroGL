@@ -4,6 +4,7 @@ unit dcm2nii;
 {$IFDEF Darwin}
   {$modeswitch objectivec1}
 {$ENDIF}
+{$DEFINE isGL}
 
 interface
 
@@ -72,9 +73,9 @@ var
 
 implementation
 
-{$ifdef LCLCocoa}
+{$ifdef LCLCocoa}{$IFDEF isGL}
 uses mainunit; //darkmode
-{$ENDIF}
+{$ENDIF}{$ENDIF}
 
 {$R *.lfm}
 const kExeName = 'dcm2niix';
@@ -359,7 +360,7 @@ begin
   ShowPrefs;
   UpdateCommand(Sender);
   InputDirDialog.InitialDir := GetUserDir;
-  {$IFDEF LCLCocoa}GLForm1.SetFormDarkMode(dcm2niiForm); {$ENDIF}
+  {$IFDEF LCLCocoa} {$IFDEF isGL} GLForm1.SetFormDarkMode(dcm2niiForm); {$ENDIF}{$ENDIF}
 end;
 
 procedure Tdcm2niiForm.OutDirDropChange(Sender: TObject);
