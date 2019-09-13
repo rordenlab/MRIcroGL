@@ -69,24 +69,16 @@ void main() {
 		bool frontface = (dot(dir , clipPlane.xyz) > 0.0);
 		float dis = dot(dir,clipPlane.xyz);
 		if (dis != 0.0  )  dis = (-clipPlane.a - dot(clipPlane.xyz, start.xyz-0.5)) / dis;
-		//test: "return" fails on 2006MacBookPro10.4ATI1900, "discard" fails on MacPro10.5NV8800
-		//if (((frontface) && (dis >= len)) || ((!frontface) && (dis <= 0.0))) {
-		// FragColor = vec4(0.0,0.0,0.0,0.0);
-		// return;
-		//}
-		//if ((dis > 0.0) && (dis < len)) {
 			if (frontface) {
 				clipStart = dis;
 				stepSizeX2 = clipStart + (stepSize * 2); //avoid specular effects in clip plane
 			} else
 				clipEnd =  dis;
-		//}
 		stepSizeX2 = clipStart + (stepSize * 2);
 	}
-	vec3 deltaDir = dir * stepSize;
+	vec4 deltaDir = vec4(dir.xyz * stepSize, stepSize);
 	vec4 ocolAcc = vec4(0.0,0.0,0.0,0.0);
 	vec4 ocolorSample, colorSample, gradSample, colAcc = vec4(0.0,0.0,0.0,0.0);
-	float lengthAcc = 0.0;
 	float boundAcc = 0.0;
 	float boundAcc2 = 0.0;
 	float overDepth = -1;
@@ -95,7 +87,7 @@ void main() {
 	float edgeThresh = 0.01;
 	float edgeExp = 0.5;
 	float diffuseDiv = diffuse / 4.0;
-	vec3 samplePos = start.xyz + deltaDir* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453));
+	vec4 samplePos = vec4(start.xyz + deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)),0.0);
 	vec4 prevGrad = vec4(0.0,0.0,0.0,0.0);
 	vec4 oprevGrad = vec4(0.0,0.0,0.0,0.0);
 	vec4 overAcc = vec4(0.0,0.0,0.0,0.0);
@@ -104,13 +96,13 @@ void main() {
 	if ( overlays > 0 ) alphaTerminate = 2.0; //impossible value: no early termination with overlays
 	for(int i = 0; i < loops; i++) {
 		colorSample = vec4(0.0,0.0,0.0,0.0);
-		if ((lengthAcc > clipStart) && (lengthAcc < clipEnd)) {
-			colorSample = texture(intensityVol,samplePos);
+		if ((samplePos.a > clipStart) && (samplePos.a < clipEnd)) {
+			colorSample = texture(intensityVol,samplePos.xyz);
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
-			if ((colorSample.a > 0.01) && (lengthAcc > stepSizeX2)) {
-				if (backDepthStart < 0) backDepthStart = lengthAcc;
-				backDepthEnd = lengthAcc;
-				gradSample= texture(gradientVol,samplePos);
+			if ((colorSample.a > 0.01) && (samplePos.a > stepSizeX2)) {
+				if (backDepthStart < 0) backDepthStart = samplePos.a;
+				backDepthEnd = samplePos.a;
+				gradSample= texture(gradientVol,samplePos.xyz);
 				gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
 				if (gradSample.a < prevGrad.a)
 					gradSample.rgb = prevGrad.rgb;
@@ -137,18 +129,17 @@ void main() {
 			}
 		}
 		if ( overlays > 0 ) {
-			vec4 ocolorSample = texture(intensityOverlay,samplePos);
+			vec4 ocolorSample = texture(intensityOverlay,samplePos.xyz);
 
 			ocolorSample.a = 1.0-pow((1.0 - ocolorSample.a), opacityCorrection);
 			if (ocolorSample.a > 0.01) {
-				//gradSample = (overlayGradTexture.sample(textureSampler, samplePos)).rgba;
-				gradSample = texture(gradientOverlay,samplePos); //interpolate gradient direction and magnitude
+				gradSample = texture(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
 
 				gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
 				if (gradSample.a < oprevGrad.a)
 					gradSample.rgb = oprevGrad.rgb;
 				oprevGrad = gradSample;
-				if (overDepth < 0) overDepth = lengthAcc;
+				if (overDepth < 0) overDepth = samplePos.a;
 				//Edge shading - darken edges parallel with viewing direction
 				float lightNormDot = dot(gradSample.rgb, lightDirHeadOn); //with respect to viewer
 				float edgeVal = pow(1.0-abs(lightNormDot),edgeExp) * pow(gradSample.a,overShade);
@@ -178,8 +169,7 @@ void main() {
 		colorSample.rgb *= colorSample.a;
 		colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
 		samplePos += deltaDir;
-		lengthAcc += stepSize;
-		if ( lengthAcc >= len || colAcc.a > alphaTerminate )
+		if ( samplePos.a >= len || colAcc.a > alphaTerminate )
 			break;
 	}
 

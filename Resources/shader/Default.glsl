@@ -60,10 +60,9 @@ void main() {
 	float shininess = 10.0;
 	vec4 colAcc = vec4(0.0,0.0,0.0,0.0);
 	vec4 prevGrad = vec4(0.0,0.0,0.0,0.0);
-	vec4 samplePos;
 	//background pass
 	float noClipLen = len;
-	samplePos = vec4(start.xyz +deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)), 0.0);
+	vec4 samplePos = vec4(start.xyz, 0.0);
 	if (clipPlane.a > -0.5) {
 		bool frontface = (dot(dir , clipPlane.xyz) > 0.0);
 		float dis = dot(dir,clipPlane.xyz);
@@ -82,7 +81,6 @@ void main() {
 		}
 	}
 	vec4 clipPos = samplePos;
-	float stepSizeX2 = samplePos.a + (stepSize * 2.0);
 	//fast pass - optional
 	deltaDir = vec4(dir.xyz * max(stepSize, sliceSize * 1.95), max(stepSize, sliceSize * 1.95));
 	while (samplePos.a <= len) {
@@ -90,22 +88,35 @@ void main() {
 		samplePos += deltaDir;
 	}
 	if ((samplePos.a > len) && ( overlays < 1 )) { //no hit: quit here
-		//colAcc = vec4(1.0, 0.0, 0.0, 1.0);
 		FragColor = colAcc;
 		return;		
 	}
 	samplePos -= deltaDir;
-	if (samplePos.a < clipPos.a)
-		samplePos = clipPos;
 	deltaDir = vec4(dir.xyz * stepSize, stepSize);
+	if (samplePos.a < clipPos.a) {
+		samplePos = clipPos;
+		float stepSizeX2 = samplePos.a + (stepSize * 2.0);
+		while (samplePos.a <= stepSizeX2) {
+			colorSample = texture(intensityVol,samplePos.xyz);
+			colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);
+			colorSample.a = clamp(colorSample.a*3.0,0.0, 1.0);
+			colorSample.rgb *= colorSample.a;
+			colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
+			samplePos += deltaDir;
+		}
+	
+	}
 	//end fastpass - optional
+	float ran = fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453);
+	samplePos += deltaDir * ran;
+	
 	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
 	while (samplePos.a <= len) {
 		colorSample = texture(intensityVol,samplePos.xyz);
 		colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);
 		if (colorSample.a > 0.01) {
 			bgNearest = min(samplePos.a,bgNearest);
-			if (samplePos.a > stepSizeX2) {
+			
 				vec3 a = colorSample.rgb * ambient;
 				gradSample= texture(gradientVol,samplePos.xyz);
 				gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
@@ -118,8 +129,6 @@ void main() {
 				vec3 d = texture(matcap2D,uv.xy).rgb;
 				vec3 surf = mix(defaultDiffuse, a, surfaceColor); //0.67 as default Brighten is 1.5
 				colorSample.rgb = d * surf * brighten;
-			} else
-				colorSample.a = clamp(colorSample.a*3.0,0.0, 1.0);
 			colorSample.rgb *= colorSample.a;
 			colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
 			if ( colAcc.a > 0.95 )
@@ -139,7 +148,7 @@ void main() {
 		samplePos = clipPos;
 	else {
 		len = noClipLen;
-		samplePos = vec4(start.xyz +deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)), 0.0);
+		samplePos = vec4(start.xyz +deltaDir.xyz* ran, 0.0);
 	}
 	//fast pass - optional
 	clipPos = samplePos;

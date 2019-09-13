@@ -3463,6 +3463,7 @@ begin
   if (lExt = '.GZ') then begin
      lExt2GZ := changefileext(lFilename,'');
      lExt2GZ := UpCaseExt(lExt2GZ);
+
   end;
   if (lExt = '.DV') then
      result := nii_readDeltaVision(lFilename, lHdr, swapEndian)
@@ -3474,7 +3475,14 @@ begin
        result := nii_readVmr(lFilename, true, lHdr, swapEndian)
   else if (lExt = '.DF3') then
        result := nii_readDf3(lFilename, lHdr, swapEndian)
-  else if (lExt = '.BVOX') then
+  else if (lExt = '.BRIK.GZ')  then begin
+       lFilename := ChangeFileExt(lFilename, '');
+       lFilename := ChangeFileExt(lFilename, '.HEAD');
+       result := readAFNIHeader(lFilename, lHdr, gzBytes, swapEndian)
+  end else if (lExt = '.BRIK')  then begin
+       lFilename := ChangeFileExt(lFilename, '.HEAD');
+       result := readAFNIHeader(lFilename, lHdr, gzBytes, swapEndian)
+  end else if (lExt = '.BVOX') then
        result := nii_readBVox(lFilename, lHdr, swapEndian)
   else if (lExt = '.GIPL') then
        result := nii_readGipl(lFilename, lHdr, swapEndian)
@@ -3492,7 +3500,7 @@ begin
        result := readMIF(lFilename, lHdr, gzBytes, swapEndian)
   else if (lExt = '.NRRD') or (lExt = '.NHDR') then
        result := readNRRDHeader(lFilename, lHdr, gzBytes, swapEndian, isDimPermute2341)
-  else if (lExt = '.HEAD') then
+  else if (lExt = '.HEAD')  then
     result := readAFNIHeader(lFilename, lHdr, gzBytes, swapEndian)
   else if (lExt = '.SPR') then
     result := readSPRHeader(lFilename, lHdr, gzBytes, swapEndian)

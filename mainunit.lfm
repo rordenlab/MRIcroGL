@@ -1620,6 +1620,7 @@ object GLForm1: TGLForm1
       Width = 477
       Align = alClient
       TabOrder = 4
+      OnClick = CenterPanelClick
     end
   end
   object TBSplitter: TSplitter

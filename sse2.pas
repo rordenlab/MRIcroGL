@@ -30,14 +30,15 @@ Type
 // 16 8-bit characters (bytes)
 procedure float2byteSIMD(flts: TFloat32s; byts: TUInt8s; lMin, lMax: single; skipVx: integer);
 //procedure SSEScale(var lMod,lMin,lMax : single; lMaxByte: byte; var liSz: integer; var lDataIn: TFloat32s; var lDataOut: TUInt8s);
-  var
+const
+  kAlign = 16; //SSE expects values aligned to 16-byte boundaries
+var
      t : integer;
      tail : integer;
-     //parameters: singleP;
-     paralign: singleP;
+     parameters: singleP;
+     parunalign: singleP;
      localIn: singleP;
      localOut: byteP;
-     //localS: integer;
      lMod: single;
      lMaxByte: byte = 255;
      fMaxByte: single;
@@ -62,20 +63,20 @@ procedure float2byteSIMD(flts: TFloat32s; byts: TUInt8s; lMin, lMax: single; ski
 			  localOut[t+lSz] := round((localIn[t+lSz]-lMin)* lMod);
 	  end;
 	end;
-        GetMem(paralign, 80);
+        //https://bugs.freepascal.org/view.php?id=34031
+        GetMem(parunalign, 80+kAlign);
+        parameters := System.Align(parunalign, kAlign); //aligned
         lMin := lMin - ((lMax-lMin)/510);  //shift 0.5 units: SSE uses trunc, we want round
         //paralign := singleP($fffffff0 and (integer(parameters)+15));
 	//paralign := singleP($fffffff0 and (pinteger(parameters)+15));
         //paralign := singleP(@parameters[1]);
         fMaxByte := lMaxByte;
 	for t := 1 to 4 do begin
-	  paralign[t]    := lMod;//scale factors
-	  paralign[t+4]  := lMin;//bias
-	  paralign[t+8]  := 0; //zeroes
-          paralign[t+12] := fMaxByte;//MaxByte
+	  parameters[t]    := lMod;//scale factors
+	  parameters[t+4]  := lMin;//bias
+	  parameters[t+8]  := 0; //zeroes
+          parameters[t+12] := fMaxByte;//MaxByte
         end;
-
-
    {Real problem here is getting the pointers into the right places
     It gives complete nonsense unless you copy the passed parameters
     into local variables before running}
@@ -87,7 +88,7 @@ procedure float2byteSIMD(flts: TFloat32s; byts: TUInt8s; lMin, lMax: single; ski
        //ebx -> rbx
        //ecx -> rcx
        //edx -> rdx
-       mov rax, [paralign];  //mov -> movaps
+       mov rax, [parameters];  //mov -> movaps
        mov rbx, [localIn];
        mov rcx, [lSz];
        mov rdx, [localOut];
@@ -135,7 +136,7 @@ procedure float2byteSIMD(flts: TFloat32s; byts: TUInt8s; lMin, lMax: single; ski
        emms //db $0f, $77                               // emms
     end;
 
-    freemem(paralign);
+    freemem(parunalign);
   end;
 {$ENDIF}
 procedure float2byteSISD(flts: TFloat32s; byts: TUInt8s; lMin, lMax: single; skipVx: integer);
@@ -144,7 +145,6 @@ var
    slope: single;
 begin
   slope := 255.0/(lMax - lMin);
-  skipVx := 0;
   vx := length(byts);
   for i := 0 to (vx - 1) do begin
     if (flts[skipVx+i] >= lMax) then
@@ -164,7 +164,7 @@ var
    inAlign: PtrUint;
 begin
   {$IFDEF CPU64}
-  inAlign := PtrUint(@flts[0]) mod kAlign;
+  inAlign := PtrUint(@flts[skipVx]) mod kAlign;
   if inAlign <> 0 then
        SSE := false;
   inAlign := PtrUint(@byts[0]) mod kAlign;

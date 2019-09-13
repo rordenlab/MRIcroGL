@@ -15,3 +15,9 @@ nodergba1=0|127|255|32
 nodergba2=127|255|127|64
 nodergba3=255|127|0|96
 nodergba4=127|0|0|128
+
+#00007F", "blue",
+"#007FFF", "cyan",
+"#7FFF7F", "yellow",
+"#FF7F00", "red",
+"#7F0000"

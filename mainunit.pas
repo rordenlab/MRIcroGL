@@ -306,6 +306,7 @@ type
     YTrackBar: TTrackBar;
     ZTrackBar: TTrackBar;
     procedure AddOverlayClusterMenuClick(Sender: TObject);
+    procedure CenterPanelClick(Sender: TObject);
     procedure EditPasteMenuClick(Sender: TObject);
     procedure InvalidateTImerTimer(Sender: TObject);
     procedure LayerContrastChange(Sender: TObject);
@@ -4289,6 +4290,11 @@ begin
    AddLayer(OpenDialog1.filename);*)
 begin
      //Use option pull down instead!
+end;
+
+procedure TGLForm1.CenterPanelClick(Sender: TObject);
+begin
+
 end;
 
 procedure TGLForm1.AddOverlayMenuClick(Sender: TObject);

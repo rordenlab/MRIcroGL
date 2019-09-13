@@ -9,5 +9,5 @@ nodeintensity1=87
 nodeintensity2=255
 [RGBA255]
 nodergba0=0|0|0|0
-nodergba1=255|128|128|128
-nodergba2=255|255|255|228
+nodergba1=255|128|128|64
+nodergba2=255|255|255|96
