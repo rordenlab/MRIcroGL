@@ -28,7 +28,7 @@ type
         txt: TGPUFont;
         drawVolTex, drawVolLut: MTLTextureProtocol;
         {$ENDIF}
-        RayCastQuality1to10, maxDim, fAzimuth,fElevation: integer;
+        RayCastQuality1to6, maxDim, fAzimuth,fElevation: integer;
         shaderPrefs: TShaderPrefs;
         prefValues: array [1..kMaxUniform] of single;
         fDistance, overlayNum: single;
@@ -64,7 +64,7 @@ type
         procedure PaintMosaic2D(var vol: TNIfTI; Drawing: TDraw; MosaicString: string);
         {$ENDIF}
         procedure UpdateOverlays(vols: TNIfTIs);
-        property Quality1to10: integer read RayCastQuality1to10 write RayCastQuality1to10;
+        property Quality1to6: integer read RayCastQuality1to6 write RayCastQuality1to6;
         property ShaderSliders: TShaderPrefs read shaderPrefs write shaderPrefs;
         property Azimuth: integer read fAzimuth write fAzimuth;
         property Elevation: integer read fElevation write fElevation;
@@ -74,7 +74,7 @@ type
         procedure Prepare(shaderName: string);
         constructor Create(fromView: TMetalControl);
         procedure Paint(var vol: TNIfTI);
-        procedure SetShader(shaderName: string);
+        procedure SetShader(shaderName: string; isUpdatePrefs: boolean = true);
         procedure SetShaderSlider(idx: integer; newVal: single);
         procedure SaveBmp(filename: string);
         procedure SetColorBar(fromColorbar: TGPUClrbar);
@@ -134,11 +134,12 @@ begin
      MTLWriteTextureToFile(pChar(filename));
 end;
 
-procedure TGPUVolume.SetShader(shaderName: string);
+procedure TGPUVolume.SetShader(shaderName: string; isUpdatePrefs: boolean = true);
 var
  options: TMetalPipelineOptions;
  i: integer;
 begin
+ if not isUpdatePrefs then exit; //only for opengl switching between "Better"
  options := TMetalPipelineOptions.Default;
  options.libraryName := shaderName;
  if not fileexists(shaderName) then
@@ -152,6 +153,7 @@ begin
  options.pipelineDescriptor.colorAttachmentAtIndex(0).setDestinationRGBBlendFactor(MTLBlendFactorOneMinusSourceAlpha);
  options.pipelineDescriptor.colorAttachmentAtIndex(0).setDestinationAlphaBlendFactor(MTLBlendFactorOneMinusSourceAlpha);
  shader3D := MTLCreatePipeline(options);
+ //if not isUpdatePrefs then exit;
  shaderPrefs := loadShaderPrefs(shaderName);
  if (shaderPrefs.nUniform > 0) and (shaderPrefs.nUniform <= kMaxUniform) then
     for i := 1 to shaderPrefs.nUniform do
@@ -230,7 +232,7 @@ begin
   lineVertexBuffer := nil;
   fAzimuth := 110;
   fElevation := 30;
-  RaycastQuality1to10 := 6;
+  RaycastQuality1to6 := 5;
   SelectionRect := Vec4(-1,0,0,0);
   fLightPos := Vec4(0, 0.707, 0.707, 0);
   //fLightPos := Vec4(0, 0.087, 0.996, 0);
@@ -752,7 +754,7 @@ begin
   fragUniforms.clipPlane := fClipPlane;
   fragUniforms.sliceSize := 1/maxDim;
   //fragUniforms.stepSize := 1.0/ ((maxDim*0.25)+ (maxDim*1.75)* (RayCastQuality1to10/10));
-  fragUniforms.stepSize := ComputeStepSize (RayCastQuality1to10, maxDim);
+  fragUniforms.stepSize := ComputeStepSize (RayCastQuality1to6, maxDim);
   //MTLBeginFrame();
     MTLSetShader(shader3D);
     MTLSetVertexBytes(@vertUniforms, sizeof(vertUniforms), 1);
@@ -1016,7 +1018,7 @@ begin
   //GLForm1.Caption := format('>> %g', [fragUniforms.backAlpha]);
   fragUniforms.sliceSize := 1/maxDim;
   //fragUniforms.stepSize := 1.0/ ((maxDim*0.25)+ (maxDim*1.75)* (RayCastQuality1to10/10));
-  fragUniforms.stepSize := ComputeStepSize (RayCastQuality1to10, maxDim);
+  fragUniforms.stepSize := ComputeStepSize (RayCastQuality1to6, maxDim);
   MTLBeginFrame();
     MTLSetShader(shader3D);
     MTLSetVertexBytes(@vertUniforms, sizeof(vertUniforms), 1);

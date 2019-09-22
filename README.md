@@ -2,6 +2,8 @@
 
 MRIcroGL is a cross=platform tool for viewing DICOM and NIfTI format images. It provides a drag-and-drop user interface as well as a scripting language. Please see the [wiki page](https://www.nitrc.org/plugins/mwiki/index.php/mricrogl:MainPage) from more details. Note that the wiki page describes version 1.0 of the software, while this Github page is for the upcoming version 1.2. The changes are in general subtle, but the [scripting](PYTHON.md) has changed quite a bit.
 
+![Chest CT](ChestCT.jpg)
+
 ## Requirements
 
 MRIcroGL 1.2 requires OpenGL 3.3 (released in 2009) or later. If you only have OpenGL 2.1, you can get [MRIcroGL 1.0](https://github.com/neurolabusc/MRIcroGL/releases) instead. If your computer does not support OpenGL at all, you can try [MRIcron](https://www.nitrc.org/projects/mricron).
@@ -20,10 +22,11 @@ You can get MRIcroGL using three methods:
   
 Once you have downloaded the software, extract the archive and run the executable. Visit the [wiki](https://www.nitrc.org/plugins/mwiki/index.php/mricrogl:MainPage) for a full manual that includes troubleshooting.
 
+![MRI](MRI.jpg)
 
 ## Compiling
 
-It is generally recommended that [download a pre-compiled executable](https://github.com/neurolabusc/MRIcroGL/releases). However, you can compile your own copy from source code.
+It is generally recommended that download a pre-compiled executable (see previous section). However, you can compile your own copy from source code.
 
  - Download and install [Lazarus 2.0 or later](https://www.lazarus-ide.org/).
  - Get the [Metal-Demos repository](https://github.com/neurolabusc/Metal-Demos), for example: `git clone https://github.com/neurolabusc/Metal-Demos`.
@@ -36,6 +39,10 @@ It is generally recommended that [download a pre-compiled executable](https://gi
  - You will need [python4lazarus_package](https://github.com/Alexey-T/Python-for-Lazarus), but hopefully Lazarus will detect and install this for you automatically.
  - Use the "Run" command to compile and run your project.
  - Note you can also compile from the command line - [the MRIcroGL 1.0 web page provides details](https://github.com/neurolabusc/MRIcroGL).
+
+Alternatively, Debian/Ubuntu Linux users may want to look at the [docker script](./DOCKER.md) that provides a line-by-line recipt for compiling MRIcroGL from the command line.
+
+![Head CT](HeadCT.jpg)
 
 ## Scripting and Command Line
 
@@ -52,7 +59,9 @@ You can also control MRIcroGL from the command line.
    * You can specify a display range, for example '-dr 3 4'.
    * Note that you can load multiple images, and the color map and display range is applied to the most recently specified image.
 
-## Supported Image Data
+![Primate](Primate.jpg)
+
+## Supported Image Formats
 
 MRIcroGL uses NIfTI as its native format. However, you can drag-and-drop files of various formats and the software should automatically detect and load these images.
 
@@ -68,17 +77,22 @@ MRIcroGL uses NIfTI as its native format. However, you can drag-and-drop files o
  - [Guys Image Processing Lab](http://rview.colin-studholme.net/rview/rv9manual/fileform.html#GIPL)(.gipl).
  - [ICS Image Cytometry Standard](https://onlinelibrary.wiley.com/doi/epdf/10.1002/cyto.990110502)(.ics).
  - [ITK MHA/MHD](https://itk.org/Wiki/MetaIO/Documentation)(.mha/.mhd).
- - [MRTrix Volume](https://mrtrix.readthedocs.io/en/latest/getting_started/image_data.html)(.mif/.mih).
+ - [Leica TIFF](https://en.wikipedia.org/wiki/TIFF)(.lsm).
+ - [MRTrix Volume](https://mrtrix.readthedocs.io/en/latest/getting_started/image_data.html)(.mif/.mih; not all variants supported).
  - [NIfTI](https://brainder.org/2012/09/23/the-nifti-file-format/)(.hdr/.nii/.nii.gz/.voi).
  - [NRRD](http://teem.sourceforge.net/nrrd/format.html)(.nhdr/.nrrd).
- - [TIFF via import menu](https://en.wikipedia.org/wiki/TIFF)(.tif/.tiff/varies).
+ - [POV-Ray Density_File](https://www.povray.org/documentation/view/3.6.1/374/)(.df3).
+ - [TIFF](https://en.wikipedia.org/wiki/TIFF)(.tif/.tiff/varies).
+ - [Stimulate Sdt](https://www.cmrr.umn.edu/stimulate/stimUsersGuide/node57.html)(.spr/.sdt)
+ - [Vaa3D](https://github.com/Vaa3D)(.v3draw).
  - [VTK Legacy Voxel Format](https://www.vtk.org/wp-content/uploads/2015/04/file-formats.pdf)(.vtk).
 
 ## Alternatives
 
 There are many terrific free tools for viewing medical imaging data. Since they are free, consider downloading a few and using the best tool for the task at hand. Below are a couple of my personal favorites.
 
- - [MRIcroGL v1.0](https://github.com/neurolabusc/MRIcroGL/releases) is mature and has similar features.
  - [MRIcron](https://www.nitrc.org/projects/mricron) is similar and does not require OpenGL, but it is unable to generate interactive renderings.
  - [FSLeyes](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FSLeyes) has many similar features, as well as rich support for [FSL](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/). Variants require either OpenGL 1.4 or OpenGL 2.1.
  - [Mango](http://ric.uthscsa.edu/mango/) is a nice viewer.
+ - [Slicer 3D](https://www.slicer.org) is daunting at first, but provides tremendous power and flexibility.
+ - For DICOM images (but not other formats), [Horos](https://horosproject.org) is outstanding.

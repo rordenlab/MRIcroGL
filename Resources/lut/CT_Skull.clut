@@ -1,6 +1,6 @@
 [FLT]
-min=180
-max=600
+min=140
+max=1024
 [INT]
 numnodes=4
 [BYT]
@@ -10,6 +10,6 @@ nodeintensity2=128
 nodeintensity3=255
 [RGBA255]
 nodergba0=0|0|0|0
-nodergba1=0|0|0|0
-nodergba2=113|109|101|100
-nodergba3=255|250|245|160
+nodergba1=2|1|1|1
+nodergba2=113|109|101|96
+nodergba3=255|250|245|168

@@ -142,7 +142,8 @@ Type
         function VoxIntensityString(vox: TVec3i): string; overload;
         function VoxIntensity(vox: int64): single; overload; //return intensity of voxel at coordinate
         function VoxIntensity(vox: TVec3i): single; overload; //return intensity of voxel at coordinate
-        function VoxIntensityArray(vox: TVec3i): TFloat32s;
+        function VoxIntensityArray(vox: TVec3i): TFloat32s; overload;
+        function VoxIntensityArray(roi: TUInt8s): TFloat32s; overload;
         function SeedCorrelationMap(vox: TVec3i; isZ: boolean): TFloat32s; overload;
         function SeedCorrelationMap(roi: TUInt8s; isZ: boolean): TFloat32s; overload;
         function SeedCorrelationMap(vSeed: TFloat32s; isZ: boolean): TFloat32s; overload;
@@ -893,7 +894,55 @@ begin
 end;  *)
 {$ENDIF}
 
-function TNIfTI.VoxIntensityArray(vox: TVec3i): TFloat32s;
+function TNIfTI.VoxIntensityArray(roi: TUInt8s): TFloat32s; overload;
+var
+  vx, nVx, nVxROI, vol, nVol, volBytes: int64;
+  d: double;
+  vol8: TUInt8s;
+  vol16: TInt16s;
+  vol32: TFloat32s;
+begin
+  setlength(result, 0);
+  if IsLabels then exit;
+  if volumesLoaded < 2 then exit;
+  if fHdr.bitpix = 24 then exit;  //>>
+  nVx := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3];
+  if nVx < 1 then exit;
+  if length(roi) <> nVx then exit;
+  nVxROI := 0;
+  for vx := 0 to (nVx-1) do
+      if roi[vx] <> 0 then
+         nVxROI := nVxROI + 1;
+  if nVxROI < 1 then exit;
+  volBytes := nVx * (fHdr.bitpix shr 3);
+  nVol := length(fRawVolBytes) div volBytes;
+  if nVol <> fVolumesLoaded then exit;
+  //vx := vox.x + (vox.y * dim.x) + (vox.z * (dim.x * dim.y));
+  //if (vx < 0) or (vx >= nVx) then exit;
+  setlength(result, fVolumesLoaded);
+  vol8 := fRawVolBytes;
+  vol16 := TInt16s(vol8);
+  vol32 := TFloat32s(vol8);
+  for vol := 0 to (nVol - 1) do begin
+    d := 0;
+    if fHdr.datatype = kDT_UINT8 then begin
+      for vx := 0 to (nVx-1) do
+          if roi[vx] <> 0 then
+             d := d  + vol8[vx + (vol * nVx)];
+    end else if fHdr.datatype = kDT_INT16 then begin
+      for vx := 0 to (nVx-1) do
+          if roi[vx] <> 0 then
+             d := d  + vol16[vx + (vol * nVx)];
+    end else if fHdr.datatype = kDT_FLOAT then begin
+      for vx := 0 to (nVx-1) do
+          if roi[vx] <> 0 then
+             d := d  + vol32[vx + (vol * nVx)];
+    end;
+    result[vol] := ( d * (1.0/nVxROI) * fHdr.scl_slope) + fHdr.scl_inter;
+  end;
+end; // VoxIntensityArray()
+
+function TNIfTI.VoxIntensityArray(vox: TVec3i): TFloat32s; overload;
 var
   vx, nVx, vol, nVol, volBytes: int64;
   vol8: TUInt8s;
@@ -931,7 +980,7 @@ begin
      end;
      for vol := 0 to (nVol - 1) do
          result[vol] := (result[vol] * fHdr.scl_slope) + fHdr.scl_inter;
-end;
+end; // VoxIntensityArray()
 
 function TNIfTI.VoxIntensity(vox: int64): single; overload; //return intensity of voxel at coordinate
 var
@@ -4875,8 +4924,75 @@ begin
   printf(format('>%d..%d %d',[vxLo, vxHi, index]));
 end;
 {$ENDIF}
-
 procedure TNIfTI.SetDisplayMinMax(isForceRefresh: boolean = false); overload;
+{$DEFINE UNROLL}
+type
+  TLUTi = array [0..255] of Int32; //Color Lookup Table
+
+var
+  {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
+  i, vx: int64;
+  {$IFDEF UNROLL}
+  vx8: int64;
+  lut: TLUTi;
+  rgba: TInt32s;
+  {$ENDIF}
+begin
+ {$IFDEF TIMER}startTime := now;{$ENDIF}
+  if (fIsOverlay) then exit; //overlays visualized using DisplayMinMax2Uint8
+  if (not isForceRefresh) and (not NeedsUpdate) then //(not clut.NeedsUpdate) and (fHdr.datatype <> kDT_RGB) and (fCache8 <> nil) and (fWindowMinCache8 <> fWindowMaxCache8) and (fWindowMin = fWindowMinCache8) and (fWindowMax = fWindowMaxCache8) then
+     exit; //no change
+  vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+  if (vx < 1) then exit;
+  if fHdr.datatype = kDT_RGB then begin
+    setlength(fVolRGBA, vx);
+    SetDisplayMinMaxRGB24();
+    ApplyCutout();
+    {$IFDEF TIMER}printf(format('Set Min/Max Window RGB time %d', [ MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+    exit;
+  end;
+  DisplayMinMax2Uint8(isForceRefresh);
+  {$IFDEF TIMER}
+  printf(format('Set Min/Max Window %g..%g time %d', [fWindowMin, fWindowMax, MilliSecondsBetween(Now,startTime)]));
+  startTime := now;
+  {$ENDIF}
+  setlength(fVolRGBA, vx);
+  {$IFDEF UNROLL}
+  //~20% faster
+  lut := TLUTi(clut.LUT);
+  rgba := TInt32s(fVolRGBA);
+  vx8 := ((vx div 8) * 8);
+  i := 0;
+  while i < vx8 do begin
+        rgba[i+0] := lut[fCache8[i+0]];
+        rgba[i+1] := lut[fCache8[i+1]];
+        rgba[i+2] := lut[fCache8[i+2]];
+        rgba[i+3] := lut[fCache8[i+3]];
+        rgba[i+4] := lut[fCache8[i+4]];
+        rgba[i+5] := lut[fCache8[i+5]];
+        rgba[i+6] := lut[fCache8[i+6]];
+        rgba[i+7] := lut[fCache8[i+7]];
+        i := i + 8;
+  end;
+  //tail - for volumes not evenly vivisible by 8
+  while i < (vx) do begin
+        rgba[i] := lut[fCache8[i]];
+        i := i + 1;
+  end;
+  {$ELSE}
+  //next stage remarkably slow, even though just lookup table.
+  for i := 0 to (vx - 1) do
+     {$IFDEF CUSTOMCOLORS}
+     fVolRGBA[i] := clut.LUT[fCache8[i]];
+     {$ELSE}
+     fVolRGBA[i] := fLUT[fCache8[i]];
+     {$ENDIF}
+  {$ENDIF}
+  ApplyCutout();
+  {$IFDEF TIMER}printf(format('Update RGBA time %d', [MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+end;
+
+(*procedure TNIfTI.SetDisplayMinMax(isForceRefresh: boolean = false); overload;
 var
   {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
   i, vx: int64;
@@ -4913,7 +5029,7 @@ begin
   {$ENDIF}
   ApplyCutout();
   {$IFDEF TIMER}printf(format('Update RGBA time %d', [MilliSecondsBetween(Now,startTime)]));{$ENDIF}
-end;
+end;   *)
 
 procedure TNIfTI.SetCutoutNoUpdate(CutoutLow, CutoutHigh: TVec3);
 begin

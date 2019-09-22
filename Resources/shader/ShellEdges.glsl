@@ -1,13 +1,14 @@
 //pref
-boundThresh|float|0.0|0.4|0.95|Boundary threshold (requires high edgeBoundMix)
+boundThresh|float|0.0|0.5|0.95
 edgeThresh|float|0|0.1|1
-edgeBoundMix|float|0|0|1
+edgeBoundMix|float|0|0.9|1
 colorTemp|float|0|0.5|1
 specular|float|0|0.5|1
 overlayFuzzy|float|0.01|0.5|1
 overlayDepth|float|0.0|0.15|0.99
-overlayClip|float|0|0|1|Does clipping also influence overlay layers?
+overlayClip|float|0|0|1
 //frag
+#line 10
 uniform float boundThresh = 0.95;
 uniform float edgeThresh = 0.4;
 uniform float edgeBoundMix = 0.9;
@@ -28,7 +29,7 @@ void main() {
 	dir = normalize(dir);
 	vec4 deltaDir = vec4(dir.xyz * stepSize, stepSize);
 	vec4 gradSample, colorSample;
-	float bgNearest = len; //assume no hit
+	float bgNearest = len; 
 	float ambient = 1.0;
 	float diffuse = 0.3;
 	float shininess = 7.0;
@@ -49,8 +50,8 @@ void main() {
 	if (samplePos.a < clipPos.a)
 		samplePos = clipPos;
 	//end fastpass - optional
-	gradSample = texture3D(intensityVol,samplePos.xyz); //only to ensure this is used
 	samplePos += deltaDir * ran;
+	gradSample = texture3D(intensityVol,samplePos.xyz); //only to ensure this is used
 	vec3 lightDirHeadOn = dir;
 	float boundAcc = 0.0;
 	vec4 edgeColor = vec4(1.0,1.0,1.0, 0.0);
@@ -62,12 +63,11 @@ void main() {
 		edgeColor.g = 1.0-((colorTemp-0.5)*-0.1);
 		edgeColor.r = 1.0-((colorTemp-0.5)*-0.5);
 	}
-	float edgeExp = 0.2;
-		
+	float edgeExp = 0.2;	
 	while (samplePos.a <= len) {
 			gradSample = texture3D(gradientVol,samplePos.xyz);
 			samplePos += deltaDir;
-			if (gradSample.a < 0.01)
+			if (gradSample.a == 0.00)
 				continue;
 			bgNearest = min(samplePos.a,bgNearest);
 			if (gradSample.a < prevGrad.a)
@@ -105,10 +105,9 @@ void main() {
 	colAcc.a *= backAlpha;
 	FragColor = colAcc;	
 	if ( overlays< 1 )	
-		return;
-	
+		return;	
 	//overlay pass
-		if (overlayClip > 0)
+	if (overlayClip > 0)
 		samplePos = clipPos;
 	else {
 		len = noClipLen;
@@ -126,7 +125,7 @@ void main() {
 		vec4 oprevGrad = vec4(0.0,0.0,0.0,0.0);
 		float overFarthest = len;
 		while (samplePos.a <= len) {
-			colorSample = texture(intensityOverlay,samplePos.xyz);
+			colorSample = texture3D(intensityOverlay,samplePos.xyz);
 			samplePos += deltaDir;
 			if (colorSample.a < 0.01)
 				continue;
@@ -137,7 +136,7 @@ void main() {
 			vec3 d = vec3(0.0, 0.0, 0.0);
 			overFarthest = samplePos.a;
 			//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
-			gradSample = texture(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
+			gradSample = texture3D(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
 			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
 			//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
 			if (gradSample.a < oprevGrad.a)
@@ -163,9 +162,5 @@ void main() {
 		}
 		colAcc.rgb = mix(colAcc.rgb, overAcc.rgb, overMix);
 		colAcc.a = max(colAcc.a, overAcc.a);		
-	
-	
-
-
-    FragColor = colAcc;
+		FragColor = colAcc;
 }

@@ -33,7 +33,7 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20190902'; //+fixes Metal memory leak
+  kVers = '1.2.20190902+'; //+fixes Metal memory leak
 type
 
   { TGLForm1 }
@@ -60,11 +60,13 @@ type
     CropMenu1: TMenuItem;
     EditPasteMenu: TMenuItem;
     AddOverlayClusterMenu: TMenuItem;
+    GraphDrawingMenu: TMenuItem;
     RemoveSmallClusterMenu: TMenuItem;
     ResizeMenu1: TMenuItem;
     ReorientMenu1: TMenuItem;
     InvalidateTImer: TTimer;
     RulerCheck: TCheckBox;
+    BetterRenderTimer: TTimer;
     ToolsMenu: TMenuItem;
     OpenAltasMenu: TMenuItem;
     TBSplitter: TSplitter;
@@ -306,10 +308,12 @@ type
     YTrackBar: TTrackBar;
     ZTrackBar: TTrackBar;
     procedure AddOverlayClusterMenuClick(Sender: TObject);
+    procedure BetterRenderTimerTimer(Sender: TObject);
     procedure CenterPanelClick(Sender: TObject);
     procedure EditPasteMenuClick(Sender: TObject);
     procedure InvalidateTImerTimer(Sender: TObject);
     procedure LayerContrastChange(Sender: TObject);
+    procedure GraphDrawingMenuClick(Sender: TObject);
     procedure RemoveSmallClusterMenuClick(Sender: TObject);
     procedure RulerVisible();
     procedure RulerCheckChange(Sender: TObject);
@@ -1938,6 +1942,8 @@ begin
   end;
   ScriptOutputMemo.lines.Add('Python Succesfully Executed');
   gPyRunning := false;
+  if (gPrefs.DisplayOrient = kRenderOrient)  and (Vol1.Quality1to6 = 0) and (not gPyRunning) then
+       BetterRenderTimer.enabled := true;
   result := true;
 end;
 
@@ -2841,6 +2847,8 @@ begin
  LayerWidgetChangeTimer.enabled := false;
  LayerWidgetChangeTimer.enabled := true;
 end;
+
+
 
 procedure TGLForm1.RulerVisible();
 var
@@ -4110,6 +4118,7 @@ function TGLForm1.AddLayer(Filename: string): boolean;
 //add a new layer on top of existing layers
 var
  fnm: string;
+
 begin
  AnimateTimer.Enabled := false;
  DisplayAnimateMenu.Checked := false;
@@ -4121,6 +4130,8 @@ begin
     showmessage('Unable to add another layer: please close a few layers');
     exit(false);
   end;
+  if (vols.NumLayers > 0) then
+     MatLoadForce(kMatNoForce);
   result := vols.AddLayer(fnm, gPrefs.ClearColor);
   if (vols.NumLayers > 1) then
     GLForm1.LayerChange(vols.NumLayers-1, vols.NumLayers-1, -1, kNaNsingle, kNaNsingle); //kNaNsingle
@@ -4136,7 +4147,7 @@ function TGLForm1.AddBackground(Filename: string; isAddToRecent: boolean = true;
 var
    {$IFDEF MATT1}
    ext: string;
- //  i: integer;
+   ss: TShiftState;
    {$ENDIF}
  fnm: string;
  FileNames: array of String ;
@@ -4151,8 +4162,11 @@ begin
   CutNoneBtnClick(nil); //turn off cut-out: not persistent like clip plane
   {$IFDEF MATT1}
   ext := uppercase(extractfileext(fnm));
-  if (ext = '.MAT') then
-     MatLoadForce(kMatForceT1);
+  if (ext = '.MAT') then begin
+     ss := getKeyshiftstate;
+     if (ssShift in ss) then
+        MatLoadForce(kMatForceT1);
+  end;
   {$ENDIF}
   if (not AddLayer(fnm)) then begin
     if (isFromFormDrop) then exit(false);
@@ -4371,6 +4385,61 @@ begin
 //
 end;
 
+
+procedure TGLForm1.GraphOpenMenuClick(Sender: TObject);
+{$IFNDEF GRAPH}
+begin
+     //
+end;
+{$ELSE}
+ var
+   openDlg: TOpenDialog;
+ begin
+   openDlg := TOpenDialog.Create(application);
+   openDlg.Title := 'Select text file with graph data';
+   openDlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+   if not Fileexists(openDlg.InitialDir) then
+      openDlg.InitialDir := GetCurrentDir;
+   openDlg.Filter := 'Text file|*.txt;*.1D;*.PAR|Comma separated values|*.csv|Any file|*.*';
+   openDlg.DefaultExt := 'txt';
+   openDlg.FilterIndex := 1;
+   if not openDlg.Execute then begin
+      openDlg.Free;
+      exit;
+   end;
+   GraphOpen(openDlg.Filename);
+   openDlg.Free;
+ end;
+{$ENDIF}
+
+procedure TGLForm1.GraphDrawingMenuClick(Sender: TObject);
+ var
+    niftiVol: TNIfTI;
+    graphLine: TFloat32s;
+begin
+  if not vols.Layer(0,niftiVol) then exit;
+  if (not vols.Drawing.IsOpen)  or (vols.Drawing.voiIsEmpty) then begin
+    showmessage('No drawing is open. Nothing to graph.');
+    exit;
+  end;
+  {$IFDEF GRAPH}
+  if niftiVol.volumesLoaded < 2 then exit;
+  graphLine := niftiVol.VoxIntensityArray(vols.Drawing.VolRawBytes);
+  if (length(graphLine) <> niftiVol.volumesLoaded) then begin
+     setlength(graphLine, 0);
+     exit;
+  end;
+  //gGraph.ClearLines;
+  gGraph.HorizontalSelection := niftiVol.VolumeDisplayed;
+  gGraph.AddLine(graphLine,'Drawing', true, true);
+  //gGraph.CloneLine();
+  ViewGPUg.Invalidate;
+  setlength(graphLine, 0);
+  if BottomPanel.Height < 50 then
+     GraphShowHideMenu.Click();
+  {$ENDIF}
+end;
+
 procedure TGLForm1.GraphAddMenuClick(Sender: TObject);
 begin
  {$IFDEF GRAPH}
@@ -4419,32 +4488,6 @@ begin
      BottomPanel.Height := GLForm1.Height div 2;
  {$ENDIF}
 end;
-
-procedure TGLForm1.GraphOpenMenuClick(Sender: TObject);
-{$IFNDEF GRAPH}
-begin
-     //
-end;
-{$ELSE}
- var
-   openDlg: TOpenDialog;
- begin
-   openDlg := TOpenDialog.Create(application);
-   openDlg.Title := 'Select text file with graph data';
-   openDlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
-   if not Fileexists(openDlg.InitialDir) then
-      openDlg.InitialDir := GetCurrentDir;
-   openDlg.Filter := 'Text file|*.txt;*.1D;*.PAR|Comma separated values|*.csv|Any file|*.*';
-   openDlg.DefaultExt := 'txt';
-   openDlg.FilterIndex := 1;
-   if not openDlg.Execute then begin
-      openDlg.Free;
-      exit;
-   end;
-   GraphOpen(openDlg.Filename);
-   openDlg.Free;
- end;
-{$ENDIF}
 
 procedure TGLForm1.GraphSaveMenuClick(Sender: TObject);
 {$IFNDEF GRAPH}
@@ -5083,6 +5126,15 @@ begin
   ViewGPU1.Invalidate;
 end;
 
+(*procedure TGLForm1.ReloadShader(isUpdatePrefs: boolean);
+var
+ shaderName: string;
+begin
+ shaderName := ShaderDir +pathdelim+ ShaderDrop.Items[ShaderDrop.ItemIndex]+kExt;
+ Vol1.SetShader(shaderName, isUpdatePrefs);
+ setShaderSliders;
+end;  *)
+
 procedure TGLForm1.ShaderDropChange(Sender: TObject);
 var
  shaderName: string;
@@ -5091,8 +5143,9 @@ begin
    showmessage('Missing plug ins: Unable to find '+ShaderDir);
    exit;
  end;
+ //ReloadShader(true);
  shaderName := ShaderDir +pathdelim+ ShaderDrop.Items[ShaderDrop.ItemIndex]+kExt;
- Vol1.SetShader(shaderName);
+ Vol1.SetShader(shaderName);//, Vol1.Quality1to10 = 10);
  setShaderSliders;
  ViewGPU1.Invalidate;
 end;
@@ -5369,8 +5422,9 @@ begin
 
  end;
  GLBox.MakeCurrent;
- q := Vol1.Quality1to10;
- Vol1.Quality1to10 := 10;
+ q := Vol1.Quality1to6;
+ Vol1.Quality1to6 := 6;
+ //if (q > 5) then GLForm1.ReloadShader(false); //best quality
  w4 := 4 * w;
  yOut := 0;
  hR := 0;
@@ -5425,8 +5479,9 @@ begin
  {$ENDIF}
  GLBox.disableTiledScreenShot();
  GLbox.ReleaseContext;
- Vol1.Quality1to10 := q;
+ Vol1.Quality1to6 := q;
  setlength(p, 0);
+ //if (q <= 5) then GLForm1.ReloadShader(false); //best quality
  ViewGPU1.Invalidate;
 end;
 {$ENDIF}
@@ -5841,15 +5896,15 @@ begin
  fnm := ChangeFileExt(fnm,'.png');
  fnm := ensurePath(fnm);
  {$IFDEF METALAPI} //to do: OpenGL must using tiling due to "pixel ownership problem"
- q := Vol1.Quality1to10;
- Vol1.Quality1to10 := 10;
+ q := Vol1.Quality1to6;
+ Vol1.Quality1to6 := 6;
  if (gPrefs.DisplayOrient = kMosaicOrient) and (gPrefs.MosaicStr <> '') then begin
     SaveMosaicBmp(fnm);
-    Vol1.Quality1to10 := q;
+    Vol1.Quality1to6 := q;
     exit;
  end;
  Vol1.SaveBmp(fnm);
- Vol1.Quality1to10 := q;
+ Vol1.Quality1to6 := q;
  {$ELSE}
   bmp := ScreenShotGL(ViewGPU1);
   if (bmp = nil) then exit;
@@ -5908,12 +5963,20 @@ begin
 end;
 
 procedure TGLForm1.UpdateShaderSettings(Sender: TObject);
+//var
+//   q: integer;
 begin
- Vol1.Quality1to10:=QualityTrack.Position;
+ //q := Vol1.Quality1to6;
+ Vol1.Quality1to6 := QualityTrack.Position;
  Vol1.LightPosition := sph2cartDeg90Light(LightAziTrack.Position, LightElevTrack.Position);
  //Caption := format('%g %g %g', [Vol1.LightPosition.X, Vol1.LightPosition.Y, Vol1.LightPosition.Z]);
-
- Vol1.clipPlane := sph2cartDeg90clip(ClipAziTrack.Position, ClipElevTrack.Position, ClipDepthTrack.Position/ClipDepthTrack.Max );
+ if ClipDepthTrack.Position = 0 then
+     Vol1.clipPlane := sph2cartDeg90clip(ClipAziTrack.Position, ClipElevTrack.Position, -1.0 )
+ else
+     Vol1.clipPlane := sph2cartDeg90clip(ClipAziTrack.Position, ClipElevTrack.Position, ClipDepthTrack.Position/ClipDepthTrack.Max );
+ //if (q > 5) <> (Vol1.Quality1to6 > 5) then begin  //changed from or to "best"
+ //   ReloadShader(false);
+    //caption := inttostr(random(888));
  ViewGPU1.Invalidate;
 end;
 
@@ -6443,6 +6506,7 @@ begin
  ViewGPUg.OnPrepare := @ViewGPUgPrepare;
  {$ELSE}
  ViewGPUg :=  TOpenGLControl.Create(GLForm1);
+ //ViewGPUg.DoubleBuffered:= false;
  ViewGPUg.OpenGLMajorVersion:= 3;
  ViewGPUg.OpenGLMinorVersion:= 3;
  ViewGPUg.MultiSampling:=4;
@@ -6600,7 +6664,7 @@ begin
   {$IFDEF METALAPI}
   ViewGPU1 :=  TMetalControl.Create(CenterPanel);
   //ViewGPU1.OnPrepare := @ViewGPUPrepare;
-  EditMenu.Visible := false; //to do: copy bitmap
+  //EditMenu.Visible := true; //to do: copy bitmap
   //Smooth2DCheck.Visible := false; //to do: Metal nearest neighbor must change shader
   //To do: variant of _Texture2D.metal e.g. _Texture2DFlat.metal with nearest neighbor :
   // constexpr sampler texSampL (mag_filter::linear,min_filter::linear);
@@ -6612,8 +6676,10 @@ begin
   //ViewGPU1.Parent := CenterPanel;
   ViewGPU1.OpenGLMajorVersion := 3;
   ViewGPU1.OpenGLMinorVersion := 3;
-  if gPrefs.MultiSample then
+  if gPrefs.MultiSample124 = 4 then
      ViewGPU1.MultiSampling := 4
+  else if gPrefs.MultiSample124 = 2 then
+     ViewGPU1.MultiSampling := 2
   else begin
     {$IFDEF UNIX}writeln('Multisampling disabled: faster but lower quality');{$ENDIF}
     ViewGPU1.MultiSampling := 1;
@@ -6631,6 +6697,7 @@ begin
   ViewGPU1.OnMouseUp := @ViewGPUMouseUp;
   ViewGPU1.OnMouseWheel := @ViewGPUMouseWheel;
   ViewGPU1.OnPaint := @ViewGPUPaint;
+  //ViewGPU1.DoubleBuffered:= false; //<- must be true for Windows OS
   Vol1 := TGPUVolume.Create(ViewGPU1);
   //Vol1.Slices.RadiologicalConvention := gPrefs.FlipLR_Radiological;
   {$IFNDEF METALAPI}
@@ -6735,7 +6802,7 @@ begin
   UpdateLayerBox(true);
   UpdateVisibleBoxes();
   UpdateOpenRecent();
-  QualityTrack.Position:= gPrefs.Quality1to10;
+  QualityTrack.Position:= gPrefs.Quality1to6;
   {$IFNDEF METALAPI}
   if gPrefs.InitScript <> '' then
      UpdateTimer.Enabled:=true;
@@ -6778,7 +6845,7 @@ begin
   Vol1.SetTextContrast(gPrefs.ClearColor);
   Vol1.Slices.RadiologicalConvention := gPrefs.FlipLR_Radiological;
   Vol1.Slices.LabelOrient := gPrefs.LabelOrient;
-  Vol1.Quality1to10:= gPrefs.Quality1to10;
+  Vol1.Quality1to6:= gPrefs.Quality1to6;
   Vol1.Slices.LineWidth := gPrefs.LineWidth;
   LineWidthEdit.Value := gPrefs.LineWidth;
 end;
@@ -6790,9 +6857,18 @@ begin
     ViewGPUPaint(sender);
 end;
 
+procedure TGLForm1.BetterRenderTimerTimer(Sender: TObject);
+begin
+     if isBusyCore then exit;
+     BetterRenderTimer.Enabled := false;
+     if (gPrefs.DisplayOrient <> kRenderOrient) then exit;
+     BetterRenderTimer.Tag := 1;
+     ViewGPUPaint(sender);
+end;
 procedure TGLForm1.ViewGPUPaint(Sender: TObject);
 var
    niftiVol: TNIfTI;
+   q: integer;
 begin
   if isBusy then exit; //invalidateTimer
   (*if isBusy then begin
@@ -6815,9 +6891,17 @@ begin
  {$ENDIF}
   if gPrefs.DisplayOrient = kMosaicOrient then
        Vol1.PaintMosaic2D(niftiVol, vols.Drawing, gPrefs.MosaicStr)
- else if gPrefs.DisplayOrient = kRenderOrient then //render view
-    Vol1.Paint(niftiVol)
- else
+ else if (gPrefs.DisplayOrient = kRenderOrient) and (BetterRenderTimer.Tag <> 0) then begin //render view
+      q := Vol1.Quality1to6;
+      Vol1.Quality1to6 := 6;
+      BetterRenderTimer.Tag := 0;
+      Vol1.Paint(niftiVol);
+      Vol1.Quality1to6 := q;
+ end else if gPrefs.DisplayOrient = kRenderOrient then begin //render view
+    Vol1.Paint(niftiVol);
+    if (Vol1.Quality1to6 = 0) and (not gPyRunning) then
+       BetterRenderTimer.enabled := true;
+ end else
      Vol1.Paint2D(niftiVol, vols.Drawing, gPrefs.DisplayOrient);
  isBusyCore := false;
 end;

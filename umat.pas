@@ -29,7 +29,7 @@ uses
   {$IFDEF TIMER} DateUtils,{$ENDIF}dialogs;
 
 var
-  gMatModality : integer = kMatNoForce;//kMatNoForce;
+  gMatModality : integer = kMatForceT1;//kMatNoForce;
 
 procedure MatLoadForce(Modality: integer);
 begin
@@ -393,6 +393,7 @@ begin
     exit;
   end;
   if gMatModality = kMatForceT1 then begin
+     MatLoadForce(kMatNoForce);
      idx := matStrings.IndexOf('T1');
      if idx >= 0 then
         exit('T1');

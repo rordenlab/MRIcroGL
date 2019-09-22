@@ -1,11 +1,11 @@
 object GLForm1: TGLForm1
-  Left = 585
-  Height = 653
-  Top = 113
+  Left = 553
+  Height = 764
+  Top = 102
   Width = 761
   AllowDropFiles = True
   Caption = 'MRIcroGL'
-  ClientHeight = 653
+  ClientHeight = 764
   ClientWidth = 761
   Constraints.MinHeight = 20
   Constraints.MinWidth = 20
@@ -19,24 +19,24 @@ object GLForm1: TGLForm1
   LCLVersion = '2.1.0.0'
   object TopPanel: TPanel
     Left = 0
-    Height = 643
+    Height = 754
     Top = 0
     Width = 761
     Align = alClient
-    ClientHeight = 643
+    ClientHeight = 754
     ClientWidth = 761
     TabOrder = 0
     object ToolPanel: TScrollBox
       Left = 1
-      Height = 641
+      Height = 752
       Top = 1
       Width = 268
       HorzScrollBar.Page = 1
       HorzScrollBar.Visible = False
-      VertScrollBar.Page = 641
+      VertScrollBar.Page = 752
       Align = alLeft
       BorderStyle = bsNone
-      ClientHeight = 641
+      ClientHeight = 752
       ClientWidth = 253
       ParentFont = False
       TabOrder = 0
@@ -369,10 +369,10 @@ object GLForm1: TGLForm1
           AnchorSideRight.Side = asrBottom
           Left = 156
           Height = 19
-          Hint = 'Render quality: higher values are slower but look better'
+          Hint = 'Render quality: higher values are slower but look better. Smallest value is dynamic: initially poor quality with high quality after pause.'
           Top = 2
           Width = 80
-          Min = 1
+          Max = 6
           OnChange = UpdateShaderSettings
           Position = 6
           TickStyle = tsNone
@@ -1526,12 +1526,12 @@ object GLForm1: TGLForm1
     end
     object ScriptPanel: TPanel
       Left = 758
-      Height = 641
+      Height = 752
       Top = 1
       Width = 2
       Align = alRight
       BevelOuter = bvNone
-      ClientHeight = 641
+      ClientHeight = 752
       ClientWidth = 2
       Constraints.MinWidth = 2
       ParentFont = False
@@ -1539,12 +1539,12 @@ object GLForm1: TGLForm1
       OnDblClick = ScriptPanelDblClick
       object ScriptBox: TGroupBox
         Left = -8
-        Height = 641
+        Height = 752
         Top = 0
         Width = 10
         Align = alClient
         Caption = 'Scripting'
-        ClientHeight = 622
+        ClientHeight = 733
         ClientWidth = 0
         Constraints.MinWidth = 10
         ParentFont = False
@@ -1552,7 +1552,7 @@ object GLForm1: TGLForm1
         OnDblClick = ScriptPanelDblClick
         object ScriptMemo: TMemo
           Left = 0
-          Height = 416
+          Height = 527
           Top = 0
           Width = 0
           Align = alClient
@@ -1575,7 +1575,7 @@ object GLForm1: TGLForm1
         object ScriptOutputMemo: TMemo
           Left = 0
           Height = 200
-          Top = 422
+          Top = 533
           Width = 0
           Align = alBottom
           BorderStyle = bsNone
@@ -1592,7 +1592,7 @@ object GLForm1: TGLForm1
           Cursor = crVSplit
           Left = 0
           Height = 6
-          Top = 416
+          Top = 527
           Width = 0
           Align = alBottom
           ResizeAnchor = akBottom
@@ -1601,13 +1601,13 @@ object GLForm1: TGLForm1
     end
     object LeftSplitter: TSplitter
       Left = 269
-      Height = 641
+      Height = 752
       Top = 1
       Width = 6
     end
     object RightSplitter: TSplitter
       Left = 752
-      Height = 641
+      Height = 752
       Top = 1
       Width = 6
       Align = alRight
@@ -1615,7 +1615,7 @@ object GLForm1: TGLForm1
     end
     object CenterPanel: TPanel
       Left = 275
-      Height = 641
+      Height = 752
       Top = 1
       Width = 477
       Align = alClient
@@ -1627,7 +1627,7 @@ object GLForm1: TGLForm1
     Cursor = crVSplit
     Left = 0
     Height = 6
-    Top = 643
+    Top = 754
     Width = 761
     Align = alBottom
     MinSize = 4
@@ -1636,7 +1636,7 @@ object GLForm1: TGLForm1
   object BottomPanel: TPanel
     Left = 0
     Height = 4
-    Top = 649
+    Top = 760
     Width = 761
     Align = alBottom
     TabOrder = 2
@@ -1944,6 +1944,10 @@ object GLForm1: TGLForm1
       object GraphSaveBitmapMenu: TMenuItem
         Caption = 'Save As Bitmap'
         OnClick = GraphSaveBitmapMenuClick
+      end
+      object GraphDrawingMenu: TMenuItem
+        Caption = 'Show Intensity Under Drawing'
+        OnClick = GraphDrawingMenuClick
       end
       object GraphAddMenu: TMenuItem
         Caption = 'Add (Hold) Current Position'
@@ -2476,9 +2480,16 @@ object GLForm1: TGLForm1
   end
   object InvalidateTImer: TTimer
     Enabled = False
-    Interval = 2
+    Interval = 1
     OnTimer = InvalidateTImerTimer
     left = 351
     top = 292
+  end
+  object BetterRenderTimer: TTimer
+    Enabled = False
+    Interval = 500
+    OnTimer = BetterRenderTimerTimer
+    left = 360
+    top = 351
   end
 end

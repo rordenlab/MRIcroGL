@@ -9,8 +9,10 @@ const
 type
   TMRU =  array [1..knMRU] of string;
   TPrefs = record
-         GradientMode, AnimationIntervalMsec, LineWidth, StartupWindowMode,DisplayOrient, StartupDisplayOrient, ColorbarSize,ColorbarPosition, Quality1to10, BitmapZoom, MaxVox: integer;
-         MultiSample, ScreenCaptureTransparentBackground, LandmarkPanel, LoadFewVolumes,
+         GradientMode, AnimationIntervalMsec, LineWidth, StartupWindowMode,DisplayOrient,
+         StartupDisplayOrient, ColorbarSize,ColorbarPosition, Quality1to6, BitmapZoom,
+         MaxVox, MultiSample124: integer;
+         ScreenCaptureTransparentBackground, LandmarkPanel, LoadFewVolumes,
          //LabelOrientCube,
          LabelOrient, RulerVisible, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay,
          FlipYZ, FlipLR_Radiological, SkipPrefWriting: boolean;
@@ -64,8 +66,9 @@ begin
             PyLib := '';
             PrevBackgroundImage := '';
             CustomDcm2niix := '';
-            RetinaDisplay := false;
-            MultiSample := true;
+            RetinaDisplay := true;
+            //MultiSample := true;
+            MultiSample124 := 4;
             DisplayOrient:= kAxCorSagOrient; //kRenderOrient;
             StartupDisplayOrient := DisplayOrient;
             DarkMode := false;
@@ -81,7 +84,7 @@ begin
             BitmapZoom := 2;
             FlipLR_Radiological := true;
             ColorbarSize := 50;
-            MaxVox := 512;
+            MaxVox := 560;
             Smooth2D := true;
        end;
   end;
@@ -93,7 +96,7 @@ begin
     ColorBarPosition := 3;
     SkipPrefWriting := false;
     FlipYZ := false;
-    Quality1to10 := 5;
+    Quality1to6 := 0;
     MosaicStr := 'H 0.2 S 0.5 0.3 A 0.5; S 0.2 C 0.3 A 0.4';
     if ScreenCaptureTransparentBackground then
        ClearColor.A := 0;
@@ -190,7 +193,7 @@ begin
   IniStr(lRead, lIniFile, 'PyLib', lPrefs.PyLib);
   IniStr(lRead, lIniFile, 'PrevBackgroundImage', lPrefs.PrevBackgroundImage  );
   IniStr(lRead, lIniFile, 'CustomDcm2niixExe', lPrefs.CustomDcm2niix);
-  IniInt(lRead,lIniFile, 'Quality1to10', lPrefs.Quality1to10);
+  IniInt(lRead,lIniFile, 'Quality1to6', lPrefs.Quality1to6);
   IniInt(lRead,lIniFile, 'ColorbarPosition',lPrefs.ColorBarPosition);
   IniInt(lRead,lIniFile, 'ColorbarSize', lPrefs.ColorbarSize);
   IniInt(lRead,lIniFile, 'BitmapZoom', lPrefs.BitmapZoom);
@@ -202,11 +205,12 @@ begin
   IniInt(lRead,lIniFile, 'StartupWindowMode', lPrefs.StartupWindowMode);
   IniInt(lRead,lIniFile, 'AnimationIntervalMsec', lPrefs.AnimationIntervalMsec);
   IniInt(lRead,lIniFile, 'GradientMode_Fast0_Slow3',lPrefs.GradientMode);
+  IniInt(lRead,lIniFile, 'MultiSample124',lPrefs.MultiSample124);
   {$IFDEF LCLCocoa}
         IniBool(lRead,lIniFile, 'RetinaDisplay',lPrefs.RetinaDisplay);
         IniBool(lRead,lIniFile, 'DarkMode',lPrefs.DarkMode);
     {$ENDIF}
-  IniBool(lRead,lIniFile, 'MultiSample',lPrefs.MultiSample);
+  //IniBool(lRead,lIniFile, 'MultiSample',lPrefs.MultiSample);
   IniBool(lRead,lIniFile, 'ColorbarVisible',lPrefs.ColorbarVisible);
   IniBool(lRead,lIniFile, 'RulerVisible',lPrefs.RulerVisible);
   IniBool(lRead,lIniFile, 'Smooth2D',lPrefs.Smooth2D);

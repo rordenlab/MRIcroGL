@@ -38,7 +38,7 @@ function readForeignHeader (var lFilename: string; var lHdr: TNIFTIhdr; var gzBy
 procedure convertForeignToNifti(var nhdr: TNIFTIhdr);
 function FSize (lFName: String): Int64;
 function isTIFF(fnm: string): boolean;
-procedure nifti_mat44_to_quatern( lR :mat44; var qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac : single);
+procedure nifti_mat44_to_quatern( lR :mat44; out qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac : single);
 
 implementation
 
@@ -422,7 +422,7 @@ begin
 end;
 {$ENDIF}
 
-procedure fromMatrix (m: mat44; var r11,r12,r13,r21,r22,r23,r31,r32,r33: double);
+procedure fromMatrix (m: mat44; out r11,r12,r13,r21,r22,r23,r31,r32,r33: double);
 begin
   r11 := m[0,0];
   r12 := m[0,1];
@@ -471,7 +471,7 @@ begin
 end;
 
 
-procedure fromMatrix33 (m: mat33; var r11,r12,r13,r21,r22,r23,r31,r32,r33: double);
+procedure fromMatrix33 (m: mat33; out r11,r12,r13,r21,r22,r23,r31,r32,r33: double);
 begin
   r11 := m[0,0];
   r12 := m[0,1];
@@ -566,7 +566,7 @@ begin
    result := Z ;
 end;
 
-procedure nifti_mat44_to_quatern( lR :mat44; var qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac : single);
+procedure nifti_mat44_to_quatern( lR :mat44; out qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac : single);
 var
    r11,r12,r13 , r21,r22,r23 , r31,r32,r33, xd,yd,zd , a,b,c,d : double;
    P,Q: mat33;  //3x3
@@ -655,7 +655,17 @@ begin
    qd := d ;
 end;
 
-procedure ZERO_MAT44(var m: mat44); //note sets m[3,3] to one
+procedure ZERO_MAT33(out m: mat33); //note sets m[3,3] to one
+var
+  i,j: integer;
+begin
+  for i := 0 to 2 do
+    for j := 0 to 2 do
+      m[i,j] := 0.0;
+  m[2,2] := 1;
+end;
+
+procedure ZERO_MAT44(out m: mat44); //note sets m[3,3] to one
 var
   i,j: integer;
 begin
@@ -697,7 +707,7 @@ begin
             + A[i,2] * B[2,j] ;
 end;
 
-procedure LOAD_MAT44(var m: mat44; m00,m01,m02,m03, m10,m11,m12,m13, m20,m21,m22,m23: single);
+procedure LOAD_MAT44(out m: mat44; m00,m01,m02,m03, m10,m11,m12,m13, m20,m21,m22,m23: single);
 begin
   m[0,0] := m00;
   m[0,1] := m01;
@@ -771,8 +781,7 @@ procedure convertForeignToNifti(var nhdr: TNIFTIhdr);
 var
   i,nonSpatialMult: integer;
   qto_xyz: mat44;
-   //dumqx, dumqy, dumqz,
-     dumdx, dumdy, dumdz: single;
+  dumdx, dumdy, dumdz: single;
 begin
   nhdr.HdrSz := 348; //used to signify header does not need to be byte-swapped
 	nhdr.magic:=kNIFTI_MAGIC_EMBEDDED_HDR;
@@ -828,7 +837,11 @@ var
   sList : TStringList;
 begin
   result := 0.0;
+  {$IFDEF FPC}
+  DefaultFormatSettings.DecimalSeparator := '.' ;
+  {$ELSE}
   DecimalSeparator := '.';
+  {$ENDIF}
   sList := TStringList.Create;
   sList.Delimiter := ' ';        // Each list item will be blank separated
   sList.DelimitedText := s;
@@ -940,12 +953,10 @@ begin
 end; //nii_readVmr()
 
 function nii_readV3draw (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
-//https://www.povray.org/documentation/view/3.6.1/374/
-//The df3 format consists of a 6 byte header of three 16-bit integers (big endian)
-//The header is followed by x*y*z unsigned integer bytes of data with a resolution of 8, 16 or 32 bit.
-// The data are written with high order byte first (big-endian)
+//https://github.com/Vaa3D
+// https://github.com/fiji/Vaa3d_Reader/blob/master/src/main/java/org/janelia/vaa3d/reader/Vaa3d_Reader.java
 Type
-  Tdf_header = packed record //Next: PIC Format Header structure
+  Tdf_header = packed record
         variant: array [1..24] of char;
         endian: char;
         dataTypeSize: int16;
@@ -1045,7 +1056,7 @@ Type
 var
    dhdr : Tdf_header;
    lHdrFile: file;
-   nvox, nvoxswap, FSz : integer;
+   nvox, FSz : integer;
 begin
   result := false;
   {$I-}
@@ -1686,6 +1697,7 @@ var
   m: mat44;
 begin
   result := false;
+  ZERO_MAT44(m);
   lExt := UpCaseExt(fname);
   if (lExt = '.MGZ') then begin
 	  lBuff := @mgh;
@@ -1803,7 +1815,7 @@ end;
 
 type TFByte =  File of Byte;
 
-  function ReadLnBin(var f: TFByte; var s: string; skipEmptyLines: boolean = false): boolean;
+  function ReadLnBin(var f: TFByte; out s: string; skipEmptyLines: boolean = false): boolean;
   const
     kEOLN = $0A;
     kCR = $0D;
@@ -1970,6 +1982,10 @@ begin
       offset[i] := 0;
       //elementSize[i] := 1;
   end;
+  ZERO_MAT33(matOrient);
+  ZERO_MAT33(mat);
+  for i := 0 to 11 do
+      transformMatrix[i] := 0;
   nPosition := 0;
   nOffset := 0;
   gzBytes := 0;
@@ -2503,6 +2519,10 @@ begin
      exit;
      {$ENDIF}
   end;
+  nDim := 0;
+  fs := nil;
+  zfs := nil;
+  ZERO_MAT44(m);
   swapEndian :=false;
   result := false;
   for i := 1 to 7 do begin
@@ -2841,8 +2861,13 @@ begin
   //gX := gX + 1; GLForm1.caption := inttostr(gX);
   //LOAD_MAT33(rot33, 1,0,0, 0,1,0, 0,0,1);
   LOAD_MAT33(rot33, -1,0,0, 0,-1,0, 0,0,1);
+  for i := 0 to 11 do
+      transformMatrix[i] := 0;
   for i := 0 to 2 do
     offset[i] := 0.0;
+  for i := 0 to 2 do
+      for j := 0 to 2 do
+          mat[i,j] := 0;
   oldMin := NaN;
   oldMax := NaN;
   isOffset := false;
@@ -3307,6 +3332,11 @@ begin
   {$ELSE}
   DecimalSeparator := '.';
   {$ENDIF}
+  for i := 0 to 2 do begin
+      xyzDelta[i] := 0;
+      xyzOrigin[i] := 0;
+      orientSpecific[i] := 0;
+  end;
   nVols := 1;
   result := false;
   isProbMap := false;
@@ -3507,11 +3537,11 @@ begin
   else if (lExt = '.V3DRAW') then
     result := nii_readV3draw(lFilename, lHdr, swapEndian);
   if (not result) and (isTIFF(lFilename)) then
-    NSLog('Use the Import menu (or ImageJ/Fiji) to convert TIFF and LSM files to NIfTI (or NRRD) for viewing')
+    NSLog('Use ImageJ/Fiji to convert TIFF and LSM files to NIfTI (or NRRD) for viewing')
   else if (not result) then begin
        lExt2GZ := isBioFormats(lFilename);
        if lExt2GZ <> '' then
-          NSLog('Use ImageJ/Fiji to convert this '+lExt2GZ+' BioFormat image to NRRD for viewing');
+          NSLog('Use ImageJ/Fiji to convert this '+lExt2GZ+' BioFormat image to NIfTI (or NRRD) for viewing');
   end;
 end;
 

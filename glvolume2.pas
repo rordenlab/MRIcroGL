@@ -21,12 +21,13 @@ const
  kGradientModeGPUFast = 1; //low precision smooth
  kGradientModeGPUSlow = 2; //high precision smooth
  kGradientModeCPUSlowest = 3; //highest precision
+
+ kQualityBest = 6;
 type
   TGPUVolume = class
       private
         {$IFDEF VIEW2D}
         programLine2D, programTex2D, vaoTex2D, vboTex2D, vaoLine2D, vboLine2D, vboBox3D: GLuint;
-        prefLoc: array [1..kMaxUniform] of GLint;
         slices2D: TSlices2D;
         uniform_drawTex, uniform_drawLUT, uniform_drawAlpha,
         uniform_viewportSizeLine, uniform_viewportSizeTex, uniform_backAlpha, uniform_tex, uniform_overlay, uniform_overlaysLoc: GLint;
@@ -35,19 +36,19 @@ type
         txt: TGPUFont;
         {$ENDIF}
         shaderPrefs: TShaderPrefs;
-        RayCastQuality1to10, maxDim,fAzimuth,fElevation, overlayNum, overlayGradTexWidth: integer;
+        RayCastQuality1to6, maxDim,fAzimuth,fElevation, overlayNum, overlayGradTexWidth: integer;
         fDistance: single;
         fLightPos: TVec4;
         fClipPlane: TVec4;
         clrbar: TGPUClrbar;
         glControl: TOpenGLControl;
+        prefLoc: array [1..kMaxUniform] of GLint;
         overlayGradientVolLoc, overlayIntensityVolLoc,
-        rayDirLoc,intensityVolLoc, gradientVolLoc,mvpLoc,normLoc, //imvLoc,
-        lightPositionLoc,clipPlaneLoc,
-        backAlphaLoc, sliceSizeLoc, stepSizeLoc, loopsLoc, overlaysLoc : GLint;
+        rayDirLoc,intensityVolLoc, gradientVolLoc,mvpLoc,normLoc, lightPositionLoc,clipPlaneLoc,
+        backAlphaLoc, sliceSizeLoc, stepSizeLoc, overlaysLoc : GLint;
         overlayGradientTexture3D, overlayIntensityTexture3D,
         drawTexture1D, drawTexture3D,
-        gradientTexture3D, intensityTexture3D, vao, programRaycast: GLuint;
+        gradientTexture3D, intensityTexture3D, vao, programRaycast, programRaycastBetter: GLuint;
         {$IFDEF MATCAP}
         matcap2D: GLuint;
         {$ENDIF}
@@ -82,7 +83,7 @@ type
         {$IFDEF MATCAP}procedure SetMatCap(lFilename: string);{$ENDIF}
         //procedure CreateOverlayTextures();
         procedure UpdateOverlays(vols: TNIfTIs);
-        property Quality1to10: integer read RayCastQuality1to10 write RayCastQuality1to10;
+        property Quality1to6: integer read RayCastQuality1to6 write RayCastQuality1to6;
         property ShaderSliders: TShaderPrefs read shaderPrefs write shaderPrefs;
         procedure SetShaderSlider(idx: integer; newVal: single);
         property Azimuth: integer read fAzimuth write fAzimuth;
@@ -458,7 +459,7 @@ begin
   GetErrorAll(102,'CreatDrawTex');
 end;
 const
- //This fall-back render shader is used if the shader folder is not found or is empty
+ //A common vertex shader for all volume rendering
 kVert = '#version 330 core'
 +#10'layout(location = 0) in vec3 vPos;'
 +#10'out vec3 TexCoord1;'
@@ -468,154 +469,6 @@ kVert = '#version 330 core'
 +#10'  TexCoord1 = vPos;'
 +#10'  gl_Position = ModelViewProjectionMatrix * vec4(vPos, 1.0);'
 +#10'  vPosition = gl_Position;'
-+#10'}';
-
-kFrag = #10'#version 330 core'
-+#10'in vec3 TexCoord1;'
-+#10'out vec4 FragColor;'
-+#10'in vec4 vPosition;'
-+#10'uniform int loops;'
-+#10'uniform float stepSize, sliceSize;'
-+#10'uniform sampler3D intensityVol, gradientVol;'
-+#10'uniform sampler3D intensityOverlay, gradientOverlay;'
-+#10'uniform vec3 lightPosition, rayDir;'
-+#10'uniform vec4 clipPlane;'
-+#10'uniform float ambient = 1.0;'
-+#10'uniform float diffuse = 0.3;'
-+#10'uniform float specular = 0.25;'
-+#10'uniform float shininess = 10.0;'
-+#10'uniform float overlayDepth = 0.3;'
-+#10'uniform int overlays = 0;'
-+#10'uniform float backAlpha = 0.5;'
-+#10'vec3 GetBackPosition (vec3 startPosition) { //when does ray exit unit cube http://prideout.net/blog/?p=64'
-+#10'	vec3 invR = 1.0 / rayDir;'
-+#10'    vec3 tbot = invR * (vec3(0.0)-startPosition);'
-+#10'    vec3 ttop = invR * (vec3(1.0)-startPosition);'
-+#10'    vec3 tmax = max(ttop, tbot);'
-+#10'    vec2 t = min(tmax.xx, tmax.yz);'
-+#10'	return startPosition + (rayDir * min(t.x, t.y));'
-+#10'}'
-+#10'void main() {'
-+#10'    vec3 start = TexCoord1.xyz;'
-+#10'	vec3 backPosition = GetBackPosition(start);'
-+#10'	vec3 dir = backPosition - start;'
-+#10'	float len = length(dir);'
-+#10'	dir = normalize(dir);'
-+#10'	vec3 deltaDir = dir * stepSize;'
-+#10'	vec4 gradSample, colorSample;'
-+#10'	float stepSizeX2 = stepSize * 2.0; //avoid specular effects in clip plane'
-+#10'	float bgNearest = len; //assume no hit'
-+#10'	float overNearest = bgNearest;'
-+#10''
-+#10'	vec4 overAcc = vec4(0.0,0.0,0.0,0.0);'
-+#10'	vec4 colAcc = vec4(0.0,0.0,0.0,0.0);'
-+#10'	vec4 prevGrad = vec4(0.0,0.0,0.0,0.0);'
-+#10'	float lengthAcc = 0.0;'
-+#10'	vec3 samplePos;'
-+#10'	//overlay pass'
-+#10'	if ( overlays > 0 ) {'
-+#10'samplePos = start.xyz +deltaDir* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453));'
-+#10''
-+#10'while (lengthAcc <= len) {'
-+#10'	colorSample = texture(intensityOverlay,samplePos);'
-+#10'	colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);'
-+#10'	vec3 a = colorSample.rgb * ambient;'
-+#10'	float s =  0;'
-+#10'	vec3 d = vec3(0.0, 0.0, 0.0);'
-+#10'	if ((colorSample.a > 0.01) && (lengthAcc > stepSizeX2)) {'
-+#10'		bgNearest = min(lengthAcc,bgNearest);'
-+#10'		//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients'
-+#10'		gradSample = texture(gradientOverlay,samplePos); //interpolate gradient direction and magnitude'
-+#10'		gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);'
-+#10'		//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html'
-+#10'		if (gradSample.a < prevGrad.a)'
-+#10'			gradSample.rgb = prevGrad.rgb;'
-+#10'		prevGrad = gradSample;'
-+#10'		float lightNormDot = dot(gradSample.rgb, lightPosition);'
-+#10'		d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;'
-+#10'		s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);'
-+#10''
-+#10'	}'
-+#10'	colorSample.rgb = a + d + s;'
-+#10'	colorSample.rgb *= colorSample.a;'
-+#10'	colAcc= (1.0 - colAcc.a) * colorSample + colAcc;'
-+#10'	samplePos += deltaDir;'
-+#10'	lengthAcc += stepSize;'
-+#10'	if ( lengthAcc >= len || colAcc.a > 0.95 )'
-+#10'		break;'
-+#10'} //while lengthAcc < len'
-+#10'colAcc.a = colAcc.a/0.95;'
-+#10'overAcc = colAcc; //color accumulated by overlays'
-+#10'overNearest = bgNearest;'
-+#10'//clear values for background'
-+#10'colAcc = vec4(0.0,0.0,0.0,0.0);'
-+#10'prevGrad = vec4(0.0,0.0,0.0,0.0);'
-+#10'lengthAcc = 0.0;'
-+#10'	} //if overlayNum > 0'
-+#10'	bgNearest = len; //assume no hit'
-+#10'	//end ovelay pass clip plane applied to background ONLY...'
-+#10'	samplePos = start.xyz +deltaDir* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453));'
-+#10'	if (clipPlane.a > -0.5) {'
-+#10'bool frontface = (dot(dir , clipPlane.xyz) > 0.0);'
-+#10'float dis = dot(dir,clipPlane.xyz);'
-+#10'if (dis != 0.0  )  dis = (-clipPlane.a - dot(clipPlane.xyz, start.xyz-0.5)) / dis;'
-+#10'//test: "return" fails on 2006MacBookPro10.4ATI1900, "discard" fails on MacPro10.5NV8800'
-+#10'if (((frontface) && (dis >= len)) || ((!frontface) && (dis <= 0.0)))'
-+#10'	lengthAcc = len + 1.0; //no background'
-+#10'else if ((dis > 0.0) && (dis < len)) {'
-+#10'	if (frontface) {'
-+#10'		lengthAcc = dis;'
-+#10'		//stepSizeX2 = dis;'
-+#10'		samplePos += dir * dis;'
-+#10'		//len -= dir * dis;'
-+#10'	} else {'
-+#10'		backPosition =  start + dir * (dis);'
-+#10'		len = length(backPosition - start);'
-+#10'	}'
-+#10'}'
-+#10'	}'
-+#10'	stepSizeX2 = lengthAcc + (stepSize * 2.0);'
-+#10'	while (lengthAcc <= len) {'
-+#10'colorSample = texture(intensityVol,samplePos);'
-+#10'colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);'
-+#10'vec3 a = colorSample.rgb * ambient;'
-+#10'float s =  0;'
-+#10'vec3 d = vec3(0.0, 0.0, 0.0);'
-+#10'if ((colorSample.a > 0.01) && (lengthAcc > stepSizeX2)) {'
-+#10'	bgNearest = min(lengthAcc,bgNearest);'
-+#10'	//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients'
-+#10'	gradSample= texture(gradientVol,samplePos);'
-+#10'	gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);'
-+#10'	//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html'
-+#10'	if (gradSample.a < prevGrad.a)'
-+#10'		gradSample.rgb = prevGrad.rgb;'
-+#10'	prevGrad = gradSample;'
-+#10'	float lightNormDot = dot(gradSample.rgb, lightPosition);'
-+#10'	d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;'
-+#10'	s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);'
-+#10'}'
-+#10'colorSample.rgb = a + d + s;'
-+#10'colorSample.rgb *= colorSample.a;'
-+#10'colAcc= (1.0 - colAcc.a) * colorSample + colAcc;'
-+#10'samplePos += deltaDir;'
-+#10'lengthAcc += stepSize;'
-+#10'if ( lengthAcc >= len || colAcc.a > 0.95 )'
-+#10'	break;'
-+#10'	} //while lengthAcc < len'
-+#10'	colAcc.a = colAcc.a/0.95;'
-+#10'	colAcc.a *= backAlpha;'
-+#10'	//if (overAcc.a > 0.0) { //<- conditional not required: overMix always 0 for overAcc.a = 0.0'
-+#10'float overMix = overAcc.a;'
-+#10'if ((overNearest > bgNearest) && (colAcc.a > 0.0)) { //background (partially) occludes overlay'
-+#10'	//max distance between two vertices of unit cube is 1.73'
-+#10'	float dx = (overNearest - bgNearest)/1.73;'
-+#10'	dx = colAcc.a * pow(dx, overlayDepth);'
-+#10'	overMix *= 1.0 - dx;'
-+#10'}'
-+#10'colAcc.rgb = mix(colAcc.rgb, overAcc.rgb, overMix);'
-+#10'colAcc.a = max(colAcc.a, overAcc.a);'
-+#10'	//}'
-+#10'    FragColor = colAcc;'
 +#10'}';
 
 {$IFDEF MATCAP}
@@ -717,6 +570,289 @@ begin
 end;
 {$ENDIF}
 
+const
+kFragBase = '#version 330'
++#10'in vec3 TexCoord1;'
++#10'out vec4 FragColor;'
++#10'in vec4 vPosition;'
++#10'uniform float stepSize, sliceSize;'
++#10'uniform sampler3D intensityVol, gradientVol;'
++#10'uniform sampler3D intensityOverlay, gradientOverlay;'
++#10'uniform vec3 lightPosition, rayDir;'
++#10'uniform vec4 clipPlane;'
++#10'uniform int overlays = 0;'
++#10'uniform float backAlpha = 0.5;'
++#10'vec3 GetBackPosition (vec3 startPosition) {'
++#10' vec3 invR = 1.0 / rayDir;'
++#10' vec3 tbot = invR * (vec3(0.0)-startPosition);'
++#10' vec3 ttop = invR * (vec3(1.0)-startPosition);'
++#10' vec3 tmax = max(ttop, tbot);'
++#10' vec2 t = min(tmax.xx, tmax.yz);'
++#10' return startPosition + (rayDir * min(t.x, t.y));'
++#10'}'
++#10'vec4 applyClip(vec3 dir, inout vec4 samplePos, inout float len) {'
++#10'	if (clipPlane.a <= -0.5) return samplePos;'
++#10'	bool frontface = (dot(dir , clipPlane.xyz) > 0.0);'
++#10'	float dis = dot(dir,clipPlane.xyz);'
++#10'	if (dis != 0.0  )  dis = (-clipPlane.a - dot(clipPlane.xyz, samplePos.xyz-0.5)) / dis;'
++#10'	//test: "return" fails on 2006MacBookPro10.4ATI1900, "discard" fails on MacPro10.5NV8800'
++#10'	if (((frontface) && (dis >= len)) || ((!frontface) && (dis <= 0.0))) {'
++#10'		samplePos.a = len + 1.0;//no background'
++#10'	} else if ((dis > 0.0) && (dis < len)) {'
++#10'		if (frontface) {'
++#10'			samplePos.a = dis;'
++#10'			samplePos.xyz += dir * dis;'
++#10'		} else {'
++#10'			len =  dis;'
++#10'		}'
++#10'	}'
++#10'	return samplePos;'
++#10'}'
++#10'void fastPass (float len, vec3 dir, sampler3D vol, inout vec4 samplePos){'
++#10'	vec4 deltaDir = vec4(dir.xyz * max(stepSize, sliceSize * 1.95), max(stepSize, sliceSize * 1.95));'
++#10'	while  (texture(vol,samplePos.xyz).a == 0.0) {'
++#10'		samplePos += deltaDir;'
++#10'		if (samplePos.a > len) return; //no hit'
++#10'	}'
++#10'	samplePos -= deltaDir;'
++#10'}';
+
+// GetBackPosition -> when does ray exit unit cube http://prideout.net/blog/?p=64
+
+
+kFragFaster = kFragBase
++#10'vec4 texture3D(sampler3D vol, vec3 coord) {'
++#10'	return texture(vol, coord); //trilinear interpolation'
++#10'}'
++#10;
+
+
+kFragBetter = kFragBase
++#10'#define BETTER_BUT_SLOWER'
++#10'vec3 textureSz;'
++#10'vec4 texture3D(sampler3D vol, vec3 coord) {'
++#10'  // shift the coordinate from [0,1] to [-0.5, textureSz-0.5]'
++#10'  //vec3 textureSz = uResolution; //textureSz3D(tex, 0));'
++#10'  //vec3 textureSz = textureSz3D(vol, 0);'
++#10'  vec3 coord_grid = coord * textureSz - 0.5;'
++#10'  vec3 index = floor(coord_grid);'
++#10'  vec3 fraction = coord_grid - index;'
++#10'  vec3 one_frac = 1.0 - fraction;'
++#10'  vec3 w0 = 1.0/6.0 * one_frac*one_frac*one_frac;'
++#10'  vec3 w1 = 2.0/3.0 - 0.5 * fraction*fraction*(2.0-fraction);'
++#10'  vec3 w2 = 2.0/3.0 - 0.5 * one_frac*one_frac*(2.0-one_frac);'
++#10'  vec3 w3 = 1.0/6.0 * fraction*fraction*fraction;'
++#10'  vec3 g0 = w0 + w1;'
++#10'  vec3 g1 = w2 + w3;'
++#10'  vec3 mult = 1.0 / textureSz;'
++#10'  vec3 h0 = mult * ((w1 / g0) - 0.5 + index);  //h0 = w1/g0 - 1, move from [-0.5, textureSz-0.5] to [0,1]'
++#10'  vec3 h1 = mult * ((w3 / g1) + 1.5 + index);  //h1 = w3/g1 + 1, move from [-0.5, textureSz-0.5] to [0,1]'
++#10'  // fetch the eight linear interpolations'
++#10'  // weighting and fetching is interleaved for performance and stability reasons'
++#10'  vec4 tex000 =  texture(vol,h0);'
++#10'  vec4 tex100 =  texture(vol,vec3(h1.x, h0.y, h0.z));'
++#10'  tex000 = mix(tex100, tex000, g0.x);  //weigh along the x-direction'
++#10'  vec4 tex010 =  texture(vol,vec3(h0.x, h1.y, h0.z));'
++#10'  vec4 tex110 =  texture(vol,vec3(h1.x, h1.y, h0.z));'
++#10'  tex010 = mix(tex110, tex010, g0.x);  //weigh along the x-direction'
++#10'  tex000 = mix(tex010, tex000, g0.y);  //weigh along the y-direction'
++#10'  vec4 tex001 =  texture(vol,vec3(h0.x, h0.y, h1.z));'
++#10'  vec4 tex101 =  texture(vol,vec3(h1.x, h0.y, h1.z));'
++#10'  tex001 = mix(tex101, tex001, g0.x);  //weigh along the x-direction'
++#10'  vec4 tex011 =  texture(vol,vec3(h0.x, h1.y, h1.z));'
++#10'  vec4 tex111 =  texture(vol,h1);'
++#10'  tex011 = mix(tex111, tex011, g0.x);  //weigh along the x-direction'
++#10'  tex001 = mix(tex011, tex001, g0.y);  //weigh along the y-direction'
++#10'  return mix(tex001, tex000, g0.z);  //weigh along the z-direction'
++#10'}'
++#10;
+
+(* License applicable to function texture3D():
+Copyright (c) 2008-2013, Danny Ruijters. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+*  Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+*  Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+*  Neither the name of the copyright holders nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+The views and conclusions contained in the software and documentation are
+those of the authors and should not be interpreted as representing official
+policies, either expressed or implied.
+
+When using this code in a scientific project, please cite one or all of the
+following papers:
+*  Daniel Ruijters and Philippe Thévenaz,
+   GPU Prefilter for Accurate Cubic B-Spline Interpolation,
+   The Computer Journal, vol. 55, no. 1, pp. 15-20, January 2012.
+*  Daniel Ruijters, Bart M. ter Haar Romeny, and Paul Suetens,
+   Efficient GPU-Based Texture Interpolation using Uniform B-Splines,
+   Journal of Graphics Tools, vol. 13, no. 4, pp. 61-69, 2008.
+*)
+
+kFrag = kFragFaster
++#10'uniform float ambient = 1.0;'
++#10'uniform float diffuse = 0.3;'
++#10'uniform float specular = 0.25;'
++#10'uniform float shininess = 10.0;'
++#10'uniform float overlayFuzzy = 0.5;'
++#10'uniform float overlayDepth = 0.3;'
++#10'uniform float overlayClip = 0.0;'
++#10'uniform float backAlpha = 0.5;'
++#10'void main() {'
++#10'	#ifdef BETTER_BUT_SLOWER'
++#10'	textureSz = textureSize(intensityVol, 0);'
++#10'	#endif'
++#10' vec3 start = TexCoord1.xyz;'
++#10'	vec3 backPosition = GetBackPosition(start);'
++#10'	vec3 dir = backPosition - start;'
++#10'	float len = length(dir);'
++#10'	dir = normalize(dir);'
++#10'	vec4 deltaDir = vec4(dir.xyz * stepSize, stepSize);'
++#10'	vec4 gradSample, colorSample;'
++#10'	float bgNearest = len;'
++#10'	float overFarthest = len;'
++#10'	vec4 colAcc = vec4(0.0,0.0,0.0,0.0);'
++#10'	vec4 prevGrad = vec4(0.0,0.0,0.0,0.0);'
++#10'	vec4 samplePos;'
++#10'	float noClipLen = len;'
++#10'	samplePos = vec4(start.xyz +deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)), 0.0);'
++#10'	if (clipPlane.a > -0.5) {'
++#10'		bool frontface = (dot(dir , clipPlane.xyz) > 0.0);'
++#10'		float dis = dot(dir,clipPlane.xyz);'
++#10'		if (dis != 0.0 ) dis = (-clipPlane.a - dot(clipPlane.xyz, start.xyz-0.5)) / dis;'
++#10'		if (((frontface) && (dis >= len)) || ((!frontface) && (dis <= 0.0))) {'
++#10'			samplePos.a = len + 1.0;'
++#10'		} else if ((dis > 0.0) && (dis < len)) {'
++#10'			if (frontface) {'
++#10'				samplePos.a = dis;'
++#10'				samplePos.xyz += dir * dis;'
++#10'			} else {'
++#10'				backPosition = start + dir * (dis);'
++#10'				len = length(backPosition - start);'
++#10'			}'
++#10'		}'
++#10'	}'
++#10'	vec4 clipPos = samplePos;'
++#10'	float stepSizeX2 = samplePos.a + (stepSize * 2.0);'
++#10'	deltaDir = vec4(dir.xyz * max(stepSize, sliceSize * 1.95), max(stepSize, sliceSize * 1.95));'
++#10'	while (samplePos.a <= len) {'
++#10'		if ((texture(intensityVol,samplePos.xyz).a) > 0.0) break;'
++#10'		samplePos += deltaDir;'
++#10'	}'
++#10'	if ((samplePos.a > len) && ( overlays < 1 )) {'
++#10'		FragColor = colAcc;'
++#10'		return;		'
++#10'	}'
++#10'	samplePos -= deltaDir;'
++#10'	if (samplePos.a < clipPos.a)'
++#10'		samplePos = clipPos;'
++#10'	deltaDir = vec4(dir.xyz * stepSize, stepSize);'
++#10'	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);'
++#10'	while (samplePos.a <= len) {'
++#10'		colorSample = texture3D(intensityVol,samplePos.xyz);'
++#10'		colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);'
++#10'		if (colorSample.a > 0.01) {'
++#10'			bgNearest = min(samplePos.a,bgNearest);'
++#10'			if (samplePos.a > stepSizeX2) {'
++#10'				vec3 a = colorSample.rgb * ambient;'
++#10'				gradSample= texture3D(gradientVol,samplePos.xyz);'
++#10'				gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);'
++#10'				if (gradSample.a < prevGrad.a)'
++#10'					gradSample.rgb = prevGrad.rgb;'
++#10'				prevGrad = gradSample;'
++#10'				'
++#10'				float lightNormDot = dot(gradSample.rgb, lightPosition);'
++#10'				vec3 d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;'
++#10'				float s = specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);'
++#10'				colorSample.rgb = a + d + s;'
++#10'			} else'
++#10'				colorSample.a = clamp(colorSample.a*3.0,0.0, 1.0);'
++#10'			colorSample.rgb *= colorSample.a;'
++#10'			colAcc= (1.0 - colAcc.a) * colorSample + colAcc;'
++#10'			if ( colAcc.a > 0.95 )'
++#10'				break;'
++#10'		}'
++#10'		samplePos += deltaDir;'
++#10'	}'
++#10'	colAcc.a = colAcc.a/0.95;'
++#10'	if ( overlays < 1 ) {'
++#10'		FragColor = colAcc;'
++#10'		return;'
++#10'	}'
++#10'	vec4 overAcc = vec4(0.0,0.0,0.0,0.0);'
++#10'	prevGrad = vec4(0.0,0.0,0.0,0.0);'
++#10'	if (overlayClip > 0)'
++#10'		samplePos = clipPos;'
++#10'	else {'
++#10'		len = noClipLen;'
++#10'		samplePos = vec4(start.xyz +deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)), 0.0);'
++#10'	}'
++#10'	clipPos = samplePos;'
++#10'	deltaDir = vec4(dir.xyz * max(stepSize, sliceSize), max(stepSize, sliceSize));'
++#10'	while (samplePos.a <= len) {'
++#10'		if ((texture(intensityOverlay,samplePos.xyz).a) > 0.0) break;'
++#10'		samplePos += deltaDir;'
++#10'	}'
++#10'	samplePos -= deltaDir;'
++#10'	if (samplePos.a < clipPos.a)'
++#10'		samplePos = clipPos;'
++#10'	deltaDir = vec4(dir.xyz * stepSize, stepSize);'
++#10'	while (samplePos.a <= len) {'
++#10'		colorSample = texture3D(intensityOverlay,samplePos.xyz);'
++#10'		if (colorSample.a > 0.00) {'
++#10'			colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);'
++#10'			colorSample.a *= overlayFuzzy;'
++#10'			vec3 a = colorSample.rgb * ambient;'
++#10'			float s = 0;'
++#10'			vec3 d = vec3(0.0, 0.0, 0.0);'
++#10'			overFarthest = samplePos.a;'
++#10'			gradSample = texture3D(gradientOverlay,samplePos.xyz);'
++#10'			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);'
++#10'			if (gradSample.a < prevGrad.a)'
++#10'				gradSample.rgb = prevGrad.rgb;'
++#10'			prevGrad = gradSample;'
++#10'			float lightNormDot = dot(gradSample.rgb, lightPosition);'
++#10'			d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;'
++#10'			s = specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);'
++#10'			colorSample.rgb = a + d + s;'
++#10'			colorSample.rgb *= colorSample.a;'
++#10'			overAcc= (1.0 - overAcc.a) * colorSample + overAcc;'
++#10'			if (overAcc.a > 0.95 )'
++#10'				break;'
++#10'		}'
++#10'		samplePos += deltaDir;'
++#10'	}'
++#10'	overAcc.a = overAcc.a/0.95;'
++#10'	colAcc.a *= backAlpha;'
++#10'	float overMix = overAcc.a;'
++#10'	if (((overFarthest) > bgNearest) && (colAcc.a > 0.0)) {'
++#10'		float dx = (overFarthest - bgNearest)/1.73;'
++#10'		dx = colAcc.a * pow(dx, overlayDepth);'
++#10'		overMix *= 1.0 - dx;'
++#10'	}'
++#10'	colAcc.rgb = mix(colAcc.rgb, overAcc.rgb, overMix);'
++#10'		colAcc.a = max(colAcc.a, overAcc.a);'
++#10'	FragColor = colAcc;'
++#10'}';
+
 procedure TGPUVolume.SetShader(shaderName: string);
 var
   VertexProgram, FragmentProgram: string;
@@ -724,8 +860,14 @@ var
 begin
   glControl.MakeCurrent();
   glUseProgram(0);
+  if (programRaycastBetter <> 0) then glDeleteProgram(programRaycastBetter);
+  loadVertFrag(shaderName, VertexProgram, FragmentProgram, kFragBetter);
+  if VertexProgram = '' then VertexProgram := kVert;
+  if FragmentProgram = '' then FragmentProgram := kFrag;
+  programRaycastBetter :=  initVertFrag(VertexProgram, FragmentProgram);
+
   if (programRaycast <> 0) then glDeleteProgram(programRaycast);
-  loadVertFrag(shaderName, VertexProgram, FragmentProgram);
+  loadVertFrag(shaderName, VertexProgram, FragmentProgram, kFragFaster);
   if VertexProgram = '' then VertexProgram := kVert;
   if FragmentProgram = '' then FragmentProgram := kFrag;
   programRaycast :=  initVertFrag(VertexProgram, FragmentProgram);
@@ -740,7 +882,7 @@ begin
   normLoc := glGetUniformLocation(programRaycast, pAnsiChar('NormalMatrix'));
   //printf(format('%d %s--->matcap @ %d = %d', [normLoc, shaderName, matcapLoc, matcap2D]));
   {$ENDIF}
-  loopsLoc := glGetUniformLocation(programRaycast, pAnsiChar('loops'));
+  //loopsLoc := glGetUniformLocation(programRaycast, pAnsiChar('loops'));
   overlaysLoc := glGetUniformLocation(programRaycast, pAnsiChar('overlays'));
   lightPositionLoc := glGetUniformLocation(programRaycast, pAnsiChar('lightPosition'));
   clipPlaneLoc :=  glGetUniformLocation(programRaycast, pAnsiChar('clipPlane'));
@@ -894,7 +1036,7 @@ begin
   fElevation := 30;
   overlayNum := 0;
   overlayGradTexWidth := 2; //refresh
-  RaycastQuality1to10 := 5;
+  RaycastQuality1to6 := 5;
   SelectionRect := Vec4(-1,0,0,0);
   fLightPos := Vec4(0, 0.707, 0.707, 0);
   fClipPlane := Vec4(0, 0, 0, -1);
@@ -909,6 +1051,8 @@ begin
   colorEditorVisible := false;
   isSmooth2D := true;
   shaderPrefs.nUniform:= 0;
+  programRaycast := 0;
+  programRaycastBetter := 0;
 end;
 
 procedure TGPUVolume.LoadCube();
@@ -1215,23 +1359,25 @@ begin
   result := round(p1 + frac * (p2 - p1));
 end;//linear interpolation
 
-function ComputeStepSize (Quality1to10, Slices: integer): single;
+function ComputeStepSize (Quality1to6, Slices: integer): single;
 var
+  i : integer;
   f: single;
 begin
-  f := Quality1to10;
-  if f <= 1 then
-    f := 0.25;
-  if f > 10 then
-    f := 10;
-  //f := (f)/10;
-  //f := lerp (0.0,slices*2,f);
+  //if (i = 0) then i := 2; //dynamic (1=0.4, 2=0.55 ... 5=1.0
+  i := Quality1to6 - 1;
+  i := max(i,0);
+  i := min(i,4); //quality 6 is same as 5 but adds cubic sampling
+  f := lerp(slices*0.4,slices*1.0, i/4); //0.4..1.0
+  //f := lerp(slices*0.4,slices*1.0, i/4); 0.5..1.0
 
-  f := f/10;
+   (*if i > 5 then
+     i := i - 1; //5 and 6 have same slices, 6 adds cubic slicing
+  f := i/10;
   if (f < 0.5) then
     f := lerp (slices*0.25,slices*1.75, f)
   else
-      f := lerp (0.0,slices*2.0,f);
+      f := lerp (0.0,slices*2.0,f); *)
   if f < 10 then
     f := 10;
   result := 1/f;
@@ -1298,7 +1444,7 @@ begin
        lElevation := 90
   else
       lElevation := 0;
-  glUseProgram(programRaycast);
+  glUseProgram(programRaycastBetter);
   glBindFramebuffer(GL_FRAMEBUFFER, 0); //draw to screen
   glActiveTexture(GL_TEXTURE2);
   glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
@@ -1316,13 +1462,13 @@ begin
   glBindTexture(GL_TEXTURE_3D, overlayGradientTexture3D);
   glUniform1i(overlayGradientVolLoc, 5);
   //other uniforms...
-  glUniform1f(stepSizeLoc, ComputeStepSize(RayCastQuality1to10, maxDim)) ;
+  glUniform1f(stepSizeLoc, ComputeStepSize(kQualityBest, maxDim)) ;
   if vol.IsLabels then
      glUniform1f(backAlphaLoc, 1)
    else
      glUniform1f(backAlphaLoc, vol.OpacityPercent/100);
   glUniform1f(sliceSizeLoc, 1.0/maxDim);
-  glUniform1i(loopsLoc,round(maxDim*2.2));
+  //glUniform1i(loopsLoc,round(maxDim*2.2));
   {$IFDEF MATCAP}
   //printf(format('>>matcapLoc %d matcap %d',[matcapLoc, matcap2D]));
   if (matcapLoc >= 0) and (matcap2D > 0) then begin
@@ -1657,7 +1803,10 @@ begin
      LoadTexture(vol, false);
   if (intensityTexture3D = 0) then
     exit;
-  glUseProgram(programRaycast);
+  if Quality1to6 = kQualityBest then
+       glUseProgram(programRaycastBetter)
+  else
+      glUseProgram(programRaycast);
   glBindFramebuffer(GL_FRAMEBUFFER, 0); //draw to screen
   //bind background intensity (color)
   glActiveTexture(GL_TEXTURE2);
@@ -1681,13 +1830,13 @@ begin
   glBindTexture(GL_TEXTURE_3D, overlayGradientTexture3D);
   glUniform1i(overlayGradientVolLoc, 5);
   //bind other uniforms
-  glUniform1f(stepSizeLoc, ComputeStepSize(RayCastQuality1to10, maxDim)) ;
+  glUniform1f(stepSizeLoc, ComputeStepSize(Quality1to6, maxDim)) ;
   if vol.IsLabels then
      glUniform1f(backAlphaLoc, 1)
   else
    glUniform1f(backAlphaLoc, vol.OpacityPercent/100);
   glUniform1f(sliceSizeLoc, 1/maxDim);
-  glUniform1i(loopsLoc,round(maxDim*2.2));
+  //glUniform1i(loopsLoc,round(maxDim*2.2));
   //glUniform3f(clearColorLoc, fClearColor.r/255, fClearColor.g/255, fClearColor.b/255);
   modelMatrix := TMat4.Identity;
   modelMatrix *= TMat4.Translate(0, 0, -fDistance);
