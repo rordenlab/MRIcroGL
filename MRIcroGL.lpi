@@ -138,6 +138,7 @@
       </Options>
     </Linking>
     <Other>
+      <WriteFPCLogo Value="False"/>
       <CustomOptions Value="-dDisableLCLGIF 
 -dDisableLCLPNM"/>
     </Other>

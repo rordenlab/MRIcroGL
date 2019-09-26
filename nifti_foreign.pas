@@ -52,10 +52,10 @@ Type
   vect3 = array [0..2] of Single;
   ivect3 = array [0..2] of integer;
 
-(*procedure printf(str: string);
+procedure printf(str: string);
 begin
   {$IFDEF UNIX} writeln(str);{$ENDIF}
-end;*)
+end;
 
 
 {$IFDEF GL10}
@@ -3222,8 +3222,203 @@ begin
     nhdr.sform_code := kNIFTI_XFORM_SCANNER_ANAT;
 end;
 
-//readSPRHeader
+(*procedure Report_Mat(var nhdr: TNIFTIhdr);
+begin
+     printf(format('m=[%g %g %g %g; %g %g %g %g; %g %g %g %g; 0 0 0 1]',[nhdr.srow_x[0], nhdr.srow_x[1], nhdr.srow_x[2], nhdr.srow_x[3],
+       nhdr.srow_y[0], nhdr.srow_y[1], nhdr.srow_y[2], nhdr.srow_y[3],
+        nhdr.srow_z[0], nhdr.srow_z[1], nhdr.srow_z[2], nhdr.srow_z[3] ]));
+
+end;
+
+procedure m33 (m: mat33);
+begin
+     printf(format('m=[%g %g %g; %g %g %g; %g %g %g]',
+       [m[0,0], m[0,1], m[0,2],
+        m[1,0], m[1,1], m[1,2],
+        m[2,0], m[2,1], m[2,2]  ]));
+
+end;
+*)
+
+procedure set_Mat(var nhdr : TNIFTIhdr; x0,x1,x2,x3, y0,y1,y2,y3, z0,z1,z2,z3: single);
+begin
+     nhdr.srow_x[0] := x0;
+     nhdr.srow_x[1] := x1;
+     nhdr.srow_x[2] := x2;
+     nhdr.srow_x[3] := x3;
+     nhdr.srow_y[0] := y0;
+     nhdr.srow_y[1] := y1;
+     nhdr.srow_y[2] := y2;
+     nhdr.srow_y[3] := y3;
+     nhdr.srow_z[0] := z0;
+     nhdr.srow_z[1] := z1;
+     nhdr.srow_z[2] := z2;
+     nhdr.srow_z[3] := z3;
+end;
+
+procedure idf2SForm(var nhdr: TNIFTIhdr; toplc: vect3; dcos: mat33);
+var
+   mm, diag, lps2ras, m: mat33;
+begin
+  diag := Matrix2D(nhdr.pixdim[1],0,0,  0,nhdr.pixdim[2],0, 0,0,nhdr.pixdim[3]);
+  mm := nifti_mat33_mul(dcos, diag);
+  lps2ras := Matrix2D(-1,0,0,  0,-1,0, 0,0,1);
+  m :=  nifti_mat33_mul(lps2ras,mm);
+  set_Mat(nhdr,
+               m[0,0],m[0,1],m[0,2],-toplc[0],
+               m[1,0],m[1,1],m[1,2],-toplc[1],
+               m[2,0],m[2,1],m[2,2], toplc[2]
+               );
+  //Report_Mat(nhdr);
+end;
+
+function nii_readIdf (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+//UCSF IDF format used by SIVIC
+label
+  666;
+var
+  FP: TextFile;
+  sList: TStringList;
+  i, j : integer;
+  isOK: boolean;
+  str, errStr, hdrName, lExt: string;
+  dcos: mat33;
+  toplc: vect3;
+begin
+  result := false;
+  {$IFDEF FPC}
+   DefaultFormatSettings.DecimalSeparator := '.' ;
+   {$ELSE}
+   DecimalSeparator := '.';
+   {$ENDIF}
+   hdrName := fname;
+   lExt := UpCaseExt(fname);
+   if (lExt <> '.IDF') then
+      hdrName := ChangeFileExt(hdrName, '.idf');
+   if not fileexists(hdrName) then begin
+      printf('Unable to find IDF header '+hdrName);
+      exit;
+   end;
+   fname := ChangeFileExt(hdrName, '.byt');
+   nhdr.datatype := kDT_UINT8;
+   if not fileexists(fname) then begin
+      fname := ChangeFileExt(hdrName, '.int2');
+      nhdr.datatype := kDT_UINT16;  //int2 ALWAYS unsigned: "If input pixels are signed ints, convert them to reals"
+   end;
+   if not fileexists(fname) then begin
+      fname := ChangeFileExt(hdrName, '.real');
+      nhdr.datatype := kDT_FLOAT;
+   end;
+   if not fileexists(fname) then begin
+      printf('Unable to find IDF image *.byt, *int2, *.real associated with '+hdrName);
+      exit;
+   end;
+   for i := 0 to 2 do begin
+       toplc[i] := 0;
+       for j := 0 to 2 do
+           dcos[i,j] := 0.0;
+
+   end;
+   for i := 1 to 3 do begin
+       nhdr.dim[i] := 0;
+   end;
+   //read
+  isOK := false;
+   {$IFDEF ENDIAN_BIG}
+   swapEndian := true;
+   {$ELSE} // IDF files are always big-endian
+  swapEndian := true;
+   {$ENDIF}
+  result := false;
+  AssignFile(fp,hdrName);
+  reset(fp);
+  sList := TStringList.Create;
+  sList.Delimiter := ' ';        // Each list item will be blank separated
+  errStr := 'EOF';
+  if (EOF(fp)) then goto 666;
+  readln(fp,str);
+  errStr := 'File signature';
+  if PosEx('IMAGE DESCRIPTOR FILE', str) < 1 then goto 666;
+  errStr := 'main body';
+  while (not EOF(fp))  do begin
+      readln(fp,str);
+      if length(str) < 1 then continue;
+      sList.DelimitedText := str;
+      if sList.Count < 2 then continue;
+      if posex('filetype:', sList[0]) = 1 then begin
+         i := strtointdef(sList[1], 0);
+         //2 :UNSIGNED_INT_1;
+         //3 :UNSIGNED_INT_2
+         //7 :SIGNED_FLOAT_4;
+         if (nhdr.datatype = kDT_UINT8) and (i = 2) then
+            //OK
+         else if (nhdr.datatype = kDT_UINT16) and (i = 3) then
+            //OK
+         else if (nhdr.datatype = kDT_FLOAT) and (i = 7) then
+            //OK
+         else
+             printf('Warning: IDF file extension and type do not match');
+      end; //filetype
+      if posex('dimension:', sList[0]) = 1 then begin
+         i := strtointdef(sList[1], 0);
+         if (i < 1) or (i > 7) then goto 666;
+         if EOF(fp) then goto 666;
+         readln(fp,str);
+         if length(str) < 1 then goto 666;
+         sList.DelimitedText := str;
+         if sList.Count < 8 then continue;
+         //[0]npix:    [1]64   [2]fov(mm):  [3]300.00  [4]center(mm):    [5]0.00  [6]pixelsize(mm):    [7]4.68750
+         nhdr.dim[i] := strtointdef(sList[1], 0);
+         nhdr.pixdim[i] := strtofloatdef(sList[7], 0);
+      end; //dimension
+      //if posex('orientation:', sList[0]) = 1 then begin
+      //   orient := strtointdef(sList[1], 0);
+      //end; //orientation
+      if (posex('toplc:', sList[0]) = 1) and (sList.Count > 3) then begin
+         toplc[0] := strtofloatdef(sList[1], 0);
+         toplc[1] := strtofloatdef(sList[2], 0);
+         toplc[2] := strtofloatdef(sList[3], 0);
+      end;
+      if (posex('dcos1:', sList[0]) = 1) and (sList.Count > 3) then begin
+         dcos[0,0] := strtofloatdef(sList[1], 0);
+         dcos[1,0] := strtofloatdef(sList[2], 0);
+         dcos[2,0] := strtofloatdef(sList[3], 0);
+      end;
+      if (posex('dcos2:', sList[0]) = 1) and (sList.Count > 3) then begin
+         dcos[0,1] := strtofloatdef(sList[1], 0);
+         dcos[1,1] := strtofloatdef(sList[2], 0);
+         dcos[2,1] := strtofloatdef(sList[3], 0);
+      end;
+      if (posex('dcos3:', sList[0]) = 1) and (sList.Count > 3) then begin
+         dcos[0,2] := strtofloatdef(sList[1], 0);
+         dcos[1,2] := strtofloatdef(sList[2], 0);
+         dcos[2,2] := strtofloatdef(sList[3], 0);
+         //showmessage(sList[1]+':'+sList[2]+':'+sList[3]);
+      end;
+  end; //while not end
+  if (nhdr.dim[1] > 0) and (nhdr.dim[2] > 0) then isOK := true;
+  if isOK then
+     result := true;
+  idf2SForm(nhdr, toplc, dcos);
+  //set_Mat(nhdr, -3.4375,0,0,108.281, 0,-3.4375,0.0017875,129.565, 0,-0.001976,-3.8,87.6606); //17 OK
+  //set_Mat(nhdr, -3.4375,0,0,108.281, 0,-3.4375,-0.001976,129.565, 0,0.0017875,-3.8,87.6606); //17
+  //set_Mat(nhdr, 0,0,-3.8,70.8193, -3.4375,0,0,138.281, 0,-3.4375,0,114.135); //19 OK
+  //Report_Mat(nhdr);
+  //set_Mat(nhdr, -3.4375,0,0,108.281, 0,0,3.8,-58.8783, 0,-3.4375,0,122.915); //23
+  //set_Mat(nhdr, -3.4375,0,0,108.281, 0,0.0248531,3.79989,-59.6592, 0,-3.4374,0.027474,122.279); //25
+666:
+  if not result then begin
+     printf('IDF error "'+errStr+'" '+hdrName);
+     exit; //error - code jumped to 666 without setting result to true
+  end;
+  convertForeignToNifti(nhdr);
+  CloseFile(FP);
+  Filemode := 2;
+  sList.Free;
+end;
+
 function readSPRHeader (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
+//SLicer3D export format https://www.cmrr.umn.edu/stimulate/stimUsersGuide/node57.html
 label
   666;
 var
@@ -3516,6 +3711,8 @@ begin
        result := nii_readBVox(lFilename, lHdr, swapEndian)
   else if (lExt = '.GIPL') then
        result := nii_readGipl(lFilename, lHdr, swapEndian)
+  else if (lExt = '.IDF') or (lExt = '.BYT') or (lExt = '.INT2') or (lExt = '.REAL') then
+       result := nii_readIdf(lFilename, lHdr, swapEndian)
   else if (lExt = '.PIC') then
     result := nii_readpic(lFilename, lHdr)
   else if (lExt = '.VTK') then

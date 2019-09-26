@@ -4653,19 +4653,26 @@ var
    skipVx, v, vx: int64;
    vol8: TUInt8s;
    vol16: TInt16s;
+   vol32f: TFloat32s;
 begin
  vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
  setlength(fCache8, vx);
  vol8 := fRawVolBytes;
  skipVx := skipVox();
- if fHdr.datatype = kDT_INT16 then begin //16 bit data
+ if fHdr.datatype = kDT_FLOAT then begin //32 bit data
+   vol32f := TFloat32s(vol8);
+   for v := 0 to (vx-1) do
+       fCache8[v] := ((round(vol32f[v+skipVx])-1) mod 100)+1;
+ end else if fHdr.datatype = kDT_INT16 then begin //16 bit data
    vol16 := TInt16s(vol8);
    for v := 0 to (vx-1) do
        fCache8[v] := ((vol16[v+skipVx]-1) mod 100)+1;
  end else begin
-       for v := 0 to (vx-1) do
+     if (fHdr.datatype <> kDT_UNSIGNED_CHAR) then
+        printf('Unsupported label datatype '+inttostr(fHdr.datatype));
+     for v := 0 to (vx-1) do
             fCache8[v] := vol8[v+skipVx];
-   end; //if 16bit else 8bit
+ end; //if ... else 8bit
 end;
 
 {$IFDEF PARALLEL16}
@@ -5713,7 +5720,6 @@ begin
      out8 := TUInt8s(fRawVolBytes);
      for lXi := 0 to (i-1) do
          out8[lXi] := 0;
-
      //clipboard.AsText := format('%d %d', [prod(tarDim), lBPP]);
      in16 := TInt16s(in8);
      out16 := TInt16s(fRawVolBytes);
