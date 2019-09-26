@@ -6203,11 +6203,10 @@ begin
      showmessage('Unable to load RGB image as overlay (overlays must be scalar).');
      exit(false);
   end;
-  if (PosEx(pathdelim+'atlases'+pathdelim, niftiFileName) > 0) and (HdrVolumes(fHdr) < 2) then begin
+  if (PosEx(pathdelim+'atlases'+pathdelim, niftiFileName) > 0) and (HdrVolumes(fHdr) < 2) then
      fHdr.intent_code := kNIFTI_INTENT_LABEL;
-  end;
   if (IsLabels) then begin
-     if (fHdr.bitpix <= 16)  then begin
+     if (fHdr.bitpix <= 32)  then begin
         LoadLabelsTxt(fFilename, fLabels);
         if (fLabels.Count < 1) and (( fHdr.vox_offset- fHdr.HdrSz) > 128) then
            LoadLabels(fFilename, fLabels, fHdr.HdrSz, round( fHdr.vox_offset));

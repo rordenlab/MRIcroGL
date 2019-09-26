@@ -188,9 +188,10 @@
       </Unit20>
       <Unit21>
         <Filename Value="nifti.pas"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="10"/>
-        <TopLine Value="4647"/>
-        <CursorPos X="68" Y="4672"/>
+        <TopLine Value="6193"/>
+        <CursorPos X="27" Y="6209"/>
         <UsageCount Value="100"/>
         <Loaded Value="True"/>
       </Unit21>
@@ -220,9 +221,8 @@
       </Unit24>
       <Unit25>
         <Filename Value="nifti_foreign.pas"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="1"/>
-        <TopLine Value="3382"/>
+        <TopLine Value="3381"/>
         <CursorPos X="28" Y="3488"/>
         <UsageCount Value="104"/>
         <Loaded Value="True"/>
@@ -463,123 +463,123 @@
     <JumpHistory Count="30" HistoryIndex="29">
       <Position1>
         <Filename Value="nifti.pas"/>
-        <Caret Line="1351" Column="26" TopLine="1446"/>
+        <Caret Line="6250" Column="15" TopLine="6230"/>
       </Position1>
       <Position2>
         <Filename Value="nifti.pas"/>
-        <Caret Line="4790" Column="14" TopLine="4770"/>
+        <Caret Line="6273" Column="23" TopLine="6253"/>
       </Position2>
       <Position3>
         <Filename Value="nifti.pas"/>
-        <Caret Line="6099" Column="12" TopLine="6081"/>
+        <Caret Line="73" Column="37" TopLine="68"/>
       </Position3>
       <Position4>
         <Filename Value="nifti.pas"/>
-        <Caret Line="6202" Column="14" TopLine="6203"/>
+        <Caret Line="4661" Column="26" TopLine="4643"/>
       </Position4>
       <Position5>
         <Filename Value="nifti.pas"/>
-        <Caret Line="6223" Column="52" TopLine="6204"/>
+        <Caret Line="4663" Column="9" TopLine="4643"/>
       </Position5>
       <Position6>
         <Filename Value="nifti.pas"/>
-        <Caret Line="6250" Column="15" TopLine="6230"/>
+        <Caret Line="4656" Column="17" TopLine="4641"/>
       </Position6>
       <Position7>
         <Filename Value="nifti.pas"/>
-        <Caret Line="6273" Column="23" TopLine="6253"/>
+        <Caret Line="4655" Column="14" TopLine="4641"/>
       </Position7>
       <Position8>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="73" Column="37" TopLine="68"/>
+        <Filename Value="../Metal-Demos/common/SimdUtils.pas"/>
+        <Caret Line="31" Column="12" TopLine="13"/>
       </Position8>
       <Position9>
         <Filename Value="nifti.pas"/>
-        <Caret Line="4661" Column="26" TopLine="4643"/>
+        <Caret Line="4666" Column="37" TopLine="4648"/>
       </Position9>
       <Position10>
         <Filename Value="nifti.pas"/>
-        <Caret Line="4663" Column="9" TopLine="4643"/>
+        <Caret Line="5" Column="111"/>
       </Position10>
       <Position11>
         <Filename Value="nifti.pas"/>
-        <Caret Line="4656" Column="17" TopLine="4641"/>
+        <Caret Line="455" Column="17" TopLine="432"/>
       </Position11>
       <Position12>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="4655" Column="14" TopLine="4641"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="3266" Column="41" TopLine="3248"/>
       </Position12>
       <Position13>
-        <Filename Value="../Metal-Demos/common/SimdUtils.pas"/>
-        <Caret Line="31" Column="12" TopLine="13"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="3417" Column="23" TopLine="3394"/>
       </Position13>
       <Position14>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="4666" Column="37" TopLine="4648"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="3300" Column="7" TopLine="3279"/>
       </Position14>
       <Position15>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="5" Column="111"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="3343" Column="4" TopLine="3328"/>
       </Position15>
       <Position16>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="455" Column="17" TopLine="432"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="5" Column="112"/>
       </Position16>
       <Position17>
         <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="3266" Column="41" TopLine="3248"/>
+        <Caret Line="816" Column="24" TopLine="792"/>
       </Position17>
       <Position18>
         <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="3417" Column="23" TopLine="3394"/>
+        <Caret Line="1944" Column="21" TopLine="1920"/>
       </Position18>
       <Position19>
         <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="3300" Column="7" TopLine="3279"/>
+        <Caret Line="2163" Column="25" TopLine="2139"/>
       </Position19>
       <Position20>
         <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="3343" Column="4" TopLine="3328"/>
+        <Caret Line="2178" Column="25" TopLine="2154"/>
       </Position20>
       <Position21>
         <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="5" Column="112"/>
+        <Caret Line="2409" Column="23" TopLine="2385"/>
       </Position21>
       <Position22>
         <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="816" Column="24" TopLine="792"/>
+        <Caret Line="2665" Column="23" TopLine="2641"/>
       </Position22>
       <Position23>
         <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="1944" Column="21" TopLine="1920"/>
+        <Caret Line="2799" Column="21" TopLine="2775"/>
       </Position23>
       <Position24>
         <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="2163" Column="25" TopLine="2139"/>
+        <Caret Line="3128" Column="27" TopLine="3104"/>
       </Position24>
       <Position25>
         <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="2178" Column="25" TopLine="2154"/>
+        <Caret Line="3245" Column="24" TopLine="3220"/>
       </Position25>
       <Position26>
         <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="2409" Column="23" TopLine="2385"/>
+        <Caret Line="3488" Column="28" TopLine="3381"/>
       </Position26>
       <Position27>
-        <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="2665" Column="23" TopLine="2641"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="6208" Column="23" TopLine="6193"/>
       </Position27>
       <Position28>
-        <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="2799" Column="21" TopLine="2775"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="6210" Column="10" TopLine="6193"/>
       </Position28>
       <Position29>
-        <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="3128" Column="27" TopLine="3104"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="196" Column="26" TopLine="182"/>
       </Position29>
       <Position30>
-        <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="3245" Column="24" TopLine="3220"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="267" Column="25" TopLine="243"/>
       </Position30>
     </JumpHistory>
     <RunParams>
