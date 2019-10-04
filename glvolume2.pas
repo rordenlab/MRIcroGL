@@ -11,7 +11,7 @@ interface
 uses
   {$IFDEF MATCAP} GraphType, FPImage, IntfGraphics, LCLType,{$ENDIF}
   {$IFDEF TIMER} DateUtils,{$ENDIF}
- {$IFDEF CUBE} glcube, {$ENDIF}
+ {$IFDEF CUBE} Forms, glcube, {$ENDIF}
  retinahelper,glclrbar, niftis, SimdUtils, glcorearb, gl_core_utils, VectorMath, Classes, SysUtils, Graphics,
     math, OpenGLContext, dialogs, nifti {$IFDEF VIEW2D}, drawvolume, colorEditor, slices2D, glfont{$ENDIF};
 const
@@ -44,7 +44,7 @@ type
         glControl: TOpenGLControl;
         prefLoc: array [1..kMaxUniform] of GLint;
         overlayGradientVolLoc, overlayIntensityVolLoc,
-        rayDirLoc,intensityVolLoc, gradientVolLoc,mvpLoc,normLoc, lightPositionLoc,clipPlaneLoc,
+        rayDirLoc,intensityVolLoc, gradientVolLoc,mvpLoc,normLoc, lightPositionLoc,clipPlaneLoc, clipThickLoc,
         backAlphaLoc, sliceSizeLoc, stepSizeLoc, overlaysLoc : GLint;
         overlayGradientTexture3D, overlayIntensityTexture3D,
         drawTexture1D, drawTexture3D,
@@ -66,6 +66,7 @@ type
       public
         matcapLoc: GLint;
         gradientMode: integer;
+        ClipThick: single;
         {$IFDEF VIEW2D}
         SelectionRect: TVec4;
         property ShowColorEditor: boolean read colorEditorVisible write colorEditorVisible;
@@ -151,6 +152,9 @@ begin
      txt.FontColor := Vec4(0,0,0,1)
   else
      txt.FontColor := Vec4(1,1,1,1);
+  {$IFDEF VIEW2D}
+  slices2D.SetFontColor(txt.FontColor);
+  {$ENDIF}
 end;
 
 {$IFDEF VIEW2D}
@@ -580,6 +584,7 @@ kFragBase = '#version 330'
 +#10'uniform sampler3D intensityOverlay, gradientOverlay;'
 +#10'uniform vec3 lightPosition, rayDir;'
 +#10'uniform vec4 clipPlane;'
++#10'uniform float clipThick;'
 +#10'uniform int overlays = 0;'
 +#10'uniform float backAlpha = 0.5;'
 +#10'vec3 GetBackPosition (vec3 startPosition) {'
@@ -590,6 +595,39 @@ kFragBase = '#version 330'
 +#10' vec2 t = min(tmax.xx, tmax.yz);'
 +#10' return startPosition + (rayDir * min(t.x, t.y));'
 +#10'}'
++#10'void fastPass (float len, vec3 dir, sampler3D vol, inout vec4 samplePos){'
++#10'	vec4 deltaDir = vec4(dir.xyz * max(stepSize, sliceSize * 1.95), max(stepSize, sliceSize * 1.95));'
++#10'	while  (texture(vol,samplePos.xyz).a == 0.0) {'
++#10'		samplePos += deltaDir;'
++#10'		if (samplePos.a > len) return; //no hit'
++#10'	}'
++#10'	samplePos -= deltaDir;'
++#10'}'
++#10'vec4 applyClip(vec3 dir, inout vec4 samplePos, inout float len) {'
++#10'	float cdot = dot(dir,clipPlane.xyz);'
++#10'	if  ((clipPlane.a > 1.0) || (cdot == 0.0)) return samplePos;'
++#10'	bool frontface = (cdot > 0.0);'
++#10'	float dis = (-clipPlane.a - dot(clipPlane.xyz, samplePos.xyz-0.5)) / cdot;'
++#10'	float  disBackFace = (-(clipPlane.a-clipThick) - dot(clipPlane.xyz, samplePos.xyz-0.5)) / cdot;'
++#10'	if (((frontface) && (dis >= len)) || ((!frontface) && (dis <= 0.0))) {'
++#10'		samplePos.a = len + 1.0;'
++#10'		return samplePos;'
++#10'	}'
++#10'	if (frontface) {'
++#10'		dis = max(0.0, dis);'
++#10'		samplePos = vec4(samplePos.xyz+dir * dis, dis);'
++#10'		len = min(disBackFace, len);'
++#10'	}'
++#10'	if (!frontface) {'
++#10'		len = min(dis, len);'
++#10'		disBackFace = max(0.0, disBackFace);'
++#10'		samplePos = vec4(samplePos.xyz+dir * disBackFace, disBackFace);'
++#10'	}'
++#10'	return samplePos;'
++#10'}';
+
+
+(*
 +#10'vec4 applyClip(vec3 dir, inout vec4 samplePos, inout float len) {'
 +#10'	if (clipPlane.a <= -0.5) return samplePos;'
 +#10'	bool frontface = (dot(dir , clipPlane.xyz) > 0.0);'
@@ -607,15 +645,7 @@ kFragBase = '#version 330'
 +#10'		}'
 +#10'	}'
 +#10'	return samplePos;'
-+#10'}'
-+#10'void fastPass (float len, vec3 dir, sampler3D vol, inout vec4 samplePos){'
-+#10'	vec4 deltaDir = vec4(dir.xyz * max(stepSize, sliceSize * 1.95), max(stepSize, sliceSize * 1.95));'
-+#10'	while  (texture(vol,samplePos.xyz).a == 0.0) {'
-+#10'		samplePos += deltaDir;'
-+#10'		if (samplePos.a > len) return; //no hit'
-+#10'	}'
-+#10'	samplePos -= deltaDir;'
-+#10'}';
++#10'}'*)
 
 // GetBackPosition -> when does ray exit unit cube http://prideout.net/blog/?p=64
 
@@ -886,6 +916,7 @@ begin
   overlaysLoc := glGetUniformLocation(programRaycast, pAnsiChar('overlays'));
   lightPositionLoc := glGetUniformLocation(programRaycast, pAnsiChar('lightPosition'));
   clipPlaneLoc :=  glGetUniformLocation(programRaycast, pAnsiChar('clipPlane'));
+  clipThickLoc :=  glGetUniformLocation(programRaycast, pAnsiChar('clipThick'));
   intensityVolLoc := glGetUniformLocation(programRaycast, pAnsiChar('intensityVol'));
   gradientVolLoc := glGetUniformLocation(programRaycast, pAnsiChar('gradientVol'));
   overlayIntensityVolLoc := glGetUniformLocation(programRaycast, pAnsiChar('intensityOverlay'));
@@ -1007,7 +1038,11 @@ begin
   //slices2D := TSlices2D.Create();
   {$ENDIF}
   LoadCube();
-  {$IFDEF CUBE} gCube := TGPUCube.Create(glControl); {$ENDIF}
+  {$IFDEF CUBE}
+  gCube := TGPUCube.Create(glControl);
+  if (Screen.PixelsPerInch < 100) then
+     gCube.Size:= gCube.Size * 1.5; //Check Darwin Retina vs Windows HiDPI
+  {$ENDIF}
   glControl.ReleaseContext;
   if GLErrorStr <> '' then
      showmessage(GLErrorStr);
@@ -1039,6 +1074,7 @@ begin
   RaycastQuality1to6 := 5;
   SelectionRect := Vec4(-1,0,0,0);
   fLightPos := Vec4(0, 0.707, 0.707, 0);
+  ClipThick := 1;
   fClipPlane := Vec4(0, 0, 0, -1);
   vao:= 0;
   matcap2D := 0;
@@ -1516,6 +1552,7 @@ begin
   projectionMatrix := TMat4.OrthoGL (0, glControl.clientwidth, 0, glControl.clientheight, 0.01, 2);
   glUniform3f(lightPositionLoc,modelLightPos.x, modelLightPos.y, modelLightPos.z);
   glUniform4f(clipPlaneLoc, fClipPlane.x, fClipPlane.y, fClipPlane.z, fClipPlane.w);
+  glUniform1f(clipThickLoc, ClipThick);
   if (shaderPrefs.nUniform > 0) then
      for i := 1 to shaderPrefs.nUniform do
          glUniform1f(prefLoc[i], shaderPrefs.Uniform[i].DefaultV);
@@ -1856,6 +1893,7 @@ begin
       projectionMatrix := TMat4.OrthoGL (-scale, scale, -scale/whratio, scale/whratio, fDistance-1, fDistance+1);
   glUniform3f(lightPositionLoc,modelLightPos.x, modelLightPos.y, modelLightPos.z);
   glUniform4f(clipPlaneLoc, fClipPlane.x, fClipPlane.y, fClipPlane.z, fClipPlane.w);
+  glUniform1f(clipThickLoc, ClipThick);
   if (shaderPrefs.nUniform > 0) then
      for i := 1 to shaderPrefs.nUniform do
          glUniform1f(prefLoc[i], shaderPrefs.Uniform[i].DefaultV);

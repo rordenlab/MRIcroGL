@@ -8,7 +8,7 @@ interface
  {$DEFINE GZIP}
 {$ENDIF}
 //{$DEFINE PARALLEL}  //for parallel Unix also edit CThreads in LPR file
-{$DEFINE OPENFOREIGN}
+{$DEFINE OPENFOREIGN} //used for q and s form as well as opening
 {$DEFINE CPUGRADIENTS} //Computing volume gradients on the GPU is much faster than using the CPU
 {$DEFINE CACHEUINT8} //save 8-bit data: faster requires RAM
 {$DEFINE SSE}
@@ -128,7 +128,7 @@ Type
         function NeedsUpdate(): boolean;
         function DisplayMinMax2Uint8(isForceRefresh: boolean = false): TUInt8s;
         procedure SaveRotated(fnm: string; perm: TVec3i);
-        procedure RemoveSmallClusters(thresh, mm: double);
+        function RemoveSmallClusters(thresh, mm: double): single; //returns surviving mm3
         function SaveCropped(fnm: string; crop: TVec6i; cropVols: TPoint): boolean;
         function SaveRescaled(fnm: string; xFrac, yFrac, zFrac: single; OutDataType, Filter: integer; isAllVolumes: boolean): boolean;
         procedure SaveAsSourceOrient(NiftiOutName: string; rawVolBytes: TUInt8s);  overload;
@@ -138,6 +138,7 @@ Type
         function FracMM(Frac: TVec3): TVec3; //return mm coordinates given volume fraction
         function MMFrac(MM: TVec3): TVec3; //return frac coordinates given volume mm
         function VoiDescriptives(VoiRawBytes: TUInt8s): TStringList;
+        function VoxMM3: single; //voxel volume of resliced data
         function VoxIntensityString(vox: int64): string; overload;
         function VoxIntensityString(vox: TVec3i): string; overload;
         function VoxIntensity(vox: int64): single; overload; //return intensity of voxel at coordinate
@@ -193,6 +194,7 @@ Type
         constructor Create(niftiFileName: string; backColor: TRGBA; lLoadFewVolumes: boolean; lMaxVox: integer; out isOK: boolean); overload; //background
         constructor Create(niftiFileName: string; backColor: TRGBA; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; out isOK: boolean; lLoadFewVolumes: boolean = true; lMaxVox: integer = 640); overload; //overlay
         constructor Create(tarMat: TMat4; tarDim: TVec3i); overload; //blank drawing
+        procedure SetIsLabels(b: boolean);
         function IsLabels: boolean; //e.g. template map: should be drawn nearest neighbor (border of area 19 and 17 is NOT 18)
         destructor Destroy; override;
   end;
@@ -262,6 +264,22 @@ end;
 procedure  TNIfTI.ForceUpdate;
 begin
   fWindowMinCache8 := infinity;
+end;
+
+procedure TNIfTI.SetIsLabels(b: boolean);
+var
+  i: smallint;
+begin
+     //see todo in main unit
+     i := fHdr.intent_code;
+     if b then
+        fHdr.intent_code := kNIFTI_INTENT_LABEL
+     else if fHdrNoRotation.intent_code = kNIFTI_INTENT_LABEL then
+          fHdr.intent_code := kNIFTI_INTENT_NONE
+     else
+           fHdr.intent_code := fHdrNoRotation.intent_code;
+     if (i <> fHdr.intent_code ) then
+     fWindowMinCache8 := infinity; //force update
 end;
 
 function TNIfTI.IsLabels: boolean;
@@ -2267,7 +2285,7 @@ begin
  FileMode := fmOpenWrite;
  NiftiOutName := fnm;
  lExt := uppercase(extractfileext(NiftiOutName));
- if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
+ if (lExt = '.GZ') or (lExt = '.VOI') then begin  //
     if (lExt = '.GZ') then
        NiftiOutName := ChangeFileExtX(NiftiOutName,'.nii.gz'); //img.gz -> img.nii.gz
     zStream := TGZFileStream.Create(NiftiOutName, gzopenwrite);
@@ -4423,18 +4441,43 @@ begin
   SetDisplayMinMax(true);
 end;
 
-procedure TNIfTI.RemoveSmallClusters(thresh, mm: double);
+function TNIfTI.VoxMM3: single;
 var
-  mnVx, i, vx, skipVx: int64;
+  x, y, z: single;
+  v, v0: TVec4;
+begin
+ v0 := Vec4(0, 0, 0, 1);
+ Coord(v0, fMat);
+ v := Vec4(1, 0, 0, 1); //X
+ Coord(v, fMat);
+ v := v - v0;
+ x := v.Length;
+ v := Vec4(0, 1, 0, 1); //Y
+ Coord(v, fMat);
+ v := v - v0;
+ y := v.Length;
+ v := Vec4(0, 0, 1, 1); //Z
+ Coord(v, fMat);
+ v := v - v0;
+ z := v.Length;
+ result := x * y * z;
+ printf(format('%.4fx%.4fx%.4fmm = %.4fmm3', [x,y,z, result]));
+end;
+
+function TNIfTI.RemoveSmallClusters(thresh, mm: double): single; //returns surviving mm3
+{$IFDEF UNIX}{$DEFINE rsc}{$ENDIF} //Windows can not get console messages
+var
+  mnVx, n, i, vx, skipVx : int64;
   vol8, out8: TUInt8s;
   mni: int16;
   vol16: TInt16s;
   vol32: TFloat32s;
   rthresh, mn: single;
   mmPerVox: double;
-
 begin
+ result := 0;
  vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+ if fHdr.datatype = kDT_RGB then exit;
  //todo: DT_RGB
  if vx < 1 then exit;
  skipVx := skipVox();
@@ -4444,27 +4487,53 @@ begin
  rthresh := Scaled2RawIntensity(fHdr, thresh);
  setlength(vol8,vx);
  FillChar(vol8[0], vx, 0);
- if fHdr.datatype = kDT_UINT8 then begin
-    for i := 0 to (vx-1) do
-        if out8[skipVx+i] >= rthresh then vol8[i] := 255;
- end else if fHdr.datatype = kDT_INT16 then begin
-   for i := 0 to (vx-1) do
-       if vol16[skipVx+i] >= rthresh then vol8[i] := 255;
- end else if fHdr.datatype = kDT_FLOAT then begin
-   for i := 0 to (vx-1) do
-       if vol32[skipVx+i] >= rthresh then vol8[i] := 255;
+ if thresh < 0.0 then begin
+    if fHdr.datatype = kDT_UINT8 then begin
+       for i := 0 to (vx-1) do
+           if out8[skipVx+i] <= rthresh then vol8[i] := 255;
+    end else if fHdr.datatype = kDT_INT16 then begin
+      for i := 0 to (vx-1) do
+          if vol16[skipVx+i] <= rthresh then vol8[i] := 255;
+    end else if fHdr.datatype = kDT_FLOAT then begin
+      for i := 0 to (vx-1) do
+          if vol32[skipVx+i] <= rthresh then vol8[i] := 255;
+    end;
+ end else begin
+   if fHdr.datatype = kDT_UINT8 then begin
+      for i := 0 to (vx-1) do
+          if out8[skipVx+i] >= rthresh then vol8[i] := 255;
+   end else if fHdr.datatype = kDT_INT16 then begin
+     for i := 0 to (vx-1) do
+         if vol16[skipVx+i] >= rthresh then vol8[i] := 255;
+   end else if fHdr.datatype = kDT_FLOAT then begin
+     for i := 0 to (vx-1) do
+         if vol32[skipVx+i] >= rthresh then vol8[i] := 255;
+   end;
  end;
  //clusterize
- mmPerVox := fHdr.pixdim[1] * fHdr.pixdim[2] * fHdr.pixdim[3];
+ //mmPerVox := fHdr.pixdim[1] * fHdr.pixdim[2] * fHdr.pixdim[3];
+ mmPerVox := VoxMM3();
  if (mmPerVox = 0) then mmPerVox := 1;
  mnVx := round(mm/mmPerVox);
+ {$IFDEF rsc}
+ printf(format('RemoveSmallClusters(thresh=%0.4f, mm=%g)', [thresh, mm]));
+ printf(format(' resliced voxels %dx%dx%d', [fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]]));
+ printf(format(' mm2vox=%d', [mnVx]));
+ n := 0;
+ for i := 0 to (vx-1) do
+     if  vol8[i] <> 0 then inc(n);
+ printf(format(' voxelsExceedingThresh=%d (%.4fmm3)', [n, n * mmPerVox]));
+ {$ENDIF}
  if mnVx > 0 then
     RemoveAllSmallClusters(vol8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3],255,0 , mnVx);
- mn := Scaled2RawIntensity(fHdr, fMin);
+ if (fMin < 0.0) and (fMax > 0.0) then
+    mn := Scaled2RawIntensity(fHdr, 0)
+ else
+     mn := Scaled2RawIntensity(fHdr, fMin);
  mni := round(mn);
  if fHdr.datatype = kDT_UINT8 then begin
     for i := 0 to (vx-1) do
-        if vol8[i] = 0 then out8[skipVx+i] := 0;
+        if vol8[i] = 0 then out8[skipVx+i] := mni;
  end else if fHdr.datatype = kDT_INT16 then begin
    for i := 0 to (vx-1) do
        if vol8[i] = 0 then vol16[skipVx+i] := mni;
@@ -4472,6 +4541,12 @@ begin
    for i := 0 to (vx-1) do
        if vol8[i] = 0 then vol32[skipVx+i] := mn;
  end;
+ //compute number of survivors
+ n := 0;
+ for i := 0 to (vx-1) do
+     if  vol8[i] <> 0 then inc(n);
+ printf(format(' voxelsInLargeClusters=%d (%.4fmm3)', [n, n * mmPerVox]));
+ result := n * mmPerVox;
  vol8 := nil;
 end;
 
@@ -5317,8 +5392,7 @@ var
    RawImage: TRawImage;
    SrcPtr, DestPtr: PInteger;
    y,i,nBytes: integer;
-   //Bmp : TBitmap;
-   LTempBitmap : TBitmap;
+   //LTempBitmap : TBitmap;
    {$IFDEF Darwin}
    v24s: TRGBs;
    v32s: TRGBAs;
@@ -5439,7 +5513,7 @@ end; *)
 procedure planar3D2RGB8(var  rawData: TUInt8s; var lHdr: TNIFTIHdr);
 var
    img: TUInt8s;
-   xy, xys, z, i, j, k,  s, xyz, nBytesS, SamplesPerPixel: int64;
+   xy, xys, i, j, s, xyz, nBytesS, SamplesPerPixel: int64;
 begin
   if lHdr.datatype <> kDT_RGBplanar3D then exit;
   lHdr.datatype := kDT_RGB;
@@ -5564,7 +5638,7 @@ begin
     exit;
  end;
  {$ENDIF}
- if (lExt <> '.IMG') and (lExt <> '.NII') and (lExt <> '.NII.GZ') and (lExt <> '.VOI') and  (lExt <> '.HDR') and (lExt <> '.GZ') then begin
+ if ((lExt = '.HDR') and (isINTERFILE(F_Filename))) or ((lExt <> '.IMG') and (lExt <> '.NII') and (lExt <> '.NII.GZ') and (lExt <> '.VOI') and  (lExt <> '.HDR') and (lExt <> '.GZ')) then begin
     result := loadForeign(F_FileName, fRawVolBytes, fHdr);
     if result then begin
        fVolumesLoaded := length(fRawVolBytes) div (fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3] * (fHdr.bitpix div 8));

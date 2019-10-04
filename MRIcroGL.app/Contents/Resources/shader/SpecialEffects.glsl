@@ -3,6 +3,7 @@ showGradient|float|0|0|1|Display surface angle
 doPoor|float|0|1|1|Poor quality reveals rendering strategy
 doJitter|float|0|0|1|Jitter hides wood-grain artifacts
 showStartEnd|float|0|0.5|1|Show background box
+
 //frag
 uniform float showGradient = 0.0;
 uniform float doPoor = 0.0;
@@ -35,8 +36,11 @@ void main() {
 	vec4 prevGrad = vec4(0.0,0.0,0.0,0.0);
 	//background pass
 	vec4 samplePos = vec4(start.xyz, 0.0);
-	//vec4 clipPos = samplePos;
 	vec4 clipPos = applyClip(dir, samplePos, len);
+	if ( clipPos.a > len ) {
+		FragColor = colAcc;
+		return;
+	}
 	//	float ran = fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453);
 	samplePos += deltaDir * ran;
 	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
@@ -82,15 +86,13 @@ void main() {
 	if (samplePos.a > (len +0.5)) {
 		//	
 	} else if (showStartEnd < 0.33) {
-		//colAcc.rgb = mix(start.xyz, colAcc.rgb, colAcc.a);	
 		colAcc.rgb = mix(clipPos.xyz, colAcc.rgb, colAcc.a);
 		colAcc.a = 1.0;
 	} else if (showStartEnd < 0.66) {
-		colAcc.rgb = mix(clipPos.xyz + (dir * len), colAcc.rgb, colAcc.a);
-		//colAcc.rgb = mix(backPosition.xyz, colAcc.rgb, colAcc.a);	
+		colAcc.rgb = mix(clipPos.xyz + (dir * (len - clipPos.a)), colAcc.rgb, colAcc.a);
+		//colAcc.rgb = mix(clipPos.xyz + (dir * len), colAcc.rgb, colAcc.a);
 		colAcc.a = 1.0;
 	}			
-
 	if ( overlays < 1 ) {
 		FragColor = colAcc;
 		return;

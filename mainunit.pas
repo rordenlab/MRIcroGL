@@ -33,13 +33,15 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20190902+'; //+fixes Metal memory leak
+  kVers = '1.2.20190902++'; //++ fixes remove small clusters
 type
 
   { TGLForm1 }
 
   TGLForm1 = class(TForm)
     CenterPanel: TPanel;
+    ClipThickLabel: TLabel;
+    ClipThickTrack: TTrackBar;
     GraphMenu: TMenuItem;
     GraphScalingMenu: TMenuItem;
     GraphSaveMenu: TMenuItem;
@@ -61,6 +63,8 @@ type
     EditPasteMenu: TMenuItem;
     AddOverlayClusterMenu: TMenuItem;
     GraphDrawingMenu: TMenuItem;
+    DrawFilledMenu: TMenuItem;
+    LayerIsLabelMenu: TMenuItem;
     RemoveSmallClusterMenu: TMenuItem;
     ResizeMenu1: TMenuItem;
     ReorientMenu1: TMenuItem;
@@ -314,6 +318,7 @@ type
     procedure InvalidateTImerTimer(Sender: TObject);
     procedure LayerContrastChange(Sender: TObject);
     procedure GraphDrawingMenuClick(Sender: TObject);
+    procedure LayerIsLabelMenuClick(Sender: TObject);
     procedure RemoveSmallClusterMenuClick(Sender: TObject);
     procedure RulerVisible();
     procedure RulerCheckChange(Sender: TObject);
@@ -1182,8 +1187,10 @@ begin
   Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
   A := gPrefs.ClearColor.A;
   with GetPythonEngine do
-    if Boolean(PyArg_ParseTuple(Args, 'iii:backcolor', @R,@G,@B)) then
+    if Boolean(PyArg_ParseTuple(Args, 'iii:backcolor', @R,@G,@B)) then begin
        gPrefs.ClearColor:= setRGBA(R,G,B,A);
+       Vol1.SetTextContrast(gPrefs.ClearColor);
+    end;
   ViewGPU1.Invalidate;
 end;
 
@@ -1215,6 +1222,17 @@ begin
       SetTrackPos(GLForm1.ClipAziTrack, A);
       SetTrackPos(GLForm1.ClipElevTrack, E);
     end;
+  ViewGPU1.Invalidate;
+end;
+
+function PyCLIPTHICK(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  Z: single;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, 'f:clipthick', @Z)) then
+       SetTrackFrac(GLForm1.ClipThickTrack, Z);
   ViewGPU1.Invalidate;
 end;
 
@@ -1372,6 +1390,26 @@ begin
     end;
 end;
 
+function PyINVERTCOLOR(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  Layer, isInvert: integer;
+  niftiVol: TNIfTI;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(FALSE));
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, 'ii:invertcolor', @Layer, @isInvert)) then
+    begin
+     if not vols.Layer(Layer,niftiVol) then exit;
+     niftiVol.CX.InvertColorMap := isInvert = 1;
+     niftiVol.CX.NeedsUpdate := true;
+     niftiVol.CX.GenerateLUT();
+     niftiVol.ForceUpdate();
+     GLForm1.updateTimer.Enabled := true;
+     Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+    end;
+end;
+
+
 function PyHIDDENBYCUTOUT(Self, Args : PPyObject): PPyObject; cdecl;
 var
   Layer, isHidden: integer;
@@ -1382,7 +1420,7 @@ begin
     if Boolean(PyArg_ParseTuple(Args, 'ii:hiddenbycutout', @Layer, @isHidden)) then
     begin
      if not vols.Layer(Layer,niftiVol) then exit;
-     niftiVol.HiddenByCutout:= (isHidden = 1);
+     niftiVol.HiddenByCutout := (isHidden = 1);
      GLForm1.CutoutChange(nil);
      niftiVol.CX.NeedsUpdate := true;
      Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
@@ -1465,10 +1503,28 @@ begin
     end;
 end;
 
+function PyFULLSCREEN(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  Vis: integer;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, 'i:fullscreen', @Vis)) then begin
+       if (Vis = 1) then
+          GLForm1.WindowState := wsFullScreen// wsMaximized
+       else
+           GLForm1.WindowState := wsMaximized;
+    end;
+end;
+
 function PyQUIT(Self, Args : PPyObject): PPyObject; cdecl;
 begin
+  //GLForm1.ScriptOutputMemo.Lines.Add('Terminating application');
   Result:= GetPythonEngine.PyBool_FromLong(Ord(TRUE));
-  GLForm1.Close;
+  //GLForm1.ScriptOutputMemo.Lines.Add('Terminating application 2');
+  dwriteln('Script executed quit(): Terminating MRIcroGL');
+  GlForm1.ScriptOutputMemo.Tag := 123;
+  //GLForm1.Close;
 end;
 
 function PySAVEBMP(Self, Args : PPyObject): PPyObject; cdecl;
@@ -1497,6 +1553,32 @@ begin
   with GetPythonEngine do
     if Boolean(PyArg_ParseTuple(Args, 'ff:contrastminmax', @MN,@MX)) then begin
       GLForm1.LayerChange(0, -1, -1, MN, MX); //kNaNsingle
+    end;
+end;
+
+//pyREMOVESMALLCLUSTERS removesmallclusters(layer, thresh, mm) -> Set the colorscheme for the target overlay (0=background layer) to a specified name.
+function pyREMOVESMALLCLUSTERS(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  i: integer;
+  thresh,mm: single;
+  niftiVol: TNIfTI;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  with GetPythonEngine do
+    if Bool(PyArg_ParseTuple(Args, 'iff:removesmallclusters', @i, @thresh, @mm)) then begin
+         GLForm1.ScriptOutputMemo.lines.add(format('removesmallclusters(%d, %g, %g)', [i, thresh, mm]));
+         if (i < 0) or (i >= GLForm1.LayerList.Count) then begin
+            GLForm1.ScriptOutputMemo.lines.add('rsc error: is this layer loaded?');
+            exit;
+         end;
+         if not vols.Layer(GLForm1.LayerList.ItemIndex,niftiVol) then begin
+            GLForm1.ScriptOutputMemo.lines.add('rsc error: is this layer loaded?');
+            exit;
+         end;
+         mm := niftiVol.RemoveSmallClusters(thresh,mm);
+         GLForm1.ScriptOutputMemo.lines.add(format('%.3fmm3 survive threshold', [mm]));
+         niftiVol.ForceUpdate(); //defer time consuming work
+         GLForm1.updateTimer.enabled := true;
     end;
 end;
 
@@ -1837,9 +1919,12 @@ begin
     AddMethod('colorbarposition', @PyCOLORBARPOSITION, ' colorbarposition(p) -> Set colorbar position (0=off, 1=top, 2=right).');
     AddMethod('colorbarsize', @PyCOLORBARSIZE, ' colorbarsize(p) -> Change width of color bar f is a value 0.01..0.5 that specifies the fraction of the screen used by the colorbar.');
     AddMethod('clipazimuthelevation', @PyCLIPAZIMUTHELEVATION, ' clipazimuthelevation(depth, azi, elev) -> Set a view-point independent clip plane.');
+    AddMethod('clipthick', @PyCLIPTHICK, ' clipthick(thick) -> Set size of clip plane slab (0..1).');
     AddMethod('cutout', @PyCUTOUT, ' cutout(L,A,S,R,P,I) -> Remove sector from volume.');
     AddMethod('extract', @PyEXTRACT, ' extract(Otsu,Dil,One) -> Remove haze.');
+    AddMethod('fullscreen', @PyFULLSCREEN, ' fullscreen(max) -> Form expands to size of screen (1) or size is maximized (0).');
     AddMethod('hiddenbycutout', @PyHIDDENBYCUTOUT, ' hiddenbycutout(layer, isHidden) -> Will cutout hide (1) or show (0) this layer?');
+    AddMethod('invertcolor', @PyINVERTCOLOR, ' invertcolor(layer, isInverted) -> Is color intensity inverted (1) or not (0) this layer?');
     AddMethod('linecolor', @PyLINECOLOR, ' linecolor(r,g,b) -> Set color of crosshairs, so "linecolor(255,0,0)" will use bright red lines.');
     AddMethod('linewidth', @PyLINEWIDTH, ' linewidth(wid) -> Set thickness of crosshairs used on 2D slices.');
     AddMethod('loadimage', @PyLOADIMAGE, ' loadimage(imageName) -> Close all open images and load new background image.');
@@ -1857,6 +1942,9 @@ begin
     AddMethod('minmax', @PyOVERLAYMINMAX, ' minmax(layer, min, max) -> Sets the color range for the overlay (layer 0 = background).');
     AddMethod('opacity', @PyOVERLAYOPACITY, ' opacity(layer, opacityPct) -> Make the layer (0 for background, 1 for 1st overlay) transparent(0), translucent (~50) or opaque (100).');
     AddMethod('quit', @PyQUIT, ' quit() -> Terminate the application.');
+    //pyREMOVESMALLCLUSTERS Set the colorscheme for the target overlay (0=background layer) to a specified name.
+    AddMethod('removesmallclusters', @pyREMOVESMALLCLUSTERS, ' removesmallclusters(layer, thresh, mm) -> only keep clusters where intensity exceeds thresh and size exceed mm.');
+
     AddMethod('resetdefaults', @PyRESETDEFAULTS, ' resetdefaults() -> Revert settings to sensible values.');
     AddMethod('savebmp', @PySAVEBMP, ' savebmp(pngName) -> Save screen display as bitmap. For example "savebmp(''test.png'')"');
     AddMethod('scriptformvisible', @PySCRIPTFORMVISIBLE, ' scriptformvisible (visible) -> Show (1) or hide (0) the scripting window.');
@@ -1879,7 +1967,6 @@ begin
     AddMethod('smooth', @PySMOOTH2D, ' smooth2D(s) -> make 2D images blurry (linear interpolation, 1) or jagged (nearest neightbor, 0).');
     AddMethod('zerointensityinvisible', @PyZEROINTENSITYINVISIBLE, ' zerointensityinvisible(layer, bool) ->  For specified layer (0 = background) should voxels with intensity 0 be opaque (bool= 0) or transparent (bool = 1).');
     AddMethod('zoomcenter', @PyZOOMCENTER, ' zoomcenter(x,y,z) -> Set center of expansion for zoom scale (values in range 0..1 with 0.5 in volume center).');
-
     {$IFDEF PYOBSOLETE}
     AddMethod('azimuth', @PyAZIMUTH, ' azimuth(degrees) -> Rotates the rendering.');
     AddMethod('clip', @PyCLIP, ' clip(depth) -> Creates a clip plane that hides information close to the viewer.');
@@ -1942,9 +2029,12 @@ begin
   end;
   ScriptOutputMemo.lines.Add('Python Succesfully Executed');
   gPyRunning := false;
-  if (gPrefs.DisplayOrient = kRenderOrient)  and (Vol1.Quality1to6 = 0) and (not gPyRunning) then
+  if  GlForm1.ScriptOutputMemo.Tag = 123 then
+      GLForm1.Close
+  else if (gPrefs.DisplayOrient = kRenderOrient)  and (Vol1.Quality1to6 = 0) and (not gPyRunning) then
        BetterRenderTimer.enabled := true;
   result := true;
+
 end;
 
 procedure TGLForm1.PyEngineAfterInit(Sender: TObject);
@@ -2578,7 +2668,8 @@ procedure TGLForm1.OpenScript(scriptname: string; isShowScriptPanel: boolean = t
 begin
      if not fileexists(scriptname) then exit;
      if (ScriptPanel.Width < 24) and (isShowScriptPanel) then
-        ScriptPanel.Width := 240;
+        ScriptFormVisible(true);
+        //ScriptPanel.Width := 240;
      ScriptMemo.Lines.LoadFromFile(scriptname);
      ScriptingRunMenuClick(nil);
 end;
@@ -3410,6 +3501,7 @@ begin
   if not vols.Layer(LayerList.ItemIndex,niftiVol) then exit;
   LayerCutoutMenu.Checked := niftiVol.HiddenByCutout;
   LayerZeroIntensityInvisibleMenu.Checked := niftiVol.ZeroIntensityInvisible;
+  LayerIsLabelMenu.Checked := niftiVol.IsLabels;
   LayerInvertColorMapMenu.Checked := niftiVol.CX.InvertColorMap;
   LayerPrevVolumeMenu.Enabled := (niftiVol.VolumesTotal > 1);
   LayerNextVolumeMenu.Enabled := LayerPrevVolumeMenu.Enabled;
@@ -4440,6 +4532,22 @@ begin
   {$ENDIF}
 end;
 
+procedure TGLForm1.LayerIsLabelMenuClick(Sender: TObject);
+var
+   i: integer;
+   niftiVol: TNIfTI;
+begin
+//to do:
+// 1: set color lookup table
+// 2: intensity min..max range
+    i := LayerList.ItemIndex;
+    if (i < 0) or (i >= LayerList.Count) then exit;
+    if not vols.Layer(LayerList.ItemIndex,niftiVol) then exit;
+    niftiVol.SetIsLabels(LayerZeroIntensityInvisibleMenu.Checked);
+    niftiVol.ForceUpdate(); //defer time consuming work
+    updateTimer.enabled := true;
+end;
+
 procedure TGLForm1.GraphAddMenuClick(Sender: TObject);
 begin
  {$IFDEF GRAPH}
@@ -4555,18 +4663,11 @@ procedure TGLForm1.LayerInvertColorMapMenuClick(Sender: TObject);
    i := LayerList.ItemIndex;
    if (i < 0) or (i >= LayerList.Count) then exit;
    if not vols.Layer(LayerList.ItemIndex,niftiVol) then exit;
-   //niftiVol.SetInvertColorMap(LayerInvertColorMapMenu.Checked);
-   //GenerateLUT
-   //.InvertColorMap := LayerInvertColorMapMenu.Checked;
-   //niftiVol.InvertColorMap:= LayerInvertColorMapMenu.Checked;
    niftiVol.CX.InvertColorMap:= LayerInvertColorMapMenu.Checked;
    niftiVol.CX.NeedsUpdate := true;
    niftiVol.CX.GenerateLUT();
    niftiVol.ForceUpdate();
    updateTimer.Enabled := true;
-   //niftiVol.ForceUpdate(); //defer time consuming work
-   //updateTimer.enabled := true;
-  //
 end;
 
 procedure TGLForm1.LayerWidgetChangeTimerTimer(Sender: TObject);
@@ -5069,6 +5170,7 @@ begin
   ClipDepthTrack.Position := 0;
   ClipAziTrack.Position := 180;
   ClipElevTrack.Position := 0;
+  ClipThickTrack.Position:= ClipThickTrack.max;
   LightElevTrack.Position := 45;
   LightAziTrack.Position := 0;
   ShaderDrop.ItemIndex := 0;
@@ -5206,11 +5308,13 @@ end;
 
 procedure TGLForm1.ClipLabelClick(Sender: TObject);
 begin
-     if (Sender as TLabel).tag = 2 then
+     if (Sender as TLabel).tag = 3 then
+        IncTrackBar(ClipThickTrack)
+     else if (Sender as TLabel).tag = 2 then
         IncTrackBar(ClipElevTrack)
      else if (Sender as TLabel).tag = 1 then
           IncTrackBar(ClipAziTrack)
-     else
+     else if (Sender as TLabel).tag = 0 then
          IncTrackBar(ClipDepthTrack);
 end;
 
@@ -5390,7 +5494,16 @@ var
   DestPtr: PInteger;
 begin
  if (gPrefs.BitmapZoom = 1) and (gPrefs.DisplayOrient <> kMosaicOrient) then begin
+    q := Vol1.Quality1to6;
+    Vol1.Quality1to6 := 6;
+    //if (gPrefs.DisplayOrient <> kRenderOrient) then exit;
+    if q <> 6 then begin
+       GLForm1.BetterRenderTimer.Enabled := false;
+       GLForm1.BetterRenderTimer.Tag := 1;
+       GLForm1.ViewGPUPaint(nil);
+    end;
     result := ScreenShot(GLBox, gPrefs.ScreenCaptureTransparentBackground); //update Metal-Demos if you get an error here
+    Vol1.Quality1to6 := q;
     exit;
  end;
  w := GLBox.ClientWidth;
@@ -5537,7 +5650,15 @@ procedure TGLForm1.EditCopyMenuClick(Sender: TObject);
 var
   bmp: TBitmap;
 begin
- if (ScriptMemo.Width > 20) and (ScriptMemo.SelLength > 0) then begin
+ if (ScriptOutputMemo.Focused) then begin
+    if (ScriptOutputMemo.SelLength < 1) then
+       ScriptOutputMemo.SelectAll();
+    ScriptOutputMemo.CopyToClipboard;
+    exit;
+ end;
+ if (ScriptMemo.Focused) then begin
+    if (ScriptMemo.SelLength < 1) then
+       ScriptMemo.SelectAll();
     ScriptMemo.CopyToClipboard;
     exit;
  end;
@@ -5701,6 +5822,11 @@ end;
 
 procedure TGLForm1.MenuItem1Click(Sender: TObject);
 const
+  {$IFDEF Darwin}
+  kAlt = 'Command';
+  {$ELSE}
+  kAlt = 'Alt';
+  {$ENDIF}
   {$IFDEF UNIX} //end of line
   kEOLN = #10; //Windows CRLF   ;
   {$ELSE}
@@ -5730,8 +5856,7 @@ begin
     +kEOLN+'Drawing (Draw/DrawColor selected)'
     +kEOLN+'  Drag: draw filled region'
     +kEOLN+'  Shift-Drag: erase filled region'
-    +kEOLN+'  Option-Click: Flood fill'
-    +kEOLN+'  Control-Click: Move crosshair';
+    +kEOLN+'  '+kAlt+'-Click: Move crosshair';
   //{$IFDEF NewCocoa}
   //ShowAlertSheet(GLForm1.Handle,'Mouse Gestures', s);
   //{$ELSE}
@@ -5925,7 +6050,7 @@ begin
      Save2Bmp(SaveDialog1.Filename);
 end;
 
-function sph2cartDeg(Azimuth,Elevation: single): TVec4;
+(*function sph2cartDeg(Azimuth,Elevation: single): TVec4;
 //convert spherical AZIMUTH,ELEVATION,RANGE to Cartesion
 //see Matlab's [x,y,z] = sph2cart(THETA,PHI,R)
 // reverse with cart2sph
@@ -5946,7 +6071,31 @@ begin
   Phi := DegToRad(E);
   result := Vec4(cos(Phi)*cos(Theta),cos(Phi)*sin(Theta),sin(Phi), 0.0);
   result := result.normalize;
+end;  *)
+
+function sph2cartDeg(Azimuth,Elevation: single): TVec4;
+//convert spherical AZIMUTH,ELEVATION,RANGE to Cartesion
+//see Matlab's [x,y,z] = sph2cart(THETA,PHI,R)
+// reverse with cart2sph
+var
+  A,E, Phi,Theta: single;
+begin
+ E := Elevation;
+ //while E > 90 do
+ //    E := E - 90;
+ //while E < -90 do
+ //    E := E + 90;
+ Phi := DegToRad(E);
+ A := Azimuth;
+  while A < 0 do
+    A := A + 360;
+  while A > 360 do
+    A := A - 360;
+  Theta := DegToRad(A);
+  result := Vec4(cos(Phi)*cos(Theta),cos(Phi)*sin(Theta),sin(Phi), 0.0);
+  result := result.normalize;
 end;
+
 
 function sph2cartDeg90clip(Azimuth,Elevation, Depth: single): TVec4;
 begin
@@ -5965,6 +6114,8 @@ end;
 procedure TGLForm1.UpdateShaderSettings(Sender: TObject);
 //var
 //   q: integer;
+var
+   v: boolean;
 begin
  //q := Vol1.Quality1to6;
  Vol1.Quality1to6 := QualityTrack.Position;
@@ -5973,10 +6124,17 @@ begin
  if ClipDepthTrack.Position = 0 then
      Vol1.clipPlane := sph2cartDeg90clip(ClipAziTrack.Position, ClipElevTrack.Position, -1.0 )
  else
-     Vol1.clipPlane := sph2cartDeg90clip(ClipAziTrack.Position, ClipElevTrack.Position, ClipDepthTrack.Position/ClipDepthTrack.Max );
+     Vol1.clipPlane := sph2cartDeg90clip(ClipAziTrack.Position, ClipElevTrack.Position, ClipDepthTrack.Position/(ClipDepthTrack.Max+1) );
+ v :=  ClipDepthTrack.Position <> 0;
+ if (v <> ClipAziTrack.enabled) then begin
+    ClipAziTrack.enabled := v;
+    ClipElevTrack.enabled := v;
+    ClipThickTrack.enabled := v;
+ end;
  //if (q > 5) <> (Vol1.Quality1to6 > 5) then begin  //changed from or to "best"
  //   ReloadShader(false);
     //caption := inttostr(random(888));
+ Vol1.ClipThick := ClipThickTrack.Position/ClipThickTrack.Max;
  ViewGPU1.Invalidate;
 end;
 
@@ -6065,15 +6223,27 @@ begin
     if (ParamCount > 0) and (s = ('-')) then begin
        s := ParamStr(ParamCount);
        if (upcase(ExtractFileExt(s)) <> '.PY') and (upcase(ExtractFileExt(s)) <> '.TXT') then begin
-          {$IFDEF UNIX}writeln('Assuming arguments are images not script (not .py or .txt) "'+s+'"');{$ENDIF}
+          dwriteln('Assuming arguments are images not script (not .py or .txt) "'+s+'"');
           ParamStr2Script();// AddBackground(s);
           exit;
        end;
-
        //gPrefs.InitScript := s;
     end;
+    if FileExists(ScriptDir+pathdelim+s) then
+       s := ScriptDir+pathdelim+s;
+    if FileExists(GetCurrentDir+pathdelim+s) then
+       s := GetCurrentDir+pathdelim+s;
     if (not FileExists(s)) then begin
-       {$IFDEF UNIX}writeln('Unable to find file provided from command line: '+s);{$ENDIF}
+       //{$IFDEF UNIX}writeln('Unable to find file provided from command line: '+s);{$ENDIF}
+       dwriteln('Reading input as literal Python script (use "^" as end-of-line delimiter)');
+       ScriptMemo.Lines.Clear;
+       //ScriptMemo.Lines.Add(s);
+       ScriptMemo.Lines.Delimiter:= '^';
+       ScriptMemo.Lines.StrictDelimiter:=true;
+       ScriptMemo.Lines.DelimitedText := s;
+       //ScriptMemo.Lines.AddText(s);
+       ScriptingRunMenuClick(nil);
+
        exit;
     end;
     {$IFDEF UNIX}writeln('Reading script '+s);{$ENDIF}
@@ -6127,9 +6297,10 @@ begin
   {$IFDEF LCLWin64}
   w := 'Windows';
   {$ENDIF}
-  w := w +chr(13)+chr(10);
-  w := w+ 'Author: Chris Rorden' +chr(13)+chr(10);
-  w := w+ 'License: BSD 2-Clause' +chr(13)+chr(10);
+  w := w + chr(13)+chr(10);
+  w := w + 'Author: Chris Rorden' +chr(13)+chr(10);
+  w := w + 'License: BSD 2-Clause' +chr(13)+chr(10);
+  w := w + format('%dx%d %d dpi', [Screen.Width, Screen.Height, Screen.PixelsPerInch]) +chr(13)+chr(10);
   s := chr(13)+chr(10)+ glGetString(GL_VENDOR)+'; OpenGL= '+glGetString(GL_VERSION)+'; Shader='+glGetString(GL_SHADING_LANGUAGE_VERSION);
   ViewGPU1.ReleaseContext;
   {$ENDIF}
@@ -6189,7 +6360,6 @@ begin
  Y := round(Y * f);
  //ss := getKeyshiftstate;
  //if  (ssShift in ss) then
-
  {$ENDIF}
  gMouseDrag := false;
   if (ssAlt in Shift) and (ColorEditorMenu.Checked) then begin
@@ -6206,7 +6376,7 @@ begin
      exit;
   end;
  if gPrefs.DisplayOrient > kMax2DOrient then exit;
- if  (Vols.Drawing.ActivePenColor >= 0) and (not AutoROIForm.Visible) and (not (ssCtrl in Shift)) and (not (ssMeta in Shift))  then begin
+ if  (Vols.Drawing.ActivePenColor >= 0) and (not AutoROIForm.Visible) and (not (ssCtrl in Shift)) and (not (ssAlt in Shift)) and (not (ssMeta in Shift))  then begin
     EnsureOpenVoi();
     fracXYZ := Vol1.GetSlice2DFrac(X,Y,i);
     gMouseLimitHi := Vol1.GetSlice2DMaxXY(X,Y, gMouseLimitLo);
@@ -6234,7 +6404,7 @@ begin
     exit;
  end;
  ViewGPUMouseMove(Sender, Shift, xIn,Yin);
- if (ssShift in Shift) or  (SSRight in Shift) then
+ if (ssShift in Shift) or  (ssRight in Shift) then
     gMouseDrag := true;
 end;
 
@@ -6255,7 +6425,7 @@ begin
  if Vol1.CE.ColorEditorMouseUp() then
     UpdateTimer.Enabled := true;
  if (Vols.Drawing.IsOpen) and (Vols.Drawing.ActivePenColor >= 0) and (Vols.Drawing.MouseDown) then begin
-    Vols.Drawing.voiMouseUp(true, DrawOverwriteMenu.Checked);
+    Vols.Drawing.voiMouseUp(DrawFilledMenu.Checked, DrawOverwriteMenu.Checked);
     Vols.Drawing.ActivePenColor := Vols.Drawing.PenColorOnRelease;
     UpdateTimer.enabled := true;
     gMouse.Y := -1; //released
@@ -6575,8 +6745,7 @@ begin
            {$IFDEF UNIX}writeln('Setting MaxVox to '+inttostr(MaxVox));{$ENDIF}
         end else if (i < paramcount) and (c='S') then begin
           inc(i);
-          //if fileexists(ParamStr(i)) then
-          if (upcase(ExtractFileExt(ParamStr(i))) = '.PY') or (upcase(ExtractFileExt(ParamStr(i))) = '.TXT') then
+          //if (upcase(ExtractFileExt(ParamStr(i))) = '.PY') or (upcase(ExtractFileExt(ParamStr(i))) = '.TXT') then
              gPrefs.InitScript := ParamStr(i);
         end;
     end;
@@ -6586,8 +6755,10 @@ begin
   if (gPrefs.InitScript = '') and (MaxVox < 1) and (ParamCount >= 1) and (not isForceReset) then //and (fileexists(ParamStr(ParamCount))) then
      gPrefs.InitScript := '-';
   if (length(gPrefs.InitScript) > 0) and (gPrefs.InitScript <> '-') and (not fileexists(gPrefs.InitScript)) then begin
-     {$IFDEF UNIX}writeln('Unable to find script '+gPrefs.InitScript);{$ENDIF}
-     gPrefs.InitScript := '';
+     if (upcase(ExtractFileExt(ParamStr(i))) = '.PY') or (upcase(ExtractFileExt(ParamStr(i))) = '.TXT') then begin
+        {$IFDEF UNIX}writeln('Unable to find script '+gPrefs.InitScript);{$ENDIF}
+        gPrefs.InitScript := '';
+     end;
   end;
   //set defaults
   if isForceReset then
@@ -6676,12 +6847,13 @@ begin
   //ViewGPU1.Parent := CenterPanel;
   ViewGPU1.OpenGLMajorVersion := 3;
   ViewGPU1.OpenGLMinorVersion := 3;
-  if gPrefs.MultiSample124 = 4 then
-     ViewGPU1.MultiSampling := 4
-  else if gPrefs.MultiSample124 = 2 then
+  //Multisampling influences borders of vertex shader - orientation cube looks MUCH better with multisampling
+  // Has no influence on fragment shader away from edges, e.g. no benefit for volume rendering but no cost?
+  ViewGPU1.MultiSampling := 4;
+  if gPrefs.MultiSample124 = 2 then
      ViewGPU1.MultiSampling := 2
-  else begin
-    {$IFDEF UNIX}writeln('Multisampling disabled: faster but lower quality');{$ENDIF}
+  else if gPrefs.MultiSample124 = 1 then begin
+    dwriteln('Multisampling disabled: orientation cube might look jagged. Performance benefit unlikely.');
     ViewGPU1.MultiSampling := 1;
   end;
   {$ENDIF}

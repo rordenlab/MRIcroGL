@@ -1,0 +1,13 @@
+import gl
+gl.resetdefaults()
+gl.loadimage('mni152')
+gl.overlayload('spmMotor')
+gl.minmax(1, 4, 4)
+gl.shadername('Glass')
+gl.shaderadjust('boundThresh', 0.3)
+gl.shaderadjust('edgeThresh', 0.42)
+gl.shaderadjust('edgeBoundMix',0.05)
+gl.shaderadjust('boundBrightness',0.0)
+gl.shaderadjust('colorTemp', 0.8)
+gl.backcolor(255, 255,255)
+gl. viewsagittal(1)

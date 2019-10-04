@@ -6,9 +6,9 @@ shininess|float|0.01|10.0|30|Specular reflections can be rough or precise
 edgeThresh|float|0|0.1|1|Surface threshold (requires low edgeBoundMix)
 boundThresh|float|0.0|0.3|0.95|Boundary threshold (requires high edgeBoundMix)
 edgeBoundMix|float|0|1|1|Mixture of edge and boundary opacity
-boundBrightness|float|0|0.2|1|Boundary color (requires high edgeBoundMix)
+boundBrightness|float|0|0.3|1|Boundary color (requires high edgeBoundMix)
 overlayDepth|float|0.0|0.3|0.8|Ability to see overlays beneath the background surface
-overlayClip|float|0|0|1|Does clipping also influence overlay layers?
+colorTemp|float|0|0.5|1
 //frag
 uniform float ambient = 1.0;
 uniform float diffuse = 0.0;
@@ -17,9 +17,10 @@ uniform float shininess = 10.0;
 uniform float edgeThresh = 0.1;
 uniform float boundThresh = 0.3;
 uniform float edgeBoundMix = 1.0;
-uniform float boundBrightness = 0.2;
+uniform float boundBrightness = 0.0;
 uniform float overlayDepth = 0.3;
 uniform float overlayClip = 0.0;
+uniform float colorTemp = 0.9;
 
 void main() {
 	#ifdef BETTER_BUT_SLOWER
@@ -57,6 +58,14 @@ void main() {
 	float edgeExp = 0.2;
 	float edgeBoundMixD = 1.0 - pow(edgeBoundMix, 2.0);
 	vec4 edgeColor = vec4(1.0, 1.0, 1.0, 1.0);
+	if (colorTemp < 0.5) {
+		edgeColor.b = 1.0-((0.5-colorTemp)*-0.5);
+		edgeColor.g = 1.0-((0.5-colorTemp)*-0.1);
+	}
+	if (colorTemp > 0.5) {
+		edgeColor.g = 1.0-((colorTemp-0.5)*-0.1);
+		edgeColor.r = 1.0-((colorTemp-0.5)*-0.5);
+	}
 	while (samplePos.a <= len) {
 		gradSample= texture3D(gradientVol,samplePos.xyz);
 		if (gradSample.a > 0.0) {

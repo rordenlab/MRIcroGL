@@ -47,6 +47,7 @@ type
         procedure CreateOverlayTextures(Dim: TVec3i; volRGBA: TRGBAs);
         procedure CreateGradientVolumeGPU(Xsz,Ysz,Zsz: integer; var inTex, grTex: MTLTextureProtocol);
       public
+        ClipThick: single; //TO DO: support in Metal
         {$IFDEF VIEW2D}
         SelectionRect: TVec4;
         property ShowColorEditor: boolean read colorEditorVisible write colorEditorVisible;
@@ -237,6 +238,7 @@ begin
   fLightPos := Vec4(0, 0.707, 0.707, 0);
   //fLightPos := Vec4(0, 0.087, 0.996, 0);
   fClipPlane := Vec4(0, 0, 0, -1);
+  ClipThick := 1.0;
   //fLightPos := Vec4(0,0.0,0.707, 0.0);
   //fClearColor.r := 200;
   //fClearColor.g := 200;

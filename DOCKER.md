@@ -7,7 +7,7 @@ The easiest way to install MRIcroGL is to download a compiled executable:
 
 ##### Compiling
 
-You can also compile a copy yourself. Here we will use a Debian-based distribution.
+You can also compile a copy yourself. Here we will use a Debian-based distribution. I suggest [Lazarus 2.0.4 or later](https://forum.lazarus.freepascal.org/index.php/topic,46721.msg333496/topicseen.html#new) for Debian systems.
 
 
 docker pull jgoerzen/debian-base-standard

@@ -5,3 +5,6 @@ with regards to mc01.jpg...mc24.jpg
 
 with regards to fubax.jpg
  https://github.com/Fubaxiusz/fubax-shaders/blob/master/Textures/matcap.png
+
+Porcelain from
+ https://threejs.org/examples/webgl_materials_matcap.html

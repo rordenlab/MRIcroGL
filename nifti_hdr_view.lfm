@@ -35,7 +35,6 @@ object HdrForm: THdrForm
       Caption = 'Dimensions'
       ClientHeight = 272
       ClientWidth = 539
-      OnContextPopup = DimensionSheetContextPopup
       object Label21: TLabel
         AnchorSideLeft.Control = DimensionSheet
         AnchorSideTop.Control = DimensionSheet

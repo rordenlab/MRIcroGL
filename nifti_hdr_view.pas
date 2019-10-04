@@ -156,8 +156,6 @@ type
     procedure FormShow(Sender: TObject);
     procedure PageControl1Change(Sender: TObject);
     procedure SaveHdrDlgClose(Sender: TObject);
-    procedure DimensionSheetContextPopup(Sender: TObject; MousePos: TPoint;
-      var Handled: Boolean);
     procedure WriteHdrForm (lHdr: TNIFTIhdr; IsNativeEndian: boolean; filename: string); overload;
     procedure WriteHdrForm (lHdr: TNIFTIhdr; IsNativeEndian: boolean; filename: string; DisplayDims: TVec3i); overload;
     procedure ReadHdrDimensionsOnly (var lHdr: TNIFTIhdr); //reads only size dimensions: useful for computing estimated filesize
@@ -424,21 +422,12 @@ begin
   //ApplySaveDlgFilter(SaveHdrDlg);
 end;
 
-
-
-procedure THdrForm.DimensionSheetContextPopup(Sender: TObject; MousePos: TPoint;
-  var Handled: Boolean);
-begin
-
-end;
-
 procedure THdrForm.FormShow(Sender: TObject);
 begin
-      // ImgForm.OnLaunch;
      {$IFDEF Darwin}
-     //HdrForm.BorderStyle:= bsSingle;
-     //HdrForm.BorderStyle:= bsDialog;
-     HdrForm.Constraints.MinHeight := 340;
+     DimensionSheet.Constraints.MinHeight := fTypeDrop.Top+fTypeDrop.Height;
+     {$ELSE}
+     HdrForm.Constraints.MinHeight := (2*HdrMenu.Height)+ fTypeDrop.Top+fTypeDrop.Height;
      {$ENDIF}
 end;
 

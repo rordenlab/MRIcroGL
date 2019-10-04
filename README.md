@@ -76,6 +76,7 @@ MRIcroGL uses NIfTI as its native format. However, you can drag-and-drop files o
  - [FreeSurfer MGH/MGZ Volume](https://surfer.nmr.mgh.harvard.edu/fswiki/FsTutorial/MghFormat)(.mgh/.mgz).
  - [Guys Image Processing Lab](http://rview.colin-studholme.net/rview/rv9manual/fileform.html#GIPL)(.gipl).
  - [ICS Image Cytometry Standard](https://onlinelibrary.wiley.com/doi/epdf/10.1002/cyto.990110502)(.ics).
+ - [Interfile](https://www.ncbi.nlm.nih.gov/pubmed/2616095)(.varies, limited support).
  - [ITK MHA/MHD](https://itk.org/Wiki/MetaIO/Documentation)(.mha/.mhd).
  - [Leica TIFF](https://en.wikipedia.org/wiki/TIFF)(.lsm).
  - [MRTrix Volume](https://mrtrix.readthedocs.io/en/latest/getting_started/image_data.html)(.mif/.mih; not all variants supported).
@@ -83,11 +84,24 @@ MRIcroGL uses NIfTI as its native format. However, you can drag-and-drop files o
  - [NRRD](http://teem.sourceforge.net/nrrd/format.html)(.nhdr/.nrrd).
  - [POV-Ray Density_File](https://www.povray.org/documentation/view/3.6.1/374/)(.df3).
  - [TIFF](https://en.wikipedia.org/wiki/TIFF)(.tif/.tiff/varies).
+ - [Spectroscopic Imaging, VIsualization and Computing (SIVIC)](https://radiology.ucsf.edu/research/labs/nelson#accordion-software)(.idf).
  - [Stimulate Sdt](https://www.cmrr.umn.edu/stimulate/stimUsersGuide/node57.html)(.spr/.sdt)
  - [Vaa3D](https://github.com/Vaa3D)(.v3draw).
  - [VTK Legacy Voxel Format](https://www.vtk.org/wp-content/uploads/2015/04/file-formats.pdf)(.vtk).
 
 If your image format is not supported directly by MRIcroGL, you may want to see if it is supported by the [Bio-Formats module](https://docs.openmicroscopy.org/bio-formats/5.9.2/supported-formats.html) of [ImageJ/Fiji](https://fiji.sc). If so, you can open the image with the module and save it as NIfTI or NRRD to read it with MRIcroGL.
+
+## Rendering Technique
+
+MRIcroGL uses single-pass raycasting to generate volume renderings.
+
+ - [Philip Rideout's seminal description of this method](https://prideout.net/blog/old/blog/index.html@p=64.html)
+ - Two-pass rendering explicitly generates a front and back face for a cube that represents the texture coordinates. One pass uses the front face and ray direction to [infer the distance to the back face](https://tavianator.com/fast-branchless-raybounding-box-intersections/)
+ - [Martino Pilia provides a nice description of this method](https://martinopilia.com/posts/2018/09/17/volume-raycasting.html)
+ - [Will Usher's minimal WebGL2 project](https://github.com/Twinklebear/webgl-volume-raycaster)
+ - [MRIcroWeb extends Will Usher's WebGL project to include MatCaps and NIfTI support](https://github.com/rordenlab/MRIcroWeb)
+ - [AMI Medical Imaging (AMI) JavaScript ToolKit](https://github.com/FNNDSC/ami) makes volume rendering easy
+
 
 ## Alternatives
 

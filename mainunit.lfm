@@ -1,12 +1,12 @@
 object GLForm1: TGLForm1
-  Left = 553
+  Left = 444
   Height = 764
-  Top = 102
-  Width = 761
+  Top = 82
+  Width = 900
   AllowDropFiles = True
   Caption = 'MRIcroGL'
   ClientHeight = 764
-  ClientWidth = 761
+  ClientWidth = 900
   Constraints.MinHeight = 20
   Constraints.MinWidth = 20
   Menu = MainMenu
@@ -21,10 +21,10 @@ object GLForm1: TGLForm1
     Left = 0
     Height = 754
     Top = 0
-    Width = 761
+    Width = 900
     Align = alClient
     ClientHeight = 754
-    ClientWidth = 761
+    ClientWidth = 900
     TabOrder = 0
     object ToolPanel: TScrollBox
       Left = 1
@@ -202,13 +202,13 @@ object GLForm1: TGLForm1
       end
       object ClipBox: TGroupBox
         Left = 0
-        Height = 80
+        Height = 101
         Top = 184
         Width = 253
         Align = alTop
         AutoSize = True
         Caption = 'Clipping'
-        ClientHeight = 61
+        ClientHeight = 82
         ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
@@ -235,7 +235,7 @@ object GLForm1: TGLForm1
           Height = 19
           Top = 0
           Width = 116
-          Max = 1000
+          Max = 999
           OnChange = UpdateShaderSettings
           Position = 0
           TickStyle = tsNone
@@ -315,11 +315,46 @@ object GLForm1: TGLForm1
           ParentFont = False
           OnClick = ClipLabelClick
         end
+        object ClipThickTrack: TTrackBar
+          AnchorSideLeft.Control = ClipDepthTrack
+          AnchorSideTop.Control = ClipElevTrack
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Control = ClipDepthTrack
+          AnchorSideRight.Side = asrBottom
+          Left = 122
+          Height = 19
+          Top = 63
+          Width = 114
+          Max = 1000
+          OnChange = UpdateShaderSettings
+          Position = 1000
+          TickStyle = tsNone
+          Anchors = [akTop, akLeft, akRight]
+          BorderSpacing.Top = 2
+          BorderSpacing.Right = 2
+          ParentFont = False
+          TabOrder = 3
+        end
+        object ClipThickLabel: TLabel
+          Tag = 3
+          AnchorSideLeft.Control = ClipBox
+          AnchorSideTop.Control = ClipThickTrack
+          AnchorSideTop.Side = asrCenter
+          Left = 2
+          Height = 16
+          Top = 64
+          Width = 61
+          BorderSpacing.Left = 2
+          Caption = 'Thickness'
+          ParentColor = False
+          ParentFont = False
+          OnClick = ClipLabelClick
+        end
       end
       object ShaderBox: TGroupBox
         Left = 0
         Height = 277
-        Top = 746
+        Top = 767
         Width = 253
         Align = alClient
         Caption = 'Render'
@@ -835,7 +870,7 @@ object GLForm1: TGLForm1
       object LineBox: TGroupBox
         Left = 0
         Height = 45
-        Top = 264
+        Top = 285
         Width = 253
         Align = alTop
         AutoSize = True
@@ -893,7 +928,7 @@ object GLForm1: TGLForm1
       object SliceBox: TGroupBox
         Left = 0
         Height = 181
-        Top = 565
+        Top = 586
         Width = 253
         Align = alTop
         AutoSize = True
@@ -1150,7 +1185,7 @@ object GLForm1: TGLForm1
       object CutoutBox: TGroupBox
         Left = 0
         Height = 82
-        Top = 483
+        Top = 504
         Width = 253
         Align = alTop
         AutoSize = True
@@ -1334,7 +1369,7 @@ object GLForm1: TGLForm1
       object MosaicBox: TGroupBox
         Left = 0
         Height = 174
-        Top = 309
+        Top = 330
         Width = 253
         Align = alTop
         AutoSize = True
@@ -1525,7 +1560,7 @@ object GLForm1: TGLForm1
       end
     end
     object ScriptPanel: TPanel
-      Left = 758
+      Left = 897
       Height = 752
       Top = 1
       Width = 2
@@ -1563,7 +1598,7 @@ object GLForm1: TGLForm1
             'print(sys.version)'
             'print(gl.version())'
             'gl.resetdefaults()'
-            'gl.loadimage(''mni152_2009_256'')'
+            'gl.loadimage(''mni152'')'
           )
           OnKeyUp = ScriptMemoKeyUp
           ParentFont = False
@@ -1606,7 +1641,7 @@ object GLForm1: TGLForm1
       Width = 6
     end
     object RightSplitter: TSplitter
-      Left = 752
+      Left = 891
       Height = 752
       Top = 1
       Width = 6
@@ -1617,7 +1652,7 @@ object GLForm1: TGLForm1
       Left = 275
       Height = 752
       Top = 1
-      Width = 477
+      Width = 616
       Align = alClient
       TabOrder = 4
       OnClick = CenterPanelClick
@@ -1628,7 +1663,7 @@ object GLForm1: TGLForm1
     Left = 0
     Height = 6
     Top = 754
-    Width = 761
+    Width = 900
     Align = alBottom
     MinSize = 4
     ResizeAnchor = akBottom
@@ -1637,7 +1672,7 @@ object GLForm1: TGLForm1
     Left = 0
     Height = 4
     Top = 760
-    Width = 761
+    Width = 900
     Align = alBottom
     TabOrder = 2
   end
@@ -1865,6 +1900,12 @@ object GLForm1: TGLForm1
           AutoCheck = True
           Caption = 'Overwrite Existing Colors'
           Checked = True
+        end
+        object DrawFilledMenu: TMenuItem
+          AutoCheck = True
+          Caption = 'Pen Draws Filled Regions'
+          Checked = True
+          Hint = 'If unchecked, pen only draws border outline'
         end
         object DrawCloneMenu: TMenuItem
           Caption = 'Clone Slice'
@@ -2414,6 +2455,13 @@ object GLForm1: TGLForm1
       AutoCheck = True
       Caption = 'Hide voxels with zero intensity'
       OnClick = LayerZeroIntensityInvisibleMenuClick
+    end
+    object LayerIsLabelMenu: TMenuItem
+      AutoCheck = True
+      Caption = 'Label Map (Indexed Atlas)'
+      GroupIndex = 193
+      Visible = False
+      OnClick = LayerIsLabelMenuClick
     end
     object RemoveSmallClusterMenu: TMenuItem
       Caption = 'Remove Small Clusters'

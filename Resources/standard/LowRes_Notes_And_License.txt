@@ -1,0 +1,13 @@
+MRIcroGL is distributed with low-resolution images to reduce file size and ensure compatibility with old computers. Larger but higher quality images are available by downloading the "Extra Sample Images"
+  https://www.nitrc.org/projects/mricrogl
+   
+The files chris_PD, chris_T1 and chris_T2, spmMotor show proton density, T1-weighted, T2-weighted and fMRI statistical map images acquired from a single individual at the McCausland Center for Brain Imaging. 
+
+The MNI152 image is a non-linear average of 152 individuals. Note that due to the initial algorithm used this template is slightly larger than the average brain. This explains why tools that normalize to the MNI brain (ANTS, FSL) create larger outputs that tools that use an average sized brain (SPM). This also explains why MRIcroGL ships with both the mni152 and "spm152" template. 
+ http://www.bic.mni.mcgill.ca/ServicesAtlases/ICBM152NLin2009
+ https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6050588/
+
+The volume CT_Philips is coutresy of Philips Medical and described here https://www.nitrc.org/plugins/mwiki/index.php/dcm2nii:MainPage#Computed_Tomography_.28CT.2C_CAT.29
+
+The volume CT_Abdo is provided by Steve Pieper and is availible in NRRD format at https://www.slicer.org/wiki/File:CTA-cardio.nrrd
+

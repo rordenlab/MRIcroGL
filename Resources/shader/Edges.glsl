@@ -1,5 +1,6 @@
 //pref
 brighten|float|0.5|2|3.5
+surfaceColor|float|0.0|1.0|1.0
 boundThresh|float|0.0|0.5|0.95
 edgeBoundMix|float|0|0.9|1
 overlayFuzzy|float|0.01|0.5|1
@@ -7,6 +8,7 @@ overlayDepth|float|0.0|0.15|0.99
 overlayClip|float|0|0|1|Does clipping also influence overlay layers?
 //frag
 uniform float brighten = 1.5;
+uniform float surfaceColor = 1.0;
 uniform float boundThresh = 0.95;
 uniform float edgeBoundMix = 0.9;
 uniform float overlayDepth = 0.3;
@@ -88,6 +90,8 @@ void main() {
 		bgNearest = min(samplePos.a,bgNearest);
 		vec3 n = normalize(normalize(NormalMatrix * gradSample.rgb));
 		vec3 d = texture(matcap2D, n.xy * 0.5 + 0.5).rgb;
+		colorSample.rgb = mix(defaultDiffuse, colorSample.rgb, surfaceColor); //0.67 as default Brighten is 1.5
+			
 		colorSample.rgb *= d * brighten * colorSample.a;
 		colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
 	} //while samplePos.a < len

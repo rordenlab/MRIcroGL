@@ -100,6 +100,7 @@ type
     function GetSlice2DFrac(mouseX, mouseY: integer; out Orient: integer): TVec3;
     function GetSlice2DMaxXY(mouseX, mouseY: integer; var Lo: TPoint): TPoint;
     function FracMM(Mat: TMat4; Dim: TVec3i; out Vox: TVec3i): TVec3;
+    procedure SetFontColor(c: TVec4);
     {$IFDEF MOSAICS}
     procedure MosaicScale(lMosaicString: string; Mat, InvMat: TMat4; Dim: TVec3i; volScale: TVec3; out w, h: integer);
     procedure UpdateMosaic(lMosaicString: string; Mat, InvMat: TMat4; Dim: TVec3i; volScale: TVec3; w,h: single);
@@ -113,6 +114,12 @@ uses mainunit;
 const
   //kBlockSzQ = 256; //expand "quad2Ds" buffer by chunks of 256 quads
   kBlockSz = 256 * 6; //expand "sliceVerts" and "lineVerts" by chunks
+
+procedure TSlices2D.SetFontColor(c: TVec4);
+begin
+  txt.FontColor := c;
+  //TextColor := c;
+end;
 
 function TSlices2D.GetSlice2DMaxXY(mouseX, mouseY: integer; var Lo: TPoint): TPoint;
 var
