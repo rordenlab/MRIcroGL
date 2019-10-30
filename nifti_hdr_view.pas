@@ -157,7 +157,7 @@ type
     procedure PageControl1Change(Sender: TObject);
     procedure SaveHdrDlgClose(Sender: TObject);
     procedure WriteHdrForm (lHdr: TNIFTIhdr; IsNativeEndian: boolean; filename: string); overload;
-    procedure WriteHdrForm (lHdr: TNIFTIhdr; IsNativeEndian: boolean; filename: string; DisplayDims: TVec3i); overload;
+    procedure WriteHdrForm (lHdr: TNIFTIhdr; IsNativeEndian: boolean; filename: string; DisplayDims: TVec3i; volsLoaded: integer = -1); overload;
     procedure ReadHdrDimensionsOnly (var lHdr: TNIFTIhdr); //reads only size dimensions: useful for computing estimated filesize
     procedure ReadHdrForm (var lHdr: TNIFTIhdr); //reads entire header
     procedure Save1Click(Sender: TObject);
@@ -280,11 +280,13 @@ begin
      end; //case
 end; //func DropItem2time_units
 
-procedure THdrForm.WriteHdrForm (lHdr: TNIFTIhdr; IsNativeEndian: boolean; filename: string; DisplayDims: TVec3i); overload; //writes a header to the various controls
+procedure THdrForm.WriteHdrForm (lHdr: TNIFTIhdr; IsNativeEndian: boolean; filename: string; DisplayDims: TVec3i; volsLoaded: integer = -1); overload; //writes a header to the various controls
 begin
      WriteHdrForm (lHdr, IsNativeEndian, filename);
      if (DisplayDims.X <> lHdr.dim[1]) or (DisplayDims.Y <> lHdr.dim[2]) or (DisplayDims.Z <> lHdr.dim[3]) then
         StatusBar1.Panels[0].text := format('Resliced: %dx%dx%d', [DisplayDims.X,DisplayDims.Y,DisplayDims.Z]) ;
+     if (volsLoaded > 0) then
+     StatusBar1.Panels[1].Text := 'Volumes loaded: '+inttostr(volsLoaded);
 
 end;
 

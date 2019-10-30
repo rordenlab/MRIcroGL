@@ -126,11 +126,25 @@ end;
 
 function GetFSLdir: string;
 //const FSLBase = '/usr/local/fsl';
+var
+   s: string;
 begin
     result := gFSLBASE;
    if (length(result)<1) or (not DirectoryExists(result)) then begin
       if DirectoryExists (GetEnvironmentVariable('FSLDIR')) then
          result:=GetEnvironmentVariable('FSLDIR');
+      {$IFDEF UNIX}
+      writeln('Searching for FSLDir');
+      if not DirectoryExists (result) then
+         if RunCommand('/bin/bash -l -c "which fsl"', s)  then
+            result := extractfiledir(extractfiledir(s));// '/usr/local/fsl/bin/fsl' ->  '/usr/local/fsl'
+      if not DirectoryExists (result) then
+         if RunCommand('/bin/zsh -l -c "which fsl"', s)  then
+            result := extractfiledir(extractfiledir(s));// '/usr/local/fsl/bin/fsl' ->  '/usr/local/fsl'
+
+      {$ENDIF}
+      if DirectoryExists(result) then
+         gFSLBASE := result;
    end;
 
 end;

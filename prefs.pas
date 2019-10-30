@@ -1,9 +1,10 @@
 unit prefs;
 {$D-,O+,Q-,R-,S-}   //Delphi L-,Y-
 {$H+}
+{$IFDEF Darwin} {$modeswitch objectivec2} {$ENDIF}
 
 interface
-uses IniFiles,SysUtils,Dialogs,Classes, SimdUtils, slices2D;
+uses {$IFDEF UNIX}Process, {$ENDIF}{$IFDEF Darwin}CocoaAll, {$ENDIF} IniFiles,SysUtils,Dialogs,Classes, SimdUtils, slices2D;
 const
   knMRU = 10;
 type
@@ -15,8 +16,8 @@ type
          ScreenCaptureTransparentBackground, LandmarkPanel, LoadFewVolumes,
          //LabelOrientCube,
          LabelOrient, RulerVisible, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay,
-         FlipYZ, FlipLR_Radiological, SkipPrefWriting: boolean;
-         CustomDcm2niix, PyLib, MosaicStr, InitScript, PrevBackgroundImage: string;
+         FlipYZ, FlipLR_Radiological, SkipPrefWriting, AutoClusterizeAtlases: boolean;
+         AfniDir, CustomDcm2niix, PyLib, MosaicStr, InitScript, PrevBackgroundImage: string;
          ClearColor: TRGBA;
          PrevFilename: TMRU;
 
@@ -40,7 +41,6 @@ begin
          strs[i] := '';
      nOK := 1;
      strs[nOK] :=  Filename;
-
      for i := 1 to knMRU do begin
          if not fileexists(MRU[i]) then continue;
          isNovel := true;
@@ -58,12 +58,26 @@ end;
 procedure SetDefaultPrefs (var lPrefs: TPrefs; lEverything: boolean);
 var
   i: integer;
+  s: string;
 begin
   if lEverything then begin  //These values are typically not changed...
      with lPrefs do begin
             for i := 1 to knMRU do
               PrevFilename[i] := '';
             PyLib := '';
+            {$IFDEF UNIX}
+            AfniDir := expandfilename('~/')+'abin';
+            if not DirectoryExists(AfniDir) then begin
+               writeln('Searching for AfniDir');
+               if RunCommand('/bin/bash -l -c "which afni"', s) then
+                  AfniDir := extractfiledir(s)
+               else if RunCommand('/bin/zsh -l -c "which afni"', s) then
+                  AfniDir := extractfiledir(s);
+            end;
+            {$ELSE}
+            AfniDir := '';
+            {$ENDIF}
+            //if not DirectoryExists(AfniDir) then AfniDir := '';
             PrevBackgroundImage := '';
             CustomDcm2niix := '';
             RetinaDisplay := true;
@@ -83,6 +97,7 @@ begin
             ScreenCaptureTransparentBackground := false;
             BitmapZoom := 2;
             FlipLR_Radiological := true;
+            AutoClusterizeAtlases := true;
             ColorbarSize := 50;
             MaxVox := 560;
             Smooth2D := true;
@@ -133,6 +148,8 @@ begin
 		lValue := Char2Bool(lStr[1]);
 end; //IniBool
 
+
+
 procedure IniStr(lRead: boolean; lIniFile: TIniFile; lIdent: string; var lValue: string);
 //read or write a string value to the initialization file
 begin
@@ -140,7 +157,8 @@ begin
     lIniFile.WriteString('STR',lIdent,lValue);
     exit;
   end;
-  lValue := lIniFile.ReadString('STR',lIdent, '');
+  //lValue := lIniFile.ReadString('STR',lIdent, '');
+  lValue := lIniFile.ReadString('STR',lIdent, lValue);
 end; //IniStr
 
 procedure IniMRU(lRead: boolean; lIniFile: TIniFile; lIdent: string;  var lMRU: TMRU);
@@ -165,12 +183,32 @@ begin
 		lValue := StrToInt(lStr);
 end; //IniInt
 
+{$IFDEF DARWIN}
+function SharedSupportFolder: ansistring;
+var
+   path: NSString;
+begin
+   path := NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, true).lastObject;
+   path := path.stringByAppendingPathComponent(NSBundle.mainBundle.bundlePath.lastPathComponent.stringByDeletingPathExtension);
+   NSFileManager.defaultManager.createDirectoryAtPath_withIntermediateDirectories_attributes_error(path, false, nil, nil);
+   result := path.UTF8String+PathDelim;
+end;
+
+function IniName: string;
+begin
+  result := SharedSupportFolder;
+  if result = '' then exit;
+  result := result +ChangeFileExt(ExtractFileName(ParamStr(0)),'')+'.ini';
+end;
+
+{$ELSE}
 function IniName: string;
 begin
   result := GetUserDir;
   if result = '' then exit;
   result := result + '.'+ChangeFileExt(ExtractFileName(ParamStr(0)),'')+'12.ini';
 end;
+{$ENDIF}
 
 function IniFile(lRead: boolean;  var lPrefs: TPrefs): boolean;
 //Read or write initialization variables to disk
@@ -191,6 +229,7 @@ begin
   lIniFile := TIniFile.Create(lFilename);
   IniMRU(lRead,lIniFile,'PrevFilename', lPrefs.PrevFilename);
   IniStr(lRead, lIniFile, 'PyLib', lPrefs.PyLib);
+  IniStr(lRead, lIniFile, 'AfniDir', lPrefs.AfniDir);
   IniStr(lRead, lIniFile, 'PrevBackgroundImage', lPrefs.PrevBackgroundImage  );
   IniStr(lRead, lIniFile, 'CustomDcm2niixExe', lPrefs.CustomDcm2niix);
   IniInt(lRead,lIniFile, 'Quality1to6', lPrefs.Quality1to6);
@@ -220,6 +259,7 @@ begin
   IniBool(lRead,lIniFile, 'LandmarkPanel',lPrefs.LandmarkPanel);
   IniBool(lRead,lIniFile, 'FlipYZ',lPrefs.FlipYZ);
   IniBool(lRead,lIniFile, 'FlipLR_Radiological',lPrefs.FlipLR_Radiological);
+  IniBool(lRead,lIniFile, 'AutoClusterizeAtlases', lPrefs.AutoClusterizeAtlases);
   lIniFile.Free;
 end;
 

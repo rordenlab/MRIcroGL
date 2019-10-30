@@ -1,12 +1,12 @@
 object GLForm1: TGLForm1
-  Left = 444
-  Height = 764
-  Top = 82
-  Width = 900
+  Left = 375
+  Height = 855
+  Top = 23
+  Width = 1063
   AllowDropFiles = True
   Caption = 'MRIcroGL'
-  ClientHeight = 764
-  ClientWidth = 900
+  ClientHeight = 855
+  ClientWidth = 1063
   Constraints.MinHeight = 20
   Constraints.MinWidth = 20
   Menu = MainMenu
@@ -19,37 +19,37 @@ object GLForm1: TGLForm1
   LCLVersion = '2.1.0.0'
   object TopPanel: TPanel
     Left = 0
-    Height = 754
+    Height = 847
     Top = 0
-    Width = 900
+    Width = 1063
     Align = alClient
-    ClientHeight = 754
-    ClientWidth = 900
+    ClientHeight = 847
+    ClientWidth = 1063
     TabOrder = 0
     object ToolPanel: TScrollBox
       Left = 1
-      Height = 752
+      Height = 845
       Top = 1
       Width = 268
       HorzScrollBar.Page = 1
       HorzScrollBar.Visible = False
-      VertScrollBar.Page = 752
+      VertScrollBar.Page = 845
       Align = alLeft
       BorderStyle = bsNone
-      ClientHeight = 752
+      ClientHeight = 845
       ClientWidth = 253
       ParentFont = False
       TabOrder = 0
       OnDblClick = ToolPanelDblClick
       object LayerBox: TGroupBox
         Left = 0
-        Height = 184
+        Height = 213
         Top = 0
         Width = 253
         Align = alTop
         AutoSize = True
         Caption = 'Layers'
-        ClientHeight = 165
+        ClientHeight = 194
         ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
@@ -199,11 +199,55 @@ object GLForm1: TGLForm1
           ParentFont = False
           TabOrder = 2
         end
+        object LayerAfniBtn: TButton
+          AnchorSideLeft.Control = LayerColorDrop
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = LayerAfniDrop
+          AnchorSideTop.Side = asrCenter
+          AnchorSideRight.Control = LayerList
+          AnchorSideRight.Side = asrBottom
+          Left = 143
+          Height = 25
+          Top = 169
+          Width = 88
+          BorderSpacing.Left = 6
+          BorderSpacing.Top = 4
+          Caption = '...'
+          OnClick = LayerAfniBtnClick
+          ParentFont = False
+          TabOrder = 6
+          Visible = False
+        end
+        object LayerAfniDrop: TComboBox
+          AnchorSideLeft.Control = LayerList
+          AnchorSideTop.Control = LayerAlphaTrack
+          AnchorSideTop.Side = asrBottom
+          Left = 0
+          Height = 20
+          Top = 171
+          Width = 137
+          BorderSpacing.Top = 6
+          ItemHeight = 26
+          ItemIndex = 0
+          Items.Strings = (
+            'AFNI'
+            'F'
+            'N'
+            'I'
+          )
+          OnChange = LayerAfniDropChange
+          OnClick = LayerAfniDropClick
+          ParentFont = False
+          Style = csDropDownList
+          TabOrder = 7
+          Text = 'AFNI'
+          Visible = False
+        end
       end
       object ClipBox: TGroupBox
         Left = 0
         Height = 101
-        Top = 184
+        Top = 213
         Width = 253
         Align = alTop
         AutoSize = True
@@ -354,9 +398,10 @@ object GLForm1: TGLForm1
       object ShaderBox: TGroupBox
         Left = 0
         Height = 277
-        Top = 767
+        Top = 796
         Width = 253
-        Align = alClient
+        Align = alTop
+        AutoSize = True
         Caption = 'Render'
         ClientHeight = 258
         ClientWidth = 243
@@ -870,7 +915,7 @@ object GLForm1: TGLForm1
       object LineBox: TGroupBox
         Left = 0
         Height = 45
-        Top = 285
+        Top = 314
         Width = 253
         Align = alTop
         AutoSize = True
@@ -928,7 +973,7 @@ object GLForm1: TGLForm1
       object SliceBox: TGroupBox
         Left = 0
         Height = 181
-        Top = 586
+        Top = 615
         Width = 253
         Align = alTop
         AutoSize = True
@@ -1185,7 +1230,7 @@ object GLForm1: TGLForm1
       object CutoutBox: TGroupBox
         Left = 0
         Height = 82
-        Top = 504
+        Top = 533
         Width = 253
         Align = alTop
         AutoSize = True
@@ -1369,7 +1414,7 @@ object GLForm1: TGLForm1
       object MosaicBox: TGroupBox
         Left = 0
         Height = 174
-        Top = 330
+        Top = 359
         Width = 253
         Align = alTop
         AutoSize = True
@@ -1560,13 +1605,13 @@ object GLForm1: TGLForm1
       end
     end
     object ScriptPanel: TPanel
-      Left = 897
-      Height = 752
+      Left = 1060
+      Height = 845
       Top = 1
       Width = 2
       Align = alRight
       BevelOuter = bvNone
-      ClientHeight = 752
+      ClientHeight = 845
       ClientWidth = 2
       Constraints.MinWidth = 2
       ParentFont = False
@@ -1574,12 +1619,12 @@ object GLForm1: TGLForm1
       OnDblClick = ScriptPanelDblClick
       object ScriptBox: TGroupBox
         Left = -8
-        Height = 752
+        Height = 845
         Top = 0
         Width = 10
         Align = alClient
         Caption = 'Scripting'
-        ClientHeight = 733
+        ClientHeight = 826
         ClientWidth = 0
         Constraints.MinWidth = 10
         ParentFont = False
@@ -1587,7 +1632,7 @@ object GLForm1: TGLForm1
         OnDblClick = ScriptPanelDblClick
         object ScriptMemo: TMemo
           Left = 0
-          Height = 527
+          Height = 620
           Top = 0
           Width = 0
           Align = alClient
@@ -1596,6 +1641,7 @@ object GLForm1: TGLForm1
             'import gl'
             'import sys'
             'print(sys.version)'
+            'print(sys.path)'
             'print(gl.version())'
             'gl.resetdefaults()'
             'gl.loadimage(''mni152'')'
@@ -1610,7 +1656,7 @@ object GLForm1: TGLForm1
         object ScriptOutputMemo: TMemo
           Left = 0
           Height = 200
-          Top = 533
+          Top = 626
           Width = 0
           Align = alBottom
           BorderStyle = bsNone
@@ -1627,7 +1673,7 @@ object GLForm1: TGLForm1
           Cursor = crVSplit
           Left = 0
           Height = 6
-          Top = 527
+          Top = 620
           Width = 0
           Align = alBottom
           ResizeAnchor = akBottom
@@ -1636,13 +1682,13 @@ object GLForm1: TGLForm1
     end
     object LeftSplitter: TSplitter
       Left = 269
-      Height = 752
+      Height = 845
       Top = 1
       Width = 6
     end
     object RightSplitter: TSplitter
-      Left = 891
-      Height = 752
+      Left = 1054
+      Height = 845
       Top = 1
       Width = 6
       Align = alRight
@@ -1650,9 +1696,9 @@ object GLForm1: TGLForm1
     end
     object CenterPanel: TPanel
       Left = 275
-      Height = 752
+      Height = 845
       Top = 1
-      Width = 616
+      Width = 779
       Align = alClient
       TabOrder = 4
       OnClick = CenterPanelClick
@@ -1662,19 +1708,86 @@ object GLForm1: TGLForm1
     Cursor = crVSplit
     Left = 0
     Height = 6
-    Top = 754
-    Width = 900
+    Top = 847
+    Width = 1063
     Align = alBottom
     MinSize = 4
     ResizeAnchor = akBottom
   end
   object BottomPanel: TPanel
     Left = 0
-    Height = 4
-    Top = 760
-    Width = 900
+    Height = 2
+    Top = 853
+    Width = 1063
     Align = alBottom
+    ClientHeight = 2
+    ClientWidth = 1063
     TabOrder = 2
+    object ClusterView: TListView
+      Left = 1
+      Height = 0
+      Top = 1
+      Width = 1061
+      Align = alClient
+      AutoWidthLastColumn = True
+      Columns = <      
+        item
+          Caption = 'Index'
+          MaxWidth = 50
+          MinWidth = 50
+          Tag = 1
+          Visible = False
+        end      
+        item
+          Caption = 'Volume'
+          MaxWidth = 120
+          MinWidth = 50
+          Tag = 1
+        end      
+        item
+          Caption = 'Peak'
+          Tag = 3
+          Width = 42
+        end      
+        item
+          Alignment = taCenter
+          Caption = 'PeakXYZ'
+          MaxWidth = 120
+          MinWidth = 20
+          Tag = 2
+          Width = 120
+        end      
+        item
+          Caption = 'Peak Structure'
+          MaxWidth = 200
+          MinWidth = 20
+          Tag = 2
+          Width = 120
+        end      
+        item
+          Alignment = taCenter
+          Caption = 'XYZ'
+          MaxWidth = 120
+          MinWidth = 20
+          Width = 120
+        end      
+        item
+          Caption = 'Structure'
+          Width = 592
+        end>
+      GridLines = True
+      PopupMenu = ClusterPopUp
+      ReadOnly = True
+      RowSelect = True
+      SortColumn = 0
+      SortType = stData
+      TabOrder = 0
+      ViewStyle = vsReport
+      OnColumnClick = ClusterViewColumnClick
+      OnCompare = ClusterViewCompare
+      OnMouseUp = ClusterViewMouseUp
+      OnSelectItem = ClusterViewSelectItem
+    end
   end
   object MainMenu: TMainMenu
     left = 280
@@ -1706,6 +1819,14 @@ object GLForm1: TGLForm1
       end
       object OpenStandardMenu: TMenuItem
         Caption = 'Open Standard'
+      end
+      object OpenAFNIMenu: TMenuItem
+        Tag = 2
+        Caption = 'Open AFNI'
+        object AfniDirMenu: TMenuItem
+          Caption = 'Set AFNI Folder...'
+          OnClick = AfniDirMenuClick
+        end
       end
       object OpenFSLMenu: TMenuItem
         Caption = 'Open FSL'
@@ -1750,7 +1871,7 @@ object GLForm1: TGLForm1
         OnClick = EditCopyMenuClick
       end
       object EditPasteMenu: TMenuItem
-        Caption = 'Edit'
+        Caption = 'Paste'
         ShortCut = 16470
         OnClick = EditPasteMenuClick
       end
@@ -2423,6 +2544,18 @@ object GLForm1: TGLForm1
       Caption = 'Move Down'
       OnClick = LayerUpDownClick
     end
+    object LayerShowHeaderMenu: TMenuItem
+      Caption = 'Show Header'
+      OnClick = LayerShowHeaderMenuClick
+    end
+    object LayerShowBidsMenu: TMenuItem
+      Caption = 'Show BIDS Sidecar'
+      OnClick = LayerShowBidsMenuClick
+    end
+    object LayerClusterMenu: TMenuItem
+      Caption = 'Generate Clusters'
+      OnClick = LayerClusterMenuClick
+    end
     object LayerFromZeroMenu: TMenuItem
       AutoCheck = True
       Caption = 'Color Range From Zero'
@@ -2449,7 +2582,7 @@ object GLForm1: TGLForm1
     object LayerCutoutMenu: TMenuItem
       AutoCheck = True
       Caption = 'Hidden By Cutout'
-      OnClick = LayerCutoutMenuClick
+      OnClick = AfniNextClick
     end
     object LayerZeroIntensityInvisibleMenu: TMenuItem
       AutoCheck = True
@@ -2471,14 +2604,6 @@ object GLForm1: TGLForm1
       AutoCheck = True
       Caption = 'Invert Color Map'
       OnClick = LayerInvertColorMapMenuClick
-    end
-    object LayerShowHeaderMenu: TMenuItem
-      Caption = 'Show Header'
-      OnClick = LayerShowHeaderMenuClick
-    end
-    object LayerShowBidsMenu: TMenuItem
-      Caption = 'Show BIDS Sidecar'
-      OnClick = LayerShowBidsMenuClick
     end
     object LayerNextVolumeMenu: TMenuItem
       Tag = 1
@@ -2539,5 +2664,36 @@ object GLForm1: TGLForm1
     OnTimer = BetterRenderTimerTimer
     left = 360
     top = 351
+  end
+  object AfniPopup: TPopupMenu
+    OnPopup = LayerPopupPopup
+    left = 392
+    top = 40
+    object AfniDetailsMenu: TMenuItem
+      Caption = 'Details'
+      OnClick = AfniDetailsMenuClick
+    end
+    object AfniPrevMenu: TMenuItem
+      Caption = 'Previous volume'
+      OnClick = DisplayNextMenuClick
+    end
+    object AfniNextMenu: TMenuItem
+      Tag = 1
+      Caption = 'Next Volume'
+      OnClick = DisplayNextMenuClick
+    end
+  end
+  object ClusterPopUp: TPopupMenu
+    left = 428
+    top = 482
+    object ClusterCopyMenu: TMenuItem
+      Caption = 'Copy table to clipboard'
+      OnClick = ClusterSaveClick
+    end
+    object ClusterSaveMenu: TMenuItem
+      Tag = 1
+      Caption = 'Save table to text'
+      OnClick = ClusterSaveClick
+    end
   end
 end

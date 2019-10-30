@@ -9,14 +9,18 @@ interface
 {$ENDIF}
 //{$DEFINE PARALLEL}  //for parallel Unix also edit CThreads in LPR file
 {$DEFINE OPENFOREIGN} //used for q and s form as well as opening
+{$DEFINE AFNI} //read Head/Brik statistics
+{$IFNDEF OPENFOREIGN}{$IFDEF AFNI} error: AFNI requires OPENFOREIGN {$ENDIF} {$ENDIF}
 {$DEFINE CPUGRADIENTS} //Computing volume gradients on the GPU is much faster than using the CPU
 {$DEFINE CACHEUINT8} //save 8-bit data: faster requires RAM
 {$DEFINE SSE}
 {$DEFINE TIF} //load bitmaps, e.g. PNG, BMP, TIFFs not handled by NIfTI_TIFF
 {$DEFINE BMP} //load bitmaps, e.g. PNG, BMP, TIFFs not handled by NIfTI_TIFF
+{$DEFINE BZIP2}
 uses
 
   //{$IFDEF UNIX}cthreads, cmem,{$ENDIF}
+  {$IFDEF BZIP2}bzip2stream,{$ENDIF}
   {$IFDEF BMP} Graphics, GraphType,{$ENDIF}
   {$IFDEF PARALLEL}MTProcs,{$ENDIF}
   {$IFDEF TIMER} DateUtils,{$ENDIF}
@@ -25,7 +29,7 @@ uses
   {$IFDEF CUSTOMCOLORS} colorTable,  {$ENDIF}
   {$IFDEF GZIP}zstream, umat, GZIPUtils, {$ENDIF} //Freepascal includes the handy zstream function for decompressing GZip files
   {$IFDEF TIF} nifti_tiff, {$ENDIF} {$IFDEF SSE} sse2, {$ENDIF}
-  strutils, dialogs, clipbrd, SimdUtils, sysutils,Classes, nifti_types, Math, VectorMath, otsuml;
+  sortu, strutils, dialogs, clipbrd, SimdUtils, sysutils,Classes, nifti_types, Math, VectorMath, otsuml;
 //Written by Chris Rorden, released under BSD license
 //This is the header NIfTI format http://nifti.nimh.nih.gov/nifti-1/
 //NIfTI is popular in neuroimaging - should be compatible for Analyze format
@@ -38,7 +42,15 @@ uses
 //Note raw image daya begins vox_offset bytes into the image data file
 //  For example, in a typical NII file, the header is the first 348 bytes,
 //  but the image data begins at byte 352 (as this is evenly divisible by 8)
+
 Type
+  TCluster = record
+		CogXYZ, PeakXYZ: TVec3; //Center of Gravity, Peak
+                Peak, SzCC: single;
+		PeakStructure, Structure: string[248];
+  end;
+  TClusters = array of TCluster;
+
   TNIfTI = Class(TObject)  // This is an actual class definition :
       // Internal class field definitions - only accessible in this unit
       private
@@ -53,7 +65,7 @@ Type
         fVolRGBA: TRGBAs;
         fLabels: TStringList;
         fhistogram: TLUT;
-        fIsOverlay, fIsDrawing: boolean; //booleans do not generate 32-bit RGBA images
+        fisLinearReslice, fIsOverlay, fIsDrawing: boolean; //booleans do not generate 32-bit RGBA images
         {$IFDEF CACHEUINT8}
         fVolumesTotal, fVolumeDisplayed, fVolumesLoaded, fOpacityPctCache8: integer;
         fWindowMinCache8, fWindowMaxCache8: single;
@@ -89,6 +101,7 @@ Type
         procedure MakeBorg(voxelsPerDimension: integer);
         procedure initHistogram(Histo: TUInt32s =  nil);
         procedure ApplyCutout();
+        function loadForeign(FileName : AnsiString; var  rawData: TUInt8s; var lHdr: TNIFTIHdr): boolean;// Load 3D data
         function LoadRaw(FileName : AnsiString; out isNativeEndian: boolean): boolean;
         {$IFDEF GZIP}
         function SaveGz(niftiFileName: string): boolean;
@@ -99,16 +112,22 @@ Type
         //function skipBytes(): int64; //if fVolumeDisplayed > 0, skip this many BYTES for first byte of data
         //function skipRawVolBytes(): TUInt8s;
         function VoiDescriptivesLabels(VoiRawBytes: TUInt8s): TStringList;
-
+        function CenterOfMass(idx: integer; out nVox: single): TVec3;
+        procedure GenerateAtlasClusters;
         //procedure robustMinMax(var rMin, rMax: single);
       public
         fRawVolBytes: TUInt8s;
         LoadFewVolumes: boolean;
+        SortClustersBySize : boolean;
         HiddenByCutout: boolean;
         IsShrunken : boolean;
         ZeroIntensityInvisible: boolean;
         MaxVox: integer; //maximum number of voxels in any dimension
         MaxMM: single; //maximum mm in any dimension
+        {$IFDEF AFNI}
+        afnis: TAFNIs;
+        {$ENDIF}
+        clusters: TClusters;
         property IsNativeEndian: boolean read fIsNativeEndian;
         property VolumeDisplayed: integer read fVolumeDisplayed; //indexed from 0 (0..VolumesLoaded-1)
         property VolumesLoaded: integer read fVolumesLoaded; //1 for 3D data, for 4D 1..hdr.dim[4] depending on RAM
@@ -124,6 +143,7 @@ Type
         //procedure SmoothMaskedImages();
         property Drawing: boolean read fIsDrawing;
         function AsFloats(): TFloat32s;
+        procedure SortClusters;
         function NotZero(): TInt16s; //volume where voxels non-zero voxels are set to 1, voxels with intensity zero set to 0
         function NeedsUpdate(): boolean;
         function DisplayMinMax2Uint8(isForceRefresh: boolean = false): TUInt8s;
@@ -181,6 +201,9 @@ Type
         procedure SetDisplayMinMax(newMin, newMax: single); overload;
         procedure SetDisplayMinMaxNoUpdate(newMin, newMax: single); overload;
         procedure SetCutoutNoUpdate(CutoutLow, CutoutHigh: TVec3);
+        procedure GenerateClusters; overload;
+        procedure GenerateClusters(LabelMap: TNIfTI); overload;
+
         function DisplayRGBGreen(): TUInt8s;
         procedure SetDisplayColorScheme(clutFileName: string; cTag: integer);
         procedure SetDisplayVolume(newDisplayVolume: integer);
@@ -454,9 +477,9 @@ begin
          if (i >= 0) and (i < fLabels.Count) then
             result := fLabels[i]
          else
-             result := inttostr(i);//''; //tobo
+             result := inttostr(i);//''; //todo
      end else
-         result := format('%3.6g', [f]);
+         result := format(' %3.6g', [f]);
 end;
 
 function TNIfTI.VoxIntensityString(vox: TVec3i): string; overload;//return intensity of voxel at coordinate
@@ -1663,13 +1686,35 @@ begin
  //showmessage(format('%g %g %g', [fHdr.qoffset_x, fHdr.qoffset_y, fHdr.qoffset_z]));
 end;
 
-function ChangeFileExtX(fnm, ext: string): string; //treat ".nii.gz" as single extension
+
+function extractfileextX(fnm: string): string; //treat ".nii.gz" as single extension, return .NII.GZ
+var
+  s: string;
+begin
+ result := upcase(extractfileext(fnm));
+ if  (result <> '.GZ') and (result <> '.BZ2')  then exit;
+ s := changefileext(fnm,'');
+ result := upcase(extractfileext(s))+result;
+end;
+
+function ChangeFileExtX(fnm, ext: string): string; //treat "brik.gz" and ".nii.gz" as single extension
+var
+   lExt: string;
+begin
+     lExt := uppercase(extractfileext(fnm));
+     result := changefileext(fnm,'');
+     if (lExt = '.GZ') or (lExt = '.BZ2') then
+        result := changefileext(result,'');
+     result := result + ext;
+end;
+
+(*function ChangeFileExtX(fnm, ext: string): string; //treat ".nii.gz" as single extension
 begin
  result := changefileext(fnm,'');
  if upcase(extractfileext(result)) = '.NII' then
       result := changefileext(result,'');
  result := result + ext;
-end;
+end;*)
 
 (*function EstimateResidual(dim : TVec3i; inR: TMat4; perm : TVec3i): TMat4;
 //compute dimension permutations and flips to reorient volume to standard space
@@ -2946,7 +2991,6 @@ begin
   lSwappedReportedSz := h2.HdrSz;
   swap4(lSwappedReportedSz);
   if (lSwappedReportedSz = SizeOf (TNIFTI2hdr)) then begin
-    //printf('Not yet able to handle byte-swapped NIfTI2');
     NIFTI2hdr_SwapBytes(h2);
     isNativeEndian := false;
     //exit(h1);
@@ -4002,7 +4046,6 @@ begin
   printf('Converted RGBA -> RGB, Data type 2304 -> 128');
 end;
 
-
 procedure TNIfTI.Convert2UInt8(); //convert int8 -> int16
 var
   i8in: TInt8s;
@@ -4018,6 +4061,7 @@ begin
   fHdr.scl_inter:= fHdr.scl_inter - (128 * fHdr.scl_slope);
   fHdr.datatype := kDT_UINT8;
   fHdr.bitpix:= 8;
+  fHdrNoRotation.scl_inter := fHdr.scl_inter;
   fHdrNoRotation.datatype := kDT_UINT8;
   fHdrNoRotation.bitpix:= 8;
   printf('Converted Int8 -> UInt8, Data type 256 -> 2');
@@ -4058,6 +4102,9 @@ begin
      i16[i] := smallint(u16[i]- 32768);
  fHdr.datatype := kDT_SIGNED_SHORT;
  fHdr.scl_inter:= (32768 * fHdr.scl_slope) + fHdr.scl_inter;
+ //reported
+ //fHdrNoRotation.scl_inter := fHdr.scl_inter;
+ //fHdrNoRotation.datatype := kDT_SIGNED_SHORT;
 end;
 
 procedure TNIfTI.Convert2Float();
@@ -4862,17 +4909,24 @@ var
   vol32: TFloat32s;
   luts: array[0..255] of byte;
 begin
+
   if (fHdr.datatype = kDT_RGB) then exit(nil); //DT_RGB: use DisplayRGBGreen
   vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
   if vx < 1 then exit(nil);
+
   if (not isForceRefresh) and (not NeedsUpdate) then// (not clut.NeedsUpdate) and (fHdr.datatype <> kDT_RGB) and (fCache8 <> nil) and (fWindowMinCache8 <> fWindowMaxCache8) and (fWindowMin = fWindowMinCache8) and (fWindowMax = fWindowMaxCache8) then begin
      exit(fCache8);
   vol8 := fRawVolBytes;
   skipVx := SkipVox();
-  if (IsLabels()) then begin
-    //DisplayLabel2Uint8();
+  //if (IsLabels()) and  (not specialsingle(fWindowMinCache8)) then begin //handle 2 volume TTatlas+tlrc.HEAD
+  if (IsLabels())  then begin
+
+
     clut.GenerateLUT(abs(fWindowMax-fWindowMin)/100, fOpacityPct);
     result := fCache8;
+    if specialsingle(fWindowMinCache8) then begin
+       DisplayLabel2Uint8();
+    end;
     fWindowMinCache8 := fWindowMin;
     fWindowMaxCache8 := fWindowMax;
     fOpacityPctCache8 := fOpacityPct;
@@ -5124,10 +5178,8 @@ end;
 
 procedure TNIfTI.SetDisplayVolume(newDisplayVolume: integer);
 var
-  //i,
   n: integer;
 begin
-   //i := newDisplayVolume;
    if (fIsOverlay) then
       n := HdrVolumes(fHdr)
    else
@@ -5154,7 +5206,9 @@ begin
   {$IFDEF CUSTOMCOLORS}
   //clut := nil;
   {$ENDIF}
-  Load(fFileName, fMat, fDim, false, fVolumeDisplayed, true); //isKeepContrast
+  //Load(fFileName, fMat, fDim, fisLinearReslice, fVolumeDisplayed, true); //isKeepContrast
+  Load(fFileName, fMat, fDim, fisLinearReslice, fVolumeDisplayed, false); //isKeepContrast
+  //Load(niftiFileName, tarMat, tarDim, isInterpolate, hdr, img)
 end;
 
 procedure TNIfTI.SetDisplayColorScheme(clutFileName: string; cTag: integer);
@@ -5534,12 +5588,103 @@ begin
   img := nil;
 end;
 
-function loadForeign(FileName : AnsiString; var  rawData: TUInt8s; var lHdr: TNIFTIHdr): boolean;// Load 3D data
+procedure correctScaleSlope(var  rawData: TUInt8s; var lHdr: TNIFTIHdr; volumeDisplayed: integer; var afnis: TAFNIs);
+var
+   vOff, v, i, vx, volBytes, floatBytes: int64;
+   in8: TUInt8s;
+   in16: TInt16s;
+   out32f: TFloat32s;
+begin
+ if length(afnis) < lHdr.Dim[4] then exit;
+ volBytes := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3] * (lHdr.bitpix div 8);
+ if length(rawData) = volBytes then begin//e.g. only load single volume
+    lHdr.scl_slope := lHdr.scl_slope * afnis[volumeDisplayed].scl_slopex;
+    exit;
+ end;
+ if lHdr.Dim[4] <= 1 then exit;
+ vx := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3];
+ floatBytes := vx * lHdr.Dim[4]* 4;
+ if (lHdr.bitpix = 8) then begin
+   setlength(in8, Length(rawData));
+   in8 := Copy(rawData, Low(rawData), Length(rawData));
+   setlength(rawData, floatBytes);
+   out32f := TFloat32s(rawData);
+   for v := 0 to (lHdr.Dim[4] -1) do begin
+       vOff := v * vx;
+       for i := 0 to (vx-1) do
+           out32f[i+vOff] := in8[i+vOff] * afnis[v].scl_slopex;
+   end;
+   lHdr.datatype := kDT_FLOAT32;
+   lHdr.bitpix := 32;
+ end else if (lHdr.bitpix = 16) then begin
+   setlength(in8, Length(rawData));
+   in8 := Copy(rawData, Low(rawData), Length(rawData));
+   in16 := TInt16s(in8);
+   setlength(rawData, floatBytes);
+   out32f := TFloat32s(rawData);
+   for v := 0 to (lHdr.Dim[4] -1) do begin
+       vOff := v * vx;
+       for i := 0 to (vx-1) do
+           out32f[i+vOff] := in16[i+vOff] * afnis[v].scl_slopex;
+   end;
+   lHdr.datatype := kDT_FLOAT32;
+   lHdr.bitpix := 32;
+ end else begin
+    printf('Unsupported datatype for variable AFNI BRICK_FLOAT_FACS');
+ end;
+
+end;
+
+{$IFDEF BZIP2}
+function LoadImgBZ(FileName : AnsiString; swapEndian: boolean; var  rawData: TUInt8s; var lHdr: TNIFTIHdr; gzBytes: integer): boolean;
+//foreign: both image and header compressed
+label
+	123;
+var
+  Decompressed: TDecompressBzip2Stream;
+  InFile: TFileStream;
+  i, volBytes, offset: int64;
+begin
+  result := false;
+  volBytes := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3] * (lHdr.bitpix div 8);
+  if HdrVolumes(lHdr) > 1 then
+  volBytes := volBytes * HdrVolumes(lHdr);
+  InFile:=TFileStream.Create(FileName, fmOpenRead);
+  offset := round(lHdr.vox_offset);
+  if (offset > 0) and (gzBytes = K_bz2Bytes_onlyImageCompressed) then
+    Infile.Seek(offset, soFromBeginning);
+  Decompressed:=TDecompressBzip2Stream.Create(InFile);
+  if (offset > 0) and (gzBytes = K_bz2Bytes_headerAndImageCompressed) then begin
+      SetLength (rawData, offset);
+      i:=Decompressed.Read(Pointer(@rawData[0])^,volBytes);
+      if i <> offset then begin
+	      printf(format('BZip2 error: unable to skip header for %s', [FileName]));
+	      goto 123;
+      end;
+  end;
+  SetLength (rawData, volBytes);
+  i:=Decompressed.Read(Pointer(@rawData[0])^,volBytes);
+  result := (i = volBytes);
+  if not result then
+  printf(format('BZip2 error: read %d but expected %d bytes for %s', [i, volBytes, FileName]));
+  123:
+  Decompressed.Free;
+  InFile.Free;
+  if result and swapEndian then
+    SwapImg(rawData, lHdr.bitpix);
+end;
+{$ENDIF}
+
+function TNIfTI.loadForeign(FileName : AnsiString; var  rawData: TUInt8s; var lHdr: TNIFTIHdr): boolean;// Load 3D data
 //Uncompressed .nii or .hdr/.img pair
 var
    Stream : TFileStream;
    gzBytes, volBytes, FSz: int64;
-   swapEndian, isDimPermute2341: boolean;
+   swapEndian: boolean;
+   tmpData: TUInt8s;
+   isDimPermute2341: boolean = false;
+   isAllVolumesSameScale: boolean = true;
+   overlayVol: integer;
    {$IFDEF BMP}lExt: string; {$ENDIF}
 begin
  if not fileexists(FileName) then exit(false);
@@ -5550,11 +5695,18 @@ begin
  end;
  {$ENDIF}
  {$IFDEF BMP}
- lExt := UpCase(ExtractFileExt(Filename));
+ lExt := UpCase(extractfileextX(Filename));
  if (lExt = '.PNG') or (lExt = '.BMP') or (lExt = '.TIF') or (lExt = '.TIFF') then begin
     result := LoadBmpAsNifti(FileName, rawData, lHdr);
     if result then exit;
  end;
+ {$ENDIF}
+ {$IFDEF AFNI}
+ if (lExt = '.HEAD') or  (lExt = '.BRIK') or (lExt = '.BRIK.GZ') then begin
+    if lExt <> '.HEAD' then
+       FileName := changefileextX(FileName, '.HEAD');
+    result := readAFNIHeader (FileName, lHdr,  gzBytes, swapEndian, isAllVolumesSameScale,  afnis, fLabels);
+ end else
  {$ENDIF}
  result := readForeignHeader (FileName, lHdr,  gzBytes, swapEndian, isDimPermute2341);
  if not result then exit(false);
@@ -5566,7 +5718,21 @@ begin
     showmessage('Unable to find '+Filename);
     exit(false);
  end;
- if gzBytes = K_gzBytes_onlyImageCompressed then
+ overlayVol := fVolumeDisplayed;
+ (*if ((isDimPermute2341) and (overlayVol > 0)) then begin
+    printf('First 3 dimensions are not spatial: convert to NIfTI (i2nii)');
+    overlayVol := 0;
+ end;*)
+ {$IFDEF BZIP2}
+ if ((gzBytes = K_bz2Bytes_headerAndImageCompressed) or (gzBytes = K_bz2Bytes_onlyImageCompressed)) then
+ 	result := LoadImgBZ(FileName, swapEndian,  rawData, lHdr, gzBytes)
+ {$ELSE}
+ if (gzBytes = K_bz2Bytes_headerAndImageCompressed) then begin
+    printf('Not compiled to read BZip2 files: '+FileName);
+    exit;
+ end
+ {$ENDIF}
+ else if gzBytes = K_gzBytes_onlyImageCompressed then
    result := LoadHdrRawImgGZ(FileName, swapEndian,  rawData, lHdr)
  else if gzBytes < 0 then
     result := LoadImgGZ(FileName, swapEndian,  rawData, lHdr)
@@ -5580,8 +5746,13 @@ begin
    Stream := TFileStream.Create (FileName, fmOpenRead or fmShareDenyWrite);
    Try
     Stream.Seek(round(lHdr.vox_offset),soFromBeginning);
-    if lHdr.dim[4] > 1 then
-      volBytes := volBytes * lHdr.dim[4];
+    if (overlayVol > 0) and (not isDimPermute2341) then begin
+         Stream.Seek(overlayVol * volBytes,soFromCurrent);
+         overlayVol := 0; //tiger
+    end else begin
+        if (lHdr.dim[4] > 1) then
+           volBytes := volBytes * lHdr.dim[4];
+    end;
     SetLength (rawData, volBytes);
     Stream.ReadBuffer (rawData[0], volBytes);
    Finally
@@ -5595,17 +5766,21 @@ begin
  planar3D2RGB8(rawData, lHdr);
  if isDimPermute2341 then
     DimPermute2341(rawData, lHdr);
+ if (overlayVol > 0) then begin
+    volBytes := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3] * (lHdr.bitpix div 8);
+    SetLength (tmpData, volBytes);
+    tmpData := copy(rawData, overlayVol* volBytes, volBytes);
+    SetLength (rawData, volBytes);
+    rawData := copy(tmpData, 0, volBytes);
+    tmpData := nil;
+    //GLForm1.LayerBox.Caption := inttostr(overlayVol)+':'+inttostr(random(888));
+ end;
+ {$IFDEF AFNI}
+ if not isAllVolumesSameScale then begin
+    correctScaleSlope(rawData, lHdr, fVolumeDisplayed, afnis);
+ end;
+ {$ENDIF}
  result := true;
-end;
-
-function extractfileextX(fnm: string): string; //treat ".nii.gz" as single extension, return .NII.GZ
-var
-  s: string;
-begin
- result := upcase(extractfileext(fnm));
- if  result <> '.GZ' then exit;
- s := changefileext(fnm,'');
- result := upcase(extractfileext(s))+result;
 end;
 
 function TNIfTI.OpenNIfTI(): boolean;
@@ -5643,7 +5818,10 @@ begin
     if result then begin
        fVolumesLoaded := length(fRawVolBytes) div (fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3] * (fHdr.bitpix div 8));
     end;
-    fVolumesTotal :=  fVolumesLoaded;
+    if (fIsOverlay) then
+       fVolumesTotal := fHdr.dim[4]
+    else
+        fVolumesTotal :=  fVolumesLoaded;
     exit;
  end;
  {$IFDEF TIMER}startTime := now;{$ENDIF}
@@ -5761,10 +5939,10 @@ begin
         VolumeReorient();
         if (tarMat = fMat) and (tarDim.X = fDim.X) and (tarDim.Y = fDim.Y) and (tarDim.Z = fDim.Z) then exit;
      end;
-     if fVolumesLoaded > 1 then begin
+     (*if fVolumesLoaded > 1 then begin
         showmessage('Fatal error: overlays can not have multiple volumes [yet]');
         exit;
-     end;
+     end; *)
      //if isLinearReslice then
      //   SmoothMaskedImages();
      m := Voxel2Voxel (tarMat,fMat); //source to target voxels
@@ -5898,7 +6076,6 @@ begin
                              {x+1,y+1,z+1}+((lXreal*lYreal*lZreal)*in32f[lXo+1+lMaxY+lMaxZ]) );
                           end;
                       end; //case of datatype
-
                     end; //if voxel is in source image's bounding box
                 end;//z
             end;//y
@@ -6004,6 +6181,7 @@ var
    lCh: char;
 begin
      lLabels.Clear;
+
      lLength := length(lInStr);
      lMaxIndex := -1;
      for lPass := 1 to 2 do begin
@@ -6140,6 +6318,7 @@ begin
   fWindowMinCache8 := infinity;
   fCache8 := nil;
   {$ENDIF}
+  fisLinearReslice := isInterpolate;
   fLabels.Clear;
   fBidsName := '';
   fFilename := niftiFileName;
@@ -6242,6 +6421,363 @@ begin
   //{$IFDEF TIMER}printf(format('Set Min/Max time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
 end;
 
+function TNIfTI.CenterOfMass(idx: integer; out nVox: single): TVec3;
+var
+   x,y,z,i: integer;
+   vol16 : TInt16s;
+begin
+  result := Vec3(0,0,0);
+  nVox := 0;
+  if min(min(dim.x,dim.y),dim.z) < 2 then exit;
+  //vol8 := fRawVolBytes;
+  i := 0;
+  if fHdr.datatype = kDT_UINT8 then begin
+    for z := 0 to (dim.z-1) do
+      for y := 0 to (dim.y-1) do
+        for x := 0 to (dim.x-1) do begin
+          if (fRawVolBytes[i] = idx) then begin
+            nVox := nVox + 1;
+            result.x := result.x + x;
+            result.y := result.y + y;
+            result.z := result.z + z;
+          end;
+          i := i + 1;
+        end;
+  end; //uint8
+  if fHdr.datatype = kDT_INT16 then begin
+     vol16 := TInt16s(fRawVolBytes);
+     for z := 0 to (dim.z-1) do
+       for y := 0 to (dim.y-1) do
+         for x := 0 to (dim.x-1) do begin
+           if (vol16[i] = idx) then begin
+             nVox := nVox + 1;
+             result.x := result.x + x;
+             result.y := result.y + y;
+             result.z := result.z + z;
+           end;
+           i := i + 1;
+         end;
+  end;
+  if nVox = 0 then exit;
+  //result in voxels 0..Dim-1
+  result.x := result.x / nVox;
+  result.y := result.y / nVox;
+  result.z := result.z / nVox;
+  //result in frac
+  result.x := result.x / (dim.x-1);
+  result.y := result.y / (dim.y-1);
+  result.z := result.z / (dim.z-1);
+  result := FracMM(result);
+  nVox := nVox * VoxMM3()/1000.0;
+end;
+
+function Clusterize(var lImg: TUInt8s; Xi,Yi,Zi: integer; out clusterNumber: integer; out img32: TInt32s): boolean;
+label
+     123;
+var
+  i, j, XY, XYZ, qlo, qhi: integer;
+  qimg: TInt32s;
+procedure checkPixel(vxl: integer);
+begin
+     if img32[vxl] <> -1 then exit; //already found or not a target
+     qhi := qhi + 1;
+     img32[vxl] := clusterNumber; //found
+     qimg[qhi] := vxl; //location
+end;//nested checkPixel()
+procedure retirePixel();
+var
+  vxl: integer;
+begin
+     vxl := qimg[qlo];
+     checkPixel(vxl-1);
+     checkPixel(vxl+1);
+     checkPixel(vxl-Xi);
+     checkPixel(vxl+Xi);
+     checkPixel(vxl-XY);
+     checkPixel(vxl+XY);
+     qlo := qlo + 1;
+end;//nested retirePixel()
+begin //main RemoveSmallClusters()
+  clusterNumber := 0;
+  result := false;
+  if (Zi < 1) then exit;
+  XY := Xi * Yi;
+  XYZ := XY * Zi;
+  setlength(img32, XYZ);
+  setlength(qimg, XYZ);
+  //set target voxels
+  for i := 0 to (XYZ-1) do begin
+      img32[i] := 0;
+      if lImg[i] > 0 then
+         img32[i] := -1;
+  end;
+  //clear bottom and top slices
+  for i := 0 to (XY-1) do
+    img32[i] := 0;
+  for i := (XYZ-1-XY) to (XYZ-1) do
+    img32[i] := 0;
+  //now seed each voxel
+  for i := (XY) to (XYZ-1-XY) do begin
+      if (img32[i] < 0) then begin //voxels not yet part of any region
+         clusterNumber := clusterNumber + 1;
+         if (clusterNumber < 1) then goto 123; //more than 2^32 clusters!
+         qlo := 0;
+         qhi := -1;
+         checkPixel(i);
+         while qlo <= qhi do
+           retirePixel();
+         //for j := 0 to qhi do
+         //    img32[qimg[j]] := qhi + 1;
+      end;
+  end;
+  result := true;
+123:
+  qimg := nil;
+  if not result then clusterNumber := 0;
+  //img32 := nil;
+end;// RemoveSmallClusters()
+
+function InitCluster():TCluster;
+begin
+     result.CogXYZ := Vec3(0,0,0);
+     result.PeakStructure := '';
+     result.Structure := '';
+     result.SzCC:= 0;
+     result.Peak := 0;
+     result.PeakXYZ := Vec3(0,0,0);
+end;
+
+procedure TNIfTI.GenerateClusters(LabelMap: TNIfTI); overload;
+label
+    123;
+var
+  zeroPad, i,o,v, nVox, idx, x,y,z, vx, skipVx, PeakVx : int64;
+  clust: TCluster;
+  label8, vol8, mask8: TUInt8s;
+  label16, vol16: TInt16s;
+  vol32: TFloat32s;
+  clusterImg: TInt32s;
+  clusterNumber: integer;
+  ccPerVox: double;
+  inten: single;
+function Peak2Label(): string;
+var
+   j: integer;
+begin
+     result := '';
+     if (LabelMap.fHdr.bitpix = 16) then
+        j := label16[PeakVx]
+     else
+         j := label8[PeakVx];
+
+     if (j < 0) or (j >= LabelMap.fLabels.Count) then exit;
+     result := LabelMap.fLabels[j];
+end;
+
+function Map2Label(): string; //idx:
+const
+     kMinFrac = 0.0051; //label regions that make up at least 1/2% of cluster
+var
+   j , nL: int64;
+   region: string;
+   sum: TSortType;
+   labelCount: TSortArray;
+begin
+     result := '';
+     nL := LabelMap.fLabels.Count;
+     setlength(labelCount, nL);
+     for j := 0 to (nL - 1) do begin
+         labelCount[j].index := j;
+         labelCount[j].value := 0;
+     end;
+     if (LabelMap.fHdr.bitpix = 16) then begin
+       for j := 0 to (vx-1) do
+           if (clusterImg[j] = idx) then
+              labelCount[label16[j]].value := labelCount[label16[j]].value + 1;
+     end else begin
+       for j := 0 to (vx-1) do
+           if (clusterImg[j] = idx) then
+              labelCount[label8[j]].value := labelCount[label8[j]].value + 1;
+     end;
+     sum := 0;
+     for j := 0 to (nL - 1) do
+         sum := sum + labelCount[j].value;
+     //result := floattostr(sum)+'==>'+inttostr(nx);
+     if sum = 0 then begin
+        labelCount := nil;
+        exit;
+     end;
+     //fractional proportion damaged
+     for j := 0 to (nL - 1) do
+         labelCount[j].value := labelCount[j].value / sum;
+     (*for j := 0 to (nL - 1) do
+         labelCount[j].index := j;
+     labelCount[2].value := 0.4;
+     labelCount[0].value := 0.2;
+     labelCount[1].value := 0.1;   *)
+
+     SortArray(labelCount);
+     j := nL-1;
+     while (j >= 0) and (labelCount[labelCount[j].index].value >= kMinFrac) do begin
+           //if labelCount[j].index = 0 then continue; //do not report air
+           region := LabelMap.fLabels[labelCount[j].index];
+           if region = '' then
+              region := '-';
+           result := result + format('%s(%.0f) ',[ region, 100.0*labelCount[labelCount[j].index].value ]);
+           //result := result + format('%d(%.0f) ',[ labelCount[j].index, 100.0*labelCount[labelCount[j].index].value ]);
+           j := j - 1;
+     end;
+     //result := floattostr(labelCount[nL-1].value)+'..'+floattostr(labelCount[0].value);
+end;
+
+function voxInten(vx: int64): single;
+begin
+     if fHdr.datatype = kDT_UINT8 then
+        result := vol8[skipVx+vx]
+     else if fHdr.datatype = kDT_INT16 then
+        result := vol16[skipVx+vx]
+     else if fHdr.datatype = kDT_FLOAT then
+        result := vol32[skipVx+vx]
+     else
+         result := 0.0;
+     //if isDarkClusters then result := -result;
+end;//nested voxInten()
+begin
+    if IsLabels then begin
+       GenerateAtlasClusters();
+       exit;
+    end;
+    if fHdr.datatype = kDT_RGB then exit;
+    vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+    if vx < 1 then exit;
+    skipVx := skipVox();
+    vol8 := fRawVolBytes;
+    vol16 := TInt16s(vol8);
+    vol32 := TFloat32s(vol8);
+    setlength(mask8,vx);
+    FillChar(mask8[0], vx, 0);
+    for i := 0 to (vx-1) do
+        if fCache8[i] <> 0 then mask8[i] := 255;
+    //if (fWindowMin < 0) and (fWindowMax < 0) then isDarkClusters := true;
+    Clusterize(mask8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3], clusterNumber, clusterImg);
+    if clusterNumber < 1 then goto 123;
+    zeroPad := trunc(log10(clusterNumber))+1;
+    ccPerVox := VoxMM3()/1000.0;
+    setlength(clusters,clusterNumber);
+    o := 0;
+    for i := 0 to (clusterNumber-1) do begin
+        nVox := 0;
+        clust := InitCluster();
+        idx := i + 1;
+        v := 0;
+        PeakVx := 0;
+        for z := 0 to (dim.z-1) do
+            for y := 0 to (dim.y-1) do
+              for x := 0 to (dim.x-1) do begin
+                if (clusterImg[v] = idx) then begin
+                  nVox := nVox + 1;
+                  clust.CogXYZ := clust.CogXYZ + Vec3(x,y,z);
+                  inten := voxInten(v);
+                  if inten > clust.Peak then begin
+                     clust.Peak := inten;
+                     clust.PeakXYZ := Vec3(x,y,z);
+                     PeakVx := v;
+                  end;
+                end; //voxel in cluster
+                v := v + 1;
+              end;
+        //result in voxels 0..Dim-1
+        if nVox < 1 then continue;
+        //if isDarkClusters then clust.Peak := -clust.Peak;
+        clust.CogXYZ := clust.CogXYZ / nVox;
+        //result in frac
+        clust.CogXYZ.x := clust.CogXYZ.x / (dim.x-1);
+        clust.CogXYZ.y := clust.CogXYZ.y / (dim.y-1);
+        clust.CogXYZ.z := clust.CogXYZ.z / (dim.z-1);
+        clust.CogXYZ := FracMM(clust.CogXYZ);
+        //result in frac
+        clust.PeakXYZ.x := clust.PeakXYZ.x / (dim.x-1);
+        clust.PeakXYZ.y := clust.PeakXYZ.y / (dim.y-1);
+        clust.PeakXYZ.z := clust.PeakXYZ.z / (dim.z-1);
+        clust.PeakXYZ := FracMM(clust.PeakXYZ);
+        clust.SzCC:= nVox * ccPerVox;
+        clusters[o] := clust;
+        //clusters[o].Structure := format('%.1f×%.1f×%.1f %.1fcc max%.1f', [clust.CogXYZ.x, clust.CogXYZ.y, clust.CogXYZ.z, clust.SzCC, clust.Peak]);
+        clusters[o].Structure := strutils.Dec2Numb(o+1,zeroPad,10);
+        //clusters[o].Structure := inttostr(o+1);
+        clusters[o].PeakStructure := '-';
+
+        if (LabelMap <> nil) and (LabelMap.IsLabels) then begin
+           label8 := LabelMap.fRawVolBytes;
+           label16 := TInt16s(vol8);
+           clusters[o].Structure := Map2Label();
+           clusters[o].PeakStructure := Peak2Label();
+        end;
+        o := o + 1;
+    end;
+    setlength(clusters,o);
+    SortClusters();
+123:
+    clusterImg := nil;
+    mask8 := nil;
+end;
+
+procedure TNIfTI.GenerateClusters(); overload;
+begin
+     GenerateClusters(nil);
+end;
+
+procedure TNIfTI.SortClusters();
+var
+   s: TSortArray;
+   i, n: integer;
+   inClust: TClusters;
+begin
+     n := length(clusters);
+     if n < 1 then exit;
+     setlength(inClust, n);
+     inClust := copy(clusters, 0, n);
+     setlength(s, n);
+     for i := 0 to (n-1) do begin
+         s[i].index:=0;
+         if SortClustersBySize then
+            s[i].value := inClust[i].SzCC
+         else
+             s[i].value := inClust[i].Peak;
+     end;
+     SortArray(s);
+     for i := 0 to (n-1) do
+         clusters[n-i-1] := inClust[s[i].index];
+     s := nil;
+     inClust := nil;
+end;
+
+procedure TNIfTI.GenerateAtlasClusters();
+var
+   o, i, n: integer;
+   clust: TCluster;
+
+begin
+     if not IsLabels then exit;
+     n := fLabels.Count -1; //0=air
+     if n < 1 then exit;
+     setlength(clusters,n);
+     o := 0;
+     clust := InitCluster();
+     for i := 0 to (n-1) do begin
+         clust.CogXYZ := CenterOfMass(i+1, clust.SzCC);
+         if clust.SzCC <= 0 then continue;
+         clust.PeakXYZ := clust.CogXYZ;
+         //clust.Peak := i;
+         clusters[o] := clust;
+         //clusters[o].Structure := fLabels[i+1]+ format (' %.1f×%.1f×%.1f %.1fcc',[clust.CogXYZ.x, clust.CogXYZ.y, clust.CogXYZ.z, clust.SzCC]);
+         clusters[o].Structure := fLabels[i+1];
+         clusters[o].PeakStructure := '-';
+         o := o + 1;
+     end;
+     setlength(clusters,o);
+     SortClusters();
+end;
 
 function TNIfTI.Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; volumeNumber: integer = 0; isKeepContrast: boolean = false): boolean; overload;
 var
@@ -6280,7 +6816,7 @@ begin
   if (PosEx(pathdelim+'atlases'+pathdelim, niftiFileName) > 0) and (HdrVolumes(fHdr) < 2) then
      fHdr.intent_code := kNIFTI_INTENT_LABEL;
   if (IsLabels) then begin
-     if (fHdr.bitpix <= 32)  then begin
+     if (fHdr.bitpix <= 32) and(fLabels.Count < 1)   then begin
         LoadLabelsTxt(fFilename, fLabels);
         if (fLabels.Count < 1) and (( fHdr.vox_offset- fHdr.HdrSz) > 128) then
            LoadLabels(fFilename, fLabels, fHdr.HdrSz, round( fHdr.vox_offset));
@@ -6304,8 +6840,6 @@ begin
         fVolumesLoaded := 1;
         IsShrunken := true;
   end;
-
-  //showmessage(format('todo>> %d %d %d', [MaxVox, prod(tarDim), fVolumesLoaded]));
   scaleMx := max(max(abs(fHdr.Dim[1]*fHdr.PixDim[1]),abs(fHdr.Dim[2]*fHdr.pixDim[2])),abs(fHdr.Dim[3]*fHdr.pixDim[3]));
   if (scaleMx <> 0) then begin
     fScale.X := abs((fHdr.Dim[1]*fHdr.PixDim[1]) / scaleMx);
@@ -6350,7 +6884,7 @@ begin
     fWindowMin := 0;
     fWindowMax := 100;
     clut.SetLabels();
-    DisplayLabel2Uint8;
+    DisplayLabel2Uint8; //TTatlas+tlrc.HEAD
   end else if fHdr.datatype = kDT_UINT8 then
      initUInt8()
   else if fHdr.datatype = kDT_INT16 then
@@ -6367,6 +6901,8 @@ begin
        initHistogram();
   end else
       printf('Unsupported data format '+inttostr(fHdr.datatype));
+  if IsLabels then
+     GenerateClusters();
   if (IsLabels) then
      //
   else if fAutoBalMin = fAutoBalMax then begin //e.g. thresholded data
@@ -6423,6 +6959,7 @@ var
 {$ENDIF}
 begin
  LoadFewVolumes := false;
+ SortClustersBySize := true;
  ZeroIntensityInvisible := false;
  IsShrunken := false;
  MaxVox := 1024;
@@ -6442,6 +6979,11 @@ begin
  fCutoutHigh := Vec3(0,0,0);
  fOpacityPct := 100;
  fRawVolBytes := nil;
+ fisLinearReslice := false;
+ {$IFDEF AFNI}
+ afnis := nil;
+ {$ENDIF}
+ clusters := nil;
  fVolRGBA := nil;
  fLabels := TStringList.Create;
  {$IFDEF CUSTOMCOLORS}
@@ -6462,6 +7004,7 @@ var
 {$ENDIF}
 begin
  IsShrunken := false;
+ SortClustersBySize := false;
  LoadFewVolumes := lLoadFewVolumes;
  ZeroIntensityInvisible := false;
  MaxVox := lMaxVox;
@@ -6481,6 +7024,11 @@ begin
  fCutoutHigh := Vec3(0,0,0);
  fOpacityPct := 100;
  fRawVolBytes := nil;
+ fisLinearReslice := false;
+ {$IFDEF AFNI}
+ afnis := nil;
+ {$ENDIF}
+ clusters := nil;
  fVolRGBA := nil;
  fLabels := TStringList.Create;
  {$IFDEF CUSTOMCOLORS}
@@ -6527,6 +7075,10 @@ begin
   fRawVolBytes := nil;
   fVolRGBA := nil;
   fCache8 := nil;
+  {$IFDEF AFNI}
+  afnis := nil;
+  {$ENDIF}
+  clusters := nil;
   {$IFDEF CUSTOMCOLORS}
   clut.Free;
   {$ENDIF}

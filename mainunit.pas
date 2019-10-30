@@ -15,6 +15,7 @@ unit mainunit;
 {$DEFINE COMPILEYOKE} //use yoking
 {$DEFINE CLRBAR} //provide color bar
 {$DEFINE GRAPH} //timeseries viewer
+{$DEFINE AFNI} //afni statistical maps
 {$WARN 5024 OFF} //disable warnings about unused parameters
 {$WARN 5043 off : Symbol "$1" is deprecated}
 {$DEFINE MATT1}
@@ -23,6 +24,7 @@ interface
 uses
   {$IFDEF MATT1}umat, {$ENDIF}
   {$IFDEF COMPILEYOKE} yokesharemem, {$ENDIF}
+  {$IFDEF AFNI} nifti_foreign, {$ENDIF}
   {$IFDEF MYPY}PythonEngine,  {$ENDIF}
   {$IFDEF LCLCocoa} {$IFDEF NewCocoa} nsappkitext, UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
@@ -33,7 +35,7 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20190902++'; //++ fixes remove small clusters
+  kVers = '1.2.20190909'; //++ fixes remove small clusters
 type
 
   { TGLForm1 }
@@ -58,6 +60,12 @@ type
     GraphSaveBitmapMenu: TMenuItem;
     DisplayCorrelationR: TMenuItem;
     DisplayCorrelationZ: TMenuItem;
+    AfniPrevMenu: TMenuItem;
+    AfniPopup: TPopupMenu;
+    LayerAfniBtn: TButton;
+    AfniNextMenu: TMenuItem;
+    LayerAfniDrop: TComboBox;
+    ClusterView: TListView;
     MatCapDrop: TComboBox;
     CropMenu1: TMenuItem;
     EditPasteMenu: TMenuItem;
@@ -65,6 +73,13 @@ type
     GraphDrawingMenu: TMenuItem;
     DrawFilledMenu: TMenuItem;
     LayerIsLabelMenu: TMenuItem;
+    AfniDetailsMenu: TMenuItem;
+    AfniDirMenu: TMenuItem;
+    LayerClusterMenu: TMenuItem;
+    ClusterCopyMenu: TMenuItem;
+    ClusterSaveMenu: TMenuItem;
+    OpenAFNIMenu: TMenuItem;
+    ClusterPopUp: TPopupMenu;
     RemoveSmallClusterMenu: TMenuItem;
     ResizeMenu1: TMenuItem;
     ReorientMenu1: TMenuItem;
@@ -311,11 +326,26 @@ type
     X2TrackBar: TTrackBar;
     YTrackBar: TTrackBar;
     ZTrackBar: TTrackBar;
+    procedure ClusterSaveClick(Sender: TObject);
+    procedure ClusterViewColumnClick(Sender: TObject; Column: TListColumn);
+    procedure ClusterViewCompare(Sender: TObject; Item1, Item2: TListItem;
+      Data: Integer; var Compare: Integer);
     procedure AddOverlayClusterMenuClick(Sender: TObject);
+    procedure AfniDetailsMenuClick(Sender: TObject);
+    procedure AfniDirMenuClick(Sender: TObject);
     procedure BetterRenderTimerTimer(Sender: TObject);
     procedure CenterPanelClick(Sender: TObject);
+    procedure ClusterByMenuClick(Sender: TObject);
+    procedure ClusterViewMouseUp(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure ClusterViewSelectItem(Sender: TObject; Item: TListItem;
+      Selected: Boolean);
     procedure EditPasteMenuClick(Sender: TObject);
     procedure InvalidateTImerTimer(Sender: TObject);
+    procedure LayerAfniBtnClick(Sender: TObject);
+    procedure LayerAfniDropChange(Sender: TObject);
+    procedure LayerAfniDropClick(Sender: TObject);
+    procedure LayerClusterMenuClick(Sender: TObject);
     procedure LayerContrastChange(Sender: TObject);
     procedure GraphDrawingMenuClick(Sender: TObject);
     procedure LayerIsLabelMenuClick(Sender: TObject);
@@ -371,7 +401,7 @@ type
     procedure ImportTIFFMenuClick(Sender: TObject);
     procedure LandmarkSelectNextClick(Sender: TObject);
     procedure LayerCloseMenuClick(Sender: TObject);
-    procedure LayerCutoutMenuClick(Sender: TObject);
+    procedure AfniNextClick(Sender: TObject);
     procedure LayerListClickCheck(Sender: TObject);
     procedure LayerListShowHint(Sender: TObject; HintInfo: PHintInfo);
     procedure LayerMaskWithBackgroundMenuClick(Sender: TObject);
@@ -456,6 +486,7 @@ type
     procedure ScriptingSaveMenuClick(Sender: TObject);
     procedure ScriptingTemplatesMenuClick(Sender: TObject);
     procedure ScriptFormVisible(vis: boolean);
+    procedure MakeList(var c: TClusters);
     procedure UpdateLayerBox(NewLayers: boolean);
     function AddLayer(Filename: string): boolean;
     procedure UpdateContrast (Xa,Ya, Xb, Yb: integer);
@@ -572,6 +603,128 @@ var
 {$DEFINE isCocoaOpenGL}
 {$ENDIF}{$ENDIF}
 
+var isDescending: boolean = false;
+procedure TGLForm1.ClusterViewColumnClick(Sender: TObject; Column: TListColumn);
+//https://www.delphitips.net/2008/04/10/sort-listview-by-clicking-on-columns/
+begin
+
+  ClusterView.SortColumn := Column.Index;
+  //Descending := not Descending;
+  isDescending := not isDescending;
+  //ClusterView.SortType := stData;
+  if ClusterView.SortDirection = sdDescending then
+     ClusterView.SortDirection := sdAscending
+  else
+      ClusterView.SortDirection := sdDescending;
+
+  (*if ClusterView.SortDirection  = sdDescending then
+       caption := 'd'
+    else
+        caption := 'a';  *)
+end;
+
+procedure TGLForm1.ClusterSaveClick(Sender: TObject);
+const
+     kTab = chr(9);
+     {$IFDEF UNIX} //https://en.wikipedia.org/wiki/Newline
+     kEOLN = chr(10);
+      {$ELSE}
+      kEOLN = chr(13)+chr(10);
+      {$ENDIF}
+var
+   contents,row: ansistring;
+   column: TListColumn;
+   item: TListItem;
+   i, j: integer;
+   dlg : TSaveDialog;
+   Txt: TextFile;
+begin
+  contents := '';
+  row := '';
+  // header
+  for i := 0 to ClusterView.Columns.Count - 1 do
+      begin
+          column := TListColumn(ClusterView.Columns[i]);
+          if not column.Visible then
+              continue;
+          row += column.Caption;
+          if i < ClusterView.Columns.Count - 1 then
+              row += kTab;
+      end;
+  contents += row+kEOLN;
+  // items
+  for i := 0 to ClusterView.Items.Count - 1 do
+      begin
+          item := TListItem(ClusterView.Items[i]);
+          row := '';
+          for j := 0 to item.SubItems.Count do
+              begin
+                  column := TListColumn(ClusterView.Columns[j]);
+                  if not column.Visible then
+                      continue;
+                  if j = 0 then
+                      row += item.Caption
+                  else
+                      row += item.SubItems[j - 1];
+                  if j < item.SubItems.Count then
+                      row += kTab;
+              end;
+          contents += row;
+          if i < ClusterView.Items.Count - 1 then
+              contents += kEOLN;
+      end;
+  //writeln(contents);
+  if (Sender as TMenuItem).tag = 0 then begin
+     Clipboard.AsText:= contents;
+     exit;
+  end;
+  dlg := TSaveDialog.Create(self);
+  dlg.Title := 'Save table';
+  dlg.InitialDir := GetUserDir;//GetUserDir;
+  {$IFDEF Darwin}
+  if PosEx('.app', dlg.InitialDir) > 0  then
+     dlg.InitialDir := HomeDir(false);
+  {$ENDIF}
+  dlg.Filter := 'Text|*.txt';
+  dlg.DefaultExt := '.txt';
+  dlg.FilterIndex := 0;
+  if not dlg.Execute then begin
+   dlg.Free;
+   exit;
+  end;
+  AssignFile(Txt, dlg.FileName);
+  Rewrite(Txt);
+  WriteLn(Txt, contents);
+  CloseFile(Txt);
+  dlg.Free;
+end;
+
+function CompareFloatText(const S1, S2: string): integer;
+begin
+     result := round(StrToFloatDef(S1,0) - StrToFloatDef(S2,0));
+
+end;
+
+procedure TGLForm1.ClusterViewCompare(Sender: TObject; Item1, Item2: TListItem;
+  Data: Integer; var Compare: Integer);
+begin
+  //if (ClusterView.SortType = stText) then begin
+  if ClusterView.Items.Count < 2 then exit;
+  if not odd(ClusterView.Columns[ClusterView.SortColumn].tag) then begin
+    if ClusterView.SortColumn = 0 then
+       Compare := CompareText(Item1.Caption, Item2.Caption)
+    else
+        Compare := CompareText(Item1.SubItems[ ClusterView.SortColumn-1], Item2.SubItems[ ClusterView.SortColumn-1]);
+  end else begin
+    if ClusterView.SortColumn = 0 then
+       Compare := CompareFloatText(Item1.Caption, Item2.Caption)
+    else
+        Compare := CompareFloatText(Item1.SubItems[ ClusterView.SortColumn-1], Item2.SubItems[ ClusterView.SortColumn-1]);
+  end;
+  if isDescending then
+     Compare := -Compare;
+end;
+
 procedure TGLForm1.ForceOverlayUpdate();
 var
     i: integer;
@@ -659,6 +812,8 @@ begin
      if Fileexists(result) then exit;
      result := Filename+'.nii.gz';
      if Fileexists(result) then exit;
+     result := Filename+'.HEAD';
+     if Fileexists(result) then exit;
      result := Filename;
 end;
 
@@ -717,6 +872,16 @@ begin
      result := CheckParentFolders(StandardDir+pathdelim, Filename); //ResourceDir is parent of standardDir, so we check both
      //result := CheckParentFolders(ResourceDir+pathdelim, Filename);
      if (Fileexists(result)) then exit;
+     if DirectoryExists(AtlasDir) then
+        result := CheckParentFolders(AtlasDir+pathdelim, Filename);
+     if (Fileexists(result)) then exit;
+     if DirectoryExists(GetFSLdir) then
+        result := CheckParentFolders(GetFSLdir+pathdelim, Filename);
+     if (Fileexists(result)) then exit;
+     if DirectoryExists(gPrefs.AfniDir) then
+        result := CheckParentFolders(gPrefs.AfniDir+pathdelim, Filename);
+     if (Fileexists(result)) then exit;
+
      for i := 1 to knMRU do begin
          result := CheckParentFolders(ExtractFilePath(gPrefs.PrevFilename[i]), Filename);
          if (Fileexists(result)) then exit;
@@ -793,6 +958,65 @@ begin
     FindClose(searchResult);
 end;
 {$ENDIF}
+
+{$IFDEF Darwin}
+function findMacOSLibPython3: string;
+const
+     kPth = '/System/Library/Frameworks/Python.framework/Versions/Current/lib/libpython2.7.dylib';
+begin
+ result := '';
+ if not FileExists(kPth) then exit;
+ result := kPth;
+end;
+
+//Catalina sandbox restrictions make do not allow this for Notarized apps:
+(*function findMacOSLibPython3(pthroot: string = '/Library/Frameworks/Python.framework/'): string;
+label
+  121;
+var
+  pths: TStringList;
+  i: integer;
+begin
+  result := '';
+  if not DirectoryExists(pthroot) then exit;
+  pths := TStringList.Create;
+  FindAllFiles(pths, pthroot, 'libpython3*dylib', true); //find e.g. all pascal sourcefiles
+  if pths.Count < 1 then goto 121;
+  for i := pths.Count -1 downto 0 do
+      if AnsiContainsText(pths[i],'loader') then
+         pths.Delete(i);
+  if pths.Count < 1 then goto 121;
+  result := pths[0];
+  //printf(pths);
+  121:
+  pths.Free;
+end;*)
+{$ENDIF}
+
+{$IFDEF LINUX}
+function findLinuxLibPython3(pthroot: string = '/usr/lib/'): string;
+label
+  121;
+var
+  pths: TStringList;
+  i: integer;
+begin
+  result := '';
+  if not DirectoryExists(pthroot) then exit;
+  pths := TStringList.Create;
+  FindAllFiles(pths, pthroot, 'libpython3*so', true); //find e.g. all pascal sourcefiles
+  if pths.Count < 1 then goto 121;
+  for i := pths.Count -1 downto 0 do
+      if AnsiContainsText(pths[i],'loader') then
+         pths.Delete(i);
+  if pths.Count < 1 then goto 121;
+  result := pths[0];
+  //printf(pths);
+  121:
+  pths.Free;
+end;
+{$ENDIF}
+
 function findPythonLib(def: string): string;
 {$IFDEF WINDOWS}
 var
@@ -822,7 +1046,6 @@ end;
     const
        knPaths = 3;
        kBasePaths : array [1..knPaths] of string = (kBasePath, '/System'+kBasePath, '/System/Library/Frameworks/Python.framework/Versions/Current/lib/');
-
 {$ENDIF}
     var
          searchResult : TSearchRec;
@@ -831,10 +1054,19 @@ end;
          n: integer;
       begin
         result := def;
-           if DirectoryExists(def) then begin //in case the user supplies libdir not the library name
+        if DirectoryExists(def) then begin //in case the user supplies libdir not the library name
              result := searchPy(def);
              if length(result) > 0 then exit;
-           end;
+        end;
+        {$IFDEF Darwin}
+        result := findMacOSLibPython3();
+        if length(result) > 0 then exit;
+        {$ENDIF}
+        {$IFDEF LINUX}
+        result := findLinuxLibPython3();
+        if length(result) > 0 then exit;
+        writeln('If scripts generate "PyUnicode_FromWideChar" errors, install Python3 and reset ("-R") this software.');
+        {$ENDIF}
            {$IFDEF LCLCocoa}
            result := searchPy('/System/Library/Frameworks/Python.framework/Versions/Current/lib');
            if fileexists(result) then exit;
@@ -914,13 +1146,18 @@ begin
     {$IFDEF UNIX}writeln('Using preference file PyLib "'+S+'"'); {$ENDIF}
   end;
   if not fileexists(S) then begin
-     {$IFDEF UNIX}writeln('Unable to find %s');{$ENDIF}
+     {$IFDEF UNIX}
+     if (S <> '') then
+        writeln('Unable to find %s');
+     writeln('Unable to find Python. Install Python3 and reset this software (-R) or set the "PyLib" in the preferences.');
+     {$ENDIF}
      exit;
   end;
   if (pos('libpython2.6',S) > 0) then begin
      showmessage('Old, unsupported version of Python '+S);
      exit;
   end;
+  //S := '/Users/chris/src/MRIcroGL12/MRIcroGL.app/Contents/Frameworks/python37/libpython3.7.dylib';
   gPrefs.PyLib := S;
   result := true;
   PythonIO := TPythonInputOutput.Create(GLForm1);
@@ -1602,7 +1839,7 @@ var
 begin
   Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
   with GetPythonEngine do
-    if Bool(PyArg_ParseTuple(Args, 'ii:overlayminmax', @layer, @vol)) then begin
+    if Bool(PyArg_ParseTuple(Args, 'ii:volume', @layer, @vol)) then begin
        if not vols.Layer(layer,v) then exit;
           v.SetDisplayVolume(vol);
         //GLForm1.caption := format('->%d/%d ',[v.VolumeDisplayed+1, v.Header.dim[4]]); //+1 as indexed from 1
@@ -1624,6 +1861,44 @@ begin
        v.ZeroIntensityInvisible:= (vol = 1);
        v.ForceUpdate(); //defer time consuming work
        GLForm1.UpdateTimer.Enabled := true;
+    end;
+end;
+
+procedure GenerateClustersCore(var v: TNIfTI);
+var
+  i: integer = 0;
+  v2: TNIfTI;
+begin
+  if (v.IsLabels) or (GLForm1.LayerList.Count < 2) then begin
+    //either atlas or only image loaded
+    v.GenerateClusters();
+    exit;
+  end;
+  //not an atlas... see if one is loaded
+  v2 := nil;
+  while (i < GLForm1.LayerList.Count) and (v2 = nil) do begin
+    if not vols.Layer(i,v2) then exit;
+    if not v2.IsLabels then
+    v2 := nil;
+  end;
+  v.GenerateClusters(v2); //v2 is either nil or a label map
+end;
+
+function PyGENERATECLUSTERS(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  layer: integer;
+  v: TNIfTI;
+begin
+ Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+ with GetPythonEngine do
+   if Bool(PyArg_ParseTuple(Args, 'i:generateclusters', @layer)) then begin
+      if not vols.Layer(layer,v) then exit;
+      while (isBusy) or (GLForm1.Updatetimer.enabled) do
+            Application.ProcessMessages;
+       //v.GenerateClusters;
+       GenerateClustersCore(v);
+       GLForm1.UpdateLayerBox(false);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
+       //GLForm1.UpdateTimer.Enabled := true;
     end;
 end;
 
@@ -1923,6 +2198,7 @@ begin
     AddMethod('cutout', @PyCUTOUT, ' cutout(L,A,S,R,P,I) -> Remove sector from volume.');
     AddMethod('extract', @PyEXTRACT, ' extract(Otsu,Dil,One) -> Remove haze.');
     AddMethod('fullscreen', @PyFULLSCREEN, ' fullscreen(max) -> Form expands to size of screen (1) or size is maximized (0).');
+    AddMethod('generateclusters', @PyGENERATECLUSTERS, ' generateclusters(layer) -> create list of distinct regions.');
     AddMethod('hiddenbycutout', @PyHIDDENBYCUTOUT, ' hiddenbycutout(layer, isHidden) -> Will cutout hide (1) or show (0) this layer?');
     AddMethod('invertcolor', @PyINVERTCOLOR, ' invertcolor(layer, isInverted) -> Is color intensity inverted (1) or not (0) this layer?');
     AddMethod('linecolor', @PyLINECOLOR, ' linecolor(r,g,b) -> Set color of crosshairs, so "linecolor(255,0,0)" will use bright red lines.');
@@ -2034,7 +2310,6 @@ begin
   else if (gPrefs.DisplayOrient = kRenderOrient)  and (Vol1.Quality1to6 = 0) and (not gPyRunning) then
        BetterRenderTimer.enabled := true;
   result := true;
-
 end;
 
 procedure TGLForm1.PyEngineAfterInit(Sender: TObject);
@@ -2130,6 +2405,8 @@ begin
      CutoutBox.Visible := gPrefs.DisplayOrient = kRenderOrient;
      ShaderBox.Visible := gPrefs.DisplayOrient = kRenderOrient;
      SliceBox.Visible := gPrefs.DisplayOrient <= kAxCorSagOrient;
+     ClusterView.Visible := gPrefs.DisplayOrient <= kAxCorSagOrient;
+     ViewGPUg.Visible := not ClusterView.Visible;
      AnatDrop.Visible := length(gLandmark.Landmarks) > 0;
      LandmarkMenu.Visible := gPrefs.LandmarkPanel;
      LineBox.Visible := gPrefs.DisplayOrient <= kMosaicOrient;
@@ -2177,7 +2454,10 @@ begin
    //OpenStandardMenu.Enabled:= false;
    if ParentMenu.tag = 1 then
       dir := AtlasDir
-   else
+   else if ParentMenu.tag = 2 then begin
+        dir := gPrefs.AfniDir;
+        if not DirectoryExists(dir) then exit;
+   end else
        dir := StandardDir;
    if not DirectoryExists(dir) then begin
      ParentMenu.Enabled := false;
@@ -2187,6 +2467,12 @@ begin
    standardNames := FindAllFiles(dir, '*.nii', false);
    try
     standardNamesGZ := FindAllFiles(dir, '*.nii.gz', false);
+    try
+      standardNames.AddStrings(standardNamesGZ);
+    finally
+      standardNamesGZ.Free;
+    end;
+    standardNamesGZ := FindAllFiles(dir, '*.HEAD', false);
     try
       standardNames.AddStrings(standardNamesGZ);
     finally
@@ -2211,6 +2497,10 @@ begin
     end;
    finally
      standardNames.Free;
+   end;
+   if ParentMenu.tag = 2 then begin
+     if (OpenAfniMenu.Count > 1) then
+     AfniDirMenu.Visible := false;
    end;
 end;
 
@@ -2559,20 +2849,26 @@ end;
 procedure TGLForm1.OpenStandardMenuClick(Sender: TObject);
 var
   ss: TShiftState;
-  dir: string;
+  dir, x: string;
   isOpenAsOverlay: boolean;
 begin
   ss := getKeyshiftstate;
+  x := '';
   isOpenAsOverlay := (ssMeta in ss) or (ssCtrl in ss);
-  if (Sender as TMenuItem).tag = 1 then begin
+  if (Sender as TMenuItem).tag = 2 then begin
+     dir := gPrefs.AfniDir;
+     x := '.HEAD';
+     if not FileExists(dir +pathdelim +(sender as TMenuItem).caption+x) then
+        x := '';
+  end else if (Sender as TMenuItem).tag = 1 then begin
      dir := AtlasDir;
      isOpenAsOverlay := not isOpenAsOverlay; //default behavior is to open template as overlay
   end else
       dir := StandardDir;
   if isOpenAsOverlay then
-     AddLayer(dir +pathdelim +(sender as TMenuItem).caption)
+     AddLayer(dir +pathdelim +(sender as TMenuItem).caption+x)
   else
-      AddBackground(dir +pathdelim +(sender as TMenuItem).caption, false);
+      AddBackground(dir +pathdelim +(sender as TMenuItem).caption+x, false);
 end;
 
 procedure TGLForm1.OpenRecentMenuClick(Sender: TObject);
@@ -2843,12 +3139,63 @@ begin
   //LayerWidgetChange(sender);
 end;
 
+{$IFDEF AFNI}
+function AFNIjvLabel(statCode: integer): string;
+begin
+     case statCode of
+        kFUNC_COR_TYPE: result := 'Correl';//// Correlation Coeff # Samples, # Fit Param, # Orts
+        kFUNC_TT_TYPE: result := 'T';//  Student t         Degrees-of-Freedom (DOF)
+        kFUNC_FT_TYPE: result := 'F';//  F ratio           Numerator DOF, Denominator DOF
+        kFUNC_ZT_TYPE: result := 'Normal';//  Standard Normal   -- none --
+        kFUNC_CT_TYPE: result := 'Chi';//  Chi-Squared       DOF
+        kFUNC_BT_TYPE: result := 'Beta';//  Incomplete Beta   Parameters "a" and "b"
+        kFUNC_BN_TYPE: result := 'Binomial';//            # Trials, Probability per trial
+        kFUNC_GT_TYPE: result := 'Gamma';//               Shape, Scale
+        kFUNC_PT_TYPE: result := 'Poisson';
+        else result := ''
+    end;
+end;
+
+{$ENDIF}
+
+procedure TGLForm1.MakeList(var c: TClusters);
+var
+   i, n: integer;
+   itm: TListItem;
+   isPeak, isLabels: boolean;
+begin
+     ClusterView.Clear;
+     n := length(c);
+     if n < 1 then exit;
+     isPeak := c[0].Peak <> 0;
+     ClusterView.Column[2].Visible:= isPeak;
+     ClusterView.Column[3].Visible:= isPeak;
+     isLabels := c[0].PeakStructure = '-';
+     ClusterView.Column[4].Visible:= not isLabels;
+     for i := 0 to (n-1) do begin
+         itm := ClusterView.Items.Add;
+         itm.Caption := format('%d', [i]);
+         //volume
+         itm.SubItems.Add(format('%.2f', [c[i].SzCC]));
+         //PeakMax
+         itm.SubItems.Add(format('%.1f', [c[i].Peak]));
+         //PeakXYZ
+         itm.SubItems.Add(format(' %.1f×%.1f×%.1f', [c[i].PeakXYZ.x, c[i].PeakXYZ.y, c[i].PeakXYZ.z]));
+         //PeakStructure
+         itm.SubItems.Add(c[i].PeakStructure);
+         //CogXYZ
+         itm.SubItems.Add(format(' %.1f×%.1f×%.1f', [c[i].CogXYZ.x, c[i].CogXYZ.y, c[i].CogXYZ.z]));
+         //Structure
+         itm.SubItems.Add(c[i].Structure);
+     end;
+end;
+
 procedure TGLForm1.UpdateLayerBox(NewLayers: boolean);
 var
    i: integer;
    v: TNIfTI;
    s: string;
-   isMultiVol: boolean;
+   isMultiVol, isAFNI: boolean;
 begin
      if (NewLayers) then begin
         LayerList.Items.Clear;
@@ -2887,6 +3234,24 @@ begin
      LayerColorDrop.ItemIndex := v.FullColorTable.Tag;
      LayerAlphaTrack.Position := v.OpacityPercent;
      LayerBox.Hint := format('image intensity range %.4g..%.4g',[DefuzzX(v.VolumeMin), DefuzzX(v.VolumeMax)]);
+     ClusterView.Visible := length(v.clusters) > 0;
+     if (ClusterView.Visible) then
+        MakeList(v.clusters);
+     {$IFDEF AFNI}
+     isAFNI := length(v.afnis) > 0;
+     if (isAFNI) and (v.VolumeDisplayed >=  length(v.afnis)) then
+        isAFNI := false;
+     if (isAFNI) and (v.afnis[0].jv = kFUNC_NO_STAT_AUX) then
+        isAFNI := false; //e.g. raw fMRI with BRICK_FLOAT_FACS but no BRICK_STATAUX
+     if  (isAFNI)  then begin
+         LayerAfniDrop.Items.Clear;
+         for i := 0 to (length(v.afnis)-1) do
+             LayerAfniDrop.Items.Add(v.afnis[i].nam+' '+ AFNIjvLabel(v.afnis[i].jv) );
+         LayerAfniDrop.ItemIndex := v.VolumeDisplayed ;
+     end;
+     LayerAfniDrop.Visible := isAFNI;
+     LayerAfniBtn.Visible := isAFNI;
+     {$ENDIF}
 end;
 
 procedure TGLForm1.LayerChange(layer, colorTag, opacityPercent: integer; displayMin, displayMax: single); //kNaNsingle
@@ -2938,8 +3303,6 @@ begin
  LayerWidgetChangeTimer.enabled := false;
  LayerWidgetChangeTimer.enabled := true;
 end;
-
-
 
 procedure TGLForm1.RulerVisible();
 var
@@ -3589,7 +3952,7 @@ var
   bmpEdit: TEdit;
   LoadFewVolumesCheck, LandMarkCheck,
   {$IFDEF LCLCocoa} DarkModeCheck, RetinaCheck,{$ENDIF}
-  BitmapAlphaCheck, RadiologicalCheck: TCheckBox;
+  ClusterizeAtlasCheck, BitmapAlphaCheck, RadiologicalCheck: TCheckBox;
   OkBtn, AdvancedBtn: TButton;
   bmpLabel: TLabel;
   WindowCombo : TComboBox;
@@ -3658,12 +4021,23 @@ begin
   BitmapAlphaCheck.AnchorSide[akLeft].Control := PrefForm;
   BitmapAlphaCheck.BorderSpacing.Left := 6;
   BitmapAlphaCheck.Parent:=PrefForm;
+  ClusterizeAtlasCheck:=TCheckBox.create(PrefForm);
+  ClusterizeAtlasCheck.Checked := gPrefs.AutoClusterizeAtlases;
+  ClusterizeAtlasCheck.Caption:='Show cluster table for atlases';
+  ClusterizeAtlasCheck.AnchorSide[akTop].Side := asrBottom;
+  ClusterizeAtlasCheck.AnchorSide[akTop].Control := BitmapAlphaCheck;
+  ClusterizeAtlasCheck.BorderSpacing.Top := 6;
+  ClusterizeAtlasCheck.AnchorSide[akLeft].Side := asrLeft;
+  ClusterizeAtlasCheck.AnchorSide[akLeft].Control := PrefForm;
+  ClusterizeAtlasCheck.BorderSpacing.Left := 6;
+  ClusterizeAtlasCheck.Anchors := [akTop, akLeft];
+  ClusterizeAtlasCheck.Parent:=PrefForm;
   //  RadiologicalCheck
   RadiologicalCheck:=TCheckBox.create(PrefForm);
   RadiologicalCheck.Checked := gPrefs.FlipLR_Radiological;
   RadiologicalCheck.Caption:='Radiological convention (left on right)';
   RadiologicalCheck.AnchorSide[akTop].Side := asrBottom;
-  RadiologicalCheck.AnchorSide[akTop].Control := BitmapAlphaCheck;
+  RadiologicalCheck.AnchorSide[akTop].Control := ClusterizeAtlasCheck;
   RadiologicalCheck.BorderSpacing.Top := 6;
   RadiologicalCheck.AnchorSide[akLeft].Side := asrLeft;
   RadiologicalCheck.AnchorSide[akLeft].Control := PrefForm;
@@ -3764,6 +4138,7 @@ begin
   	exit; //if user closes window with out pressing "OK"
   end;
   gPrefs.FlipLR_Radiological := RadiologicalCheck.Checked;
+  gPrefs.AutoClusterizeAtlases := ClusterizeAtlasCheck.Checked;
   Vol1.Slices.RadiologicalConvention := gPrefs.FlipLR_Radiological;
   gPrefs.BitmapZoom:= strtointdef(bmpEdit.Text,1);
   gPrefs.LoadFewVolumes := LoadFewVolumesCheck.Checked;
@@ -4077,7 +4452,7 @@ begin
      if not vols.Layer(0,niftiVol) then exit;
      sliceMM := Vol1.Slice2Dmm(niftiVol, vox);
      {$IFDEF GRAPH}
-     if niftiVol.volumesLoaded > 1 then begin
+     if (niftiVol.volumesLoaded > 1) and (not niftiVol.IsLabels) then begin
        graphLine :=  niftiVol.VoxIntensityArray(vox);
        if (length(graphLine) <> niftiVol.volumesLoaded) then begin
           setlength(graphLine, 0);
@@ -4343,6 +4718,10 @@ begin
         exit;
      end;
   end;
+  if (ext = '.PY') then begin
+     OpenScript(fnm);
+     exit;
+  end;
   if (ext = '.1D') or (ext = '.TXT') or (ext = '.CSV') then begin
      GraphOpen(fnm);
      exit;
@@ -4398,10 +4777,97 @@ begin
      //Use option pull down instead!
 end;
 
+procedure TGLForm1.AfniDetailsMenuClick(Sender: TObject);
+var
+   s: string;
+   v: TNIfTI;
+   i: integer;
+begin
+  {$IFDEF AFNI}
+  vols.Layer(LayerList.ItemIndex,v);
+  if v = nil then exit;
+  if length(v.afnis) < v.VolumeDisplayed then exit;
+  s := 'statistical code: '+AFNIjvLabel(v.afnis[v.VolumeDisplayed].jv);
+  if (v.afnis[v.VolumeDisplayed].nv > 0) then begin
+     s := s + ' parameters:';
+     for i := 0 to v.afnis[v.VolumeDisplayed].nv - 1 do
+         s := s + ' '+floattostr(v.afnis[v.VolumeDisplayed].param[i]);
+  end;
+  showmessage(s);
+  {$ENDIF}
+end;
+
+procedure TGLForm1.AfniDirMenuClick(Sender: TObject);
+begin
+  {$IFDEF UNIX}
+  if not DirectoryExists(gPrefs.AfniDir) then
+     gPrefs.AfniDir := expandfilename('~/')+'abin';
+  {$ENDIF}
+  if not DirectoryExists(gPrefs.AfniDir) then
+     gPrefs.AfniDir := '';
+   if not Dialogs.SelectDirectory('Select AFNI Folder (often named "abin")', gPrefs.AfniDir, gPrefs.AfniDir) then exit;
+  CreateStandardMenus(OpenAFNIMenu);
+end;
+
 procedure TGLForm1.CenterPanelClick(Sender: TObject);
 begin
 
 end;
+
+procedure TGLForm1.ClusterByMenuClick(Sender: TObject);
+var
+   v: TNIfTI;
+begin
+   if not vols.Layer(LayerList.ItemIndex,v) then exit;
+   v.SortClustersBySize := (Sender as TMenuItem).tag = 0;
+   v.SortClusters;
+   UpdateLayerBox(false);
+end;
+
+procedure TGLForm1.ClusterViewMouseUp(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+var
+   w, row, col: integer;
+ v: TNIfTI;
+begin
+ if not vols.Layer(LayerList.ItemIndex,v) then exit;
+ if ClusterView.Selected = nil then
+    exit;
+ row := ClusterView.Selected.Index;
+ w := 0;
+ col := -1;
+ while (w < X) and ((col+1) < ClusterView.Columns.Count) do begin
+     col  := col + 1;
+     if not ClusterView.Column[col].visible then continue;
+     w := w + ClusterView.Column[col].Width;
+ end;
+ if (col < 0) or (col >= ClusterView.ColumnCount) then exit;
+ if (row >= length(v.clusters)) or (row< 0) then exit;
+ //LayerBox.caption := format('%d %d %d',[col, row, ClusterView.Column[col].Tag]);
+ if ClusterView.Column[col].Tag > 1 then
+    SetXHairPosition(v.clusters[row].PeakXYZ.x, v.clusters[row].PeakXYZ.Y, v.clusters[row].PeakXYZ.Z, true )
+ else
+     SetXHairPosition(v.clusters[row].CogXYZ.x, v.clusters[row].CogXYZ.Y, v.clusters[row].CogXYZ.Z, true );
+end;
+
+procedure TGLForm1.ClusterViewSelectItem(Sender: TObject; Item: TListItem; Selected: Boolean);
+begin
+     //
+end;
+
+(*var
+ i: integer;
+ v: TNIfTI;
+begin
+ //
+
+ if not vols.Layer(LayerList.ItemIndex,v) then exit;
+ i := StrToIntDef(Item.Caption,0);
+ //SliceBox.Caption := inttostr(i);
+ //SliceBox.Caption := inttostr(i)+':'+inttostr(length(v.clusters));
+ if (i >= length(v.clusters)) or (i < 0) then exit;
+ SetXHairPosition(v.clusters[i].CogXYZ.x, v.clusters[i].CogXYZ.Y, v.clusters[i].CogXYZ.Z, true );
+end; *)
 
 procedure TGLForm1.AddOverlayMenuClick(Sender: TObject);
 begin
@@ -4593,7 +5059,7 @@ begin
      showmessage('Unable to load graph from text file "'+fnm+'"');
   ViewGPUg.Invalidate;
   if BottomPanel.Height < 20 then
-     BottomPanel.Height := GLForm1.Height div 2;
+     BottomPanel.Height := round(GLForm1.Height * 0.25);
  {$ENDIF}
 end;
 
@@ -5650,7 +6116,11 @@ procedure TGLForm1.EditCopyMenuClick(Sender: TObject);
 var
   bmp: TBitmap;
 begin
- if (ScriptOutputMemo.Focused) then begin
+  if (ClusterView.Focused) then begin
+     ClusterCopyMenu.Click;
+     exit;
+  end;
+  if (ScriptOutputMemo.Focused) then begin
     if (ScriptOutputMemo.SelLength < 1) then
        ScriptOutputMemo.SelectAll();
     ScriptOutputMemo.CopyToClipboard;
@@ -5728,7 +6198,6 @@ begin
    {$ENDIF}
    exit(true);
  end;
-
 end;
 
 procedure TGLForm1.GraphMouseWheel(Sender: TObject; Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
@@ -5871,7 +6340,7 @@ begin
  UpdateTimer.Enabled := true;
 end;
 
-procedure TGLForm1.LayerCutoutMenuClick(Sender: TObject);
+procedure TGLForm1.AfniNextClick(Sender: TObject);
 var
     i: integer;
     niftiVol: TNIfTI;
@@ -5968,7 +6437,7 @@ begin
   {$IFDEF LCLCocoa}
   setThemeMode(HdrForm, gPrefs.DarkMode);
   {$ENDIF}
-  HdrForm.WriteHdrForm(niftiVol.HeaderNoRotation, niftiVol.IsNativeEndian, niftiVol.Filename, niftiVol.Dim);
+  HdrForm.WriteHdrForm(niftiVol.HeaderNoRotation, niftiVol.IsNativeEndian, niftiVol.Filename, niftiVol.Dim, niftiVol.VolumesLoaded);
   HdrForm.SaveHdrDlg.Filename := niftiVol.Filename;
   HdrForm.show;
 end;
@@ -6815,6 +7284,7 @@ begin
   CreateStandardMenus(OpenAltasMenu);
   if DirectoryExists(GetFSLdir+pathdelim+ 'data'+pathdelim+'standard') then
      OpenFSLMenu.Visible := true;
+  CreateStandardMenus(OpenAFNIMenu);
   s := gPrefs.PrevBackgroundImage;
   if (not fileexists(s)) then
      s := gPrefs.PrevFilename[1];
@@ -7027,6 +7497,48 @@ begin
     if isBusyCore then exit;
     InvalidateTimer.enabled := false;
     ViewGPUPaint(sender);
+end;
+
+procedure TGLForm1.LayerAfniBtnClick(Sender: TObject);
+begin
+  AfniPopup.PopUp;
+end;
+
+procedure TGLForm1.LayerAfniDropChange(Sender: TObject);
+begin
+ //LayerBox.Caption := inttostr(LayerAfniDrop.ItemIndex); exit;
+end;
+
+procedure TGLForm1.LayerAfniDropClick(Sender: TObject);
+var
+   v: TNIfTI;
+   i: integer;
+begin
+ i := LayerAfniDrop.ItemIndex;
+ vols.Layer(LayerList.ItemIndex,v);
+ if v.VolumeDisplayed = i then exit;
+ v.SetDisplayVolume(i);
+ UpdateLayerBox(false);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
+ UpdateTimer.Enabled := true;
+ //LayerBox.Caption := inttostr(random(888))+' '+inttostr(i);
+
+end;
+
+procedure TGLForm1.LayerClusterMenuClick(Sender: TObject);
+var
+   v: TNIfTI;
+begin
+  if not vols.Layer(LayerList.ItemIndex,v) then exit;
+  if ((v.VolumesLoaded > 2) and (length(v.afnis) < 1)) then begin
+     showmessage('Clusters are for 3D data.');
+     exit;
+  end;
+  generateClustersCore(v);
+  UpdateLayerBox(false);
+  if gPrefs.DisplayOrient > kAxCorSagOrient then
+     MPRMenu.Click;
+  if BottomPanel.Height < 20 then
+     BottomPanel.Height := round(GLForm1.Height * 0.25);
 end;
 
 procedure TGLForm1.BetterRenderTimerTimer(Sender: TObject);
