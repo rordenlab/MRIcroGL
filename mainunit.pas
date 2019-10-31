@@ -44,6 +44,7 @@ type
     CenterPanel: TPanel;
     ClipThickLabel: TLabel;
     ClipThickTrack: TTrackBar;
+    ClusterView: TListView;
     GraphMenu: TMenuItem;
     GraphScalingMenu: TMenuItem;
     GraphSaveMenu: TMenuItem;
@@ -65,7 +66,6 @@ type
     LayerAfniBtn: TButton;
     AfniNextMenu: TMenuItem;
     LayerAfniDrop: TComboBox;
-    ClusterView: TListView;
     MatCapDrop: TComboBox;
     CropMenu1: TMenuItem;
     EditPasteMenu: TMenuItem;
@@ -80,12 +80,15 @@ type
     ClusterSaveMenu: TMenuItem;
     OpenAFNIMenu: TMenuItem;
     ClusterPopUp: TPopupMenu;
+    GraphPanel: TPanel;
+    ClusterPanel: TPanel;
     RemoveSmallClusterMenu: TMenuItem;
     ResizeMenu1: TMenuItem;
     ReorientMenu1: TMenuItem;
     InvalidateTImer: TTimer;
     RulerCheck: TCheckBox;
     BetterRenderTimer: TTimer;
+    ClusterGraphSplitter: TSplitter;
     ToolsMenu: TMenuItem;
     OpenAltasMenu: TMenuItem;
     TBSplitter: TSplitter;
@@ -760,7 +763,7 @@ begin
     ViewGPU1.Invalidate;
 end;
 
-procedure dwriteln(str: string);
+procedure printf(str: string);
 begin
      {$IFDEF UNIX} writeln(str); {$ENDIF}
 end;
@@ -1759,7 +1762,7 @@ begin
   //GLForm1.ScriptOutputMemo.Lines.Add('Terminating application');
   Result:= GetPythonEngine.PyBool_FromLong(Ord(TRUE));
   //GLForm1.ScriptOutputMemo.Lines.Add('Terminating application 2');
-  dwriteln('Script executed quit(): Terminating MRIcroGL');
+  printf('Script executed quit(): Terminating MRIcroGL');
   GlForm1.ScriptOutputMemo.Tag := 123;
   //GLForm1.Close;
 end;
@@ -2405,8 +2408,8 @@ begin
      CutoutBox.Visible := gPrefs.DisplayOrient = kRenderOrient;
      ShaderBox.Visible := gPrefs.DisplayOrient = kRenderOrient;
      SliceBox.Visible := gPrefs.DisplayOrient <= kAxCorSagOrient;
-     ClusterView.Visible := gPrefs.DisplayOrient <= kAxCorSagOrient;
-     ViewGPUg.Visible := not ClusterView.Visible;
+     //ClusterView.Visible := gPrefs.DisplayOrient <= kAxCorSagOrient;
+     //ViewGPUg.Visible := not ClusterView.Visible;
      AnatDrop.Visible := length(gLandmark.Landmarks) > 0;
      LandmarkMenu.Visible := gPrefs.LandmarkPanel;
      LineBox.Visible := gPrefs.DisplayOrient <= kMosaicOrient;
@@ -2461,7 +2464,7 @@ begin
        dir := StandardDir;
    if not DirectoryExists(dir) then begin
      ParentMenu.Enabled := false;
-     dwriteln('Unable to find folder "'+dir+'"');
+     printf('Unable to find folder "'+dir+'"');
      exit;//showmessage('Unable to find folder "'+dir+'"');
    end;
    standardNames := FindAllFiles(dir, '*.nii', false);
@@ -3195,12 +3198,14 @@ var
    i: integer;
    v: TNIfTI;
    s: string;
-   isMultiVol, isAFNI: boolean;
+   isMultiVol, isAFNI, hasClusters: boolean;
 begin
      if (NewLayers) then begin
         LayerList.Items.Clear;
         isMultiVol := false;
+        hasClusters := false;
         if vols.NumLayers < 1 then exit;
+        v := nil;
         for i := 1 to vols.NumLayers do begin
             vols.Layer(i-1,v);
             if v.VolumesTotal > 1 then
@@ -3210,6 +3215,7 @@ begin
                s := format('%d/%d: ', [v.VolumeDisplayed+1, v.VolumesTotal] )+s;
             LayerList.Items.add(s);
             LayerList.Checked[i-1] := true;
+            if length(v.clusters) > 0 then hasClusters := true;
         end;
         LayerList.ItemIndex := vols.NumLayers - 1;
         DisplayPrevMenu.Enabled := isMultiVol;
@@ -3218,6 +3224,23 @@ begin
         DisplayCorrelationR.Enabled := isMultiVol;
         DisplayCorrelationZ.Enabled := isMultiVol;
         GraphAddMenu.Enabled := isMultiVol;
+        if (v <> nil) and (gPrefs.AutoClusterizeAtlases) then begin
+           if (v.IsLabels) and (length(v.clusters) < 1) then begin
+              generateClustersCore(v);
+              if (BottomPanel.Height < 20) then
+                 BottomPanel.Height := round(GLForm1.Height * 0.25);
+              hasClusters := true;
+
+           end;
+        end;
+        if hasClusters then begin
+           if gGraph.isEmpty then
+              GraphPanel.width := 0
+           else
+               GraphPanel.width := BottomPanel.Width div 2;
+
+        end
+
      end;
      if (LayerList.ItemIndex < 0)  then
         LayerList.ItemIndex := LayerList.Items.Count -1;
@@ -3234,7 +3257,7 @@ begin
      LayerColorDrop.ItemIndex := v.FullColorTable.Tag;
      LayerAlphaTrack.Position := v.OpacityPercent;
      LayerBox.Hint := format('image intensity range %.4g..%.4g',[DefuzzX(v.VolumeMin), DefuzzX(v.VolumeMax)]);
-     ClusterView.Visible := length(v.clusters) > 0;
+     //ClusterView.Visible := length(v.clusters) > 0;
      if (ClusterView.Visible) then
         MakeList(v.clusters);
      {$IFDEF AFNI}
@@ -4586,6 +4609,7 @@ function TGLForm1.AddLayer(Filename: string): boolean;
 var
  fnm: string;
 
+   v: TNIfTI;
 begin
  AnimateTimer.Enabled := false;
  DisplayAnimateMenu.Checked := false;
@@ -4600,6 +4624,7 @@ begin
   if (vols.NumLayers > 0) then
      MatLoadForce(kMatNoForce);
   result := vols.AddLayer(fnm, gPrefs.ClearColor);
+  //handle AutoClusterizeAtlases in UpdateLayerBox() so it impacts startup images
   if (vols.NumLayers > 1) then
     GLForm1.LayerChange(vols.NumLayers-1, vols.NumLayers-1, -1, kNaNsingle, kNaNsingle); //kNaNsingle
   UpdateLayerBox(true);
@@ -4690,11 +4715,6 @@ begin
         result := false;
 end;
 
-procedure printf(s: string);
-begin
-{$IFDEF UNIX}writeln(s); {$ENDIF}
-end;
-
 procedure TGLForm1.FormDropFiles(Sender: TObject; const FileNames: array of String);
 var
  ss: TShiftState;
@@ -4761,8 +4781,6 @@ begin
       OpenDialog1.filename := '';
    AddBackground(OpenDialog1.filename);
 end;
-
-
 
 procedure TGLForm1.AddOverlayClusterMenuClick(Sender: TObject);
 (*var
@@ -5021,19 +5039,18 @@ begin
  ViewGPUg.Invalidate;
  if BottomPanel.Height < 50 then
     GraphShowHideMenu.Click();
-
  {$ENDIF}
 end;
 
 procedure TGLForm1.GraphClearMenuClick(Sender: TObject);
 const
-  k = 10;
+  k = 3;
 var
    newVals: TFloat32s;
    i: integer;
 begin
  {$IFDEF GRAPH}
-  gGraph.ClearLines();
+  gGraph.ClearLines(true);
   setlength(newVals, k);
   for i := 0 to k-1 do
       newVals[i] := 0;//(3 * sin(i/(k/12))) + 6;
@@ -6646,25 +6663,25 @@ begin
               script.Add(format('gl.minmax (%d, %g, %g)',[max(layers-1,0), lo, hi]) );
            end else if (upcase(s[2]) = 'H')  then begin//e.g. '-h'
               {$IFDEF UNIX}
-              dwriteln('');
-              dwriteln('MRIcroGL '+kVers);
-              dwriteln(' Usage: MRIcroGL [options] file [displayOpts] file [displayOpts]');
-              dwriteln('   -h  : Display help');
-              dwriteln('   -cm : Color map: "-cm actc"');
-              dwriteln('   -dr : Display range: "-dr 2 5"');
-              dwriteln('   -std : Load standard image: "-std" ');
-              dwriteln('   -m : Set MaxVox (downsample large images). n.b. retained in preferences: "-m 256" ');
-              dwriteln('   -r : Reset all preferences to defaults (recovery)');
-              dwriteln(' Examples:');
-              dwriteln('   MRIcroGL spm152 spmMotor  -cm actc -dr 2 5');
-              dwriteln('   MRIcroGL spm152 -cm copper -dr 25 70 spmMotor  -cm actc -dr 2 5');
-              dwriteln('   MRIcroGL ~/myScript.py');
-              dwriteln(' ');
-              dwriteln(' ');
+              printf('');
+              printf('MRIcroGL '+kVers);
+              printf(' Usage: MRIcroGL [options] file [displayOpts] file [displayOpts]');
+              printf('   -h  : Display help');
+              printf('   -cm : Color map: "-cm actc"');
+              printf('   -dr : Display range: "-dr 2 5"');
+              printf('   -std : Load standard image: "-std" ');
+              printf('   -m : Set MaxVox (downsample large images). n.b. retained in preferences: "-m 256" ');
+              printf('   -r : Reset all preferences to defaults (recovery)');
+              printf(' Examples:');
+              printf('   MRIcroGL spm152 spmMotor  -cm actc -dr 2 5');
+              printf('   MRIcroGL spm152 -cm copper -dr 25 70 spmMotor  -cm actc -dr 2 5');
+              printf('   MRIcroGL ~/myScript.py');
+              printf(' ');
+              printf(' ');
               {$ENDIF}
            end else             //gl.minmax(2, -4, -4)
-               dwriteln('Unknown argument "'+s+'"');
-           //dwriteln('>>Unknown argument "'+upcase(s[2])+upcase(s[3])+'"');
+               printf('Unknown argument "'+s+'"');
+           //printf('>>Unknown argument "'+upcase(s[2])+upcase(s[3])+'"');
            continue;
         end;
         AddImg();
@@ -6692,7 +6709,7 @@ begin
     if (ParamCount > 0) and (s = ('-')) then begin
        s := ParamStr(ParamCount);
        if (upcase(ExtractFileExt(s)) <> '.PY') and (upcase(ExtractFileExt(s)) <> '.TXT') then begin
-          dwriteln('Assuming arguments are images not script (not .py or .txt) "'+s+'"');
+          printf('Assuming arguments are images not script (not .py or .txt) "'+s+'"');
           ParamStr2Script();// AddBackground(s);
           exit;
        end;
@@ -6704,7 +6721,7 @@ begin
        s := GetCurrentDir+pathdelim+s;
     if (not FileExists(s)) then begin
        //{$IFDEF UNIX}writeln('Unable to find file provided from command line: '+s);{$ENDIF}
-       dwriteln('Reading input as literal Python script (use "^" as end-of-line delimiter)');
+       printf('Reading input as literal Python script (use "^" as end-of-line delimiter)');
        ScriptMemo.Lines.Clear;
        //ScriptMemo.Lines.Add(s);
        ScriptMemo.Lines.Delimiter:= '^';
@@ -7150,7 +7167,7 @@ begin
  ViewGPUg.OpenGLMinorVersion:= 3;
  ViewGPUg.MultiSampling:=4;
  {$ENDIF}
- ViewGPUg.Parent := BottomPanel;
+ ViewGPUg.Parent := GraphPanel;
  ViewGPUg.Align:= alClient;
  ViewGPUg.OnPaint := @GraphPaint;
  ViewGPUg.OnMouseDown := @GraphMouseDown;
@@ -7297,7 +7314,7 @@ begin
   end;
   if (length(gPrefs.InitScript) > 0) then
      s := '+'; //load borg for quick load
-  //vols.Create
+  //TODO: house keeping with new volumes: autoload cluster AutoClusterizeAtlases
   vols := TNIfTIs.Create(s,  gPrefs.ClearColor, gPrefs.LoadFewVolumes, gPrefs.MaxVox, isOK); //to do: warning regarding multi-volume files?
   //niftiVol := TNIfTI.Create('/Users/rorden/metal_demos/tar.nii');
   //niftiVol := TNIfTI.Create('/Users/rorden/metal_demos/rmotor.nii.gz', niftiVol.Mat, niftiVol.Dim);
@@ -7323,7 +7340,7 @@ begin
   if gPrefs.MultiSample124 = 2 then
      ViewGPU1.MultiSampling := 2
   else if gPrefs.MultiSample124 = 1 then begin
-    dwriteln('Multisampling disabled: orientation cube might look jagged. Performance benefit unlikely.');
+    printf('Multisampling disabled: orientation cube might look jagged. Performance benefit unlikely.');
     ViewGPU1.MultiSampling := 1;
   end;
   {$ENDIF}

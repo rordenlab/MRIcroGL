@@ -1,12 +1,12 @@
 object GLForm1: TGLForm1
-  Left = 375
-  Height = 855
-  Top = 23
-  Width = 1063
+  Left = 371
+  Height = 727
+  Top = 106
+  Width = 1069
   AllowDropFiles = True
   Caption = 'MRIcroGL'
-  ClientHeight = 855
-  ClientWidth = 1063
+  ClientHeight = 727
+  ClientWidth = 1069
   Constraints.MinHeight = 20
   Constraints.MinWidth = 20
   Menu = MainMenu
@@ -19,24 +19,24 @@ object GLForm1: TGLForm1
   LCLVersion = '2.1.0.0'
   object TopPanel: TPanel
     Left = 0
-    Height = 847
+    Height = 641
     Top = 0
-    Width = 1063
+    Width = 1069
     Align = alClient
-    ClientHeight = 847
-    ClientWidth = 1063
+    ClientHeight = 641
+    ClientWidth = 1069
     TabOrder = 0
     object ToolPanel: TScrollBox
       Left = 1
-      Height = 845
+      Height = 639
       Top = 1
       Width = 268
       HorzScrollBar.Page = 1
       HorzScrollBar.Visible = False
-      VertScrollBar.Page = 845
+      VertScrollBar.Page = 639
       Align = alLeft
       BorderStyle = bsNone
-      ClientHeight = 845
+      ClientHeight = 639
       ClientWidth = 253
       ParentFont = False
       TabOrder = 0
@@ -1605,13 +1605,13 @@ object GLForm1: TGLForm1
       end
     end
     object ScriptPanel: TPanel
-      Left = 1060
-      Height = 845
+      Left = 1066
+      Height = 639
       Top = 1
       Width = 2
       Align = alRight
       BevelOuter = bvNone
-      ClientHeight = 845
+      ClientHeight = 639
       ClientWidth = 2
       Constraints.MinWidth = 2
       ParentFont = False
@@ -1619,12 +1619,12 @@ object GLForm1: TGLForm1
       OnDblClick = ScriptPanelDblClick
       object ScriptBox: TGroupBox
         Left = -8
-        Height = 845
+        Height = 639
         Top = 0
         Width = 10
         Align = alClient
         Caption = 'Scripting'
-        ClientHeight = 826
+        ClientHeight = 620
         ClientWidth = 0
         Constraints.MinWidth = 10
         ParentFont = False
@@ -1632,7 +1632,7 @@ object GLForm1: TGLForm1
         OnDblClick = ScriptPanelDblClick
         object ScriptMemo: TMemo
           Left = 0
-          Height = 620
+          Height = 414
           Top = 0
           Width = 0
           Align = alClient
@@ -1656,7 +1656,7 @@ object GLForm1: TGLForm1
         object ScriptOutputMemo: TMemo
           Left = 0
           Height = 200
-          Top = 626
+          Top = 420
           Width = 0
           Align = alBottom
           BorderStyle = bsNone
@@ -1673,7 +1673,7 @@ object GLForm1: TGLForm1
           Cursor = crVSplit
           Left = 0
           Height = 6
-          Top = 620
+          Top = 414
           Width = 0
           Align = alBottom
           ResizeAnchor = akBottom
@@ -1682,13 +1682,13 @@ object GLForm1: TGLForm1
     end
     object LeftSplitter: TSplitter
       Left = 269
-      Height = 845
+      Height = 639
       Top = 1
       Width = 6
     end
     object RightSplitter: TSplitter
-      Left = 1054
-      Height = 845
+      Left = 1060
+      Height = 639
       Top = 1
       Width = 6
       Align = alRight
@@ -1696,9 +1696,9 @@ object GLForm1: TGLForm1
     end
     object CenterPanel: TPanel
       Left = 275
-      Height = 845
+      Height = 639
       Top = 1
-      Width = 779
+      Width = 785
       Align = alClient
       TabOrder = 4
       OnClick = CenterPanelClick
@@ -1708,85 +1708,112 @@ object GLForm1: TGLForm1
     Cursor = crVSplit
     Left = 0
     Height = 6
-    Top = 847
-    Width = 1063
+    Top = 641
+    Width = 1069
     Align = alBottom
     MinSize = 4
     ResizeAnchor = akBottom
   end
   object BottomPanel: TPanel
     Left = 0
-    Height = 2
-    Top = 853
-    Width = 1063
+    Height = 80
+    Top = 647
+    Width = 1069
     Align = alBottom
-    ClientHeight = 2
-    ClientWidth = 1063
+    ClientHeight = 80
+    ClientWidth = 1069
     TabOrder = 2
-    object ClusterView: TListView
-      Left = 1
-      Height = 0
+    object ClusterGraphSplitter: TSplitter
+      Left = 983
+      Height = 78
       Top = 1
-      Width = 1061
+      Width = 5
+      Align = alRight
+      ResizeAnchor = akRight
+    end
+    object GraphPanel: TPanel
+      Left = 988
+      Height = 78
+      Top = 1
+      Width = 80
+      Align = alRight
+      Constraints.MinWidth = 2
+      TabOrder = 1
+    end
+    object ClusterPanel: TPanel
+      Left = 1
+      Height = 78
+      Top = 1
+      Width = 982
       Align = alClient
-      AutoWidthLastColumn = True
-      Columns = <      
-        item
-          Caption = 'Index'
-          MaxWidth = 50
-          MinWidth = 50
-          Tag = 1
-          Visible = False
-        end      
-        item
-          Caption = 'Volume'
-          MaxWidth = 120
-          MinWidth = 50
-          Tag = 1
-        end      
-        item
-          Caption = 'Peak'
-          Tag = 3
-          Width = 42
-        end      
-        item
-          Alignment = taCenter
-          Caption = 'PeakXYZ'
-          MaxWidth = 120
-          MinWidth = 20
-          Tag = 2
-          Width = 120
-        end      
-        item
-          Caption = 'Peak Structure'
-          MaxWidth = 200
-          MinWidth = 20
-          Tag = 2
-          Width = 120
-        end      
-        item
-          Alignment = taCenter
-          Caption = 'XYZ'
-          MaxWidth = 120
-          MinWidth = 20
-          Width = 120
-        end      
-        item
-          Caption = 'Structure'
-          Width = 592
-        end>
-      GridLines = True
-      PopupMenu = ClusterPopUp
-      ReadOnly = True
-      RowSelect = True
-      SortColumn = 0
-      SortType = stData
-      TabOrder = 0
-      ViewStyle = vsReport
-      OnColumnClick = ClusterViewColumnClick
-      OnCompare = ClusterViewCompare
-      OnMouseUp = ClusterViewMouseUp
-      OnSelectItem = ClusterViewSelectItem
+      ClientHeight = 78
+      ClientWidth = 982
+      TabOrder = 2
+      object ClusterView: TListView
+        Left = 1
+        Height = 76
+        Top = 1
+        Width = 980
+        Align = alClient
+        Columns = <        
+          item
+            Caption = 'Index'
+            MaxWidth = 50
+            MinWidth = 50
+            Tag = 1
+            Visible = False
+          end        
+          item
+            Caption = 'Volume'
+            MaxWidth = 120
+            MinWidth = 50
+            Tag = 1
+          end        
+          item
+            Caption = 'Peak'
+            Tag = 3
+            Width = 42
+          end        
+          item
+            Alignment = taCenter
+            Caption = 'PeakXYZ'
+            MaxWidth = 120
+            MinWidth = 20
+            Tag = 2
+            Width = 120
+          end        
+          item
+            Caption = 'Peak Structure'
+            MaxWidth = 200
+            MinWidth = 20
+            Tag = 2
+            Width = 120
+          end        
+          item
+            Alignment = taCenter
+            Caption = 'XYZ'
+            MaxWidth = 120
+            MinWidth = 20
+            Width = 120
+          end        
+          item
+            Caption = 'Structure'
+            Width = 572
+          end>
+        Constraints.MinWidth = 2
+        GridLines = True
+        PopupMenu = ClusterPopUp
+        ReadOnly = True
+        RowSelect = True
+        SortColumn = 0
+        SortType = stData
+        TabOrder = 0
+        ViewStyle = vsReport
+        OnColumnClick = ClusterViewColumnClick
+        OnCompare = ClusterViewCompare
+        OnMouseUp = ClusterViewMouseUp
+        OnSelectItem = ClusterViewSelectItem
+      end
     end
   end
   object MainMenu: TMainMenu
@@ -2556,6 +2583,10 @@ object GLForm1: TGLForm1
       Caption = 'Generate Clusters'
       OnClick = LayerClusterMenuClick
     end
+    object RemoveSmallClusterMenu: TMenuItem
+      Caption = 'Remove Small Clusters'
+      OnClick = RemoveSmallClusterMenuClick
+    end
     object LayerFromZeroMenu: TMenuItem
       AutoCheck = True
       Caption = 'Color Range From Zero'
@@ -2595,10 +2626,6 @@ object GLForm1: TGLForm1
       GroupIndex = 193
       Visible = False
       OnClick = LayerIsLabelMenuClick
-    end
-    object RemoveSmallClusterMenu: TMenuItem
-      Caption = 'Remove Small Clusters'
-      OnClick = RemoveSmallClusterMenuClick
     end
     object LayerInvertColorMapMenu: TMenuItem
       AutoCheck = True

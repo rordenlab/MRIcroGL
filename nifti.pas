@@ -4508,7 +4508,7 @@ begin
  v := v - v0;
  z := v.Length;
  result := x * y * z;
- printf(format('%.4fx%.4fx%.4fmm = %.4fmm3', [x,y,z, result]));
+ //printf(format('%.4fx%.4fx%.4fmm = %.4fmm3', [x,y,z, result]));
 end;
 
 function TNIfTI.RemoveSmallClusters(thresh, mm: double): single; //returns surviving mm3
@@ -6552,6 +6552,7 @@ label
     123;
 var
   zeroPad, i,o,v, nVox, idx, x,y,z, vx, skipVx, PeakVx : int64;
+  isDarkClusters: boolean = false;
   clust: TCluster;
   label8, vol8, mask8: TUInt8s;
   label16, vol16: TInt16s;
@@ -6640,7 +6641,7 @@ begin
         result := vol32[skipVx+vx]
      else
          result := 0.0;
-     //if isDarkClusters then result := -result;
+     if isDarkClusters then result := -result;
 end;//nested voxInten()
 begin
     if IsLabels then begin
@@ -6658,7 +6659,7 @@ begin
     FillChar(mask8[0], vx, 0);
     for i := 0 to (vx-1) do
         if fCache8[i] <> 0 then mask8[i] := 255;
-    //if (fWindowMin < 0) and (fWindowMax < 0) then isDarkClusters := true;
+    if (fWindowMin < 0) and (fWindowMax < 0) then isDarkClusters := true;
     Clusterize(mask8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3], clusterNumber, clusterImg);
     if clusterNumber < 1 then goto 123;
     zeroPad := trunc(log10(clusterNumber))+1;
@@ -6688,6 +6689,7 @@ begin
               end;
         //result in voxels 0..Dim-1
         if nVox < 1 then continue;
+        clust.Peak := (clust.Peak * fHdr.scl_slope) + fHdr.scl_inter;
         //if isDarkClusters then clust.Peak := -clust.Peak;
         clust.CogXYZ := clust.CogXYZ / nVox;
         //result in frac
@@ -6706,7 +6708,6 @@ begin
         clusters[o].Structure := strutils.Dec2Numb(o+1,zeroPad,10);
         //clusters[o].Structure := inttostr(o+1);
         clusters[o].PeakStructure := '-';
-
         if (LabelMap <> nil) and (LabelMap.IsLabels) then begin
            label8 := LabelMap.fRawVolBytes;
            label16 := TInt16s(vol8);
@@ -6901,8 +6902,8 @@ begin
        initHistogram();
   end else
       printf('Unsupported data format '+inttostr(fHdr.datatype));
-  if IsLabels then
-     GenerateClusters();
+  //if IsLabels then
+  //   GenerateClusters();
   if (IsLabels) then
      //
   else if fAutoBalMin = fAutoBalMax then begin //e.g. thresholded data
