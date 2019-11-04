@@ -27,7 +27,6 @@ void main() {
 	vec4 deltaDir = vec4(dir.xyz * stepSize, stepSize);
 	vec4 gradSample, colorSample;
 	float bgNearest = len; //assume no hit
-	float overFarthest = len;
 	float ambient = 1.0;
 	float diffuse = 0.3;
 	float specular = 0.25;

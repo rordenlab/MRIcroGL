@@ -30,7 +30,6 @@ void main() {
 	vec4 deltaDir = vec4(dir.xyz * stepSize, stepSize);
 	vec4 gradSample, colorSample;
 	float bgNearest = len; //assume no hit
-	float overFarthest = len;
 	float ambient = 1.0;
 	float diffuse = 0.3;
 	float specular = 0.25;
@@ -121,15 +120,17 @@ void main() {
 	if (samplePos.a < clipPos.a)
 		samplePos = clipPos;
 	//end fastpass - optional
+	float overFarthest = len;
 	while (samplePos.a <= len) {
 		colorSample = texture3D(intensityOverlay,samplePos.xyz);
 		if (colorSample.a > 0.00) {
+			if (overAcc.a < 0.3)
+				overFarthest = samplePos.a;
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
 			colorSample.a *=  overlayFuzzy;
 			vec3 a = colorSample.rgb * ambient;
 			float s =  0;
 			vec3 d = vec3(0.0, 0.0, 0.0);
-			overFarthest = samplePos.a;
 			//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
 			gradSample = texture3D(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
 			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);

@@ -2,8 +2,14 @@ The following files are from different authors and have their own licenses
 
 SynZip.pas: Inflate routines (used as long as FASTGZ is defined) MPL 1.1/GPL 2.0/LGPL 2.1 tri-license, included with permission.
   https://github.com/synopse/mORMot
+
 gziputils.pas: Inflate routines (unused unless FASTGZ is undefined) ISC License (ISC)
   https://www.gocher.me/GZIP
+
+gziputils.pas: Inflate routines (unused unless FASTGZ is undefined) ISC License (ISC)
+  https://www.gocher.me/GZIP
+
+ustat.pas: Written by William ('Bill') G. Miller 2004, released under BSD 2-Clause License
 
 ---
 The Software has been developed for research purposes only and is not a clinical tool

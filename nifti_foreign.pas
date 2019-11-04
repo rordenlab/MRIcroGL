@@ -4058,7 +4058,10 @@ begin
         if AnsiContainsText(nameStr,'BRICK_LABS') then begin
         	sList := TStringList.Create;
   			sList.Delimiter := '~';        // Each list item will be blank separated
-  			sList.DelimitedText := copy(valStr, 2, length(valStr)-2);
+                        valStr := trim(valStr);
+                        valStr := copy(valStr, 2, length(valStr)-2);
+
+  			sList.DelimitedText := valStr;
   			if sList.count < 1 then begin
   				sList.Free;
   				break;

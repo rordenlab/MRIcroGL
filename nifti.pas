@@ -121,6 +121,7 @@ Type
         SortClustersBySize : boolean;
         HiddenByCutout: boolean;
         IsShrunken : boolean;
+        IsInterpolated : boolean;
         ZeroIntensityInvisible: boolean;
         MaxVox: integer; //maximum number of voxels in any dimension
         MaxMM: single; //maximum mm in any dimension
@@ -128,6 +129,8 @@ Type
         afnis: TAFNIs;
         {$ENDIF}
         clusters: TClusters;
+        clusterNotes: string[128]; //interpolated, label map, etc
+
         property IsNativeEndian: boolean read fIsNativeEndian;
         property VolumeDisplayed: integer read fVolumeDisplayed; //indexed from 0 (0..VolumesLoaded-1)
         property VolumesLoaded: integer read fVolumesLoaded; //1 for 3D data, for 4D 1..hdr.dim[4] depending on RAM
@@ -148,7 +151,7 @@ Type
         function NeedsUpdate(): boolean;
         function DisplayMinMax2Uint8(isForceRefresh: boolean = false): TUInt8s;
         procedure SaveRotated(fnm: string; perm: TVec3i);
-        function RemoveSmallClusters(thresh, mm: double): single; //returns surviving mm3
+        function RemoveSmallClusters(thresh, mm: double; NeighborMethod: integer = 1): single; //returns surviving mm3
         function SaveCropped(fnm: string; crop: TVec6i; cropVols: TPoint): boolean;
         function SaveRescaled(fnm: string; xFrac, yFrac, zFrac: single; OutDataType, Filter: integer; isAllVolumes: boolean): boolean;
         procedure SaveAsSourceOrient(NiftiOutName: string; rawVolBytes: TUInt8s);  overload;
@@ -201,9 +204,8 @@ Type
         procedure SetDisplayMinMax(newMin, newMax: single); overload;
         procedure SetDisplayMinMaxNoUpdate(newMin, newMax: single); overload;
         procedure SetCutoutNoUpdate(CutoutLow, CutoutHigh: TVec3);
-        procedure GenerateClusters; overload;
-        procedure GenerateClusters(LabelMap: TNIfTI); overload;
-
+        procedure GenerateClusters(NeighborMethod: integer = 1); overload;
+        procedure GenerateClusters(LabelMap: TNIfTI; NeighborMethod: integer = 1); overload;
         function DisplayRGBGreen(): TUInt8s;
         procedure SetDisplayColorScheme(clutFileName: string; cTag: integer);
         procedure SetDisplayVolume(newDisplayVolume: integer);
@@ -1499,7 +1501,7 @@ var
     inperm: TVec3i;
     xOffset, yOffset, zOffset: array of int64;
     voxOffset, byteOffset, volBytes,vol, volumesLoaded,  x,y,z, i: int64;
-    xy, p8, p16: int64;
+    //xy, p8, p16: int64;
 begin
   if (perm.x = 1) and (perm.y = 2) and (perm.z = 3) then begin
      Mat2SForm(outR, fHdr); //could skip: no change!
@@ -3009,7 +3011,10 @@ begin
   h1.HdrSz:= 0; //error
   isNativeEndian := true;
   Stream.Seek(0,soFromBeginning);
+  //{$PUSH}
+  //{$WARN 5057 OFF}
   Stream.ReadBuffer (h2, SizeOf (TNIFTI2hdr));
+  //{$WARN 5057 ON}
   lSwappedReportedSz := h2.HdrSz;
   swap4(lSwappedReportedSz);
   if (lSwappedReportedSz = SizeOf (TNIFTI2hdr)) then begin
@@ -4511,7 +4516,7 @@ begin
  //printf(format('%.4fx%.4fx%.4fmm = %.4fmm3', [x,y,z, result]));
 end;
 
-function TNIfTI.RemoveSmallClusters(thresh, mm: double): single; //returns surviving mm3
+function TNIfTI.RemoveSmallClusters(thresh, mm: double; NeighborMethod: integer): single; //returns surviving mm3
 {$IFDEF UNIX}{$DEFINE rsc}{$ENDIF} //Windows can not get console messages
 var
   mnVx, n, i, vx, skipVx : int64;
@@ -4572,7 +4577,7 @@ begin
  printf(format(' voxelsExceedingThresh=%d (%.4fmm3)', [n, n * mmPerVox]));
  {$ENDIF}
  if mnVx > 0 then
-    RemoveAllSmallClusters(vol8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3],255,0 , mnVx);
+    RemoveAllSmallClusters(vol8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3],255,0 , mnVx, NeighborMethod);
  if (fMin < 0.0) and (fMax > 0.0) then
     mn := Scaled2RawIntensity(fHdr, 0)
  else
@@ -4645,19 +4650,6 @@ begin
   vol8 := nil;//free
   SetDisplayMinMax(true);
 end;
-
-(*procedure TNIfTI.SetDisplayMinMaxRGB24();
-var
-   skipVx, i, vx: int64;
-   vol24: TRGBs;
-begin
-  vol24 := TRGBs(fRawVolBytes);
-  vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
-  skipVx := skipVox();
-  for i := 0 to (vx - 1) do begin
-    fVolRGBA[i] := SetRGBA(vol24[skipVx+i].r,vol24[skipVx+i].g,vol24[skipVx+i].b,vol24[skipVx+i].g);
-  end;
-end;*)
 
 procedure TNIfTI.SetDisplayMinMaxRGB24();
 var
@@ -4913,15 +4905,12 @@ begin
   if (fHdr.datatype = kDT_RGB) then exit(nil); //DT_RGB: use DisplayRGBGreen
   vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
   if vx < 1 then exit(nil);
-
   if (not isForceRefresh) and (not NeedsUpdate) then// (not clut.NeedsUpdate) and (fHdr.datatype <> kDT_RGB) and (fCache8 <> nil) and (fWindowMinCache8 <> fWindowMaxCache8) and (fWindowMin = fWindowMinCache8) and (fWindowMax = fWindowMaxCache8) then begin
      exit(fCache8);
   vol8 := fRawVolBytes;
   skipVx := SkipVox();
   //if (IsLabels()) and  (not specialsingle(fWindowMinCache8)) then begin //handle 2 volume TTatlas+tlrc.HEAD
   if (IsLabels())  then begin
-
-
     clut.GenerateLUT(abs(fWindowMax-fWindowMin)/100, fOpacityPct);
     result := fCache8;
     if specialsingle(fWindowMinCache8) then begin
@@ -5939,6 +5928,7 @@ begin
         VolumeReorient();
         if (tarMat = fMat) and (tarDim.X = fDim.X) and (tarDim.Y = fDim.Y) and (tarDim.Z = fDim.Z) then exit;
      end;
+     IsInterpolated := true;
      (*if fVolumesLoaded > 1 then begin
         showmessage('Fatal error: overlays can not have multiple volumes [yet]');
         exit;
@@ -6320,6 +6310,7 @@ begin
   {$ENDIF}
   fisLinearReslice := isInterpolate;
   fLabels.Clear;
+  IsInterpolated := false;
   fBidsName := '';
   fFilename := niftiFileName;
   fVolumeDisplayed := 0;
@@ -6471,11 +6462,11 @@ begin
   nVox := nVox * VoxMM3()/1000.0;
 end;
 
-function Clusterize(var lImg: TUInt8s; Xi,Yi,Zi: integer; out clusterNumber: integer; out img32: TInt32s): boolean;
+function Clusterize(var lImg: TUInt8s; Xi,Yi,Zi: integer; out clusterNumber: integer; out img32: TInt32s; NeighborMethod : integer): boolean;
 label
      123;
 var
-  i, j, XY, XYZ, qlo, qhi: integer;
+  i, XY, XYZ, qlo, qhi: integer;
   qimg: TInt32s;
 procedure checkPixel(vxl: integer);
 begin
@@ -6484,7 +6475,7 @@ begin
      img32[vxl] := clusterNumber; //found
      qimg[qhi] := vxl; //location
 end;//nested checkPixel()
-procedure retirePixel();
+procedure retirePixel6();
 var
   vxl: integer;
 begin
@@ -6497,6 +6488,46 @@ begin
      checkPixel(vxl+XY);
      qlo := qlo + 1;
 end;//nested retirePixel()
+procedure retirePixel18();
+var
+  vxl: integer;
+begin
+     vxl := qimg[qlo];
+     //edges in plane
+     checkPixel(vxl-Xi-1);
+     checkPixel(vxl-Xi+1);
+     checkPixel(vxl+Xi-1);
+     checkPixel(vxl+Xi+1);
+     //edges below
+     checkPixel(vxl-1-XY);
+     checkPixel(vxl+1-XY);
+     checkPixel(vxl-Xi-XY);
+     checkPixel(vxl+Xi-XY);
+     //edges above
+     checkPixel(vxl-1+XY);
+     checkPixel(vxl+1+XY);
+     checkPixel(vxl-Xi+XY);
+     checkPixel(vxl+Xi+XY);
+     retirePixel6();
+end;//nested retirePixel()
+
+procedure retirePixel26();
+var
+  vxl: integer;
+begin
+     vxl := qimg[qlo];
+     //corners below
+     checkPixel(vxl-Xi-XY-1);
+     checkPixel(vxl-Xi-XY+1);
+     checkPixel(vxl+Xi-XY-1);
+     checkPixel(vxl+Xi-XY+1);
+     //corners above
+     checkPixel(vxl-Xi+XY-1);
+     checkPixel(vxl-Xi+XY+1);
+     checkPixel(vxl+Xi+XY-1);
+     checkPixel(vxl+Xi+XY+1);
+     retirePixel18();
+end;
 begin //main RemoveSmallClusters()
   clusterNumber := 0;
   result := false;
@@ -6517,18 +6548,48 @@ begin //main RemoveSmallClusters()
   for i := (XYZ-1-XY) to (XYZ-1) do
     img32[i] := 0;
   //now seed each voxel
-  for i := (XY) to (XYZ-1-XY) do begin
-      if (img32[i] < 0) then begin //voxels not yet part of any region
-         clusterNumber := clusterNumber + 1;
-         if (clusterNumber < 1) then goto 123; //more than 2^32 clusters!
-         qlo := 0;
-         qhi := -1;
-         checkPixel(i);
-         while qlo <= qhi do
-           retirePixel();
-         //for j := 0 to qhi do
-         //    img32[qimg[j]] := qhi + 1;
-      end;
+  if (NeighborMethod = 3) then begin
+    for i := (XY) to (XYZ-1-XY) do begin
+        if (img32[i] < 0) then begin //voxels not yet part of any region
+           clusterNumber := clusterNumber + 1;
+           if (clusterNumber < 1) then goto 123; //more than 2^32 clusters!
+           qlo := 0;
+           qhi := -1;
+           checkPixel(i);
+           while qlo <= qhi do
+             retirePixel26();
+           //for j := 0 to qhi do
+           //    img32[qimg[j]] := qhi + 1;
+        end;
+    end;
+  end else if (NeighborMethod = 2) then begin
+    for i := (XY) to (XYZ-1-XY) do begin
+        if (img32[i] < 0) then begin //voxels not yet part of any region
+           clusterNumber := clusterNumber + 1;
+           if (clusterNumber < 1) then goto 123; //more than 2^32 clusters!
+           qlo := 0;
+           qhi := -1;
+           checkPixel(i);
+           while qlo <= qhi do
+             retirePixel18();
+           //for j := 0 to qhi do
+           //    img32[qimg[j]] := qhi + 1;
+        end;
+    end;
+  end else begin //faces only
+    for i := (XY) to (XYZ-1-XY) do begin
+        if (img32[i] < 0) then begin //voxels not yet part of any region
+           clusterNumber := clusterNumber + 1;
+           if (clusterNumber < 1) then goto 123; //more than 2^32 clusters!
+           qlo := 0;
+           qhi := -1;
+           checkPixel(i);
+           while qlo <= qhi do
+             retirePixel6();
+           //for j := 0 to qhi do
+           //    img32[qimg[j]] := qhi + 1;
+        end;
+    end;
   end;
   result := true;
 123:
@@ -6547,7 +6608,16 @@ begin
      result.PeakXYZ := Vec3(0,0,0);
 end;
 
-procedure TNIfTI.GenerateClusters(LabelMap: TNIfTI); overload;
+
+function GetClusterNotes(var n: TNIfTI): string;
+begin
+     if n = nil then exit('');
+     result := n.shortName;
+     if (n.IsShrunken) or (n.IsInterpolated) then
+         result += '(interpolated)';
+end;
+
+procedure TNIfTI.GenerateClusters(LabelMap: TNIfTI; NeighborMethod: integer); overload;
 label
     123;
 var
@@ -6570,7 +6640,6 @@ begin
         j := label16[PeakVx]
      else
          j := label8[PeakVx];
-
      if (j < 0) or (j >= LabelMap.fLabels.Count) then exit;
      result := LabelMap.fLabels[j];
 end;
@@ -6611,12 +6680,6 @@ begin
      //fractional proportion damaged
      for j := 0 to (nL - 1) do
          labelCount[j].value := labelCount[j].value / sum;
-     (*for j := 0 to (nL - 1) do
-         labelCount[j].index := j;
-     labelCount[2].value := 0.4;
-     labelCount[0].value := 0.2;
-     labelCount[1].value := 0.1;   *)
-
      SortArray(labelCount);
      j := nL-1;
      while (j >= 0) and (labelCount[labelCount[j].index].value >= kMinFrac) do begin
@@ -6649,6 +6712,9 @@ begin
        exit;
     end;
     if fHdr.datatype = kDT_RGB then exit;
+    clusterNotes := GetClusterNotes(self) ;
+    if (LabelMap <> nil) then
+       clusterNotes+= ' on '+GetClusterNotes(LabelMap);
     vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
     if vx < 1 then exit;
     skipVx := skipVox();
@@ -6660,7 +6726,7 @@ begin
     for i := 0 to (vx-1) do
         if fCache8[i] <> 0 then mask8[i] := 255;
     if (fWindowMin < 0) and (fWindowMax < 0) then isDarkClusters := true;
-    Clusterize(mask8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3], clusterNumber, clusterImg);
+    Clusterize(mask8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3], clusterNumber, clusterImg, NeighborMethod);
     if clusterNumber < 1 then goto 123;
     zeroPad := trunc(log10(clusterNumber))+1;
     ccPerVox := VoxMM3()/1000.0;
@@ -6723,9 +6789,9 @@ begin
     mask8 := nil;
 end;
 
-procedure TNIfTI.GenerateClusters(); overload;
+procedure TNIfTI.GenerateClusters(NeighborMethod: integer = 1); overload;
 begin
-     GenerateClusters(nil);
+     GenerateClusters(nil, NeighborMethod);
 end;
 
 procedure TNIfTI.SortClusters();
@@ -6760,6 +6826,8 @@ var
 
 begin
      if not IsLabels then exit;
+     clusterNotes := GetClusterNotes(self);
+     //clusterNotes := shortName;
      n := fLabels.Count -1; //0=air
      if n < 1 then exit;
      setlength(clusters,n);
@@ -6792,6 +6860,7 @@ begin
   {$ENDIF}
   fLabels.Clear;
   fBidsName := '';
+  IsInterpolated := false;
   fFilename := niftiFileName;
   fVolumeDisplayed := volumeNumber;
   if fVolumeDisplayed < 0 then fVolumeDisplayed := 0;
@@ -6963,6 +7032,7 @@ begin
  SortClustersBySize := true;
  ZeroIntensityInvisible := false;
  IsShrunken := false;
+ IsInterpolated := false;
  MaxVox := 1024;
  {$IFDEF CACHEUINT8}  //release cache, force creation on next refresh
  fWindowMinCache8 := infinity;
@@ -6981,6 +7051,7 @@ begin
  fOpacityPct := 100;
  fRawVolBytes := nil;
  fisLinearReslice := false;
+ clusterNotes := '';
  {$IFDEF AFNI}
  afnis := nil;
  {$ENDIF}
@@ -7026,6 +7097,7 @@ begin
  fOpacityPct := 100;
  fRawVolBytes := nil;
  fisLinearReslice := false;
+ clusterNotes := '';
  {$IFDEF AFNI}
  afnis := nil;
  {$ENDIF}
@@ -7076,6 +7148,7 @@ begin
   fRawVolBytes := nil;
   fVolRGBA := nil;
   fCache8 := nil;
+  clusterNotes := '';
   {$IFDEF AFNI}
   afnis := nil;
   {$ENDIF}

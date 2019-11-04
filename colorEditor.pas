@@ -37,7 +37,7 @@ type
 
 implementation
 
-uses mainunit;
+//uses mainunit;
 const
   kGridHWPixScale1 = 256;
   kBlockSz = 256 * 6; //expand  "lineVerts" by chunks

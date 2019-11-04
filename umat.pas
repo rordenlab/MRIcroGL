@@ -9,11 +9,17 @@ uses
 Type
     TUInt8s = array of uint8;
 const
-  kMatForceT1 = 1;
-  kMatForcefMRI = 2;
-  kMatNoForce = 0;
+  //force of 0 or above explicitly selects index, negative values select name, e.g. 'lesion' of 'DWI'
+  kMatNoForce = -1;
+  kMatForceT1 = -2;
+  kMatForcefMRI = -3;
+  kMatForceDWI = -4;
+  kMatForceLesion = -5;
+
 
 procedure MatLoadForce(Modality: integer);
+function MatTestHasAnatomical(fnm: string; ForceAnatomical: boolean): boolean;
+//function MatLoadForceAnatomical(fnm: string; out hasLesion: boolean): boolean;
 function MatLoadNii(fnm: string; out hdr: TNIFTIHdr; var img: TUInt8s): boolean;
 
 implementation
@@ -30,6 +36,8 @@ uses
 
 var
   gMatModality : integer = kMatForceT1;//kMatNoForce;
+
+
 
 procedure MatLoadForce(Modality: integer);
 begin
@@ -376,6 +384,8 @@ begin
   Stream.Free;
 end;
 
+
+
 function matSeriesSelectForm(matStrings: TStringlist): string;
 //choose from one of multiple strings
 const
@@ -384,6 +394,7 @@ var
   PrefForm: TForm;
   rg: TRadioGroup;
   OKBtn, CancelBtn: TButton;
+  forceStr: string;
   w,h, idx: integer;
 begin
   result := '';
@@ -392,17 +403,22 @@ begin
     result := matStrings[0];//seriesNum(dcmStrings[0]);
     exit;
   end;
-  if gMatModality = kMatForceT1 then begin
-     MatLoadForce(kMatNoForce);
-     idx := matStrings.IndexOf('T1');
-     if idx >= 0 then
-        exit('T1');
-     exit('');
+  //showmessage(format('%d %d', [gMatModality, matStrings.Count]));
+  if (gMatModality > kMatNoForce) and (gMatModality < matStrings.Count) then begin
+     //showmessage(format('--%d %d', [gMatModality, matStrings.Count]));
+     result := matStrings[gMatModality];
+     exit;
   end;
-  if gMatModality = kMatForcefMRI then begin
-     idx := matStrings.IndexOf('fMRI');
+  forceStr := '';
+  if gMatModality = kMatForceT1 then forceStr := 'T1';
+  if gMatModality = kMatForcefMRI then forceStr := 'fMRI';
+  if gMatModality = kMatForceDWI then forceStr := 'DWI';
+  if gMatModality = kMatForceLesion then forceStr := 'lesion';
+  if forceStr <> '' then begin
+     MatLoadForce(kMatNoForce);
+     idx := matStrings.IndexOf(forceStr);
      if idx >= 0 then
-        exit('fMRI');
+        exit(forceStr);
      exit('');
   end;
   PrefForm:=TForm.Create(nil);
@@ -464,6 +480,7 @@ begin
   //OkBtn.AnchorSide[akRight].Control := rg;
   OkBtn.Parent:=PrefForm;
   OkBtn.ModalResult:= mrOK;
+  PrefForm.SetFocusedControl(OkBtn); //<- pressing return key opens first image
   PrefForm.Height:= OkBtn.Top + OkBtn.Height+4;
   //{$IFDEF LCLCocoa}GLForm1.SetFormDarkMode(PrefForm); {$ENDIF}
   //86
@@ -503,6 +520,89 @@ begin
   result := true;
   strs.Free;
 end;
+
+function MatTestHasAnatomical(fnm: string; ForceAnatomical: boolean): boolean;
+label
+  123;
+var
+  strs: TStringList;
+  hdr: TNIFTIHdr;
+  img: TUInt8s;
+  idx: integer;
+begin
+  result := false;
+  if not fileexists(fnm) then exit;
+  strs := TStringList.Create();
+  img := nil; //clear
+  if not MatLoad(fnm, '', strs, hdr, img) then begin
+     strs.Free;
+     exit;
+  end;
+  img := nil;
+  idx := strs.IndexOf('lesion');
+  if idx >= 0 then
+     result := true;
+  gMatModality := kMatNoForce;
+  if (strs.count = 1) then goto 123; //only one modality in this file
+  if (strs.count = 2) and (result) then begin //only lesion and one other type: load lesion of remaining image!
+     gMatModality := (1 - idx); //two volumes [0,1] lesion is either 0,1: use remaining one as our modality
+     goto 123;
+  end;
+  if not ForceAnatomical then
+     goto 123;
+  idx := strs.IndexOf('T1');
+  if idx >= 0 then begin
+     gMatModality := kMatForceT1;
+     goto 123;
+  end;
+  idx := strs.IndexOf('DWI');
+  if idx >= 0 then begin
+     gMatModality := kMatForceDWI;
+     goto 123;
+  end;
+123:
+  strs.Free;
+end;
+
+(*function MatLoadForceAnatomical(fnm: string; out hasLesion: boolean): boolean;
+label
+  123;
+var
+  strs: TStringList;
+  hdr: TNIFTIHdr;
+  img: TUInt8s;
+  idx: integer;
+begin
+  result := false;
+  hasLesion := false;
+  if not fileexists(fnm) then exit;
+  strs := TStringList.Create();
+  //tagname := '';
+  img := nil; //clear
+  if not MatLoad(fnm, '', strs, hdr, img) then begin
+     strs.Free;
+     exit;
+  end;
+  img := nil;
+  idx := strs.IndexOf('lesion');
+  if idx >= 0 then
+     hasLesion := true;
+  gMatModality := kMatNoForce;
+  idx := strs.IndexOf('T1');
+  if idx >= 0 then begin
+     gMatModality := kMatForceT1;
+     goto 123;
+  end;
+  idx := strs.IndexOf('DWI');
+  if idx >= 0 then begin
+     gMatModality := kMatForceDWI;
+     goto 123;
+  end;
+123:
+  strs.Free;
+  result := gMatModality <> kMatNoForce;
+
+end;*)
 
 
 

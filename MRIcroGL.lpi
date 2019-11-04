@@ -139,6 +139,9 @@
     </Linking>
     <Other>
       <WriteFPCLogo Value="False"/>
+      <CompilerMessages>
+        <IgnoredMessages idx5057="True"/>
+      </CompilerMessages>
       <CustomOptions Value="-dDisableLCLGIF 
 -dDisableLCLPNM"/>
     </Other>

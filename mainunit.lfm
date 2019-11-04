@@ -1,7 +1,7 @@
 object GLForm1: TGLForm1
-  Left = 371
+  Left = 863
   Height = 727
-  Top = 106
+  Top = 38
   Width = 1069
   AllowDropFiles = True
   Caption = 'MRIcroGL'
@@ -247,6 +247,7 @@ object GLForm1: TGLForm1
       object ClipBox: TGroupBox
         Left = 0
         Height = 101
+        Hint = 'Set clip plane'
         Top = 213
         Width = 253
         Align = alTop
@@ -256,6 +257,8 @@ object GLForm1: TGLForm1
         ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
+        ParentShowHint = False
+        ShowHint = True
         TabOrder = 1
         object ClipDepthLabel: TLabel
           AnchorSideLeft.Control = ClipBox
@@ -400,7 +403,7 @@ object GLForm1: TGLForm1
         Height = 277
         Top = 796
         Width = 253
-        Align = alTop
+        Align = alClient
         AutoSize = True
         Caption = 'Render'
         ClientHeight = 258
@@ -1239,6 +1242,8 @@ object GLForm1: TGLForm1
         ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
+        ParentShowHint = False
+        ShowHint = True
         TabOrder = 4
         object XLabel: TLabel
           AnchorSideLeft.Control = CutoutBox
@@ -1738,6 +1743,7 @@ object GLForm1: TGLForm1
       Width = 80
       Align = alRight
       Constraints.MinWidth = 2
+      PopupMenu = GraphPopUp
       TabOrder = 1
     end
     object ClusterPanel: TPanel
@@ -1805,10 +1811,12 @@ object GLForm1: TGLForm1
         PopupMenu = ClusterPopUp
         ReadOnly = True
         RowSelect = True
+        ScrollBars = ssAutoBoth
         SortColumn = 0
         SortType = stData
         TabOrder = 0
         ViewStyle = vsReport
+        OnChange = ClusterViewChange
         OnColumnClick = ClusterViewColumnClick
         OnCompare = ClusterViewCompare
         OnMouseUp = ClusterViewMouseUp
@@ -1817,8 +1825,8 @@ object GLForm1: TGLForm1
     end
   end
   object MainMenu: TMainMenu
-    left = 280
-    top = 256
+    left = 512
+    top = 16
     object AppleMenu: TMenuItem
       Caption = ''
       object AboutMenu: TMenuItem
@@ -2123,7 +2131,12 @@ object GLForm1: TGLForm1
     object GraphMenu: TMenuItem
       Caption = 'Graph'
       object GraphOpenMenu: TMenuItem
-        Caption = 'Open'
+        Caption = 'Open (Close Previous Graphs)'
+        OnClick = GraphOpenMenuClick
+      end
+      object GraphOpenAddMenu: TMenuItem
+        Tag = 1
+        Caption = 'Open (Add to Previous Graphs)'
         OnClick = GraphOpenMenuClick
       end
       object GraphSaveMenu: TMenuItem
@@ -2516,8 +2529,8 @@ object GLForm1: TGLForm1
     end
   end
   object OpenDialog1: TOpenDialog
-    left = 280
-    top = 88
+    left = 304
+    top = 16
   end
   object ColorDialog1: TColorDialog
     Color = clBlack
@@ -2543,25 +2556,25 @@ object GLForm1: TGLForm1
       'ColorS=F0FBFF'
       'ColorT=A4A0A0'
     )
-    left = 280
-    top = 147
+    left = 304
+    top = 80
   end
   object SaveDialog1: TSaveDialog
     DefaultExt = '.png'
-    left = 280
-    top = 200
+    left = 304
+    top = 147
   end
   object UpdateTimer: TTimer
     Enabled = False
     Interval = 100
     OnTimer = UpdateTimerTimer
-    left = 280
-    top = 312
+    left = 408
+    top = 16
   end
   object LayerPopup: TPopupMenu
     OnPopup = LayerPopupPopup
-    left = 280
-    top = 27
+    left = 512
+    top = 80
     object LayerUpMenu: TMenuItem
       Caption = 'Move Up'
       OnClick = LayerUpDownClick
@@ -2580,12 +2593,16 @@ object GLForm1: TGLForm1
       OnClick = LayerShowBidsMenuClick
     end
     object LayerClusterMenu: TMenuItem
-      Caption = 'Generate Clusters'
+      Caption = 'Generate Cluster Table'
       OnClick = LayerClusterMenuClick
     end
     object RemoveSmallClusterMenu: TMenuItem
       Caption = 'Remove Small Clusters'
       OnClick = RemoveSmallClusterMenuClick
+    end
+    object LayerFindPeakMenu: TMenuItem
+      Caption = 'Find Nearest Cluster Peak'
+      OnClick = LayerFindPeakMenuClick
     end
     object LayerFromZeroMenu: TMenuItem
       AutoCheck = True
@@ -2649,56 +2666,64 @@ object GLForm1: TGLForm1
   object ScriptOpenDialog: TOpenDialog
     DefaultExt = '.py'
     Filter = 'Python scripts|*.py'
-    left = 280
-    top = 368
+    left = 304
+    top = 216
   end
   object ScriptSaveDialog: TSaveDialog
     DefaultExt = '.py'
-    left = 280
-    top = 424
+    left = 304
+    top = 292
   end
   object YokeTimer: TTimer
     Enabled = False
     Interval = 200
     OnTimer = YokeTimerTimer
-    left = 295
-    top = 480
+    left = 408
+    top = 360
   end
   object AnimateTimer: TTimer
     Enabled = False
     Interval = 100
     OnTimer = AnimateTimerTimer
-    left = 369
-    top = 210
+    left = 408
+    top = 147
   end
   object LayerWidgetChangeTimer: TTimer
     Enabled = False
     Interval = 200
     OnTimer = LayerWidgetChangeTimerTimer
-    left = 472
-    top = 104
+    left = 408
+    top = 80
   end
   object InvalidateTImer: TTimer
     Enabled = False
     Interval = 1
     OnTimer = InvalidateTImerTimer
-    left = 351
-    top = 292
+    left = 408
+    top = 216
   end
   object BetterRenderTimer: TTimer
     Enabled = False
     Interval = 500
     OnTimer = BetterRenderTimerTimer
-    left = 360
-    top = 351
+    left = 408
+    top = 288
   end
   object AfniPopup: TPopupMenu
     OnPopup = LayerPopupPopup
-    left = 392
-    top = 40
+    left = 512
+    top = 147
     object AfniDetailsMenu: TMenuItem
       Caption = 'Details'
       OnClick = AfniDetailsMenuClick
+    end
+    object AfniPMenu: TMenuItem
+      Caption = 'p Values'
+      OnClick = AfniPMenuClick
+    end
+    object AfniQMenu: TMenuItem
+      Caption = 'q Values (FDR)'
+      OnClick = AfniQMenuClick
     end
     object AfniPrevMenu: TMenuItem
       Caption = 'Previous volume'
@@ -2711,8 +2736,8 @@ object GLForm1: TGLForm1
     end
   end
   object ClusterPopUp: TPopupMenu
-    left = 428
-    top = 482
+    left = 512
+    top = 216
     object ClusterCopyMenu: TMenuItem
       Caption = 'Copy table to clipboard'
       OnClick = ClusterSaveClick
@@ -2721,6 +2746,18 @@ object GLForm1: TGLForm1
       Tag = 1
       Caption = 'Save table to text'
       OnClick = ClusterSaveClick
+    end
+  end
+  object GraphPopUp: TPopupMenu
+    left = 512
+    top = 292
+    object GraphSaveTxtMenu: TMenuItem
+      Caption = 'Save Graph as Text'
+      OnClick = GraphSaveMenuClick
+    end
+    object GraphSaveBmpMenu: TMenuItem
+      Caption = 'Save Graph As Bitmap'
+      OnClick = GraphSaveBitmapMenuClick
     end
   end
 end

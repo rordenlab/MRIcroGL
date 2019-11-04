@@ -31,18 +31,18 @@ void main() {
 	vec4 deltaDir = vec4(dir.xyz * stepSizeX, stepSizeX);
 	vec4 gradSample, colorSample;
 	float bgNearest = len; //assume no hit
-	float overFarthest = len;
 	vec4 colAcc = vec4(0.0,0.0,0.0,0.0);
 	vec4 prevGrad = vec4(0.0,0.0,0.0,0.0);
 	//background pass
 	vec4 samplePos = vec4(start.xyz, 0.0);
+	samplePos += deltaDir * ran;
 	vec4 clipPos = applyClip(dir, samplePos, len);
 	if ( clipPos.a > len ) {
 		FragColor = colAcc;
 		return;
 	}
 	//	float ran = fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453);
-	samplePos += deltaDir * ran;
+	
 	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
 	//
 	if (doPoor <= 0.5)
@@ -108,14 +108,16 @@ void main() {
 	if (samplePos.a < clipPos.a)
 		samplePos = clipPos;
 	//end fastpass - optional
+	float overFarthest = len;
 	while (samplePos.a <= len) {
 		colorSample = texture3D(intensityOverlay,samplePos.xyz);
 		if (colorSample.a > 0.00) {
+			if (overAcc.a < 0.3)
+				overFarthest = samplePos.a;
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSizeX/sliceSize);
 			vec3 a = colorSample.rgb * ambient;
 			float s =  0;
 			vec3 d = vec3(0.0, 0.0, 0.0);
-			overFarthest = samplePos.a;
 			//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
 			gradSample = texture3D(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
 			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);

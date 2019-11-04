@@ -9,9 +9,9 @@ unit dcm2nii;
 interface
 
 uses
-  {$IFDEF Darwin} CocoaAll, MacOSAll, {$ENDIF}
+  {$IFDEF Darwin} CocoaAll, {$ENDIF}
   lclintf, strutils, Process, Classes, SysUtils, Forms, Controls, Graphics,
-  Dialogs, ExtCtrls, StdCtrls, IniFiles, ComCtrls, Types;
+  Dialogs, ExtCtrls, StdCtrls, IniFiles, ComCtrls; //'Types' not used by Darwin
 
 type
 

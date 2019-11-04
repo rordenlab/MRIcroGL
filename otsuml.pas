@@ -13,7 +13,7 @@ procedure ApplyOtsuBinary(var Img: TUInt8s; nVox,levels: integer);
 procedure PreserveLargestCluster(var lImg: TUInt8s; Xi,Yi,Zi: integer; lClusterValue,ValueForSmallClusters: byte  );
 procedure SimpleMaskDilate(var lImg: TUInt8s; lXi,lYi,lZi: integer);
 procedure SimpleMaskErode(var lImg: TUInt8s; lXi,lYi,lZi: integer);
-procedure RemoveAllSmallClusters(var lImg: TUInt8s; Xi,Yi,Zi: integer; lClusterValue,ValueForSmallClusters: byte; ThresholdVox:integer);
+procedure RemoveAllSmallClusters(var lImg: TUInt8s; Xi,Yi,Zi: integer; lClusterValue,ValueForSmallClusters: byte; ThresholdVox, NeighborMethod:integer);
 
 implementation
 
@@ -28,7 +28,15 @@ type
     LongIntRA = array [1..1] of LongInt;
     LongIntp = ^LongIntRA;
 
-procedure RemoveAllSmallClusters(var lImg: TUInt8s; Xi,Yi,Zi: integer; lClusterValue,ValueForSmallClusters: byte; ThresholdVox:integer);
+procedure RemoveAllSmallClusters(var lImg: TUInt8s; Xi,Yi,Zi: integer; lClusterValue,ValueForSmallClusters: byte; ThresholdVox, NeighborMethod:integer);
+(*NeighborMethod https://afni.nimh.nih.gov/pub/dist/doc/program_help/3dClusterize.html
+-NN {1|2|3}    :Necessary option to specify how many neighbors a voxel
+                 has; one MUST put one of 1, 2 or 3 after it:
+                   1 -> 6 facewise neighbors
+                   2 -> 18 face+edgewise neighbors
+                   3 -> 26 face+edge+cornerwise neighbors
+
+*)
 var
   i, j, XY, XYZ, qlo, qhi: integer;
   qimg, img32: TInt32s;
@@ -39,7 +47,7 @@ begin
      img32[vxl] := 1; //found
      qimg[qhi] := vxl; //location
 end;//nested checkPixel()
-procedure retirePixel();
+procedure retirePixel6();
 var
   vxl: integer;
 begin
@@ -52,6 +60,47 @@ begin
      checkPixel(vxl+XY);
      qlo := qlo + 1;
 end;//nested retirePixel()
+procedure retirePixel18();
+var
+  vxl: integer;
+begin
+     vxl := qimg[qlo];
+     //edges in plane
+     checkPixel(vxl-Xi-1);
+     checkPixel(vxl-Xi+1);
+     checkPixel(vxl+Xi-1);
+     checkPixel(vxl+Xi+1);
+     //edges below
+     checkPixel(vxl-1-XY);
+     checkPixel(vxl+1-XY);
+     checkPixel(vxl-Xi-XY);
+     checkPixel(vxl+Xi-XY);
+     //edges above
+     checkPixel(vxl-1+XY);
+     checkPixel(vxl+1+XY);
+     checkPixel(vxl-Xi+XY);
+     checkPixel(vxl+Xi+XY);
+     retirePixel6();
+end;//nested retirePixel()
+
+procedure retirePixel26();
+var
+  vxl: integer;
+begin
+     vxl := qimg[qlo];
+     //corners below
+     checkPixel(vxl-Xi-XY-1);
+     checkPixel(vxl-Xi-XY+1);
+     checkPixel(vxl+Xi-XY-1);
+     checkPixel(vxl+Xi-XY+1);
+     //corners above
+     checkPixel(vxl-Xi+XY-1);
+     checkPixel(vxl-Xi+XY+1);
+     checkPixel(vxl+Xi+XY-1);
+     checkPixel(vxl+Xi+XY+1);
+     retirePixel18();
+end;
+
 begin //main RemoveSmallClusters()
   if (Zi < 1) then exit;
   XY := Xi * Yi;
@@ -70,16 +119,30 @@ begin //main RemoveSmallClusters()
   for i := (XYZ-1-XY) to (XYZ-1) do
     img32[i] := 0;
   //now seed each voxel
-  for i := (XY) to (XYZ-1-XY) do begin
-      if (img32[i] < 0) then begin //voxels not yet part of any region
-         qlo := 0;
-         qhi := -1;
-         checkPixel(i);
-         while qlo <= qhi do
-           retirePixel();
-         for j := 0 to qhi do
-             img32[qimg[j]] := qhi + 1;
-      end;
+  if NeighborMethod = 2 then begin
+     for i := (XY) to (XYZ-1-XY) do begin
+         if (img32[i] < 0) then begin //voxels not yet part of any region
+            qlo := 0;
+            qhi := -1;
+            checkPixel(i);
+            while qlo <= qhi do
+              retirePixel18();
+            for j := 0 to qhi do
+                img32[qimg[j]] := qhi + 1;
+         end;
+     end;
+  end else begin
+    for i := (XY) to (XYZ-1-XY) do begin
+        if (img32[i] < 0) then begin //voxels not yet part of any region
+           qlo := 0;
+           qhi := -1;
+           checkPixel(i);
+           while qlo <= qhi do
+             retirePixel6();
+           for j := 0 to qhi do
+               img32[qimg[j]] := qhi + 1;
+        end;
+    end;
   end;
   //delete voxels not part of largest cluster
   for i := 0 to (XYZ-1) do

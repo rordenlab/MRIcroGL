@@ -28,14 +28,14 @@ uses
   {$IFDEF MYPY}PythonEngine,  {$ENDIF}
   {$IFDEF LCLCocoa} {$IFDEF NewCocoa} nsappkitext, UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
-  resize,
+  resize, ustat,
   lcltype, GraphType, Graphics, dcm_load, crop,
   LCLIntf, slices2D, StdCtrls, SimdUtils, Classes, SysUtils, Forms, Controls,clipbrd,
   Dialogs, Menus, ExtCtrls, CheckLst, ComCtrls, Spin, Types, fileutil, ulandmarks, nifti_types,
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20190909'; //++ fixes remove small clusters
+  kVers = '1.2.20191031 BETA'; //++ fixes remove small clusters
 type
 
   { TGLForm1 }
@@ -78,10 +78,17 @@ type
     LayerClusterMenu: TMenuItem;
     ClusterCopyMenu: TMenuItem;
     ClusterSaveMenu: TMenuItem;
+    GraphSaveTxtMenu: TMenuItem;
+    GraphSaveBmpMenu: TMenuItem;
+    LayerFindPeakMenu: TMenuItem;
+    AfniPMenu: TMenuItem;
+    AfniQMenu: TMenuItem;
+    GraphOpenAddMenu: TMenuItem;
     OpenAFNIMenu: TMenuItem;
     ClusterPopUp: TPopupMenu;
     GraphPanel: TPanel;
     ClusterPanel: TPanel;
+    GraphPopUp: TPopupMenu;
     RemoveSmallClusterMenu: TMenuItem;
     ResizeMenu1: TMenuItem;
     ReorientMenu1: TMenuItem;
@@ -329,7 +336,11 @@ type
     X2TrackBar: TTrackBar;
     YTrackBar: TTrackBar;
     ZTrackBar: TTrackBar;
+    procedure AfniPMenuClick(Sender: TObject);
+    procedure AfniQMenuClick(Sender: TObject);
     procedure ClusterSaveClick(Sender: TObject);
+    procedure ClusterViewChange(Sender: TObject; Item: TListItem;
+      Change: TItemChange);
     procedure ClusterViewColumnClick(Sender: TObject; Column: TListColumn);
     procedure ClusterViewCompare(Sender: TObject; Item1, Item2: TListItem;
       Data: Integer; var Compare: Integer);
@@ -351,7 +362,9 @@ type
     procedure LayerClusterMenuClick(Sender: TObject);
     procedure LayerContrastChange(Sender: TObject);
     procedure GraphDrawingMenuClick(Sender: TObject);
+    procedure LayerFindPeakMenuClick(Sender: TObject);
     procedure LayerIsLabelMenuClick(Sender: TObject);
+    procedure MenuItem3Click(Sender: TObject);
     procedure RemoveSmallClusterMenuClick(Sender: TObject);
     procedure RulerVisible();
     procedure RulerCheckChange(Sender: TObject);
@@ -371,7 +384,7 @@ type
     procedure GraphClearMenuClick(Sender: TObject);
     procedure GraphMarkerMenuClick(Sender: TObject);
     procedure GraphOpenMenuClick(Sender: TObject);
-    procedure GraphOpen(fnm: string);
+    function GraphOpen(fnm: string; isKeepOldGraph: boolean = false; isShowMessageOnError: boolean = false): boolean;
     procedure GraphSaveBitmapMenuClick(Sender: TObject);
     procedure GraphSaveMenuClick(Sender: TObject);
     procedure GraphScaleClick(Sender: TObject);
@@ -394,6 +407,7 @@ type
     procedure AnimateTimerTimer(Sender: TObject);
     procedure CreateStandardMenus (ParentMenu: TMenuItem);
     procedure DisplayAnimateMenuClick(Sender: TObject);
+    function Active4DLayer: integer;
     function DisplayNextMenuClick(Sender: TObject): boolean;
     procedure DrawHintsMenuClick(Sender: TObject);
     procedure EditCopyMenuClick(Sender: TObject);
@@ -490,7 +504,7 @@ type
     procedure ScriptingTemplatesMenuClick(Sender: TObject);
     procedure ScriptFormVisible(vis: boolean);
     procedure MakeList(var c: TClusters);
-    procedure UpdateLayerBox(NewLayers: boolean);
+    procedure UpdateLayerBox(NewLayers: boolean; NewVolumes: boolean = false);
     function AddLayer(Filename: string): boolean;
     procedure UpdateContrast (Xa,Ya, Xb, Yb: integer);
     function AddBackground(Filename: string; isAddToRecent: boolean = true; isFromFormDrop: boolean = false): boolean;
@@ -619,7 +633,7 @@ begin
      ClusterView.SortDirection := sdAscending
   else
       ClusterView.SortDirection := sdDescending;
-
+  // LayerBox.Caption := inttostr(random(888));
   (*if ClusterView.SortDirection  = sdDescending then
        caption := 'd'
     else
@@ -641,9 +655,14 @@ var
    i, j: integer;
    dlg : TSaveDialog;
    Txt: TextFile;
+   niftiVol: TNIfTI;
 begin
   contents := '';
   row := '';
+  contents := 'MRIcroGL '+kVers+kEOLN;
+  contents += 'Warning: clusters are a beta feature'+kEOLN;
+  if vols.Layer(GLForm1.LayerList.ItemIndex,niftiVol) then
+     contents += 'Notes: '+niftiVol.clusterNotes+kEOLN;
   // header
   for i := 0 to ClusterView.Columns.Count - 1 do
       begin
@@ -700,6 +719,168 @@ begin
   WriteLn(Txt, contents);
   CloseFile(Txt);
   dlg.Free;
+end;
+
+{$IFDEF AFNI}
+function AFNIjvLabel(statCode: integer): string;
+begin
+     case statCode of
+        kFUNC_COR_TYPE: result := 'Correl';//// Correlation Coeff # Samples, # Fit Param, # Orts
+        kFUNC_TT_TYPE: result := 'T';//  Student t         Degrees-of-Freedom (DOF)
+        kFUNC_FT_TYPE: result := 'F';//  F ratio           Numerator DOF, Denominator DOF
+        kFUNC_ZT_TYPE: result := 'Normal';//  Standard Normal   -- none --
+        kFUNC_CT_TYPE: result := 'Chi';//  Chi-Squared       DOF
+        kFUNC_BT_TYPE: result := 'Beta';//  Incomplete Beta   Parameters "a" and "b"
+        kFUNC_BN_TYPE: result := 'Binomial';//            # Trials, Probability per trial
+        kFUNC_GT_TYPE: result := 'Gamma';//               Shape, Scale
+        kFUNC_PT_TYPE: result := 'Poisson';
+        else result := 'Other'
+    end;
+end;
+{$ENDIF}
+
+function GetFloat(prompt: string; min,def,max: double): double;
+var
+    PrefForm: TForm;
+    CancelBtn,OkBtn: TButton;
+    promptLabel: TLabel;
+    valEdit: TEdit;
+begin
+  PrefForm:=TForm.Create(nil);
+  //PrefForm.SetBounds(100, 100, 512, 212);
+  PrefForm.AutoSize := True;
+  PrefForm.BorderWidth := 8;
+  PrefForm.Caption:='Value required';
+  PrefForm.Position := poScreenCenter;
+  PrefForm.BorderStyle := bsDialog;
+  //label
+  promptLabel:=TLabel.create(PrefForm);
+  promptLabel.Caption:= prompt;
+  if (min < max) then
+     promptLabel.Caption:= format('%s (range %0.3g..%0.3g)', [prompt, min, max]);
+  //promptLabel.Left := 8;
+  //promptLabel.Top := 12;
+  promptLabel.AutoSize := true;
+  promptLabel.AnchorSide[akTop].Side := asrTop;
+  promptLabel.AnchorSide[akTop].Control := PrefForm;
+  promptLabel.BorderSpacing.Top := 6;
+  promptLabel.AnchorSide[akLeft].Side := asrLeft;
+  promptLabel.AnchorSide[akLeft].Control := PrefForm;
+  promptLabel.BorderSpacing.Left := 6;
+  promptLabel.Parent:=PrefForm;
+  //edit
+  valEdit:=TEdit.create(PrefForm);
+  valEdit.Caption := FloatToStrF(def, ffGeneral, 8, 4);
+  //valEdit.Top := 42;
+  //valEdit.Width := PrefForm.Width - 16;
+  valEdit.Constraints.MinWidth:= 300;
+  valEdit.AutoSize := true;
+  valEdit.AnchorSide[akTop].Side := asrBottom;
+  valEdit.AnchorSide[akTop].Control := promptLabel;
+  valEdit.BorderSpacing.Top := 6;
+  valEdit.AnchorSide[akLeft].Side := asrLeft;
+  valEdit.AnchorSide[akLeft].Control := PrefForm;
+  valEdit.BorderSpacing.Left := 6;
+  valEdit.Parent:=PrefForm;
+  //Cancel Btn
+  CancelBtn:=TButton.create(PrefForm);
+  CancelBtn.Caption:='Cancel';
+  CancelBtn.AutoSize := true;
+  CancelBtn.AnchorSide[akTop].Side := asrBottom;
+  CancelBtn.AnchorSide[akTop].Control := valEdit;
+  CancelBtn.BorderSpacing.Top := 6;
+  CancelBtn.AnchorSide[akLeft].Side := asrLeft;
+  CancelBtn.AnchorSide[akLeft].Control := PrefForm;
+  CancelBtn.BorderSpacing.Left := 200;
+  CancelBtn.Parent:=PrefForm;
+  CancelBtn.ModalResult:= mrCancel;
+  //OK button
+  OkBtn:=TButton.create(PrefForm);
+  OkBtn.Caption:='OK';
+  OkBtn.AutoSize := true;
+  OkBtn.AnchorSide[akTop].Side := asrBottom;
+  OkBtn.AnchorSide[akTop].Control := valEdit;
+  OkBtn.BorderSpacing.Top := 6;
+  OkBtn.AnchorSide[akLeft].Side := asrRight;
+  OkBtn.AnchorSide[akLeft].Control := CancelBtn;
+  OkBtn.BorderSpacing.Left := 6;
+  OkBtn.Parent:=PrefForm;
+  OkBtn.ModalResult:= mrOK;
+  //OK button
+  {$IFDEF LCLCocoa}
+  if gPrefs.DarkMode then GLForm1.SetFormDarkMode(PrefForm);
+  {$ENDIF}
+  PrefForm.ShowModal;
+  result := kNaN;
+  if (PrefForm.ModalResult = mrOK) then begin
+    result := StrToFloatDef(valEdit.Caption, def);
+    if (min < max) and (result < min) then
+      result := min;
+    if (min < max) and (result > max) then
+      result := max;
+  end;
+  FreeAndNil(PrefForm);
+end; //GetFloat()
+
+procedure TGLForm1.AfniPMenuClick(Sender: TObject);
+var
+   v: TNIfTI;
+  jv: integer;
+  s: string;
+  df0, df1, p, thresh: double;
+begin
+  {$IFDEF AFNI} //TRW
+  vols.Layer(LayerList.ItemIndex,v);
+  if v = nil then exit;
+  if length(v.afnis) < v.VolumeDisplayed then exit;
+  jv := v.afnis[v.VolumeDisplayed].jv;
+  s := AFNIjvLabel(jv);
+  if (jv <> kFUNC_TT_TYPE) and (jv <> kFUNC_FT_TYPE) then begin
+     showmessage('Current version only supports p-values for T and F tests, not "'+s+'"');
+     exit;
+  end;
+  df0 := v.afnis[v.VolumeDisplayed].param[0];
+  df1 := v.afnis[v.VolumeDisplayed].param[1];
+  if jv = kFUNC_TT_TYPE then
+     s := format('%s (%d)', [s, round(df0)])
+  else
+      s := format('%s (%d,%d)', [s, round(df0), round(df1)]);
+
+  p := GetFloat('Threshold at uncorrected p-value for '+s, 0,0.05,0);
+  if jv = kFUNC_TT_TYPE then begin
+     p := p / 2; //2 tails
+     thresh := inverset(p, df0); //pTdistrInv(round(df0), p);
+  end else
+      thresh := inversef(p, round(df0), round(df1));//pFdistrInv(round(df0), round(df1), p);
+  LayerChange(LayerList.ItemIndex, -1, -1, thresh, thresh);
+  {$ENDIF}
+
+end;
+
+procedure TGLForm1.AfniQMenuClick(Sender: TObject);
+{$IFDEF AFNIfdr}
+var
+   v: TNIfTI;
+  jv: integer;
+  p, z, thresh: double;
+{$ENDIF}
+begin
+  {$IFDEF AFNIfdr} //TRW
+  vols.Layer(LayerList.ItemIndex,v);
+  if v = nil then exit;
+  if length(v.afnis) < v.VolumeDisplayed then exit;
+  jv := v.afnis[v.VolumeDisplayed].jv;
+  if (jv <> kFUNC_TT_TYPE) and (jv <> kFUNC_FT_TYPE) then begin
+     showmessage('Current version only supports p-values for T and F tests, not "'+AFNIjvLabel(jv)+'"');
+     exit;
+  end;
+  p := GetFloat('Threshold at FDR-corrected p-value', 0,0.05,0);
+  z := inversez(p); //pNormalInv(p); //qginv(p);
+  //thresh := fdrCurve(z);
+  //LayerChange(LayerList.ItemIndex, -1, -1, thresh, thresh);
+  {$ELSE}
+  showmessage('This feature is not yet enabled');
+  {$ENDIF}
 end;
 
 function CompareFloatText(const S1, S2: string): integer;
@@ -806,11 +987,12 @@ begin
      result.z := vol1.Slices.SliceFrac.Z
 end;
 
-function AddNiiExt(Filename: string): string;
+function AddNiiExt(Filename: string; changeExt: boolean): string;
 //does adding ".nii" or ".nii.gz" identify an eexisting file?
 begin
      result := Filename;
      if Fileexists(result) then exit;
+     if not (changeExt) then exit;
      result := Filename+'.nii';
      if Fileexists(result) then exit;
      result := Filename+'.nii.gz';
@@ -820,14 +1002,14 @@ begin
      result := Filename;
 end;
 
-function CheckParentFolders(Path, Filename: string): string;
+function CheckParentFolders(Path, Filename: string; changeExt: boolean): string;
 //does adding ".nii" or ".nii.gz" identify an eexisting file?
 var
    opth, pth: string;
 begin
      pth := Path;
      while (length(pth) > 0) and (DirectoryExists(pth)) do begin
-           result := AddNiiExt(pth+Filename);
+           result := AddNiiExt(pth+Filename, changeExt);
            if Fileexists(result) then exit;
            //showmessage(pth);
            opth := pth;
@@ -847,46 +1029,46 @@ begin
 	result := ResourceDir + pathdelim + 'atlas';
 end;
 
-function GetFullPath( Filename: string): string;
+function GetFullPath( Filename: string; changeExt: boolean = true): string;
 // "motor" -> /home/smith/myDir/motor.nii.gz
 var
    i: integer;
 begin
      result := Filename;
      if (length(Filename) < 1) or (Fileexists(result)) then exit;
-     result := AddNiiExt(Filename);
+     result := AddNiiExt(Filename, changeExt);
      if Fileexists(result) then exit;
      {$IFDEF UNIX}
      if Filename[1] = '~' then begin
-        result := AddNiiExt(ExpandFileName(Filename));
+        result := AddNiiExt(ExpandFileName(Filename), changeExt);
         if Fileexists(result) then exit;
      end;
      {$ENDIF}
      //result := Filename;
      //Filename := ExtractFileName(result);
-     result := AddNiiExt(GetCurrentDir + pathdelim+ Filename);
+     result := AddNiiExt(GetCurrentDir + pathdelim+ Filename, changeExt);
      if Fileexists(result) then exit;
      if upcase(ExtractFileExt(Filename))= '.NII' then
         Filename := ChangeFileExt(Filename,''); //img.nii -> img (allows us to find .nii.gz
      if (length(ExtractFilePath(Filename)) > 1) then begin //path provided
-        result := AddNiiExt(Filename);
+        result := AddNiiExt(Filename, changeExt);
         exit;
      end;
-     result := CheckParentFolders(StandardDir+pathdelim, Filename); //ResourceDir is parent of standardDir, so we check both
+     result := CheckParentFolders(StandardDir+pathdelim, Filename, changeExt); //ResourceDir is parent of standardDir, so we check both
      //result := CheckParentFolders(ResourceDir+pathdelim, Filename);
      if (Fileexists(result)) then exit;
      if DirectoryExists(AtlasDir) then
-        result := CheckParentFolders(AtlasDir+pathdelim, Filename);
+        result := CheckParentFolders(AtlasDir+pathdelim, Filename, changeExt);
      if (Fileexists(result)) then exit;
      if DirectoryExists(GetFSLdir) then
-        result := CheckParentFolders(GetFSLdir+pathdelim, Filename);
+        result := CheckParentFolders(GetFSLdir+pathdelim, Filename, changeExt);
      if (Fileexists(result)) then exit;
      if DirectoryExists(gPrefs.AfniDir) then
-        result := CheckParentFolders(gPrefs.AfniDir+pathdelim, Filename);
+        result := CheckParentFolders(gPrefs.AfniDir+pathdelim, Filename, changeExt);
      if (Fileexists(result)) then exit;
 
      for i := 1 to knMRU do begin
-         result := CheckParentFolders(ExtractFilePath(gPrefs.PrevFilename[i]), Filename);
+         result := CheckParentFolders(ExtractFilePath(gPrefs.PrevFilename[i]), Filename, changeExt);
          if (Fileexists(result)) then exit;
      end;
      if (Filename[1] = '-') then begin //fsleyes defaults
@@ -894,7 +1076,7 @@ begin
            result := GetFSLdir+pathdelim+ 'data'+pathdelim+'standard'+pathdelim+'MNI152_T1_1mm';
         if (Filename = '-std') or (Filename = '--standard') then
            result := GetFSLdir+pathdelim+ 'data'+pathdelim+'standard'+pathdelim+'MNI152_T1_2mm';
-        result := AddNiiExt(result);
+        result := AddNiiExt(result, changeExt);
         if (Fileexists(result)) then exit;
      end;
      result := Filename; //failed to find a match!
@@ -1341,6 +1523,27 @@ begin
     Result:= PyString_FromString(PChar(s));
 end;
 
+function PyLOADGRAPH(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  PtrName: PChar;
+  StrName: string;
+  IsAdd: integer;
+  ret: boolean;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(FALSE));
+  IsAdd := 0;
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, 's|i:loadgraph', @PtrName, @IsAdd)) then
+    begin
+      StrName:= string(PtrName);
+      ret := GLForm1.GraphOpen(StrName, IsAdd = 1, false);
+      //ret := GLForm1.AddBackground(StrName);xxxx
+      if not ret then
+         GLForm1.ScriptOutputMemo.Lines.Add('unable to load graph "'+StrName+'"');
+      Result:= GetPythonEngine.PyBool_FromLong(Ord(ret));
+    end;
+end;
+
 function PyLOADIMAGE(Self, Args : PPyObject): PPyObject; cdecl;
 var
   PtrName: PChar;
@@ -1648,7 +1851,21 @@ begin
      Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
     end;
 end;
-
+//AddMethod('graphscaling', @PyGRAPHSCALING,
+function PyGRAPHSCALING(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  Style: integer;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(FALSE));
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, 'i:graphscaling', @Style)) then
+    begin
+       gGraph.Style := Style;
+       gGraph.isRedraw := true;
+       ViewGPUg.Invalidate;
+     Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+    end;
+end;
 
 function PyHIDDENBYCUTOUT(Self, Args : PPyObject): PPyObject; cdecl;
 var
@@ -1799,23 +2016,24 @@ end;
 //pyREMOVESMALLCLUSTERS removesmallclusters(layer, thresh, mm) -> Set the colorscheme for the target overlay (0=background layer) to a specified name.
 function pyREMOVESMALLCLUSTERS(Self, Args : PPyObject): PPyObject; cdecl;
 var
-  i: integer;
+  i, neighbors: integer;
   thresh,mm: single;
   niftiVol: TNIfTI;
 begin
   Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
   with GetPythonEngine do
-    if Bool(PyArg_ParseTuple(Args, 'iff:removesmallclusters', @i, @thresh, @mm)) then begin
-         GLForm1.ScriptOutputMemo.lines.add(format('removesmallclusters(%d, %g, %g)', [i, thresh, mm]));
+    if Bool(PyArg_ParseTuple(Args, 'iiff:removesmallclusters', @i, @neighbors, @thresh, @mm)) then begin
+         GLForm1.ScriptOutputMemo.lines.add(format('removesmallclusters(%d, %d, %g, %g)', [i, neighbors, thresh, mm]));
+         GLForm1.ScriptOutputMemo.lines.add(format(' neighbors=%d (1=faces(6),2=faces+edges(18),3=faces+edges+corners(26)', [neighbors]));
          if (i < 0) or (i >= GLForm1.LayerList.Count) then begin
-            GLForm1.ScriptOutputMemo.lines.add('rsc error: is this layer loaded?');
+            GLForm1.ScriptOutputMemo.lines.add('error: is this layer loaded?');
             exit;
          end;
          if not vols.Layer(GLForm1.LayerList.ItemIndex,niftiVol) then begin
-            GLForm1.ScriptOutputMemo.lines.add('rsc error: is this layer loaded?');
+            GLForm1.ScriptOutputMemo.lines.add('error: is this layer loaded?');
             exit;
          end;
-         mm := niftiVol.RemoveSmallClusters(thresh,mm);
+         mm := niftiVol.RemoveSmallClusters(thresh,mm, neighbors);
          GLForm1.ScriptOutputMemo.lines.add(format('%.3fmm3 survive threshold', [mm]));
          niftiVol.ForceUpdate(); //defer time consuming work
          GLForm1.updateTimer.enabled := true;
@@ -1874,7 +2092,7 @@ var
 begin
   if (v.IsLabels) or (GLForm1.LayerList.Count < 2) then begin
     //either atlas or only image loaded
-    v.GenerateClusters();
+    v.GenerateClusters(gPrefs.ClusterNeighborMethod);
     exit;
   end;
   //not an atlas... see if one is loaded
@@ -1883,8 +2101,9 @@ begin
     if not vols.Layer(i,v2) then exit;
     if not v2.IsLabels then
     v2 := nil;
+    i := i + 1;
   end;
-  v.GenerateClusters(v2); //v2 is either nil or a label map
+  v.GenerateClusters(v2, gPrefs.ClusterNeighborMethod); //v2 is either nil or a label map
 end;
 
 function PyGENERATECLUSTERS(Self, Args : PPyObject): PPyObject; cdecl;
@@ -1900,7 +2119,7 @@ begin
             Application.ProcessMessages;
        //v.GenerateClusters;
        GenerateClustersCore(v);
-       GLForm1.UpdateLayerBox(false);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
+       GLForm1.UpdateLayerBox(true);// show cluster panel
        //GLForm1.UpdateTimer.Enabled := true;
     end;
 end;
@@ -2138,7 +2357,7 @@ begin
   if not vols.Layer(0,niftiVol) then exit;
   Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
   with GetPythonEngine do
-    if Boolean(PyArg_ParseTuple(Args, 'iii:extract', @Otsu,@Dil,@One)) then begin
+    if Boolean(PyArg_ParseTuple(Args, '|iii:extract', @Otsu,@Dil,@One)) then begin
       //EXTRACT(Otsu,Dil,Boolean(One));
       niftiVol.RemoveHaze(true); //todo: dilation and number of Otsu layers
       ViewGPU1.Invalidate;
@@ -2199,13 +2418,15 @@ begin
     AddMethod('clipazimuthelevation', @PyCLIPAZIMUTHELEVATION, ' clipazimuthelevation(depth, azi, elev) -> Set a view-point independent clip plane.');
     AddMethod('clipthick', @PyCLIPTHICK, ' clipthick(thick) -> Set size of clip plane slab (0..1).');
     AddMethod('cutout', @PyCUTOUT, ' cutout(L,A,S,R,P,I) -> Remove sector from volume.');
-    AddMethod('extract', @PyEXTRACT, ' extract(Otsu,Dil,One) -> Remove haze.');
+    AddMethod('extract', @PyEXTRACT, ' extract() -> Remove haze from background image.');
     AddMethod('fullscreen', @PyFULLSCREEN, ' fullscreen(max) -> Form expands to size of screen (1) or size is maximized (0).');
     AddMethod('generateclusters', @PyGENERATECLUSTERS, ' generateclusters(layer) -> create list of distinct regions.');
+    AddMethod('graphscaling', @PyGRAPHSCALING, ' graphscaling(type) -> Vertical axis of graph is raw (0), demeaned (1) normalized -1..1 (2) normalized 0..1 (3) or percent (4).');
     AddMethod('hiddenbycutout', @PyHIDDENBYCUTOUT, ' hiddenbycutout(layer, isHidden) -> Will cutout hide (1) or show (0) this layer?');
     AddMethod('invertcolor', @PyINVERTCOLOR, ' invertcolor(layer, isInverted) -> Is color intensity inverted (1) or not (0) this layer?');
     AddMethod('linecolor', @PyLINECOLOR, ' linecolor(r,g,b) -> Set color of crosshairs, so "linecolor(255,0,0)" will use bright red lines.');
     AddMethod('linewidth', @PyLINEWIDTH, ' linewidth(wid) -> Set thickness of crosshairs used on 2D slices.');
+    AddMethod('loadgraph', @PyLOADGRAPH, ' loadgraph(graphName, add = 0) -> Load text file graph (e.g. AFNI .1D, FSL .par, SPM rp_.txt). If "add" equals 1 new graph added to existing graph');
     AddMethod('loadimage', @PyLOADIMAGE, ' loadimage(imageName) -> Close all open images and load new background image.');
     AddMethod('modalmessage', @PyMODALMESSAGE, ' modalmessage(msg) -> Show a message in a dialog box, pause script until user presses "OK" button.');
     AddMethod('mosaic', @PyMOSAIC, ' mosaic(mosString) -> Create a series of 2D slices.');
@@ -2222,8 +2443,7 @@ begin
     AddMethod('opacity', @PyOVERLAYOPACITY, ' opacity(layer, opacityPct) -> Make the layer (0 for background, 1 for 1st overlay) transparent(0), translucent (~50) or opaque (100).');
     AddMethod('quit', @PyQUIT, ' quit() -> Terminate the application.');
     //pyREMOVESMALLCLUSTERS Set the colorscheme for the target overlay (0=background layer) to a specified name.
-    AddMethod('removesmallclusters', @pyREMOVESMALLCLUSTERS, ' removesmallclusters(layer, thresh, mm) -> only keep clusters where intensity exceeds thresh and size exceed mm.');
-
+    AddMethod('removesmallclusters', @pyREMOVESMALLCLUSTERS, ' removesmallclusters(layer, neighbors, thresh, mm) -> only keep clusters where intensity exceeds thresh and size exceed mm. Clusters based on neighbors that share faces (1), faces+edges (2) or faces+edges+corners (3)');
     AddMethod('resetdefaults', @PyRESETDEFAULTS, ' resetdefaults() -> Revert settings to sensible values.');
     AddMethod('savebmp', @PySAVEBMP, ' savebmp(pngName) -> Save screen display as bitmap. For example "savebmp(''test.png'')"');
     AddMethod('scriptformvisible', @PySCRIPTFORMVISIBLE, ' scriptformvisible (visible) -> Show (1) or hide (0) the scripting window.');
@@ -2894,7 +3114,7 @@ begin
      mx := max(mx, CutNearBtn.Left + CutNearBtn.Width);
      mx := max(mx, ZCoordEdit.Left + ZCoordEdit.Width);
      mx := max(mx, QualityTrack.Left + QualityTrack.Width);
-     ToolPanel.Constraints.MaxWidth:= mx+8;
+     ToolPanel.Constraints.MaxWidth:= mx+16;
 end;
 
 procedure TGLForm1.SetFormDarkMode(f: TForm);
@@ -2930,6 +3150,10 @@ begin
 end;
 
 procedure TGLForm1.CutoutChange(Sender: TObject);
+function  tf(t: TTrackBar): single; //trackbar fraction
+begin
+     result := t.Position/t.Max;
+end;
 var
    niftiVol: TNIfTI;
    CutoutLow, CutoutHigh: TVec3;
@@ -2955,6 +3179,7 @@ begin
         end;
      end;
      UpdateTimer.Enabled:=true;
+     CutoutBox.Hint := format('cutout(%.2f, %2f, %.2f, %.2f, %2f, %.2f)',[tf(XTrackBar),tf(YTrackBar),tf(ZTrackBar), tf(X2TrackBar),tf(Y2TrackBar),tf(Z2TrackBar)]);
 end;
 
 procedure TGLForm1.CutoutMouseUp(Sender: TObject; Button: TMouseButton;
@@ -3142,25 +3367,6 @@ begin
   //LayerWidgetChange(sender);
 end;
 
-{$IFDEF AFNI}
-function AFNIjvLabel(statCode: integer): string;
-begin
-     case statCode of
-        kFUNC_COR_TYPE: result := 'Correl';//// Correlation Coeff # Samples, # Fit Param, # Orts
-        kFUNC_TT_TYPE: result := 'T';//  Student t         Degrees-of-Freedom (DOF)
-        kFUNC_FT_TYPE: result := 'F';//  F ratio           Numerator DOF, Denominator DOF
-        kFUNC_ZT_TYPE: result := 'Normal';//  Standard Normal   -- none --
-        kFUNC_CT_TYPE: result := 'Chi';//  Chi-Squared       DOF
-        kFUNC_BT_TYPE: result := 'Beta';//  Incomplete Beta   Parameters "a" and "b"
-        kFUNC_BN_TYPE: result := 'Binomial';//            # Trials, Probability per trial
-        kFUNC_GT_TYPE: result := 'Gamma';//               Shape, Scale
-        kFUNC_PT_TYPE: result := 'Poisson';
-        else result := ''
-    end;
-end;
-
-{$ENDIF}
-
 procedure TGLForm1.MakeList(var c: TClusters);
 var
    i, n: integer;
@@ -3193,23 +3399,42 @@ begin
      end;
 end;
 
-procedure TGLForm1.UpdateLayerBox(NewLayers: boolean);
+procedure TGLForm1.UpdateLayerBox(NewLayers: boolean; NewVolumes: boolean = false);
 var
    i: integer;
    v: TNIfTI;
    s: string;
-   isMultiVol, isAFNI, hasClusters: boolean;
+   isMultiVol, isAFNI, hasClusters, isMultiVol1: boolean;
 begin
+     isMultiVol1 := false;
+     isMultiVol := false;
+     hasClusters := false;
+     if (not NewLayers) and (NewVolumes) and (vols.NumLayers > 0) then begin
+        for i := 1 to vols.NumLayers do begin
+            vols.Layer(i-1,v);
+            if v.VolumesTotal > 1 then begin
+               isMultiVol := true;
+               if (i = 1) then //TGV
+                  isMultiVol1 := true;
+            end;
+            s := v.ShortName;
+            if v.VolumesTotal > 1 then
+               s := format('%d/%d: ', [v.VolumeDisplayed+1, v.VolumesTotal] )+s;
+            LayerList.Items[i-1] := s;
+            if length(v.clusters) > 0 then hasClusters := true;
+        end;
+     end;
      if (NewLayers) then begin
         LayerList.Items.Clear;
-        isMultiVol := false;
-        hasClusters := false;
         if vols.NumLayers < 1 then exit;
         v := nil;
         for i := 1 to vols.NumLayers do begin
             vols.Layer(i-1,v);
-            if v.VolumesTotal > 1 then
+            if v.VolumesTotal > 1 then begin
                isMultiVol := true;
+               if (i = 1) then //TGV
+                  isMultiVol1 := true;
+            end;
             s := v.ShortName;
             if v.VolumesTotal > 1 then
                s := format('%d/%d: ', [v.VolumeDisplayed+1, v.VolumesTotal] )+s;
@@ -3227,20 +3452,26 @@ begin
         if (v <> nil) and (gPrefs.AutoClusterizeAtlases) then begin
            if (v.IsLabels) and (length(v.clusters) < 1) then begin
               generateClustersCore(v);
-              if (BottomPanel.Height < 20) then
-                 BottomPanel.Height := round(GLForm1.Height * 0.25);
               hasClusters := true;
-
            end;
         end;
+     end;
+     if (NewLayers) or (NewVolumes) then begin
+        {$IFDEF GRAPH}
+        if gGraph.PointsPerLine > 3 then
+           isMultiVol1 := true;
+        {$ENDIF}
         if hasClusters then begin
-           if gGraph.isEmpty then
-              GraphPanel.width := 0
+           if isMultiVol1 then
+              GraphPanel.width := BottomPanel.Width div 2
            else
-               GraphPanel.width := BottomPanel.Width div 2;
-
-        end
-
+               GraphPanel.width := 0;
+        end else if isMultiVol1 then
+            GraphPanel.width := BottomPanel.ClientWidth - ClusterGraphSplitter.width - 8;
+        if (not hasClusters) and (not isMultiVol1) then
+           BottomPanel.Height := 2
+        else if (BottomPanel.Height < 20) then
+             BottomPanel.Height := round(GLForm1.Height * 0.25);
      end;
      if (LayerList.ItemIndex < 0)  then
         LayerList.ItemIndex := LayerList.Items.Count -1;
@@ -3752,90 +3983,6 @@ begin
      end;
      UpdateTimer.Enabled := true;
 end;
-
-
-function GetFloat(prompt: string; min,def,max: double): double;
-var
-    PrefForm: TForm;
-    CancelBtn,OkBtn: TButton;
-    promptLabel: TLabel;
-    valEdit: TEdit;
-begin
-  PrefForm:=TForm.Create(nil);
-  //PrefForm.SetBounds(100, 100, 512, 212);
-  PrefForm.AutoSize := True;
-  PrefForm.BorderWidth := 8;
-  PrefForm.Caption:='Value required';
-  PrefForm.Position := poScreenCenter;
-  PrefForm.BorderStyle := bsDialog;
-  //label
-  promptLabel:=TLabel.create(PrefForm);
-  promptLabel.Caption:= prompt;
-  if (min < max) then
-     promptLabel.Caption:= format('%s (range %0.3g..%0.3g)', [prompt, min, max]);
-  //promptLabel.Left := 8;
-  //promptLabel.Top := 12;
-  promptLabel.AutoSize := true;
-  promptLabel.AnchorSide[akTop].Side := asrTop;
-  promptLabel.AnchorSide[akTop].Control := PrefForm;
-  promptLabel.BorderSpacing.Top := 6;
-  promptLabel.AnchorSide[akLeft].Side := asrLeft;
-  promptLabel.AnchorSide[akLeft].Control := PrefForm;
-  promptLabel.BorderSpacing.Left := 6;
-  promptLabel.Parent:=PrefForm;
-  //edit
-  valEdit:=TEdit.create(PrefForm);
-  valEdit.Caption := FloatToStrF(def, ffGeneral, 8, 4);
-  //valEdit.Top := 42;
-  //valEdit.Width := PrefForm.Width - 16;
-  valEdit.Constraints.MinWidth:= 300;
-  valEdit.AutoSize := true;
-  valEdit.AnchorSide[akTop].Side := asrBottom;
-  valEdit.AnchorSide[akTop].Control := promptLabel;
-  valEdit.BorderSpacing.Top := 6;
-  valEdit.AnchorSide[akLeft].Side := asrLeft;
-  valEdit.AnchorSide[akLeft].Control := PrefForm;
-  valEdit.BorderSpacing.Left := 6;
-  valEdit.Parent:=PrefForm;
-  //Cancel Btn
-  CancelBtn:=TButton.create(PrefForm);
-  CancelBtn.Caption:='Cancel';
-  CancelBtn.AutoSize := true;
-  CancelBtn.AnchorSide[akTop].Side := asrBottom;
-  CancelBtn.AnchorSide[akTop].Control := valEdit;
-  CancelBtn.BorderSpacing.Top := 6;
-  CancelBtn.AnchorSide[akLeft].Side := asrLeft;
-  CancelBtn.AnchorSide[akLeft].Control := PrefForm;
-  CancelBtn.BorderSpacing.Left := 200;
-  CancelBtn.Parent:=PrefForm;
-  CancelBtn.ModalResult:= mrCancel;
-  //OK button
-  OkBtn:=TButton.create(PrefForm);
-  OkBtn.Caption:='OK';
-  OkBtn.AutoSize := true;
-  OkBtn.AnchorSide[akTop].Side := asrBottom;
-  OkBtn.AnchorSide[akTop].Control := valEdit;
-  OkBtn.BorderSpacing.Top := 6;
-  OkBtn.AnchorSide[akLeft].Side := asrRight;
-  OkBtn.AnchorSide[akLeft].Control := CancelBtn;
-  OkBtn.BorderSpacing.Left := 6;
-  OkBtn.Parent:=PrefForm;
-  OkBtn.ModalResult:= mrOK;
-  //OK button
-  {$IFDEF LCLCocoa}
-  if gPrefs.DarkMode then GLForm1.SetFormDarkMode(PrefForm);
-  {$ENDIF}
-  PrefForm.ShowModal;
-  result := kNaN;
-  if (PrefForm.ModalResult = mrOK) then begin
-    result := StrToFloatDef(valEdit.Caption, def);
-    if (min < max) and (result < min) then
-      result := min;
-    if (min < max) and (result > max) then
-      result := max;
-  end;
-  FreeAndNil(PrefForm);
-end; //GetFloat()                                                  r
 
 procedure TGLForm1.ExtractBrainMenuClick(Sender: TObject);
 var
@@ -4608,8 +4755,6 @@ function TGLForm1.AddLayer(Filename: string): boolean;
 //add a new layer on top of existing layers
 var
  fnm: string;
-
-   v: TNIfTI;
 begin
  AnimateTimer.Enabled := false;
  DisplayAnimateMenu.Checked := false;
@@ -4643,6 +4788,7 @@ var
    {$ENDIF}
  fnm: string;
  FileNames: array of String ;
+ MatHasLesion: boolean = false;
 begin
   AnimateTimer.Enabled := false;
   DisplayAnimateMenu.Checked := false;
@@ -4651,13 +4797,16 @@ begin
   fnm := GetFullPath(fnm);
   if not Fileexists(fnm) then exit(false);
   vols.CloseAllLayers;
+  //TGV
+  {$IFDEF GRAPH}
+  GraphClearMenuClick(nil);
+  {$ENDIF}
   CutNoneBtnClick(nil); //turn off cut-out: not persistent like clip plane
   {$IFDEF MATT1}
   ext := uppercase(extractfileext(fnm));
   if (ext = '.MAT') then begin
      ss := getKeyshiftstate;
-     if (ssShift in ss) then
-        MatLoadForce(kMatForceT1);
+     MatHasLesion := MatTestHasAnatomical(fnm, (ssShift in ss));
   end;
   {$ENDIF}
   if (not AddLayer(fnm)) then begin
@@ -4671,6 +4820,19 @@ begin
   gPrefs.PrevBackgroundImage := fnm; //launch with last image, even if it is template/fsl image
   if (isAddToRecent) then AddOpenRecent(fnm);
   {$IFDEF MATT1}
+  if (MatHasLesion) then begin
+     MatLoadForce(kMatForceLesion);
+     if (vols.Drawing.IsOpen) and (not vols.Drawing.voiIsEmpty) and (vols.Drawing.NeedsSave) then
+        DrawSaveMenuClick(nil);
+     Vols.OpenDrawing(fnm);
+  end;
+  //if (ext = '.MAT') then begin
+     //MatLoadForce(kMatForceLesion);
+     //AddLayer(fnm);
+     //i := GLForm1.LayerColorDrop.Items.IndexOf('actc'); //search is case-insensitive!
+     //if i > 0 then
+     //   GLForm1.LayerChange(1, i, -1, kNaNsingle, kNaNsingle); //kNaNsingle
+  //end;
   (*if (ext = '.MAT') then begin
      MatLoadForce(kMatForcefMRI);
      AddLayer(fnm);
@@ -4726,6 +4888,7 @@ begin
      dcm2niiForm.FormDropFiles(Sender, FileNames);
      exit;
   end;
+  ss := getKeyshiftstate;
   fnm := GetFullPath(Filenames[0]);
   if (not fileexists(fnm)) and (not DirectoryExists(fnm)) then exit;
   ext := upcase(ExtractFileExt(fnm));
@@ -4734,16 +4897,24 @@ begin
      fnmREC := changefileext(fnm,'.REC');
      fnmRec2 := changefileext(fnm,'.rec');
      if (not fileexists(fnmREC)) and (not fileexists(fnmREC2)) then begin
-        GraphOpen(fnm);
+        GraphOpen(fnm, (ssCtrl in ss));
         exit;
      end;
+  end;
+  if (ext = '.JSON') then begin
+     fnmREC := changefileext(fnm,'.nii');
+     if (not fileexists(fnmREC)) then
+        fnmREC := fnmREC + '.gz';
+     if fileexists(fnmREC) then
+        fnm := fnmREC;
   end;
   if (ext = '.PY') then begin
      OpenScript(fnm);
      exit;
   end;
+
   if (ext = '.1D') or (ext = '.TXT') or (ext = '.CSV') then begin
-     GraphOpen(fnm);
+     GraphOpen(fnm, ssCtrl in ss);
      exit;
   end;
   (*if (isTIFF(fnm)) then begin
@@ -4767,7 +4938,6 @@ begin
      exit;
   end;
   if (DirectoryExists(fnm)) then exit;
-  ss := getKeyshiftstate;
   //if (ssModifier in ss) then begin
   if (ssMeta in ss) or (ssCtrl in ss) then
      AddLayer(fnm)
@@ -4842,10 +5012,13 @@ begin
    UpdateLayerBox(false);
 end;
 
-procedure TGLForm1.ClusterViewMouseUp(Sender: TObject; Button: TMouseButton;
-  Shift: TShiftState; X, Y: Integer);
+procedure TGLForm1.ClusterViewMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+const
+  kSelectedColumnPrefix = '• ';
+  kPeakXYZCol = 3;
+  kCogXYZCol = 5;
 var
-   w, row, col: integer;
+ w, row, col, selCol, unSelCol: integer;
  v: TNIfTI;
 begin
  if not vols.Layer(LayerList.ItemIndex,v) then exit;
@@ -4862,30 +5035,38 @@ begin
  if (col < 0) or (col >= ClusterView.ColumnCount) then exit;
  if (row >= length(v.clusters)) or (row< 0) then exit;
  //LayerBox.caption := format('%d %d %d',[col, row, ClusterView.Column[col].Tag]);
- if ClusterView.Column[col].Tag > 1 then
-    SetXHairPosition(v.clusters[row].PeakXYZ.x, v.clusters[row].PeakXYZ.Y, v.clusters[row].PeakXYZ.Z, true )
- else
+ if ClusterView.Column[col].Tag > 1 then begin
+    SetXHairPosition(v.clusters[row].PeakXYZ.x, v.clusters[row].PeakXYZ.Y, v.clusters[row].PeakXYZ.Z, true );
+    selCol := kPeakXYZCol;
+    unSelCol := kCogXYZCol;
+ end else begin
      SetXHairPosition(v.clusters[row].CogXYZ.x, v.clusters[row].CogXYZ.Y, v.clusters[row].CogXYZ.Z, true );
+     selCol := kCogXYZCol;
+     unSelCol := kPeakXYZCol;
+ end;
+ //LayerBox.Caption := inttostr(selCol)+':'+inttostr(unSelCol);
+ if AnsiStartsText(kSelectedColumnPrefix, ClusterView.Column[unSelCol].Caption) then
+     ClusterView.Column[unSelCol].Caption := Copy(ClusterView.Column[unSelCol].Caption, Length(kSelectedColumnPrefix) + 1, MaxInt);
+ if not AnsiStartsText(kSelectedColumnPrefix, ClusterView.Column[selCol].Caption) then
+     ClusterView.Column[selCol].Caption := kSelectedColumnPrefix+ClusterView.Column[selCol].Caption;
+end;
+
+procedure TGLForm1.ClusterViewChange(Sender: TObject; Item: TListItem;
+  Change: TItemChange);
+begin
+
 end;
 
 procedure TGLForm1.ClusterViewSelectItem(Sender: TObject; Item: TListItem; Selected: Boolean);
-begin
-     //
-end;
-
-(*var
+var
  i: integer;
  v: TNIfTI;
 begin
- //
-
  if not vols.Layer(LayerList.ItemIndex,v) then exit;
  i := StrToIntDef(Item.Caption,0);
- //SliceBox.Caption := inttostr(i);
- //SliceBox.Caption := inttostr(i)+':'+inttostr(length(v.clusters));
  if (i >= length(v.clusters)) or (i < 0) then exit;
  SetXHairPosition(v.clusters[i].CogXYZ.x, v.clusters[i].CogXYZ.Y, v.clusters[i].CogXYZ.Z, true );
-end; *)
+end;
 
 procedure TGLForm1.AddOverlayMenuClick(Sender: TObject);
 begin
@@ -4983,7 +5164,7 @@ end;
       openDlg.Free;
       exit;
    end;
-   GraphOpen(openDlg.Filename);
+   GraphOpen(openDlg.Filename, (Sender as TMenuItem).tag = 1);
    openDlg.Free;
  end;
 {$ENDIF}
@@ -5016,6 +5197,57 @@ begin
   {$ENDIF}
 end;
 
+procedure TGLForm1.LayerFindPeakMenuClick(Sender: TObject);
+var
+  i, nearestIdx: integer;
+  v: TNIfTI;
+  sliceMM, vec: TVec3;
+  vox: TVec3i;
+  nearestMM, mm: single;
+  isActiveClusterized : boolean = true;
+  itm: TListItem;
+begin
+ i := LayerList.ItemIndex;
+ if (i < 0) or (i >= LayerList.Count) then exit;
+ if not vols.Layer(i,v) then exit;
+ if length(v.clusters) < 1 then begin
+    isActiveClusterized := false;
+    i := 0;
+    while (i <  LayerList.Count) and (length(v.clusters) < 1) do begin
+       vols.Layer(i,v);
+       i := i + 1;
+    end;
+    if length(v.clusters) < 1 then begin
+       showmessage('No clusters open: use "Generate Clusters" or open a template image.');
+    end;
+ end;
+ sliceMM := Vol1.Slice2Dmm(v, vox);
+ nearestIdx := 0;
+ vec :=  sliceMM-v.clusters[0].CogXYZ;
+ nearestMM := vec.Length;
+ for i := 0 to (length(v.clusters) -1) do begin
+     vec := (sliceMM-v.clusters[i].CogXYZ);
+     mm := vec.Length;
+     if (mm < nearestMM) then begin
+        nearestIdx := i;
+        nearestMM := mm;
+     end;
+
+ end;
+ if isActiveClusterized then begin
+    //ClusterView.FindCaption(0,inttostr(nearestIdx), false,true,true);
+    itm := ClusterView.FindCaption(0, inttostr(nearestIdx), false, true, false);
+    if itm <> nil then begin
+       itm.Focused := true;
+       itm.Selected:= true;
+    end;
+       //LayerBox.caption := 'x';
+ end;
+ SetXHairPosition(v.clusters[nearestIdx].CogXYZ.x, v.clusters[nearestIdx].CogXYZ.Y, v.clusters[nearestIdx].CogXYZ.Z, true );
+ //LayerBox.Caption := format('%g %g %g', [sliceMM.x, sliceMM.y, sliceMM.z]);
+
+end;
+
 procedure TGLForm1.LayerIsLabelMenuClick(Sender: TObject);
 var
    i: integer;
@@ -5030,6 +5262,11 @@ begin
     niftiVol.SetIsLabels(LayerZeroIntensityInvisibleMenu.Checked);
     niftiVol.ForceUpdate(); //defer time consuming work
     updateTimer.enabled := true;
+end;
+
+procedure TGLForm1.MenuItem3Click(Sender: TObject);
+begin
+
 end;
 
 procedure TGLForm1.GraphAddMenuClick(Sender: TObject);
@@ -5050,11 +5287,11 @@ var
    i: integer;
 begin
  {$IFDEF GRAPH}
-  gGraph.ClearLines(true);
+  gGraph.ClearLines();
   setlength(newVals, k);
   for i := 0 to k-1 do
       newVals[i] := 0;//(3 * sin(i/(k/12))) + 6;
-  gGraph.AddLine(newVals, 'No Graph Loaded: Use Graph Open Menu or View 4D Image');
+  gGraph.AddLine(newVals, 'No Graph Loaded: Use Graph Open Menu or open 4D Image as background');
   newVals := nil;
   ViewGPUg.Invalidate;
  {$ENDIF}
@@ -5069,14 +5306,27 @@ begin
  {$ENDIF}
 end;
 
-procedure TGLForm1.GraphOpen(fnm: string);
+function TGLForm1.GraphOpen(fnm: string; isKeepOldGraph: boolean = false; isShowMessageOnError: boolean = false): boolean;
+var
+   fnm2: string;
 begin
  {$IFDEF GRAPH}
-  if not gGraph.LoadText(fnm) then
-     showmessage('Unable to load graph from text file "'+fnm+'"');
+ fnm2 := fnm;
+ result := fileexists(fnm2);
+ if not result then begin
+    fnm2 := GetFullPath(fnm2, false);
+    result := fileexists(fnm2);
+ end;
+ if (not result) and (isShowMessageOnError) then
+     showmessage('Unable to find file "'+fnm2+'"');
+ if not result then exit;
+ result := gGraph.LoadText(fnm2, isKeepOldGraph);
+ if (not result) and (isShowMessageOnError) then
+     showmessage('Unable to load graph from text file "'+fnm2+'"');
   ViewGPUg.Invalidate;
-  if BottomPanel.Height < 20 then
-     BottomPanel.Height := round(GLForm1.Height * 0.25);
+  GLForm1.UpdateLayerBox(false, true);
+  //if BottomPanel.Height < 20 then
+  //  BottomPanel.Height := round(GLForm1.Height * 0.25);
  {$ENDIF}
 end;
 
@@ -5172,12 +5422,13 @@ var
    updateTimer.enabled := true;
 end;
 
-procedure GetThresh(var thresh: double; out mm: double);  //TResliceForm
+procedure GetThresh(var thresh: double; out mm: double; out NeighborMethod: integer);  //TResliceForm
 var
     PrefForm: TForm;
     CancelBtn,OkBtn: TButton;
     threshLabel, ClusterLabel: TLabel;
     threshEdit, ClusterEdit: TEdit;
+    NeighborCombo: TComboBox;
 begin
   PrefForm:=TForm.Create(nil);
   //PrefForm.SetBounds(100, 100, 512, 212);
@@ -5233,13 +5484,31 @@ begin
   clusterEdit.AnchorSide[akLeft].Control := PrefForm;
   clusterEdit.BorderSpacing.Left := 6;
   clusterEdit.Parent:=PrefForm;
+
+  NeighborCombo:=TComboBox.create(PrefForm);
+  NeighborCombo.Parent:=PrefForm;
+  NeighborCombo.AutoSize:= true;
+  NeighborCombo.Width := 320;
+  NeighborCombo.Items.Add('Neighbors: Faces (6)');
+  NeighborCombo.Items.Add('Neighbors: Faces, Edges (18)');
+  NeighborCombo.Items.Add('Neighbors: Faces, Edges, Corners (26)');
+  NeighborCombo.ItemIndex:=  0;
+  NeighborCombo.Style := csDropDownList;
+  NeighborCombo.AnchorSide[akTop].Side := asrBottom;
+  NeighborCombo.AnchorSide[akTop].Control := clusterEdit;
+  NeighborCombo.BorderSpacing.Top := 6;
+  NeighborCombo.AnchorSide[akLeft].Side := asrLeft;
+  NeighborCombo.AnchorSide[akLeft].Control := PrefForm;
+  NeighborCombo.BorderSpacing.Left := 6;
+  NeighborCombo.Anchors := [akTop, akLeft];
+  NeighborCombo.Parent:=PrefForm;
   //Cancel Btn
   CancelBtn:=TButton.create(PrefForm);
   CancelBtn.Caption:='Cancel';
   CancelBtn.AutoSize := true;
   CancelBtn.AnchorSide[akTop].Side := asrBottom;
-  CancelBtn.AnchorSide[akTop].Control := clusterEdit;
-  CancelBtn.BorderSpacing.Top := 6;
+  CancelBtn.AnchorSide[akTop].Control := NeighborCombo;
+  CancelBtn.BorderSpacing.Top := 8;
   CancelBtn.AnchorSide[akLeft].Side := asrLeft;
   CancelBtn.AnchorSide[akLeft].Control := PrefForm;
   CancelBtn.BorderSpacing.Left := 200;
@@ -5250,8 +5519,8 @@ begin
   OkBtn.Caption:='OK';
   OkBtn.AutoSize := true;
   OkBtn.AnchorSide[akTop].Side := asrBottom;
-  OkBtn.AnchorSide[akTop].Control := clusterEdit;
-  OkBtn.BorderSpacing.Top := 6;
+  OkBtn.AnchorSide[akTop].Control := NeighborCombo;
+  OkBtn.BorderSpacing.Top := 8;
   OkBtn.AnchorSide[akLeft].Side := asrRight;
   OkBtn.AnchorSide[akLeft].Control := CancelBtn;
   OkBtn.BorderSpacing.Left := 6;
@@ -5267,12 +5536,14 @@ begin
     thresh := StrToFloatDef(threshEdit.Caption, 4);
     mm :=  StrToFloatDef(clusterEdit.Caption, 0);
   end;
+  NeighborMethod := NeighborCombo.ItemIndex+1;
+
   FreeAndNil(PrefForm);
 end; //GetThresh()
 
 procedure TGLForm1.RemoveSmallClusterMenuClick(Sender: TObject);
 var
-     i: integer;
+     i, NeighborMethod: integer;
      niftiVol: TNIfTI;
      thresh, mm: double;
 begin
@@ -5280,9 +5551,9 @@ begin
  if (i < 0) or (i >= LayerList.Count) then exit;
  if not vols.Layer(LayerList.ItemIndex,niftiVol) then exit;
  thresh := (0.5*(niftiVol.DisplayMax-niftiVol.DisplayMin))+niftiVol.DisplayMin;
- GetThresh(thresh, mm);
+ GetThresh(thresh, mm, NeighborMethod);
  if thresh = kNaN then exit;
- niftiVol.RemoveSmallClusters(thresh,mm);
+ niftiVol.RemoveSmallClusters(thresh,mm, NeighborMethod);
  niftiVol.ForceUpdate(); //defer time consuming work
  updateTimer.enabled := true;
 end;
@@ -6094,7 +6365,8 @@ var
    png: TPortableNetworkGraphic;
 begin
   if not SaveDialog1.execute then exit;
-  bmp := ScreenShotGL(ViewGPUg);
+  //bmp := ScreenShotGL(ViewGPUg);
+  bmp := ScreenShot(ViewGPUg);
   if (bmp = nil) then exit;
   png := TPortableNetworkGraphic.Create;
   try
@@ -6165,26 +6437,42 @@ begin
     AnimateTimer.enabled := DisplayAnimateMenu.Checked;
 end;
 
+function TGLForm1.Active4DLayer: integer;
+var
+  i: integer;
+  v: TNIfTI;
+begin
+     i := LayerList.ItemIndex;
+     if not vols.Layer(i,v) then exit(-1);
+     if v.VolumesTotal > 1 then exit(i);
+     for i := 0 to (vols.NumLayers-1) do begin
+       vols.Layer(i,v);
+       if v.VolumesTotal > 1 then exit(i);
+     end;
+     exit(-1);
+end;
+
 procedure TGLForm1.AnimateTimerTimer(Sender: TObject);
 var
     v: TNIfTI;
     i: integer;
 begin
-  for i := 1 to vols.NumLayers do begin
-    vols.Layer(i-1,v);
-    if v.VolumesTotal < 2 then
-       continue;
-    v.SetDisplayVolume(v.VolumeDisplayed + 1);
-    //LayerBox.caption := format('%d %d/%d ',[i,v.VolumeDisplayed+1, v.VolumesTotal]); //+1 as indexed from 1
-    UpdateLayerBox(true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
-    //UpdateTimer.Enabled := true;
-    UpdateTimerTimer(Sender);
-    {$IFDEF GRAPH}
-    gGraph.HorizontalSelection:= v.VolumeDisplayed;
-    gGraph.isRedraw := true;
-    ViewGPUg.Invalidate;
-    {$ENDIF}
-    exit;
+  //BUBBA
+  i := Active4DLayer;
+  if i >= 0 then begin
+     vols.Layer(i,v);
+     v.SetDisplayVolume(v.VolumeDisplayed + 1);
+     //LayerBox.caption := format('%d %d/%d ',[i,v.VolumeDisplayed+1, v.VolumesTotal]); //+1 as indexed from 1
+     UpdateLayerBox(false, true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
+     //UpdateTimer.Enabled := true;
+     UpdateTimerTimer(Sender);
+     {$IFDEF GRAPH}
+     if i > 0 then exit; //TGV
+     gGraph.HorizontalSelection:= v.VolumeDisplayed;
+     gGraph.isRedraw := true;
+     ViewGPUg.Invalidate;
+     {$ENDIF}
+     exit;
   end;
   //exit if success
   AnimateTimer.Enabled := false;
@@ -6196,7 +6484,33 @@ var
    v: TNIfTI;
    i: integer;
 begin
+     i := Active4DLayer;
+     if i < 0 then exit(false);
+     vols.Layer(i,v);
+     if (Sender as TMenuItem).Tag = 1 then
+        v.SetDisplayVolume(v.VolumeDisplayed + 1)
+     else
+         v.SetDisplayVolume(v.VolumeDisplayed - 1);
+     //LayerBox.caption := format('%d %d/%d ',[i,v.VolumeDisplayed+1, v.VolumesTotal]); //+1 as indexed from 1
+     UpdateLayerBox(false, true);
+     //UpdateLayerBox(true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
+     UpdateTimer.Enabled := true;
+     {$IFDEF GRAPH}
+     if (i > 0) then exit(true);
+     gGraph.HorizontalSelection:= v.VolumeDisplayed;
+     gGraph.isRedraw := true;
+     ViewGPUg.Invalidate;
+     {$ENDIF}
+     exit(true);
+end;
+
+(*function TGLForm1.DisplayNextMenuClick(Sender: TObject): boolean;
+var
+   v: TNIfTI;
+   i: integer;
+begin
  result := false;
+
  for i := 1 to vols.NumLayers do begin
    vols.Layer(i-1,v);
    if v.VolumesTotal < 2 then
@@ -6206,7 +6520,8 @@ begin
    else
        v.SetDisplayVolume(v.VolumeDisplayed - 1);
    //LayerBox.caption := format('%d %d/%d ',[i,v.VolumeDisplayed+1, v.VolumesTotal]); //+1 as indexed from 1
-   UpdateLayerBox(true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
+   UpdateLayerBox(false, true);
+   //UpdateLayerBox(true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
    UpdateTimer.Enabled := true;
    {$IFDEF GRAPH}
    gGraph.HorizontalSelection:= v.VolumeDisplayed;
@@ -6215,12 +6530,15 @@ begin
    {$ENDIF}
    exit(true);
  end;
-end;
+end;  *)
 
 procedure TGLForm1.GraphMouseWheel(Sender: TObject; Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
 begin
  {$IFDEF GRAPH}
+ //TGV
  if not DisplayNextMenu.Enabled then exit;
+ if LayerList.ItemIndex <>0 then
+    LayerList.ItemIndex:= 0;
  if (WheelDelta < 0) then
     DisplayNextMenu.Click
  else
@@ -6243,14 +6561,17 @@ begin
      f := gGraph.HorizontalClickFrac(X);
      if (f < 0) or (f > 1) then exit;
      if f = 1 then f := f - 0.000001;
+     if LayerList.ItemIndex <>0 then
+        LayerList.ItemIndex:= 0;
      if not vols.Layer(0,v) then exit;
      if (v.VolumesLoaded < 2) then exit;
+     //TGV
      vol := trunc(v.VolumesLoaded * f) ; // 0...(v.VolumesTotal-1)
      v.SetDisplayVolume(vol);
      gGraph.HorizontalSelection:= v.VolumeDisplayed;
      gGraph.isRedraw := true;
      ViewGPUg.Invalidate;
-        UpdateLayerBox(true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
+        UpdateLayerBox(false, true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
    UpdateTimer.Enabled := true;
      {$ENDIF}
 end;
@@ -6598,8 +6919,6 @@ begin
 end;
 
 procedure TGLForm1.UpdateShaderSettings(Sender: TObject);
-//var
-//   q: integer;
 var
    v: boolean;
 begin
@@ -6621,6 +6940,7 @@ begin
  //   ReloadShader(false);
     //caption := inttostr(random(888));
  Vol1.ClipThick := ClipThickTrack.Position/ClipThickTrack.Max;
+ ClipBox.Hint := (format('clipazimuthelevation(%.2f %d %d)',[ClipDepthTrack.Position/ClipDepthTrack.Max , ClipAziTrack.Position, ClipElevTrack.Position]));
  ViewGPU1.Invalidate;
 end;
 
@@ -7024,21 +7344,33 @@ procedure TGLForm1.UpdateContrast (Xa,Ya, Xb, Yb: integer);
 var
    ptA, ptB: TVec3; //fractional coordinates
    ptAi, ptBi: TVec3i; //voxel coordinates
-   yi, zi, x,y,z: integer;
+   i, yi, zi, x,y,z: integer;
    v, Mn, Mx: single;
 var
    niftiVol: TNIfTI;
 begin
-  if not vols.Layer(0,niftiVol) then begin
+
+  i := LayerList.ItemIndex;
+  //i := 0; //always adjust background layer
+  if not vols.Layer(i,niftiVol) then begin
      ViewGPU1.Invalidate;
      exit;
   end;
-  if niftiVol.IsLabels then exit;
+  if (niftiVol.IsLabels) and (i <> 0) then begin
+     i := 0;
+     if not vols.Layer(0,niftiVol) then begin
+        ViewGPU1.Invalidate;
+        exit;
+     end;
+  end;
+  if (niftiVol.IsLabels) then begin
+     ViewGPU1.Invalidate;
+     exit;
+  end;
   ptA := Vol1.GetSlice2DFrac(Xa,Ya,x);
   ptB := Vol1.GetSlice2DFrac(Xb,Yb,y);
   if x <> y then exit; //e.g. dragged across coronal and axial slice
   if (x < kAxialOrient) or (x > kSagLeftOrient) then exit;
-  //LayerBox.Caption := format('%.2g %.2g %.2g -> %.2g %.2g %.2g', [ptA.X,ptA.Y,ptA.Z, ptB.X,ptB.Y,ptB.Z]);
   ptAi := niftiVol.FracToSlice(ptA);
   ptBi := niftiVol.FracToSlice(ptB);
   SortVec3i(ptAi, ptBi);
@@ -7056,7 +7388,7 @@ begin
     end; //y
   end; //z
   if Mn = Mx then exit;
-  LayerChange(0, -1, -1, Mn, Mx); //kNaNsingle
+  LayerChange(i, -1, -1, Mn, Mx); //kNaNsingle
 end;
 
 procedure TGLForm1.ViewGPUMouseWheel(Sender: TObject; Shift: TShiftState;
@@ -7518,7 +7850,7 @@ end;
 
 procedure TGLForm1.LayerAfniBtnClick(Sender: TObject);
 begin
-  AfniPopup.PopUp;
+     AfniPopup.PopUp;
 end;
 
 procedure TGLForm1.LayerAfniDropChange(Sender: TObject);
@@ -7535,7 +7867,7 @@ begin
  vols.Layer(LayerList.ItemIndex,v);
  if v.VolumeDisplayed = i then exit;
  v.SetDisplayVolume(i);
- UpdateLayerBox(false);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
+ UpdateLayerBox(false, true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
  UpdateTimer.Enabled := true;
  //LayerBox.Caption := inttostr(random(888))+' '+inttostr(i);
 
@@ -7554,8 +7886,9 @@ begin
   UpdateLayerBox(false);
   if gPrefs.DisplayOrient > kAxCorSagOrient then
      MPRMenu.Click;
-  if BottomPanel.Height < 20 then
-     BottomPanel.Height := round(GLForm1.Height * 0.25);
+  GLForm1.UpdateLayerBox(false, true);
+  //if BottomPanel.Height < 20 then
+  //   BottomPanel.Height := round(GLForm1.Height * 0.25);
 end;
 
 procedure TGLForm1.BetterRenderTimerTimer(Sender: TObject);

@@ -12,7 +12,7 @@ type
   TPrefs = record
          GradientMode, AnimationIntervalMsec, LineWidth, StartupWindowMode,DisplayOrient,
          StartupDisplayOrient, ColorbarSize,ColorbarPosition, Quality1to6, BitmapZoom,
-         MaxVox, MultiSample124: integer;
+         MaxVox, MultiSample124, ClusterNeighborMethod: integer;
          ScreenCaptureTransparentBackground, LandmarkPanel, LoadFewVolumes,
          //LabelOrientCube,
          LabelOrient, RulerVisible, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay,
@@ -78,6 +78,7 @@ begin
             AfniDir := '';
             {$ENDIF}
             //if not DirectoryExists(AfniDir) then AfniDir := '';
+            ClusterNeighborMethod := 1; //1=faces only,2=faces+edges,3=faces+edges+corners
             PrevBackgroundImage := '';
             CustomDcm2niix := '';
             RetinaDisplay := true;
@@ -232,13 +233,14 @@ begin
   IniStr(lRead, lIniFile, 'AfniDir', lPrefs.AfniDir);
   IniStr(lRead, lIniFile, 'PrevBackgroundImage', lPrefs.PrevBackgroundImage  );
   IniStr(lRead, lIniFile, 'CustomDcm2niixExe', lPrefs.CustomDcm2niix);
+  //Ints
+  IniInt(lRead,lIniFile, 'ClusterNeighborMethod', lPrefs.ClusterNeighborMethod);
   IniInt(lRead,lIniFile, 'Quality1to6', lPrefs.Quality1to6);
   IniInt(lRead,lIniFile, 'ColorbarPosition',lPrefs.ColorBarPosition);
   IniInt(lRead,lIniFile, 'ColorbarSize', lPrefs.ColorbarSize);
   IniInt(lRead,lIniFile, 'BitmapZoom', lPrefs.BitmapZoom);
   //IniInt(lRead,lIniFile, 'DisplayOrient', lPrefs.DisplayOrient);
   IniInt(lRead,lIniFile, 'StartupDisplayOrient', lPrefs.StartupDisplayOrient);
-
   IniInt(lRead,lIniFile, 'MaxVox', lPrefs.MaxVox);
   IniInt(lRead,lIniFile, 'LineWidth', lPrefs.LineWidth);
   IniInt(lRead,lIniFile, 'StartupWindowMode', lPrefs.StartupWindowMode);
