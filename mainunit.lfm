@@ -1,7 +1,7 @@
 object GLForm1: TGLForm1
-  Left = 863
+  Left = 146
   Height = 727
-  Top = 38
+  Top = 132
   Width = 1069
   AllowDropFiles = True
   Caption = 'MRIcroGL'
@@ -1816,7 +1816,6 @@ object GLForm1: TGLForm1
         SortType = stData
         TabOrder = 0
         ViewStyle = vsReport
-        OnChange = ClusterViewChange
         OnColumnClick = ClusterViewColumnClick
         OnCompare = ClusterViewCompare
         OnMouseUp = ClusterViewMouseUp
@@ -2136,7 +2135,7 @@ object GLForm1: TGLForm1
       end
       object GraphOpenAddMenu: TMenuItem
         Tag = 1
-        Caption = 'Open (Add to Previous Graphs)'
+        Caption = 'Add (Keep Previous Graphs)'
         OnClick = GraphOpenMenuClick
       end
       object GraphSaveMenu: TMenuItem
@@ -2398,9 +2397,9 @@ object GLForm1: TGLForm1
         Caption = 'Remove Haze'
         OnClick = RemoveHazeMenuClick
       end
-      object RemoveHazeSmoothMenu: TMenuItem
+      object RemoveHazeOptionsMenu: TMenuItem
         Tag = 1
-        Caption = 'Remove Haze and Smooth Edges'
+        Caption = 'Remove Haze with Options'
         OnClick = RemoveHazeMenuClick
       end
       object ExtractBrainMenu: TMenuItem
@@ -2505,11 +2504,11 @@ object GLForm1: TGLForm1
       end
       object ScriptingSepMenu: TMenuItem
         Caption = '-'
+        OnClick = ScriptingSepMenuClick
       end
     end
     object HelpMenu: TMenuItem
       Caption = 'Help'
-      OnClick = HelpMenuClick
       object OnlineHelpMenu: TMenuItem
         Caption = 'Online Help'
         OnClick = OnlineHelpMenuClick
@@ -2520,7 +2519,7 @@ object GLForm1: TGLForm1
       end
       object MenuItem1: TMenuItem
         Caption = 'Mouse Gestures'
-        OnClick = MenuItem1Click
+        OnClick = MouseGesturesMenu
       end
       object HelpAboutMenu: TMenuItem
         Caption = 'About'
@@ -2561,6 +2560,7 @@ object GLForm1: TGLForm1
   end
   object SaveDialog1: TSaveDialog
     DefaultExt = '.png'
+    Options = [ofNoReadOnlyReturn, ofEnableSizing, ofViewDetail]
     left = 304
     top = 147
   end
@@ -2594,6 +2594,11 @@ object GLForm1: TGLForm1
     end
     object LayerClusterMenu: TMenuItem
       Caption = 'Generate Cluster Table'
+      OnClick = LayerClusterMenuClick
+    end
+    object LayerClusterOptsMenu: TMenuItem
+      Tag = 1
+      Caption = 'Generate Cluster Table with Options'
       OnClick = LayerClusterMenuClick
     end
     object RemoveSmallClusterMenu: TMenuItem
@@ -2634,7 +2639,7 @@ object GLForm1: TGLForm1
     end
     object LayerZeroIntensityInvisibleMenu: TMenuItem
       AutoCheck = True
-      Caption = 'Hide voxels with zero intensity'
+      Caption = 'Hide Voxels with Zero Intensity'
       OnClick = LayerZeroIntensityInvisibleMenuClick
     end
     object LayerIsLabelMenu: TMenuItem
@@ -2668,11 +2673,6 @@ object GLForm1: TGLForm1
     Filter = 'Python scripts|*.py'
     left = 304
     top = 216
-  end
-  object ScriptSaveDialog: TSaveDialog
-    DefaultExt = '.py'
-    left = 304
-    top = 292
   end
   object YokeTimer: TTimer
     Enabled = False

@@ -4,11 +4,83 @@ interface
 {$mode Delphi}
 uses Math; {for Power/Ln}
 
-function inversez(prob : double) : double;
-function inverset(prob, DF : double) : double;
+function inversechi(p : double; k : integer) : double;
 function inversef(prob : real; k1,k2 : integer) : real;
+function inverset(prob, DF : double) : double;
+function inversez(prob : double) : double;
+
+function chi2p(X : double; k : integer) : double;
+function f2p(f,df1,df2 : extended) : extended;
+function t2p(t,df1 : double) : double;
+function z2p(z: double): double;
 
 implementation
+
+function gammln(xx : double) : double;
+var
+   X, tmp, ser : double;
+   cof : array[0..5] of double;
+   j : integer;
+
+begin
+    cof[0] := 76.18009173;
+    cof[1] := -86.50532033;
+    cof[2] := 24.01409822;
+    cof[3] := -1.231739516;
+    cof[4] := 0.00120858003;
+    cof[5] := -0.00000536382;
+
+    X := xx - 1.0;
+    tmp := X + 5.5;
+    tmp := tmp - ((X + 0.5) * ln(tmp));
+    ser := 1.0;
+    for j := 0 to 5 do
+    begin
+        X := X + 1.0;
+        ser := ser + cof[j] / X;
+    end;
+    Result := ( -tmp + ln(2.50662827465 * ser) );
+end;
+
+function chi2p(X : double; k : integer) : double;
+var
+   factor : double;   // factor which multiplies sum of series
+   g      : double;   // lngamma(k1+1)
+   k1     : double;   // adjusted degrees of freedom
+   sum    : double;   // temporary storage for partial sums
+   term   : double;   // term of series
+   x1     : double;   // adjusted argument of funtion
+   chi2prob : double; // chi-squared probability
+begin
+     // the distribution function of the chi-squared distribution based on k d.f.
+     if (X < 0.01) or (X > 1000.0) then
+     begin
+          if X < 0.01 then chi2prob := 0.0001
+          else chi2prob := 0.999;
+     end
+     else
+     begin
+    	x1 := 0.5 * X;
+    	k1 := 0.5 * k;
+    	g := gammln(k1 + 1);
+    	factor := exp(k1 * ln(x1) - g - x1);
+    	sum := 0.0;
+    	if factor > 0 then
+    	begin
+        	term := 1.0;
+          	sum := 1.0;
+          	while ((term / sum) > 0.000001) do
+          	begin
+                     k1 := k1 + 1;
+                     term  := term * (x1 / k1);
+                     sum := sum + term;
+                end;
+        end;
+    	chi2prob := sum * factor;
+     end; //end if .. else
+     Result := chi2prob;
+end;
+
 
 function zprob(p : double; VAR errorstate : boolean) : double;
 VAR
@@ -246,5 +318,156 @@ begin
      x := inversebetaratio(ratio,h1,h2,lnbeta);
      result := k2 * (1 - x) / (k1 * x)
 end; (* of fpercentpoint *)
+
+function zdensity(z : real) : real;
+(* the density function of the standard normal distribution *)
+const a = 0.39894228; (* 1 / sqrt(2*pi) *)
+
+begin
+     Result := a * exp(-0.5 * z*z )
+end; (* of normal *)
+
+function f2p(f,df1,df2 : extended) : extended;
+var
+    term1, term2, term3, term4, term5, term6 : extended;
+
+FUNCTION betacf(a,b,x: double): extended;
+LABEL 1;
+CONST
+   itmax=100;
+   eps=3.0e-7;
+VAR
+   tem,qap,qam,qab,em,d: extended;
+   bz,bpp,bp,bm,az,app: extended;
+   am,aold,ap: extended;
+   m: integer;
+
+BEGIN
+   am := 1.0;
+   bm := 1.0;
+   az := 1.0;
+   qab := a+b;
+   qap := a+1.0;
+   qam := a-1.0;
+   bz := 1.0 - qab * x / qap;
+   FOR m := 1 to itmax DO BEGIN
+      em := m;
+      tem := em+em;
+      d := em * (b - m) * x / ((qam + tem) * (a + tem));
+      ap := az + d * am;
+      bp := bz + d * bm;
+      term1 := -(a + em);
+      term2 := qab + em;
+      term3 := term1 * term2 * x;
+      term4 := a + tem;
+      term5 := qap + tem;
+      term6 := term4 * term5;
+      d := term3 / term6;
+      app := ap + d * az;
+      bpp := bp + d * bz;
+      aold := az;
+      am := ap/bpp;
+      bm := bp/bpp;
+      az := app/bpp;
+      bz := 1.0;
+      IF ((abs(az-aold)) < (eps*abs(az))) THEN GOTO 1
+   END;
+  { ShowMessage('WARNING! a or b too big, or itmax too small in betacf');}
+1:   betacf := az
+END;
+
+FUNCTION betai(a,b,x: extended): extended;
+VAR
+   bt: extended;
+BEGIN
+   IF ((x <= 0.0) OR (x >= 1.0)) THEN BEGIN
+     { ShowMessage('ERROR! Problem in routine BETAI');}
+      betai := 0.5;
+      exit;
+   END;
+   IF ((x <= 0.0) OR (x >= 1.0)) THEN bt := 0.0
+   ELSE
+       begin
+            term1 := gammln(a + b) -
+                     gammln(a) - gammln(b);
+            term2 := a * ln(x);
+            term3 := b * ln(1.0 - x);
+            term4 := term1 + term2 + term3;
+            bt    := exp(term4);
+            term5 := (a + 1.0) / (a + b + 2.0);
+       end;
+   IF x < term5 then betai := bt * betacf(a,b,x) / a
+   ELSE betai := 1.0 - bt * betacf(b,a,1.0-x) / b
+END;
+
+begin { fprob function }
+     if f <= 0.0 then
+     	result := 1.0 
+     else
+     	result := (betai(0.5*df2,0.5*df1,df2/(df2+df1*f)) +
+                   (1.0-betai(0.5*df1,0.5*df2,df1/(df1+df2/f))))/2.0;
+end; // of fprob function
+
+
+function simpsonintegral(a,b : real) : real;
+(* integrates the function f from lower a to upper limit b choosing an *)
+(* interval length so that the error is less than a given amount -     *)
+(* the default value is 1.0e-06                                        *)
+const error = 1.0e-4 ;
+
+var h : real; (* current length of interval *)
+    i : integer; (* counter *)
+    integral : real; (* current approximation to integral *)
+    lastint : real; (* previous approximation *)
+    n : integer; (* no. of intervals *)
+    sum1,sum2,sum4 : real; (* sums of function values *)
+
+begin
+     n := 2 ; h := 0.5 * (b - a);
+     sum1 := h * (zdensity(a) + zdensity(b) );
+     sum2 := 0;
+     sum4 := zdensity( 0.5 * (a + b));
+     integral := h * (sum1 + 4 * sum4);
+     repeat
+           lastint := integral; n := n + n; h := 0.5*h;
+           sum2 := sum2 + sum4;
+           sum4 := 0; i := 1;
+           repeat
+                 sum4 := sum4 + zdensity(a + i*h);
+                 i := i + 2
+           until i > n;
+           integral := h * (sum1 + 2*sum2 + 4*sum4);
+     until abs(integral - lastint) < error;
+     simpsonintegral := integral/3
+end; (* of SimpsonIntegral *)
+
+function z2p(z: double): double;
+(* the distribution function of the standard normal distribution derived *)
+(* by integration using simpson's rule .                                 *)
+
+begin
+     Result := 0.5 + simpsonintegral(0.0,z);
+end;
+
+function t2p(t,df1 : double) : double;
+var
+   F : double;
+begin
+    // Returns the probability corresponding to a two-tailed t test.
+    F := t * t;
+    result := f2p(F,1.0,df1);
+end;
+
+function inversechi(p : double; k : integer) : double;
+var
+   a1, w, z : double;
+begin
+       z := inversez(p);
+       a1 := 2.0 / ( 9.0 * k);
+       w := 1.0 - a1 + z * sqrt(a1);
+       Result := (k * w * w * w);
+end;
+
+
 
 end.

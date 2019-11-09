@@ -17,7 +17,7 @@ type
          //LabelOrientCube,
          LabelOrient, RulerVisible, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay,
          FlipYZ, FlipLR_Radiological, SkipPrefWriting, AutoClusterizeAtlases: boolean;
-         AfniDir, CustomDcm2niix, PyLib, MosaicStr, InitScript, PrevBackgroundImage: string;
+         AfniDir, CustomDcm2niix, PyLib, MosaicStr, InitScript, PrevScript, PrevBackgroundImage: string;
          ClearColor: TRGBA;
          PrevFilename: TMRU;
 
@@ -65,6 +65,8 @@ begin
             for i := 1 to knMRU do
               PrevFilename[i] := '';
             PyLib := '';
+            //InitScript := '';
+            PrevScript := '';
             {$IFDEF UNIX}
             AfniDir := expandfilename('~/')+'abin';
             if not DirectoryExists(AfniDir) then begin

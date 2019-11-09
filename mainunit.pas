@@ -24,9 +24,9 @@ interface
 uses
   {$IFDEF MATT1}umat, {$ENDIF}
   {$IFDEF COMPILEYOKE} yokesharemem, {$ENDIF}
-  {$IFDEF AFNI} nifti_foreign, {$ENDIF}
+  {$IFDEF AFNI} nifti_foreign, afni_fdr, {$ENDIF}
   {$IFDEF MYPY}PythonEngine,  {$ENDIF}
-  {$IFDEF LCLCocoa} {$IFDEF NewCocoa} nsappkitext, UserNotification,{$ENDIF} {$ENDIF}
+  {$IFDEF LCLCocoa}SysCtl, dos, {$IFDEF NewCocoa} nsappkitext, UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
   resize, ustat,
   lcltype, GraphType, Graphics, dcm_load, crop,
@@ -35,7 +35,7 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20191031 BETA'; //++ fixes remove small clusters
+  kVers = '1.2.20191108 BETA'; //++ fixes remove small clusters
 type
 
   { TGLForm1 }
@@ -84,6 +84,7 @@ type
     AfniPMenu: TMenuItem;
     AfniQMenu: TMenuItem;
     GraphOpenAddMenu: TMenuItem;
+    LayerClusterOptsMenu: TMenuItem;
     OpenAFNIMenu: TMenuItem;
     ClusterPopUp: TPopupMenu;
     GraphPanel: TPanel;
@@ -182,7 +183,7 @@ type
     MaskPreserveMenu: TMenuItem;
     DrawHintsMenu: TMenuItem;
     ImportTIFFMenu: TMenuItem;
-    RemoveHazeSmoothMenu: TMenuItem;
+    RemoveHazeOptionsMenu: TMenuItem;
     SaveNIfTIMenu: TMenuItem;
     StoreFMRIMenu: TMenuItem;
     SmoothMenu: TMenuItem;
@@ -247,7 +248,6 @@ type
     LineBox: TGroupBox;
     HelpMenu: TMenuItem;
     OnlineHelpMenu: TMenuItem;
-    ScriptSaveDialog: TSaveDialog;
     ScriptOpenDialog: TOpenDialog;
     ScriptingMenu: TMenuItem;
     ScriptingSepMenu: TMenuItem;
@@ -339,8 +339,6 @@ type
     procedure AfniPMenuClick(Sender: TObject);
     procedure AfniQMenuClick(Sender: TObject);
     procedure ClusterSaveClick(Sender: TObject);
-    procedure ClusterViewChange(Sender: TObject; Item: TListItem;
-      Change: TItemChange);
     procedure ClusterViewColumnClick(Sender: TObject; Column: TListColumn);
     procedure ClusterViewCompare(Sender: TObject; Item1, Item2: TListItem;
       Data: Integer; var Compare: Integer);
@@ -368,6 +366,7 @@ type
     procedure RemoveSmallClusterMenuClick(Sender: TObject);
     procedure RulerVisible();
     procedure RulerCheckChange(Sender: TObject);
+    procedure ScriptingSepMenuClick(Sender: TObject);
     procedure UpdateCropMask(msk: TVec6);
     procedure CreateOverlapImageMenuClick(Sender: TObject);
     procedure CreateSubtractionPlotMenuClick(Sender: TObject);
@@ -427,7 +426,7 @@ type
     procedure LayerShowHeaderMenuClick(Sender: TObject);
     procedure LayerVolumeChange(Sender: TObject);
     procedure MaskMenuClick(Sender: TObject);
-    procedure MenuItem1Click(Sender: TObject);
+    procedure MouseGesturesMenu(Sender: TObject);
     procedure OpenFSLMenuClick(Sender: TObject);
     procedure Quit2TextEditor;
     procedure DrawAutomaticMenuClick(Sender: TObject);
@@ -477,9 +476,9 @@ type
     procedure CutNoneBtnClick(Sender: TObject);
     procedure SetFormDarkMode(f: TForm);
     procedure SetToolPanelMaxWidth();
+    function ClusterOpen(fnm: string): boolean;
     procedure DisplayViewMenu(Sender: TObject);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
-    procedure HelpMenuClick(Sender: TObject);
     procedure ImportDicomMenuClick(Sender: TObject);
     procedure LayerAlphaTrackMouseUp(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
@@ -594,6 +593,12 @@ const kExt = '.glsl';
 const
      kNaNsingle: single = 1/0;
      kNaN : double = 1/0;
+  {$IFDEF UNIX} //end of line
+  kEOLN = #10;
+  {$ELSE}
+   kEOLN = #13#10; //Windows CRLF
+  {$ENDIF}
+  kTab = #9;
 var
  gPrefs: TPrefs;
  gMouseLimitLo, gMouseLimitHi : TPoint;
@@ -641,13 +646,6 @@ begin
 end;
 
 procedure TGLForm1.ClusterSaveClick(Sender: TObject);
-const
-     kTab = chr(9);
-     {$IFDEF UNIX} //https://en.wikipedia.org/wiki/Newline
-     kEOLN = chr(10);
-      {$ELSE}
-      kEOLN = chr(13)+chr(10);
-      {$ENDIF}
 var
    contents,row: ansistring;
    column: TListColumn;
@@ -661,7 +659,8 @@ begin
   row := '';
   contents := 'MRIcroGL '+kVers+kEOLN;
   contents += 'Warning: clusters are a beta feature'+kEOLN;
-  if vols.Layer(GLForm1.LayerList.ItemIndex,niftiVol) then
+  //if vols.Layer(GLForm1.LayerList.ItemIndex,niftiVol) then
+  if vols.Layer(ClusterView.tag,niftiVol) then
      contents += 'Notes: '+niftiVol.clusterNotes+kEOLN;
   // header
   for i := 0 to ClusterView.Columns.Count - 1 do
@@ -823,13 +822,14 @@ begin
 end; //GetFloat()
 
 procedure TGLForm1.AfniPMenuClick(Sender: TObject);
+{$IFDEF AFNI}
 var
    v: TNIfTI;
   jv: integer;
   s: string;
   df0, df1, p, thresh: double;
 begin
-  {$IFDEF AFNI} //TRW
+
   vols.Layer(LayerList.ItemIndex,v);
   if v = nil then exit;
   if length(v.afnis) < v.VolumeDisplayed then exit;
@@ -853,35 +853,58 @@ begin
   end else
       thresh := inversef(p, round(df0), round(df1));//pFdistrInv(round(df0), round(df1), p);
   LayerChange(LayerList.ItemIndex, -1, -1, thresh, thresh);
-  {$ENDIF}
-
 end;
-
-procedure TGLForm1.AfniQMenuClick(Sender: TObject);
-{$IFDEF AFNIfdr}
-var
-   v: TNIfTI;
-  jv: integer;
-  p, z, thresh: double;
-{$ENDIF}
+{$ELSE}
 begin
-  {$IFDEF AFNIfdr} //TRW
+     showmessage('Not compiled with AFNI support');
+end;
+{$ENDIF}
+
+procedure TGLForm1.AfniDetailsMenuClick(Sender: TObject);
+var
+   s: string;
+   v: TNIfTI;
+   i: integer;
+
+begin
+  {$IFDEF AFNI}
   vols.Layer(LayerList.ItemIndex,v);
   if v = nil then exit;
   if length(v.afnis) < v.VolumeDisplayed then exit;
-  jv := v.afnis[v.VolumeDisplayed].jv;
-  if (jv <> kFUNC_TT_TYPE) and (jv <> kFUNC_FT_TYPE) then begin
-     showmessage('Current version only supports p-values for T and F tests, not "'+AFNIjvLabel(jv)+'"');
-     exit;
+  s := 'Statistical code: '+AFNIjvLabel(v.afnis[v.VolumeDisplayed].jv);
+  if (v.afnis[v.VolumeDisplayed].nv > 0) then begin
+     s := s + kEOLN +'  Parameters:';
+     for i := 0 to v.afnis[v.VolumeDisplayed].nv - 1 do
+         s := s + ' '+floattostr(v.afnis[v.VolumeDisplayed].param[i]);
   end;
-  p := GetFloat('Threshold at FDR-corrected p-value', 0,0.05,0);
-  z := inversez(p); //pNormalInv(p); //qginv(p);
-  //thresh := fdrCurve(z);
-  //LayerChange(LayerList.ItemIndex, -1, -1, thresh, thresh);
-  {$ELSE}
-  showmessage('This feature is not yet enabled');
+  s := s + kEOLN + format('Volume intensity %.5f..%.5f', [v.afnis[v.VolumeDisplayed].minVal, v.afnis[v.VolumeDisplayed].maxVal ]);
+  showmessage(s);
   {$ENDIF}
 end;
+
+procedure TGLForm1.AfniQMenuClick(Sender: TObject);
+{$IFDEF AFNI}
+var
+  v: TNIfTI;
+  i: integer;
+  q, thresh: double;
+begin
+  vols.Layer(LayerList.ItemIndex,v);
+  if v = nil then exit;
+  i := v.VolumeDisplayed;
+  if length(v.afnis) < i then exit;
+  if (length(v.afnis[i].FDRcurv.ar) < 20) then begin
+     showmessage('This volume does not include an FDR curve');
+  end;
+  q := GetFloat('Threshold at FDR-corrected q-value (e.g. q=0.05 for 1 in 20 false alarms)', 0,0.05,0);
+  thresh := q2VoxelIntensity(v.afnis[i].FDRcurv, q, v.afnis[i].maxAbsVal, true);
+  LayerChange(LayerList.ItemIndex, -1, -1, thresh, thresh);
+end;
+{$ELSE}
+begin
+     showmessage('Not compiled with AFNI support');
+end;
+{$ENDIF}
 
 function CompareFloatText(const S1, S2: string): integer;
 begin
@@ -1514,6 +1537,21 @@ begin
   ViewGPU1.Invalidate;
 end;
 
+function PyCOLOREDITOR(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  D: integer;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  D := 1;
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, '|i:coloreditor', @D)) then begin
+       Vol1.ShowColorEditor := (D = 1);
+       GLForm1.ColorEditorMenu.checked := Vol1.ShowColorEditor;
+    end;
+  ViewGPU1.Invalidate;
+end;
+
+
 function PyVERSION(Self, Args : PPyObject): PPyObject; cdecl;
 var
   s: string;
@@ -2085,14 +2123,15 @@ begin
     end;
 end;
 
-procedure GenerateClustersCore(var v: TNIfTI);
+procedure GenerateClustersCore(var v: TNIfTI; thresh, mm: single; method: integer; isDarkAndBright: boolean);
 var
   i: integer = 0;
   v2: TNIfTI;
 begin
+  GLForm1.ClusterView.tag := -1;
   if (v.IsLabels) or (GLForm1.LayerList.Count < 2) then begin
     //either atlas or only image loaded
-    v.GenerateClusters(gPrefs.ClusterNeighborMethod);
+    v.GenerateClusters(thresh, mm, gPrefs.ClusterNeighborMethod, isDarkAndBright);
     exit;
   end;
   //not an atlas... see if one is loaded
@@ -2103,22 +2142,30 @@ begin
     v2 := nil;
     i := i + 1;
   end;
-  v.GenerateClusters(v2, gPrefs.ClusterNeighborMethod); //v2 is either nil or a label map
+  v.GenerateClusters(v2, thresh, mm, method, isDarkAndBright); //v2 is either nil or a label map
 end;
 
 function PyGENERATECLUSTERS(Self, Args : PPyObject): PPyObject; cdecl;
 var
-  layer: integer;
+  layer, method, bimodal: integer;
+  thresh, mm: single;
   v: TNIfTI;
 begin
  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+ thresh := kNaN;
+ mm := 32;
+ method := gPrefs.ClusterNeighborMethod;
+ bimodal := 0;
  with GetPythonEngine do
-   if Bool(PyArg_ParseTuple(Args, 'i:generateclusters', @layer)) then begin
-      if not vols.Layer(layer,v) then exit;
+   if Bool(PyArg_ParseTuple(Args, 'i|ffii:generateclusters', @layer, @thresh, @mm, @method, @bimodal)) then begin
+      if not vols.Layer(layer,v) then begin
+         GLForm1.ScriptOutputMemo.lines.Add('generateclusters unable to load layer '+inttostr(layer));
+         exit;
+      end;
       while (isBusy) or (GLForm1.Updatetimer.enabled) do
             Application.ProcessMessages;
-       //v.GenerateClusters;
-       GenerateClustersCore(v);
+       GenerateClustersCore(v, thresh, mm,method, bimodal = 1);
+       //GenerateClustersCore(v, thresh, mm,method, true);
        GLForm1.UpdateLayerBox(true);// show cluster panel
        //GLForm1.UpdateTimer.Enabled := true;
     end;
@@ -2350,16 +2397,20 @@ end;
 
 function PyEXTRACT(Self, Args : PPyObject): PPyObject; cdecl;
 var
-  Otsu,Dil,One: integer;
+  isSmoothEdges, isSingleObject, OtsuLevels: integer;
   niftiVol: TNIfTI;
 begin
   Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  //isSmoothEdges: boolean = true; isSingleObject: boolean = true; OtsuLevels : integer = 5
+  isSmoothEdges := 1;
+  isSingleObject := 1;
+  OtsuLevels := 5;
   if not vols.Layer(0,niftiVol) then exit;
   Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
   with GetPythonEngine do
-    if Boolean(PyArg_ParseTuple(Args, '|iii:extract', @Otsu,@Dil,@One)) then begin
+    if Boolean(PyArg_ParseTuple(Args, '|iii:extract', @isSmoothEdges,@isSingleObject,@OtsuLevels)) then begin
       //EXTRACT(Otsu,Dil,Boolean(One));
-      niftiVol.RemoveHaze(true); //todo: dilation and number of Otsu layers
+      niftiVol.RemoveHaze(isSmoothEdges=1, isSingleObject=1, OtsuLevels); //todo: dilation and number of Otsu layers
       ViewGPU1.Invalidate;
     end;
 end;
@@ -2415,12 +2466,14 @@ begin
     AddMethod('cameradistance', @PyCAMERADISTANCE, ' cameradistance(z) -> Sets the viewing distance from the object.');
     AddMethod('colorbarposition', @PyCOLORBARPOSITION, ' colorbarposition(p) -> Set colorbar position (0=off, 1=top, 2=right).');
     AddMethod('colorbarsize', @PyCOLORBARSIZE, ' colorbarsize(p) -> Change width of color bar f is a value 0.01..0.5 that specifies the fraction of the screen used by the colorbar.');
+    AddMethod('coloreditor', @PyCOLOREDITOR, ' coloreditor(s) -> Show (1) or hide (0) color editor and histogram.');
     AddMethod('clipazimuthelevation', @PyCLIPAZIMUTHELEVATION, ' clipazimuthelevation(depth, azi, elev) -> Set a view-point independent clip plane.');
     AddMethod('clipthick', @PyCLIPTHICK, ' clipthick(thick) -> Set size of clip plane slab (0..1).');
     AddMethod('cutout', @PyCUTOUT, ' cutout(L,A,S,R,P,I) -> Remove sector from volume.');
-    AddMethod('extract', @PyEXTRACT, ' extract() -> Remove haze from background image.');
+    AddMethod('extract', @PyEXTRACT, ' extract(|b,s,t) -> Remove haze from background image. Blur edges (b: 0=no, 1=yes, default), single object (s: 0=no, 1=yes, default), threshold (t: 1..5=high threshold, 5 is default, higher values yield larger objects)');
+    ////isSmoothEdges: boolean = true; isSingleObject: boolean = true; OtsuLevels : integer = 5
     AddMethod('fullscreen', @PyFULLSCREEN, ' fullscreen(max) -> Form expands to size of screen (1) or size is maximized (0).');
-    AddMethod('generateclusters', @PyGENERATECLUSTERS, ' generateclusters(layer) -> create list of distinct regions.');
+    AddMethod('generateclusters', @PyGENERATECLUSTERS, ' generateclusters(layer |,thresh, minClusterMM3, method, bimodal) -> create list of distinct regions. Optionally provide cluster intensity, minimum cluster size, neighbor method(1=faces,2=faces+edges,3=faces+edges+corners). If bimodal = 1, both dark and bright clusters are detected.');
     AddMethod('graphscaling', @PyGRAPHSCALING, ' graphscaling(type) -> Vertical axis of graph is raw (0), demeaned (1) normalized -1..1 (2) normalized 0..1 (3) or percent (4).');
     AddMethod('hiddenbycutout', @PyHIDDENBYCUTOUT, ' hiddenbycutout(layer, isHidden) -> Will cutout hide (1) or show (0) this layer?');
     AddMethod('invertcolor', @PyINVERTCOLOR, ' invertcolor(layer, isInverted) -> Is color intensity inverted (1) or not (0) this layer?');
@@ -2947,7 +3000,6 @@ begin
      if (nii.Header.intent_code <> kNIFTI_INTENT_ESTIMATE) or (length(nii.Header.intent_name) < 2) or (nii.Header.intent_name[1] <> 'N')  then exit;
      s := copy(nii.Header.intent_name,2, length(nii.Header.intent_name)-1);
      result := StrToIntDef(s, -1);
-
 end;
 
 procedure TGLForm1.CreateSubtractionPlotMenuClick(Sender: TObject);
@@ -3041,8 +3093,6 @@ begin
     LayerChange(vols.NumLayers-1, i, -1, kNaNsingle, kNaNsingle)
  else
      LayerChange(vols.NumLayers-1, vols.NumLayers-1, -1, kNaNsingle, kNaNsingle);
-
-
  UpdateLayerBox(true);
  UpdateColorbar();
  //Vol1.UpdateOverlays(vols);
@@ -3194,6 +3244,7 @@ begin
      if (ScriptPanel.Width < 24) and (isShowScriptPanel) then
         ScriptFormVisible(true);
         //ScriptPanel.Width := 240;
+     gPrefs.PrevScript := scriptname;
      ScriptMemo.Lines.LoadFromFile(scriptname);
      ScriptingRunMenuClick(nil);
 end;
@@ -3303,12 +3354,7 @@ procedure TGLForm1.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
  gPrefs.CustomDcm2niix := dcm2niiForm.getCustomDcm2niix();
  IniFile(false, gPrefs);
- Vol1.Free;
-end;
-
-procedure TGLForm1.HelpMenuClick(Sender: TObject);
-begin
-
+ FreeandNil(Vol1);
 end;
 
 procedure TGLForm1.ImportDicomMenuClick(Sender: TObject);
@@ -3385,7 +3431,7 @@ begin
          itm := ClusterView.Items.Add;
          itm.Caption := format('%d', [i]);
          //volume
-         itm.SubItems.Add(format('%.2f', [c[i].SzCC]));
+         itm.SubItems.Add(format('%d', [round(c[i].SzMM3)]));
          //PeakMax
          itm.SubItems.Add(format('%.1f', [c[i].Peak]));
          //PeakXYZ
@@ -3396,6 +3442,7 @@ begin
          itm.SubItems.Add(format(' %.1f×%.1f×%.1f', [c[i].CogXYZ.x, c[i].CogXYZ.y, c[i].CogXYZ.z]));
          //Structure
          itm.SubItems.Add(c[i].Structure);
+         //itm.SubItems.Add(format('%d:%s', [i, c[i].Structure])); //add index
      end;
 end;
 
@@ -3412,16 +3459,19 @@ begin
      if (not NewLayers) and (NewVolumes) and (vols.NumLayers > 0) then begin
         for i := 1 to vols.NumLayers do begin
             vols.Layer(i-1,v);
-            if v.VolumesTotal > 1 then begin
+            if (v.VolumesTotal > 1) and (not v.IsLabels) then begin //IsLabels detect 2-volume TTatlas+tlrc.HEAD
                isMultiVol := true;
                if (i = 1) then //TGV
                   isMultiVol1 := true;
             end;
             s := v.ShortName;
-            if v.VolumesTotal > 1 then
+            if (v.VolumesTotal > 1) then
                s := format('%d/%d: ', [v.VolumeDisplayed+1, v.VolumesTotal] )+s;
             LayerList.Items[i-1] := s;
-            if length(v.clusters) > 0 then hasClusters := true;
+            if length(v.clusters) > 0 then begin
+               hasClusters := true;
+               //Layerbox.caption := format('layer %d clusters %d', [i, length(v.clusters)]);
+            end;
         end;
      end;
      if (NewLayers) then begin
@@ -3430,7 +3480,7 @@ begin
         v := nil;
         for i := 1 to vols.NumLayers do begin
             vols.Layer(i-1,v);
-            if v.VolumesTotal > 1 then begin
+            if (v.VolumesTotal > 1) and (not v.IsLabels) then begin //IsLabels detect 2-volume TTatlas+tlrc.HEAD
                isMultiVol := true;
                if (i = 1) then //TGV
                   isMultiVol1 := true;
@@ -3451,7 +3501,7 @@ begin
         GraphAddMenu.Enabled := isMultiVol;
         if (v <> nil) and (gPrefs.AutoClusterizeAtlases) then begin
            if (v.IsLabels) and (length(v.clusters) < 1) then begin
-              generateClustersCore(v);
+              generateClustersCore(v, 1, 1, gPrefs.ClusterNeighborMethod, false);
               hasClusters := true;
            end;
         end;
@@ -3489,8 +3539,11 @@ begin
      LayerAlphaTrack.Position := v.OpacityPercent;
      LayerBox.Hint := format('image intensity range %.4g..%.4g',[DefuzzX(v.VolumeMin), DefuzzX(v.VolumeMax)]);
      //ClusterView.Visible := length(v.clusters) > 0;
-     if (ClusterView.Visible) then
-        MakeList(v.clusters);
+     if (NewLayers) or ((LayerList.ItemIndex <> ClusterView.tag) and (length(v.clusters) > 0 )) then begin
+        MakeList(v.clusters); //tue
+        //Layerbox.caption := format('layer %d clusters %d', [i, length(v.clusters)]);
+        ClusterView.tag := LayerList.ItemIndex;
+     end;
      {$IFDEF AFNI}
      isAFNI := length(v.afnis) > 0;
      if (isAFNI) and (v.VolumeDisplayed >=  length(v.afnis)) then
@@ -3577,6 +3630,11 @@ begin
   if vols = nil then exit; //mungo : mosaic selected before image is loaded
  RulerVisible();
  ViewGPU1.Invalidate;
+end;
+
+procedure TGLForm1.ScriptingSepMenuClick(Sender: TObject);
+begin
+
 end;
 
 procedure TGLForm1.LayerContrastKeyUp(Sender: TObject; var Key: Word;
@@ -3743,12 +3801,123 @@ begin
  ReportPositionXYZ(true);
 end;
 
+procedure GetRemoveHazePrefs(var isSmoothEdges, isSingleObject: boolean; var OtsuLevels: integer);
+var
+    PrefForm: TForm;
+    CancelBtn,OkBtn: TButton;
+    threshLabel: TLabel;
+    threshEdit: TEdit;
+    smoothCheck, singleCheck: TCheckBox;
+
+
+    //NeighborCombo: TComboBox;
+begin
+  PrefForm:=TForm.Create(nil);
+  //PrefForm.SetBounds(100, 100, 512, 212);
+  PrefForm.AutoSize := True;
+  PrefForm.BorderWidth := 8;
+  PrefForm.Caption:='Overlay Settings';
+  PrefForm.Position := poScreenCenter;
+  PrefForm.BorderStyle := bsDialog;
+  //label
+  threshLabel:=TLabel.create(PrefForm);
+  threshLabel.Caption:= 'Threshold 1..5 (small..big)';
+  threshLabel.AutoSize := true;
+  threshLabel.AnchorSide[akTop].Side := asrTop;
+  threshLabel.AnchorSide[akTop].Control := PrefForm;
+  threshLabel.BorderSpacing.Top := 6;
+  threshLabel.AnchorSide[akLeft].Side := asrLeft;
+  threshLabel.AnchorSide[akLeft].Control := PrefForm;
+  threshLabel.BorderSpacing.Left := 6;
+  threshLabel.Parent:=PrefForm;
+  //edit
+  threshEdit:=TEdit.create(PrefForm);
+  threshEdit.Caption := IntToStr(OtsuLevels);
+  threshEdit.Constraints.MinWidth:= 300;
+  threshEdit.AutoSize := true;
+  threshEdit.AnchorSide[akTop].Side := asrBottom;
+  threshEdit.AnchorSide[akTop].Control := threshLabel;
+  threshEdit.BorderSpacing.Top := 6;
+  threshEdit.AnchorSide[akLeft].Side := asrLeft;
+  threshEdit.AnchorSide[akLeft].Control := PrefForm;
+  threshEdit.BorderSpacing.Left := 6;
+  threshEdit.Parent:=PrefForm;
+  //smoothCheck
+  smoothCheck:=TCheckBox.create(PrefForm);
+  smoothCheck.Checked := isSmoothEdges;
+  smoothCheck.Caption:='Smooth Edges';
+  smoothCheck.AnchorSide[akTop].Side := asrBottom;
+  smoothCheck.AnchorSide[akTop].Control := threshEdit;
+  smoothCheck.BorderSpacing.Top := 6;
+  smoothCheck.AnchorSide[akLeft].Side := asrLeft;
+  smoothCheck.AnchorSide[akLeft].Control := PrefForm;
+  smoothCheck.BorderSpacing.Left := 6;
+  smoothCheck.Anchors := [akTop, akLeft];
+  smoothCheck.Parent:=PrefForm;
+  //singleCheck
+  singleCheck:=TCheckBox.create(PrefForm);
+  singleCheck.Checked := isSingleObject;
+  singleCheck.Caption:='Only extract the largest object';
+  singleCheck.AnchorSide[akTop].Side := asrBottom;
+  singleCheck.AnchorSide[akTop].Control := smoothCheck;
+  singleCheck.BorderSpacing.Top := 6;
+  singleCheck.AnchorSide[akLeft].Side := asrLeft;
+  singleCheck.AnchorSide[akLeft].Control := PrefForm;
+  singleCheck.BorderSpacing.Left := 6;
+  singleCheck.Anchors := [akTop, akLeft];
+  singleCheck.Parent:=PrefForm;
+
+  //
+  //Cancel Btn
+  CancelBtn:=TButton.create(PrefForm);
+  CancelBtn.Caption:='Cancel';
+  CancelBtn.AutoSize := true;
+  CancelBtn.AnchorSide[akTop].Side := asrBottom;
+  CancelBtn.AnchorSide[akTop].Control := singleCheck;
+  CancelBtn.BorderSpacing.Top := 8;
+  CancelBtn.AnchorSide[akLeft].Side := asrLeft;
+  CancelBtn.AnchorSide[akLeft].Control := PrefForm;
+  CancelBtn.BorderSpacing.Left := 200;
+  CancelBtn.Parent:=PrefForm;
+  CancelBtn.ModalResult:= mrCancel;
+  //OK button
+  OkBtn:=TButton.create(PrefForm);
+  OkBtn.Caption:='OK';
+  OkBtn.AutoSize := true;
+  OkBtn.AnchorSide[akTop].Side := asrBottom;
+  OkBtn.AnchorSide[akTop].Control := singleCheck;
+  OkBtn.BorderSpacing.Top := 8;
+  OkBtn.AnchorSide[akLeft].Side := asrRight;
+  OkBtn.AnchorSide[akLeft].Control := CancelBtn;
+  OkBtn.BorderSpacing.Left := 6;
+  OkBtn.Parent:=PrefForm;
+  OkBtn.ModalResult:= mrOK;
+  //OK button
+  {$IFDEF LCLCocoa}
+  if gPrefs.DarkMode then GLForm1.SetFormDarkMode(PrefForm);
+  {$ENDIF}
+  PrefForm.ShowModal;
+  OtsuLevels := 0;
+  if (PrefForm.ModalResult = mrOK) then begin
+    OtsuLevels := StrToInt(threshEdit.Caption);
+    isSingleObject := singleCheck.Checked;
+    isSmoothEdges := smoothCheck.Checked;
+  end;
+  FreeAndNil(PrefForm);
+end; //GetRemoveHazePrefs()
+
 procedure TGLForm1.RemoveHazeMenuClick(Sender: TObject);
 var
  niftiVol: TNIfTI;
+ isSmoothEdges: boolean = true;
+ isSingleObject: boolean = true;
+ OtsuLevels : integer = 5;
 begin
   if not vols.Layer(0,niftiVol) then exit;
-  niftiVol.RemoveHaze((Sender as TMenuItem).tag = 1);
+  if (Sender as TMenuItem).tag = 1 then
+     GetRemoveHazePrefs(isSmoothEdges, isSingleObject, OtsuLevels);
+  if OtsuLevels < 1 then exit; //user pressed cancel
+  niftiVol.RemoveHaze(isSmoothEdges, isSingleObject, OtsuLevels);
   ViewGPU1.Invalidate;
 end;
 
@@ -4723,11 +4892,57 @@ begin
    if sender <> nil then CutoutChange(Sender);
 end;
 
-procedure TGLForm1.ScriptingSaveMenuClick(Sender: TObject);
+function erfc(x: extended):extended;
+const
+ sqrtPi = 1.772453851;
+ Terms = 12;
+var
+  x2,u,v,sum: extended;
+  i: integer;
 begin
-   if not ScriptSaveDialog.Execute then exit;
-     ScriptSaveDialog.Filename := ChangeFileExt(ScriptSaveDialog.Filename,'.py');
-     ScriptMemo.Lines.SaveToFile(ScriptSaveDialog.Filename);
+     x2 := x*x;
+     v := 1.0/ (2.0*x2);
+     u := 1.0 + v*(Terms+1.0);
+     for i := Terms downto 1 do begin
+         sum := 1.0 + i*v/u;
+         u := sum;
+     end;
+     result := exp(-x2)/(x*sum*sqrtPi);
+end;
+
+procedure TGLForm1.ScriptingSaveMenuClick(Sender: TObject);
+var
+  fnm, dir: string;
+  dlg : TSaveDialog;
+begin
+ fnm := (gPrefs.PrevScript);
+ if (FileGetAttr(fnm) and faReadOnly) <>0 then
+    fnm := extractfilename(fnm);
+ {$IFDEF Darwin}
+ if AnsiContainsText(fnm, '.app/') then
+    fnm := extractfilename(fnm);
+ {$ENDIF}
+ if fnm = '' then
+    fnm := 'myScript.py';
+  dir := ExtractFileDir(fnm);
+  if (dir = '') or (not DirectoryExists(dir)) then
+     dir := HomeDir(false);
+  dlg := TSaveDialog.Create(self);
+  dlg.InitialDir:= dir;
+  dlg.Filename := fnm;
+  dlg.DefaultExt := '.py';
+  dlg.Filter := 'Python Script|*.py';
+
+  dlg.Options := [ofEnableSizing, ofViewDetail, ofNoReadOnlyReturn, ofOverwritePrompt];
+  if not dlg.Execute then begin
+     dlg.Free;
+     exit;
+  end;
+  fnm := ChangeFileExt(dlg.Filename,'.py');
+  dlg.Free;
+  ScriptMemo.Lines.SaveToFile(fnm);
+  gPrefs.PrevScript := fnm;
+
 end;
 
 procedure TGLForm1.ScriptingRunMenuClick(Sender: TObject);
@@ -4877,10 +5092,64 @@ begin
         result := false;
 end;
 
+function TGLForm1.ClusterOpen(fnm: string): boolean;
+label
+     123;
+var
+   s, s2: TStringList;
+   st: string;
+   i, o: integer;
+   c: TClusters;
+   niftiVol: TNIfTI;
+begin
+     result := false;
+     if not fileexists(fnm) then exit;
+     i := LayerList.ItemIndex;
+     if (i < 0) or (i >= LayerList.Count) then exit;
+     if not vols.Layer(LayerList.ItemIndex,niftiVol) then exit;
+     s := TStringList.Create();
+     s2 := TStringList.Create();
+     s.LoadFromFile(fnm);
+     if s.Count < 1 then goto 123;
+     if not AnsiContainsText(s[0],'AFNI interactive cluster table') then
+        goto 123;
+     i := 0;
+     o := 0;
+     setlength(c,100);
+     while i < s.Count do begin
+           st := s[i];
+           i := i + 1;
+           if (length(st) < 1) or (st[1] = '#') then continue;
+           s2.DelimitedText := st;
+           if s2.Count <> 7 then exit;
+           if (o >= length(c)) then
+              setlength(c, 100+length(c));
+           c[o].SzMM3:= strtointdef(s2[0],0);
+           c[o].CogXYZ.x := strtofloatdef(s2[1],0);
+           c[o].CogXYZ.y := strtofloatdef(s2[2],0);
+           c[o].CogXYZ.z := strtofloatdef(s2[3],0);
+           c[o].PeakXYZ.x := strtofloatdef(s2[4],0);
+           c[o].PeakXYZ.y := strtofloatdef(s2[5],0);
+           c[o].PeakXYZ.z := strtofloatdef(s2[6],0);
+           c[o].Structure:= inttostr(o+1);
+           c[o].PeakStructure:= inttostr(o+1);
+           c[o].Peak := 1;
+           o := o + 1;
+     end;
+     setlength(c,o);
+     niftiVol.SetClusters(c, fnm);
+     UpdateLayerBox(true);
+    123:
+     s.Free;
+     s2.Free;
+     c := nil;
+end;
+
 procedure TGLForm1.FormDropFiles(Sender: TObject; const FileNames: array of String);
 var
  ss: TShiftState;
  fnm, ext, fnmREC, fnmRec2: string;
+ i : integer;
 begin
   if (gPrefs.InitScript <> '') then exit; //MacOS gets paramstr as FormDropFiles, but deletes those that begin with '-', e.g. '-std'
   if length(FileNames) < 1 then exit;
@@ -4912,7 +5181,8 @@ begin
      OpenScript(fnm);
      exit;
   end;
-
+  if (ext = '.1D') and (ClusterOpen(fnm)) then
+     exit;
   if (ext = '.1D') or (ext = '.TXT') or (ext = '.CSV') then begin
      GraphOpen(fnm, ssCtrl in ss);
      exit;
@@ -4943,10 +5213,22 @@ begin
      AddLayer(fnm)
   else
       AddBackground(fnm,true, true);
+  if length(FileNames) > 1 then begin
+     for i := 1 to length(FileNames)-1 do begin
+       fnm := GetFullPath(Filenames[i]);
+       if (not fileexists(fnm)) then continue;
+       ext := upcase(ExtractFileExt(fnm));
+       if (ext <> '.NII') and (ext <> '.HEAD') and (ext <> '.GZ') and (ext <> '.HDR') then
+          continue;
+       AddLayer(fnm)
+
+     end;
+  end;
 end;
 
 procedure TGLForm1.OpenMenuClick(Sender: TObject);
 begin
+   //OpenDialog1.Filter := 'Text file|*.txt;*.1D;*.PAR|Comma separated values|*.csv|Any file|*.*';
    if not OpenDialog1.execute then
       OpenDialog1.filename := '';
    AddBackground(OpenDialog1.filename);
@@ -4963,26 +5245,6 @@ begin
    AddLayer(OpenDialog1.filename);*)
 begin
      //Use option pull down instead!
-end;
-
-procedure TGLForm1.AfniDetailsMenuClick(Sender: TObject);
-var
-   s: string;
-   v: TNIfTI;
-   i: integer;
-begin
-  {$IFDEF AFNI}
-  vols.Layer(LayerList.ItemIndex,v);
-  if v = nil then exit;
-  if length(v.afnis) < v.VolumeDisplayed then exit;
-  s := 'statistical code: '+AFNIjvLabel(v.afnis[v.VolumeDisplayed].jv);
-  if (v.afnis[v.VolumeDisplayed].nv > 0) then begin
-     s := s + ' parameters:';
-     for i := 0 to v.afnis[v.VolumeDisplayed].nv - 1 do
-         s := s + ' '+floattostr(v.afnis[v.VolumeDisplayed].param[i]);
-  end;
-  showmessage(s);
-  {$ENDIF}
 end;
 
 procedure TGLForm1.AfniDirMenuClick(Sender: TObject);
@@ -5021,10 +5283,14 @@ var
  w, row, col, selCol, unSelCol: integer;
  v: TNIfTI;
 begin
- if not vols.Layer(LayerList.ItemIndex,v) then exit;
+ //if not vols.Layer(LayerList.ItemIndex,v) then exit;
+ if not vols.Layer(ClusterView.tag,v) then exit;
  if ClusterView.Selected = nil then
     exit;
  row := ClusterView.Selected.Index;
+ if (row >=  ClusterView.Items.Count) then exit;
+ row := strtointdef(ClusterView.Items[row].caption, 0); //rows can be sorted by volume, peak ht, etc. find original index
+ //determine which column user clicked, required to select whether XYZ refers to peak or CoG
  w := 0;
  col := -1;
  while (w < X) and ((col+1) < ClusterView.Columns.Count) do begin
@@ -5051,28 +5317,32 @@ begin
      ClusterView.Column[selCol].Caption := kSelectedColumnPrefix+ClusterView.Column[selCol].Caption;
 end;
 
-procedure TGLForm1.ClusterViewChange(Sender: TObject; Item: TListItem;
-  Change: TItemChange);
-begin
-
-end;
 
 procedure TGLForm1.ClusterViewSelectItem(Sender: TObject; Item: TListItem; Selected: Boolean);
 var
  i: integer;
  v: TNIfTI;
 begin
- if not vols.Layer(LayerList.ItemIndex,v) then exit;
+ //if not vols.Layer(LayerList.ItemIndex,v) then exit;
+ if not vols.Layer(ClusterView.tag,v) then exit;
  i := StrToIntDef(Item.Caption,0);
  if (i >= length(v.clusters)) or (i < 0) then exit;
  SetXHairPosition(v.clusters[i].CogXYZ.x, v.clusters[i].CogXYZ.Y, v.clusters[i].CogXYZ.Z, true );
 end;
 
 procedure TGLForm1.AddOverlayMenuClick(Sender: TObject);
+var
+ opts: TOpenOptions;
+ i: integer;
 begin
-   if not OpenDialog1.execute then
-      exit;
-   AddLayer(OpenDialog1.filename);
+  opts := OpenDialog1.Options ;
+  OpenDialog1.Options := [ofAllowMultiSelect, ofEnableSizing, ofViewDetail];
+  if (not OpenDialog1.execute) or (OpenDialog1.Files.count < 1) then begin
+     OpenDialog1.Options := opts;
+     exit;
+  end;
+  for i := 0 to (OpenDialog1.Files.count -1) do
+   AddLayer(OpenDialog1.Files[i]);
 end;
 
 procedure TGLForm1.ScriptingOpenMenuClick(Sender: TObject);
@@ -5422,13 +5692,14 @@ var
    updateTimer.enabled := true;
 end;
 
-procedure GetThresh(var thresh: double; out mm: double; out NeighborMethod: integer);  //TResliceForm
+procedure GetThresh(var thresh: double; var mm: double; out NeighborMethod: integer; out isDarkAndBright: boolean; selectDarkAndBright: boolean = true);  //TResliceForm
 var
     PrefForm: TForm;
     CancelBtn,OkBtn: TButton;
     threshLabel, ClusterLabel: TLabel;
     threshEdit, ClusterEdit: TEdit;
     NeighborCombo: TComboBox;
+    BimodalCheck: TCheckBox;
 begin
   PrefForm:=TForm.Create(nil);
   //PrefForm.SetBounds(100, 100, 512, 212);
@@ -5474,7 +5745,7 @@ begin
   clusterLabel.Parent:=PrefForm;
   //edit
   clusterEdit:=TEdit.create(PrefForm);
-  clusterEdit.Caption := '8';
+  clusterEdit.Caption := FloatToStrF(mm, ffGeneral, 8, 4);
   clusterEdit.Constraints.MinWidth:= 300;
   clusterEdit.AutoSize := true;
   clusterEdit.AnchorSide[akTop].Side := asrBottom;
@@ -5502,12 +5773,26 @@ begin
   NeighborCombo.BorderSpacing.Left := 6;
   NeighborCombo.Anchors := [akTop, akLeft];
   NeighborCombo.Parent:=PrefForm;
+
+
+  BimodalCheck:=TCheckBox.create(PrefForm);
+  BimodalCheck.Checked := false;
+  BimodalCheck.Caption:='Bimodal (identify both dark and bright clusters)';
+  BimodalCheck.AnchorSide[akTop].Side := asrBottom;
+  BimodalCheck.AnchorSide[akTop].Control := NeighborCombo;
+  BimodalCheck.BorderSpacing.Top := 6;
+  BimodalCheck.AnchorSide[akLeft].Side := asrLeft;
+  BimodalCheck.AnchorSide[akLeft].Control := PrefForm;
+  BimodalCheck.BorderSpacing.Left := 6;
+  BimodalCheck.Anchors := [akTop, akLeft];
+  BimodalCheck.visible := selectDarkAndBright;
+  BimodalCheck.Parent:=PrefForm;
   //Cancel Btn
   CancelBtn:=TButton.create(PrefForm);
   CancelBtn.Caption:='Cancel';
   CancelBtn.AutoSize := true;
   CancelBtn.AnchorSide[akTop].Side := asrBottom;
-  CancelBtn.AnchorSide[akTop].Control := NeighborCombo;
+  CancelBtn.AnchorSide[akTop].Control := BimodalCheck;
   CancelBtn.BorderSpacing.Top := 8;
   CancelBtn.AnchorSide[akLeft].Side := asrLeft;
   CancelBtn.AnchorSide[akLeft].Control := PrefForm;
@@ -5519,7 +5804,7 @@ begin
   OkBtn.Caption:='OK';
   OkBtn.AutoSize := true;
   OkBtn.AnchorSide[akTop].Side := asrBottom;
-  OkBtn.AnchorSide[akTop].Control := NeighborCombo;
+  OkBtn.AnchorSide[akTop].Control := BimodalCheck;
   OkBtn.BorderSpacing.Top := 8;
   OkBtn.AnchorSide[akLeft].Side := asrRight;
   OkBtn.AnchorSide[akLeft].Control := CancelBtn;
@@ -5535,9 +5820,9 @@ begin
   if (PrefForm.ModalResult = mrOK) then begin
     thresh := StrToFloatDef(threshEdit.Caption, 4);
     mm :=  StrToFloatDef(clusterEdit.Caption, 0);
+    isDarkAndBright := BimodalCheck.Checked;
   end;
   NeighborMethod := NeighborCombo.ItemIndex+1;
-
   FreeAndNil(PrefForm);
 end; //GetThresh()
 
@@ -5546,12 +5831,14 @@ var
      i, NeighborMethod: integer;
      niftiVol: TNIfTI;
      thresh, mm: double;
+     dummy: boolean;
 begin
  i := LayerList.ItemIndex;
  if (i < 0) or (i >= LayerList.Count) then exit;
  if not vols.Layer(LayerList.ItemIndex,niftiVol) then exit;
  thresh := (0.5*(niftiVol.DisplayMax-niftiVol.DisplayMin))+niftiVol.DisplayMin;
- GetThresh(thresh, mm, NeighborMethod);
+ mm := 32;
+ GetThresh(thresh, mm, NeighborMethod, dummy, false);
  if thresh = kNaN then exit;
  niftiVol.RemoveSmallClusters(thresh,mm, NeighborMethod);
  niftiVol.ForceUpdate(); //defer time consuming work
@@ -6577,12 +6864,6 @@ begin
 end;
 
 procedure TGLForm1.DrawHintsMenuClick(Sender: TObject);
-const
-  {$IFDEF UNIX} //end of line
-  kEOLN = #10; //Windows CRLF   ;
-  {$ELSE}
-   kEOLN = #13#10; //Windows CRLF
-  {$ENDIF}
 begin
   showmessage('Drag mouse to draw'+kEOLN
 +'Shift+Drag to erase'+kEOLN
@@ -6627,17 +6908,12 @@ begin
   UpdateTimer.Enabled := true;
 end;
 
-procedure TGLForm1.MenuItem1Click(Sender: TObject);
+procedure TGLForm1.MouseGesturesMenu(Sender: TObject);
 const
   {$IFDEF Darwin}
   kAlt = 'Command';
   {$ELSE}
   kAlt = 'Alt';
-  {$ENDIF}
-  {$IFDEF UNIX} //end of line
-  kEOLN = #10; //Windows CRLF   ;
-  {$ELSE}
-   kEOLN = #13#10; //Windows CRLF
   {$ENDIF}
 var
   s: string;
@@ -7070,53 +7346,94 @@ begin
  ViewGPU1.Invalidate;
 end;
 
+{$IFDEF LCLCocoa}
+function HWmodel : AnsiString;
+var
+  mib : array[0..1] of Integer;
+  status : Integer;
+  {$IFDEF CPU64}
+  len : Int64;
+  {$ELSE}
+  len : Int32;
+  {$ENDIF}
+  p   : PChar;
 
+begin
+ mib[0] := CTL_HW;
+ mib[1] := HW_MODEL;
+ status := fpSysCtl(PChar(@mib), Length(mib), Nil, @len, Nil, 0);
+ if status <> 0 then RaiseLastOSError;
+
+ GetMem(p, len);
+
+ try
+   status := fpSysCtl(PChar(@mib), Length(mib), p, @len, Nil, 0);
+   if status <> 0 then RaiseLastOSError;
+   Result := p;
+ finally
+   FreeMem(p);
+ end;
+end;
+{$ENDIF}
+
+function versionStr: string;
+var
+  w: string;
+begin
+ w := '';
+ {$IFDEF LCLCocoa}
+ w := 'Cocoa';
+ {$ENDIF}
+ {$IFDEF LCLQT5}
+ w := 'QT5';
+ {$ENDIF}
+ {$IFDEF LCLQT}
+ w := 'QT4';
+ {$ENDIF}
+ {$IFDEF LCLGTK2}
+ w := 'GTK2';
+ {$ENDIF}
+ {$IFDEF LCLGTK3}
+ w := 'GTK3';
+ {$ENDIF}
+ {$IFDEF LCLWin64}
+ w := 'Windows';
+ {$ENDIF}
+ w := w + chr(13)+chr(10);
+ w := w + 'Author: Chris Rorden' +kEOLN;
+ w := w + 'License: BSD 2-Clause' +kEOLN;
+ {$IFDEF WINDOWS}
+ w := w + 'Windows ' + IntToStr(Win32MajorVersion) + '.' + IntToStr(Win32MinorVersion)+kEOLN;
+ {$ENDIF}
+ {$IFDEF LCLCocoa}
+ w := w + 'MacOS 10.' + IntToStr(Lo(DosVersion) - 4) + '.' + IntToStr(Hi(DosVersion))+' '+HWmodel+kEOLN;
+ {$ENDIF}
+ {$IFDEF Linux}
+ w := w + 'Linux'+kEOLN;
+ {$ENDIF}
+ result := format('%s %s', [kVers, w]);
+end;
 
 procedure TGLForm1.AboutMenuClick(Sender: TObject);
 var
    niftiVol: TNIfTI;
-   w, s: string;
+   v: string;
 begin
-  //showmessage(IntToStr(Lo(DosVersion) - 4)+'.' +IntToStr(Hi(DosVersion))); //add 'DOS to uses
-  if not vols.Layer(0,niftiVol) then exit;
-  w := '';
-  {$IFDEF METALAPI}
-  //s := chr(13)+chr(10)+'Apple Metal';
-  s := chr(13)+chr(10)+'Apple Metal multisample=' + inttostr(ViewGPU1.renderView.sampleCount);
-  {$ELSE}
-  ViewGPU1.MakeCurrent(false);
-  {$IFDEF LCLCocoa}
-  w := 'Cocoa';
-  {$ENDIF}
-  {$IFDEF LCLQT5}
-  w := 'QT5';
-  {$ENDIF}
-  {$IFDEF LCLQT}
-  w := 'QT4';
-  {$ENDIF}
-  {$IFDEF LCLGTK2}
-  w := 'GTK2';
-  {$ENDIF}
-  {$IFDEF LCLGTK3}
-  w := 'GTK3';
-  {$ENDIF}
-  {$IFDEF LCLWin64}
-  w := 'Windows';
-  {$ENDIF}
-  w := w + chr(13)+chr(10);
-  w := w + 'Author: Chris Rorden' +chr(13)+chr(10);
-  w := w + 'License: BSD 2-Clause' +chr(13)+chr(10);
-  w := w + format('%dx%d %d dpi', [Screen.Width, Screen.Height, Screen.PixelsPerInch]) +chr(13)+chr(10);
-  s := chr(13)+chr(10)+ glGetString(GL_VENDOR)+'; OpenGL= '+glGetString(GL_VERSION)+'; Shader='+glGetString(GL_SHADING_LANGUAGE_VERSION);
-  ViewGPU1.ReleaseContext;
-  {$ENDIF}
-  s := format('%s %sCurrent volume: %d %d %d %s', [kVers, w, niftiVol.Dim.X, niftiVol.Dim.Y, niftiVol.Dim.Z, s]);
-  {$IFDEF NewCocoa}
-  ShowAlertSheet(GLForm1.Handle,'MRIcroGL', s);
-  {$ELSE}
-  s := 'MRIcroGL '+ s;
-  Showmessage(s);
-  {$ENDIF}
+ v := versionStr;
+ if not vols.Layer(0,niftiVol) then exit;
+ {$IFDEF METALAPI}
+ v := v+'Apple Metal multisample=' + inttostr(ViewGPU1.renderView.sampleCount);
+ {$ELSE}
+ ViewGPU1.MakeCurrent(false);
+ v := v + glGetString(GL_VENDOR)+'; OpenGL= '+glGetString(GL_VERSION)+'; Shader='+glGetString(GL_SHADING_LANGUAGE_VERSION);
+ ViewGPU1.ReleaseContext;
+ {$ENDIF}
+ v := v+ kEOLN+ format('Current volume: %d %d %d', [niftiVol.Dim.X, niftiVol.Dim.Y, niftiVol.Dim.Z]);
+ {$IFDEF NewCocoa}
+ ShowAlertSheet(GLForm1.Handle,'MRIcroGL', v);
+ {$ELSE}
+ Showmessage('MRIcroGL '+v);
+ {$ENDIF}
 end;
 
 procedure TGLForm1.SaveColorTable;
@@ -7536,6 +7853,8 @@ end;
 {$ENDIF}
 
 procedure TGLForm1.FormShow(Sender: TObject);
+//const
+//  kImgFilter = 'Volumes|*.nii;*.nii.gz;*.HEAD;*.hdr;*.nrrd;*.nhdr;*.mgh;*.mgz;*.mhd;*.mha|NIfTI|*.nii|Compressed NIfTI|*.nii.gz|All|*.*';
 var
  i, MaxVox: integer;
  c: char;
@@ -7545,6 +7864,7 @@ var
  newMenu: TMenuItem;
 begin
  {$IFDEF FPC} Application.ShowButtonGlyphs:= sbgNever; {$ENDIF}
+ //OpenDialog1.Filter := kImgFilter;
  isForceReset := false;
  gPrefs.InitScript := '';
  MaxVox := -1;
@@ -7555,7 +7875,9 @@ begin
     s := ParamStr(i);
     if (length(s)> 1) and (s[1]='-') then begin
         c := upcase(s[2]);
-        if c='R' then
+        if c='V' then
+           printf(versionStr)
+        else if c='R' then
            isForceReset := true
         else if (i < paramcount) and (c='M') then begin
           inc(i);
@@ -7870,23 +8192,50 @@ begin
  UpdateLayerBox(false, true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
  UpdateTimer.Enabled := true;
  //LayerBox.Caption := inttostr(random(888))+' '+inttostr(i);
-
 end;
 
 procedure TGLForm1.LayerClusterMenuClick(Sender: TObject);
 var
    v: TNIfTI;
+   smallestClusterMM3,thresh: double;
+   NeighborMethod: integer;
+   isDarkAndBright: boolean;
 begin
   if not vols.Layer(LayerList.ItemIndex,v) then exit;
   if ((v.VolumesLoaded > 2) and (length(v.afnis) < 1)) then begin
      showmessage('Clusters are for 3D data.');
      exit;
   end;
-  generateClustersCore(v);
+  NeighborMethod := gPrefs.ClusterNeighborMethod;
+  smallestClusterMM3 := 32;
+  isDarkAndBright := false;
+  if (v.DisplayMax < 0) and (v.DisplayMin < 0) then begin
+     thresh := max(v.DisplayMin, v.DisplayMax);
+     if thresh = (v.VolumeMax) then
+        thresh := (0.5*(v.DisplayMax-v.DisplayMin))+v.DisplayMin;
+  end else begin
+      thresh := min(v.DisplayMin, v.DisplayMax);
+      if thresh = (v.VolumeMin) then
+         thresh := (0.5*(v.DisplayMax-v.DisplayMin))+v.DisplayMin;
+  end;
+  //var thresh: double; out mm: double; out NeighborMethod: integer
+  if ((Sender as TMenuItem).tag = 1) and (v.IsLabels) then
+     showmessage('No cluster options for label maps (atlases)')
+  else if (Sender as TMenuItem).tag = 1 then begin
+     GetThresh(thresh, smallestClusterMM3, NeighborMethod, isDarkAndBright);
+  end;
+  if thresh = kNaN then begin
+     //showmessage('Skipping clusters');
+     exit;
+  end;
+  generateClustersCore(v, thresh, smallestClusterMM3, NeighborMethod, isDarkAndBright);
   UpdateLayerBox(false);
   if gPrefs.DisplayOrient > kAxCorSagOrient then
      MPRMenu.Click;
   GLForm1.UpdateLayerBox(false, true);
+  if (length(v.clusters) < 1) then
+     showmessage('No clusters survive');
+  //LayerBox.Caption := format('TUE %d',[length(v.clusters)]);
   //if BottomPanel.Height < 20 then
   //   BottomPanel.Height := round(GLForm1.Height * 0.25);
 end;

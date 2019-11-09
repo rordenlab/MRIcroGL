@@ -1,7 +1,8 @@
 unit nifti_foreign;
 //{$DEFINE MRIcron}
 interface
-{$mode objfpc} //would need to be changed for Delphi mode, see "FPC_DELPHI" below
+//{$mode objfpc} //test
+{$mode Delphi}
 {$H+}
 {$DEFINE GZIP}
 {$Include isgui.inc}//<- {$DEFINE GUI}
@@ -20,7 +21,7 @@ uses
  dialogsx,
 {$ENDIF}
 //ClipBrd,
- nifti_types,  sysutils, classes, StrUtils;//2015! dialogsx
+ nifti_types,  sysutils, classes, StrUtils, math;//2015! dialogsx
 
 const
     kIVers = ' i2nii v1.0.20191027';
@@ -46,12 +47,22 @@ const
       kFUNC_PT_TYPE = 10;//  Poisson           Mean
       kFUNC_NO_STAT_AUX = 13;
 type
+  TFloatVec = record
+    ar: array of single;
+    dx: single;
+    x0: single;
+    function nar: integer; inline;
+  end;
+
+type
    TAFNI = record
 		jv: integer; //statistical code
 		nv: integer; //number of parameters that follow (may be 0)
 		param: array [0..2] of single;
                 scl_slopex: single;
+                minVal, maxVal, maxAbsVal: single;
 		nam: string[64];
+        FDRcurv: TFloatVec;
    end;
    TAFNIs = array of TAFNI;
 
@@ -90,7 +101,7 @@ Type
 procedure printf(str: string);
 begin
   {$IFDEF Windows}
-  if IsConsole then
+  if IsConsole then //'System' in uses
      writeln(str);
   {$ENDIF}
   {$IFDEF UNIX} writeln(str);{$ENDIF}
@@ -218,7 +229,8 @@ begin
         decomp.Read(skip[0], offset);
      end;
      //buffer^[0] :=  0; //BlockRead should be out not var: https://fpc-pascal.freepascal.narkive.com/M2rzyAkf/blockread-and-buffers
-     decomp.Read(buffer[0], sz);
+     //decomp.Read(buffer[0], sz);
+     decomp.Read(buffer[1], sz);
      decomp.free;
 end;
 {$ELSE}
@@ -839,6 +851,8 @@ begin
       nhdr.dim[i] := 0;
   end;
   nhdr.bitpix := 8;
+  if (nhdr.scl_slope = 0.0) then
+    nhdr.scl_slope := 1.0;
   if (nhdr.datatype = 4) or (nhdr.datatype = 512) then nhdr.bitpix := 16;
   if (nhdr.datatype = kDT_RGB) or (nhdr.datatype = kDT_RGBplanar3D) then nhdr.bitpix := 24;
   if (nhdr.datatype = 8) or (nhdr.datatype = 16) or (nhdr.datatype = 768) then nhdr.bitpix := 32;
@@ -3842,6 +3856,11 @@ begin
   nhdr.descrip := 'SPR'+kIVers;
 end;
 
+function TFloatVec.nar: integer;
+begin
+  result := length(ar);
+end;
+
 procedure initAFNIs(var AFNIs: TAFNIs; n: integer);
 var
 	prev, i: integer;
@@ -3862,6 +3881,12 @@ begin
 		AFNIs[i].param[0] := 0;
 		AFNIs[i].param[1] := 0;
 		AFNIs[i].param[2] := 0;
+		AFNIs[i].minVal := 0;
+		AFNIs[i].maxVal := 0;
+		AFNIs[i].maxAbsVal := 0;
+		AFNIs[i].FDRcurv.dx:= 0;
+		AFNIs[i].FDRcurv.x0:=0;
+		AFNIs[i].FDRcurv.ar := nil;
 	end;
 end; // initAFNIs()
 
@@ -3900,7 +3925,7 @@ var
   ivMax, iv, jv, nv: integer;
   p0,p1, p2: single;
 begin
- {$IFDEF FPC}
+  {$IFDEF FPC}
   DefaultFormatSettings.DecimalSeparator := '.' ;
  //DecimalSeparator := '.';
   {$ELSE}
@@ -3911,6 +3936,8 @@ begin
       xyzOrigin[i] := 0;
       orientSpecific[i] := 0;
   end;
+  NII_Clear (nhdr);
+
   xForm := kNIFTI_XFORM_SCANNER_ANAT;
   fLabels.Clear;
   hasStatAux := false;
@@ -4159,8 +4186,31 @@ begin
                   end;
               end; //if acount > 0
               //NSLog('HEAD datatype is '+inttostr(nhdr.datatype) );
-          end else if AnsiContainsText(nameStr,'BRICK_FLOAT_FACS') then begin
+         end else if AnsiContainsText(nameStr,'BRICK_STATS') then begin
+              if (itemCount < 2) then continue;
+              initAFNIs(AFNIs, itemCount div 2);
+              for i := 0 to ((itemCount div 2) -1) do begin
+                  AFNIs[i].minVal := valArray[i*2];
+                  AFNIs[i].maxVal := valArray[(i*2)+1];
+                  AFNIs[i].maxAbsVal := max(abs(AFNIs[i].minVal), abs(AFNIs[i].maxVal));
+                 //printf(format('min..max %g..%g', [AFNIs[i].minVal, AFNIs[i].maxVal]));
+              end;
+         end else if AnsiContainsText(nameStr,'FDRCURVE_') then begin
+             if (itemCount < 20) then continue;
+             tmpStr := copy(nameStr, 10, maxint);
+             iv := strtointdef(tmpStr, -1);
+             if iv < 0 then continue;
+             initAFNIs(AFNIs, iv+1);
+             AFNIs[iv].FDRcurv.x0 := valArray[0];
+             AFNIs[iv].FDRcurv.dx := valArray[1];
+             setlength(AFNIs[iv].FDRcurv.ar, itemCount-2);
+             for i := 0 to (itemCount-3) do
+                 AFNIs[iv].FDRcurv.ar[i] := valArray[i+2];
+             //printf(format('%d %d', [iv,itemCount]));
+         end else if AnsiContainsText(nameStr,'BRICK_FLOAT_FACS') then begin
               nhdr.scl_slope := valArray[0];
+              if nhdr.scl_slope = 0 then
+                 nhdr.scl_slope := 1;
               initAFNIs(AFNIs, itemCount);
               AFNIs[0].scl_slopex := valArray[0];
               if (itemCount > 1) then begin //check that all volumes are of the same datatype
@@ -4168,7 +4218,7 @@ begin
                       if (valArray[0] <> valArray[i]) then isAllVolumesSame := false;
                       AFNIs[i].scl_slopex := valArray[i];
                   end;
-              end; //if acount > 0
+              end; //if itemCount > 0
           end else if AnsiContainsText(nameStr,'DATASET_DIMENSIONS') then begin
               if itemCount > 3 then itemCount := 3;
               for i := 0 to (itemCount-1) do
@@ -4224,11 +4274,9 @@ begin
   nhdr.descrip := 'AFNI'+kIVers;
   if (not hasStatAux) and  (length(AFNIs) > 1) then
      AFNIs[0].jv := kFUNC_NO_STAT_AUX ; //e.g. raw fMRI with BRICK_FLOAT_FACS but no BRICK_STATAUX
-  if length(AFNIs) = 1 then
+  if (length(AFNIs) = 1) and (AFNIs[0].jv = kFUNC_NO_STAT_AUX) then
      setlength(AFNIs,0); //e.g. for T1 scan, the AFNI fields hold no useful information
 end;
-
-
 
 function readAFNIHeader (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean; overload;
 var
