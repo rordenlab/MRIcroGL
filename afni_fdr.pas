@@ -197,9 +197,7 @@ function q2VoxelIntensity(fv: TFloatVec; q: single; maxAbsVal: single; isVerbose
 var
   zval: single;
   itop: integer;
-  {$IFDEF UNIX}
   xtop: single;
-  {$ENDIF}
 begin
      //zval = qginv(0.5*val) ;
      //qval = THD_fdrcurve_zqtot( dset , ival , zval ) ;

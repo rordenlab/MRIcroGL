@@ -85,6 +85,7 @@ type
     AfniQMenu: TMenuItem;
     GraphOpenAddMenu: TMenuItem;
     LayerClusterOptsMenu: TMenuItem;
+    NimlMenu: TMenuItem;
     OpenAFNIMenu: TMenuItem;
     ClusterPopUp: TPopupMenu;
     GraphPanel: TPanel;
@@ -363,6 +364,7 @@ type
     procedure LayerFindPeakMenuClick(Sender: TObject);
     procedure LayerIsLabelMenuClick(Sender: TObject);
     procedure MenuItem3Click(Sender: TObject);
+    procedure NimlMenuClick(Sender: TObject);
     procedure RemoveSmallClusterMenuClick(Sender: TObject);
     procedure RulerVisible();
     procedure RulerCheckChange(Sender: TObject);
@@ -2050,7 +2052,7 @@ begin
       GLForm1.LayerChange(0, -1, -1, MN, MX); //kNaNsingle
     end;
 end;
-
+//removesmallclusters(layer, thresh, mm, neighbors)
 //pyREMOVESMALLCLUSTERS removesmallclusters(layer, thresh, mm) -> Set the colorscheme for the target overlay (0=background layer) to a specified name.
 function pyREMOVESMALLCLUSTERS(Self, Args : PPyObject): PPyObject; cdecl;
 var
@@ -2059,8 +2061,11 @@ var
   niftiVol: TNIfTI;
 begin
   Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  mm := 1;
+  neighbors := gPrefs.ClusterNeighborMethod;
   with GetPythonEngine do
-    if Bool(PyArg_ParseTuple(Args, 'iiff:removesmallclusters', @i, @neighbors, @thresh, @mm)) then begin
+    //gl.removesmallclusters(2, -2.5, 800)
+    if Bool(PyArg_ParseTuple(Args, 'if|fi:removesmallclusters', @i, @thresh, @mm, @neighbors)) then begin
          GLForm1.ScriptOutputMemo.lines.add(format('removesmallclusters(%d, %d, %g, %g)', [i, neighbors, thresh, mm]));
          GLForm1.ScriptOutputMemo.lines.add(format(' neighbors=%d (1=faces(6),2=faces+edges(18),3=faces+edges+corners(26)', [neighbors]));
          if (i < 0) or (i >= GLForm1.LayerList.Count) then begin
@@ -2164,6 +2169,7 @@ begin
       end;
       while (isBusy) or (GLForm1.Updatetimer.enabled) do
             Application.ProcessMessages;
+
        GenerateClustersCore(v, thresh, mm,method, bimodal = 1);
        //GenerateClustersCore(v, thresh, mm,method, true);
        GLForm1.UpdateLayerBox(true);// show cluster panel
@@ -2496,7 +2502,7 @@ begin
     AddMethod('opacity', @PyOVERLAYOPACITY, ' opacity(layer, opacityPct) -> Make the layer (0 for background, 1 for 1st overlay) transparent(0), translucent (~50) or opaque (100).');
     AddMethod('quit', @PyQUIT, ' quit() -> Terminate the application.');
     //pyREMOVESMALLCLUSTERS Set the colorscheme for the target overlay (0=background layer) to a specified name.
-    AddMethod('removesmallclusters', @pyREMOVESMALLCLUSTERS, ' removesmallclusters(layer, neighbors, thresh, mm) -> only keep clusters where intensity exceeds thresh and size exceed mm. Clusters based on neighbors that share faces (1), faces+edges (2) or faces+edges+corners (3)');
+    AddMethod('removesmallclusters', @pyREMOVESMALLCLUSTERS, ' removesmallclusters(layer, thresh, mm, neighbors) -> only keep clusters where intensity exceeds thresh and size exceed mm. Clusters based on neighbors that share faces (1), faces+edges (2) or faces+edges+corners (3)');
     AddMethod('resetdefaults', @PyRESETDEFAULTS, ' resetdefaults() -> Revert settings to sensible values.');
     AddMethod('savebmp', @PySAVEBMP, ' savebmp(pngName) -> Save screen display as bitmap. For example "savebmp(''test.png'')"');
     AddMethod('scriptformvisible', @PySCRIPTFORMVISIBLE, ' scriptformvisible (visible) -> Show (1) or hide (0) the scripting window.');
@@ -3451,14 +3457,16 @@ var
    i: integer;
    v: TNIfTI;
    s: string;
-   isMultiVol, isAFNI, hasClusters, isMultiVol1: boolean;
+   isMultiVolLabel, isMultiVol, isAFNI, hasClusters, isMultiVol1: boolean;
 begin
      isMultiVol1 := false;
      isMultiVol := false;
      hasClusters := false;
+     isMultiVolLabel := false;
      if (not NewLayers) and (NewVolumes) and (vols.NumLayers > 0) then begin
         for i := 1 to vols.NumLayers do begin
             vols.Layer(i-1,v);
+            if (v.VolumesTotal > 1) and (v.IsLabels) then isMultiVolLabel := true;
             if (v.VolumesTotal > 1) and (not v.IsLabels) then begin //IsLabels detect 2-volume TTatlas+tlrc.HEAD
                isMultiVol := true;
                if (i = 1) then //TGV
@@ -3480,6 +3488,7 @@ begin
         v := nil;
         for i := 1 to vols.NumLayers do begin
             vols.Layer(i-1,v);
+            if (v.VolumesTotal > 1) and (v.IsLabels) then isMultiVolLabel := true;
             if (v.VolumesTotal > 1) and (not v.IsLabels) then begin //IsLabels detect 2-volume TTatlas+tlrc.HEAD
                isMultiVol := true;
                if (i = 1) then //TGV
@@ -3493,8 +3502,8 @@ begin
             if length(v.clusters) > 0 then hasClusters := true;
         end;
         LayerList.ItemIndex := vols.NumLayers - 1;
-        DisplayPrevMenu.Enabled := isMultiVol;
-        DisplayNextMenu.Enabled := isMultiVol;
+        DisplayPrevMenu.Enabled := isMultiVol or isMultiVolLabel;
+        DisplayNextMenu.Enabled := isMultiVol or isMultiVolLabel;
         DisplayAnimateMenu.Enabled := isMultiVol;
         DisplayCorrelationR.Enabled := isMultiVol;
         DisplayCorrelationZ.Enabled := isMultiVol;
@@ -5539,6 +5548,11 @@ begin
 
 end;
 
+procedure TGLForm1.NimlMenuClick(Sender: TObject);
+begin
+  showmessage('Hello world');
+end;
+
 procedure TGLForm1.GraphAddMenuClick(Sender: TObject);
 begin
  {$IFDEF GRAPH}
@@ -7403,10 +7417,13 @@ begin
  w := w + 'Author: Chris Rorden' +kEOLN;
  w := w + 'License: BSD 2-Clause' +kEOLN;
  {$IFDEF WINDOWS}
- w := w + 'Windows ' + IntToStr(Win32MajorVersion) + '.' + IntToStr(Win32MinorVersion)+kEOLN;
+ w := w + 'Windows: ' + IntToStr(Win32MajorVersion) + '.' + IntToStr(Win32MinorVersion)+kEOLN;
  {$ENDIF}
  {$IFDEF LCLCocoa}
- w := w + 'MacOS 10.' + IntToStr(Lo(DosVersion) - 4) + '.' + IntToStr(Hi(DosVersion))+' '+HWmodel+kEOLN;
+ w := w + 'MacOS: 10.' + IntToStr(Lo(DosVersion) - 4) + '.' + IntToStr(Hi(DosVersion))+' '+HWmodel+kEOLN;
+  {$IFNDEF METALAPI}
+  w := w + format('Retina Scale: %g', [ViewGPU1.retinaScale])+kEOLN;
+  {$ENDIF}
  {$ENDIF}
  {$IFDEF Linux}
  w := w + 'Linux'+kEOLN;

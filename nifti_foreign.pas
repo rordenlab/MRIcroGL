@@ -3917,7 +3917,7 @@ var
   sl, mArray: TStringList;
   typeStr,nameStr, valStr, tmpStr: string;
   xForm, lineNum, itemCount,i, vInt, nVols: integer;
-  isProbMap, isStringAttribute, hasStatAux: boolean;
+  isProbMap, isStringAttribute, hasStatAux, hasIJK_TO_DICOM_REAL: boolean;
   valArray  : Array of double;
   orientSpecific: ivect3;
   xyzOrigin, xyzDelta: vect3;
@@ -3937,10 +3937,10 @@ begin
       orientSpecific[i] := 0;
   end;
   NII_Clear (nhdr);
-
   xForm := kNIFTI_XFORM_SCANNER_ANAT;
   fLabels.Clear;
   hasStatAux := false;
+  hasIJK_TO_DICOM_REAL := false;
   isAllVolumesSame := true;
   setLength(AFNIs, 0);
   nVols := 1;
@@ -4195,6 +4195,21 @@ begin
                   AFNIs[i].maxAbsVal := max(abs(AFNIs[i].minVal), abs(AFNIs[i].maxVal));
                  //printf(format('min..max %g..%g', [AFNIs[i].minVal, AFNIs[i].maxVal]));
               end;
+         end else if AnsiContainsText(nameStr,'IJK_TO_DICOM_REAL') then begin
+         
+         	hasIJK_TO_DICOM_REAL := true;
+         	nhdr.srow_x[0] := -valArray[0];
+         	nhdr.srow_x[1] := -valArray[1];
+         	nhdr.srow_x[2] := -valArray[2];
+         	nhdr.srow_x[3] := -valArray[3];
+         	nhdr.srow_y[0] := -valArray[4];
+         	nhdr.srow_y[1] := -valArray[5];
+         	nhdr.srow_y[2] := -valArray[6];
+         	nhdr.srow_y[3] := -valArray[7];         	
+         	nhdr.srow_z[0] := valArray[8];
+         	nhdr.srow_z[1] := valArray[9];
+         	nhdr.srow_z[2] := valArray[10];
+         	nhdr.srow_z[3] := valArray[11];         	
          end else if AnsiContainsText(nameStr,'FDRCURVE_') then begin
              if (itemCount < 20) then continue;
              tmpStr := copy(nameStr, 10, maxint);
@@ -4245,7 +4260,6 @@ begin
           end else if AnsiContainsText(nameStr,'TAXIS_FLOATS') then begin
               if (itemCount > 1) then nhdr.pixdim[4] := valArray[1]; //second item is TR
           end;
-
   until (lineNum >= (sl.count-1));
   result := true;
 666:
@@ -4256,7 +4270,8 @@ begin
   if not result then exit; //error - code jumped to 666 without setting result to true
   if (nVols > 1) then nhdr.dim[4] := nVols;
   if (isProbMap) and (nhdr.intent_code = kNIFTI_INTENT_LABEL)  then nhdr.intent_code := kNIFTI_INTENT_NONE;
-  THD_daxes_to_NIFTI(nhdr, xyzDelta, xyzOrigin, orientSpecific );
+  if (not hasIJK_TO_DICOM_REAL) then
+  	THD_daxes_to_NIFTI(nhdr, xyzDelta, xyzOrigin, orientSpecific );
   nhdr.vox_offset := 0;
   convertForeignToNifti(nhdr);
   nhdr.sform_code:= xForm;
@@ -4274,7 +4289,7 @@ begin
   nhdr.descrip := 'AFNI'+kIVers;
   if (not hasStatAux) and  (length(AFNIs) > 1) then
      AFNIs[0].jv := kFUNC_NO_STAT_AUX ; //e.g. raw fMRI with BRICK_FLOAT_FACS but no BRICK_STATAUX
-  if (length(AFNIs) = 1) and (AFNIs[0].jv = kFUNC_NO_STAT_AUX) then
+  if (length(AFNIs) = 1) and ((AFNIs[0].jv = kFUNC_NO_STAT_AUX) or (AFNIs[0].jv = kFUNC_NOT_STAT)) then
      setlength(AFNIs,0); //e.g. for T1 scan, the AFNI fields hold no useful information
 end;
 

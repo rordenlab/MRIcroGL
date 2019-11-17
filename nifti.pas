@@ -116,6 +116,7 @@ Type
         //function CenterOfMass(idx: integer; out sizeMM3: single): TVec3;
         //procedure GenerateAtlasClusters8bit;
         procedure GenerateAtlasClusters;
+        function rawAtlasMax: integer;
         function mm3toVox(mm3: single) : integer; //e.g. if 3x3x3mm voxels (27mm) and input is 28, return 2
         //procedure robustMinMax(var rMin, rMax: single);
       public
@@ -6191,7 +6192,8 @@ var
    lCh: char;
 begin
      lLabels.Clear;
-
+     if AnsiContainsText(lInstr, 'xml version=') then
+        exit;
      lLength := length(lInStr);
      lMaxIndex := -1;
      for lPass := 1 to 2 do begin
@@ -6630,6 +6632,8 @@ begin
      result := max(0,result);
 end;
 
+//{$DEFINE XF2}
+{$IFDEF XF2}
 procedure TNIfTI.GenerateClusters(LabelMap: TNIfTI; thresh, smallestClusterMM3: single; NeighborMethod: integer; isDarkAndBright: boolean = false); overload;
 label
     100,123;
@@ -6827,6 +6831,7 @@ begin
         end;
         o := o + 1;
     end;
+    //procedure VoxelsNearestCogs(var c: TClusters; maxIdx: integer; var clusterImg: TInt32s);
     setlength(clusters,o);
     if (isDarkAndBright) then begin
       if fHdr.datatype = kDT_UINT8 then begin
@@ -6873,6 +6878,305 @@ begin
     v32 := nil;
 end;
 
+
+
+{$ELSE}
+procedure TNIfTI.GenerateClusters(LabelMap: TNIfTI; thresh, smallestClusterMM3: single; NeighborMethod: integer; isDarkAndBright: boolean = false); overload;
+label
+    100,123;
+function vx2xyz(vx:integer): TVec3; inline;
+var
+  z,y: integer;
+begin
+     z := trunc(vx/ (dim.x * dim.y));
+     vx := vx - (z *(dim.x * dim.y));
+     y := trunc(vx/ (dim.x));
+     result.x := vx - (y *(dim.x));
+     result.y := y;
+     result.z := z;
+end;
+procedure VoxelsNearestCogs32(var c: TClusters; clusterOffset, maxIdx: integer; var clusterImg: TInt32s);
+//optional step to ensure that "Center of Gravity" is a voxel of the correct label
+// e.g. for a torus, the CoG should not be the hole.
+var
+   x,y,z, vx,i: integer;
+   dx: single;
+   minDx : TFloat32s;
+   minVx: TInt32s;
+begin
+     setlength(minDx, maxIdx+1);
+     for i := 0 to maxIdx do
+         minDx[i] := infinity;
+     setlength(minVx, maxIdx+1);
+     vx := -1;
+         for z := 0 to (dim.z-1) do
+           for y := 0 to (dim.y-1) do
+             for x := 0 to (dim.x-1) do begin
+                 vx := vx + 1;
+                 i := clusterImg[vx];
+                 if (i = 0) then continue; //air
+                 dx := (sqr(c[i+clusterOffset].CogXYZ.x - x)+sqr(c[i+clusterOffset].CogXYZ.y - y)+sqr(c[i+clusterOffset].CogXYZ.z - z));
+                 if dx >= minDx[i] then continue;
+                 minDx[i] := dx;
+                 minVx[i] := vx;
+             end;
+     for i := 1 to maxIdx do
+         if not specialsingle(minDx[i]) then //e.g. not infinity, e.g. detected
+            c[i+clusterOffset].CogXYZ := vx2xyz(minVx[i]);
+     minVx := nil;
+     minDx := nil;
+end;
+var
+  zeroPad, i,o,v, nVox, idx, x,y,z, vx, skipVx, PeakVx : int64;
+  isDarkClusters: boolean = false;
+  isPass2: boolean = false;
+  clust: TCluster;
+  label8, in8, mask8: TUInt8s;
+  label16, in16: TInt16s;
+  in32, v32: TFloat32s;
+  clusterImg: TInt32s;
+  clusterNumber, smallestClusterVox: integer;
+  mm3PerVox: double;
+  inten: single;
+  {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
+function Peak2Label(): string;
+var
+   j: integer;
+begin
+     result := '';
+     if (LabelMap.fHdr.bitpix = 16) then
+        j := label16[PeakVx]
+     else
+         j := label8[PeakVx];
+     if (j < 0) or (j >= LabelMap.fLabels.Count) then exit;
+     result := LabelMap.fLabels[j];
+end;
+
+function Map2Label(): string; //idx:
+const
+     kMinFrac = 0.0051; //label regions that make up at least 1/2% of cluster
+var
+   j , nL: int64;
+   region: string;
+   sum: TSortType;
+   labelCount: TSortArray;
+begin
+     result := '';
+     nL := LabelMap.fLabels.Count;
+     setlength(labelCount, nL);
+     for j := 0 to (nL - 1) do begin
+         labelCount[j].index := j;
+         labelCount[j].value := 0;
+     end;
+     if (LabelMap.fHdr.bitpix = 16) then begin
+       for j := 0 to (vx-1) do
+           if (clusterImg[j] = idx) then
+              labelCount[label16[j]].value := labelCount[label16[j]].value + 1;
+     end else begin
+       for j := 0 to (vx-1) do
+           if (clusterImg[j] = idx) then
+              labelCount[label8[j]].value := labelCount[label8[j]].value + 1;
+     end;
+     sum := 0;
+     for j := 0 to (nL - 1) do
+         sum := sum + labelCount[j].value;
+     //result := floattostr(sum)+'==>'+inttostr(nx);
+     if sum = 0 then begin
+        labelCount := nil;
+        exit;
+     end;
+     //fractional proportion damaged
+     for j := 0 to (nL - 1) do
+         labelCount[j].value := labelCount[j].value / sum;
+     SortArray(labelCount);
+     j := nL-1;
+     while (j >= 0) and (labelCount[labelCount[j].index].value >= kMinFrac) do begin
+           //if labelCount[j].index = 0 then continue; //do not report air
+           region := LabelMap.fLabels[labelCount[j].index];
+           if region = '' then
+              region := '-';
+           result := result + format('%s(%.0f) ',[ region, 100.0*labelCount[labelCount[j].index].value ]);
+           //result := result + format('%d(%.0f) ',[ labelCount[j].index, 100.0*labelCount[labelCount[j].index].value ]);
+           j := j - 1;
+     end;
+     //result := floattostr(labelCount[nL-1].value)+'..'+floattostr(labelCount[0].value);
+end;
+function voxInten(vx: int64): single; inline;
+begin
+     result := v32[vx]
+end;//nested voxInten()
+
+begin
+    if IsLabels then begin
+       GenerateAtlasClusters();
+       exit;
+    end;
+    {$IFDEF TIMER}startTime := now;{$ENDIF}
+    smallestClusterVox := mm3toVox(smallestClusterMM3);
+    if fHdr.datatype = kDT_RGB then exit;
+    clusterNotes := GetClusterNotes(self) ;
+    if (LabelMap <> nil) then
+       clusterNotes+= ' on '+GetClusterNotes(LabelMap);
+    vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+    if vx < 1 then exit;
+    skipVx := skipVox();
+    in8 := fRawVolBytes;
+    in16 := TInt16s(in8);
+    in32 := TFloat32s(in8);
+    setlength(v32,vx);
+    if fHdr.datatype = kDT_UINT8 then begin
+       for i := 0 to (vx-1) do
+        v32[i] := in8[skipVx+i];
+    end else if fHdr.datatype = kDT_INT16 then begin
+      for i := 0 to (vx-1) do
+       v32[i] := in16[skipVx+i];
+    end else if fHdr.datatype = kDT_FLOAT then begin
+      for i := 0 to (vx-1) do
+       v32[i] := in32[skipVx+i];
+    end;
+    for i := 0 to (vx-1) do
+        v32[i] := (v32[i]* fHdr.scl_slope) + fHdr.scl_inter;
+    setlength(mask8,vx);
+    if specialSingle(thresh) then begin
+       if (DisplayMax < 0) and (DisplayMin < 0) then
+            thresh := max(DisplayMin-TSingleHelper.Epsilon, DisplayMax-TSingleHelper.Epsilon)
+         else
+             thresh := min(DisplayMin+TSingleHelper.Epsilon, DisplayMax+TSingleHelper.Epsilon);
+
+    end;
+    if isDarkAndBright then
+       thresh := abs(thresh); //positive as first pass
+    o := 0;
+ 100:
+    if (thresh < 0) then isDarkClusters := true;
+    FillChar(mask8[0], vx, 0);
+    if (isDarkClusters) then begin
+      for i := 0 to (vx-1) do
+          if v32[i] <= thresh then mask8[i] := 255;
+      for i := 0 to (vx-1) do
+          v32[i] := -v32[i]; //invert so peaks are bright
+    end else
+        for i := 0 to (vx-1) do
+            if v32[i] >= thresh then mask8[i] := 255;
+    (*j := 0;
+    for i := 0 to (vx-1) do
+        if mask8[i] = 255 then
+           j := j + 1;
+    if (j <= 0) then begin
+       printf(format('Cluster is empty, no voxels survive threshold=%g', [thresh]));
+       goto 123;
+    end; *)
+    Clusterize(mask8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3], clusterNumber, clusterImg, NeighborMethod, smallestClusterVox);
+    if clusterNumber < 1 then goto 123;
+    zeroPad := trunc(log10(clusterNumber))+1;
+    //ccPerVox := VoxMM3()/1000.0;
+    mm3PerVox := VoxMM3();
+    setlength(clusters,clusterNumber+o);
+    for i := 0 to (clusterNumber-1) do begin
+        nVox := 0;
+        clust := InitCluster();
+        idx := i + 1;
+        v := 0;
+        PeakVx := 0;
+        for z := 0 to (dim.z-1) do
+            for y := 0 to (dim.y-1) do
+              for x := 0 to (dim.x-1) do begin
+                if (clusterImg[v] = idx) then begin
+                  nVox := nVox + 1;
+                  clust.CogXYZ := clust.CogXYZ + Vec3(x,y,z);
+                  inten := voxInten(v);
+                  if inten > clust.Peak then begin
+                     clust.Peak := inten;
+                     clust.PeakXYZ := Vec3(x,y,z);
+                     PeakVx := v;
+                  end;
+                end; //voxel in cluster
+                v := v + 1;
+              end;
+        //result in voxels 0..Dim-1
+        if nVox < 1 then continue;
+        if isDarkClusters then clust.Peak := -clust.Peak;
+        clust.CogXYZ := clust.CogXYZ / nVox;
+        clust.SzMM3:= nVox * mm3PerVox;
+        clusters[i] := clust;
+    end;
+    VoxelsNearestCogs32(clusters, o-1, clusterNumber, clusterImg);
+    for i := 0 to (clusterNumber-1) do begin
+        if (clusters[i].SzMM3 <= 0) then continue;
+        clust := clusters[i];
+        //result in frac
+        clust.CogXYZ.x := clust.CogXYZ.x / (dim.x-1);
+        clust.CogXYZ.y := clust.CogXYZ.y / (dim.y-1);
+        clust.CogXYZ.z := clust.CogXYZ.z / (dim.z-1);
+        //result in frac
+        clust.PeakXYZ.x := clust.PeakXYZ.x / (dim.x-1);
+        clust.PeakXYZ.y := clust.PeakXYZ.y / (dim.y-1);
+        clust.PeakXYZ.z := clust.PeakXYZ.z / (dim.z-1);
+
+        clust.CogXYZ := FracMM(clust.CogXYZ);
+        clust.PeakXYZ := FracMM(clust.PeakXYZ);
+
+        clusters[o] := clust;
+        //clusters[o].Structure := format('%.1f×%.1f×%.1f %.1fcc max%.1f', [clust.CogXYZ.x, clust.CogXYZ.y, clust.CogXYZ.z, clust.SzCC, clust.Peak]);
+        clusters[o].Structure := strutils.Dec2Numb(o+1,zeroPad,10);
+        //clusters[o].Structure := inttostr(o+1);
+        clusters[o].PeakStructure := '-';
+        if (LabelMap <> nil) and (LabelMap.IsLabels) then begin
+           label8 := LabelMap.fRawVolBytes;
+           label16 := TInt16s(label8);
+           clusters[o].Structure := Map2Label();
+           clusters[o].PeakStructure := Peak2Label();
+        end;
+        o := o + 1;
+    end;
+    setlength(clusters,o);
+    if (isDarkAndBright) then begin
+      if fHdr.datatype = kDT_UINT8 then begin
+         for i := 0 to (vx-1) do
+             if (clusterImg[i] <= 0) and (v32[i] > 0) then in8[skipVx+i] := 0;
+      end else if fHdr.datatype = kDT_INT16 then begin
+        for i := 0 to (vx-1) do
+            if (clusterImg[i] <= 0) and (v32[i] > 0) then in16[skipVx+i] := 0;
+      end else if fHdr.datatype = kDT_FLOAT then begin
+        for i := 0 to (vx-1) do
+            if (clusterImg[i] <= 0) and (v32[i] > 0) then in32[skipVx+i] := 0;
+      end;
+    end;
+    if (not isDarkAndBright)  then begin
+      if fHdr.datatype = kDT_UINT8 then begin
+         for i := 0 to (vx-1) do
+             if clusterImg[i] <= 0 then in8[skipVx+i] := 0;
+      end else if fHdr.datatype = kDT_INT16 then begin
+        for i := 0 to (vx-1) do
+            if clusterImg[i] <= 0 then in16[skipVx+i] := 0;
+      end else if fHdr.datatype = kDT_FLOAT then begin
+        for i := 0 to (vx-1) do
+            if clusterImg[i] <= 0 then in32[skipVx+i] := 0;
+      end;
+    end;
+    if (not isPass2) and (isDarkAndBright) then begin
+       isPass2 := true;
+       thresh := -thresh;
+       clusterImg := nil;
+       goto 100;
+    end;
+    SortClusters();
+    {$IFDEF TIMER}
+    printf(format('Cluster time %d', [MilliSecondsBetween(Now,startTime)]));
+    if isDarkAndBright then
+       printf('  Bimodal (dark and bright peaks');
+    printf(format('  threshold=%g smallest-cluster(mm3)=%g neighbors=%d numClusters=%d', [thresh, smallestClusterMM3, NeighborMethod, o]));
+    {$ENDIF}
+    initHistogram();
+    fWindowMinCache8 := infinity;
+123:
+    clusterImg := nil;
+    mask8 := nil;
+    v32 := nil;
+end;
+{$ENDIF}
+
+
 procedure TNIfTI.GenerateClusters(thresh, smallestClusterMM3: single; NeighborMethod: integer = 1; isDarkAndBright: boolean = false); overload;
 begin
      GenerateClusters(nil, thresh, smallestClusterMM3, NeighborMethod, isDarkAndBright);
@@ -6905,6 +7209,301 @@ end;
 
 {$DEFINE FASTCLUSTERS}
 {$IFDEF FASTCLUSTERS}
+{$DEFINE CLUSTERX}
+{$IFDEF CLUSTERX}
+procedure TNIfTI.GenerateAtlasClusters();
+function vx2xyz(vx:integer): TVec3; inline;
+var
+  vol,z,y: integer;
+begin
+     vol := trunc(vx / (dim.x * dim.y * dim.z));
+     vx := vx - (vol *(dim.x * dim.y * dim.z));
+     z := trunc(vx/ (dim.x * dim.y));
+     vx := vx - (z *(dim.x * dim.y));
+     y := trunc(vx/ (dim.x));
+     result.x := vx - (y *(dim.x));
+     result.y := y;
+     result.z := z;
+end;
+procedure VoxelsNearestCogs(var c: TClusters; maxIdx: integer);
+//optional step to ensure that "Center of Gravity" is a voxel of the correct label
+// e.g. for a torus, the CoG should not be the hole.
+var
+   v,x,y,z, vx,i: integer;
+   dx: single;
+   minDx : TFloat32s;
+   minVx: TInt32s;
+   vol16 : TInt16s;
+   err: boolean = false;
+begin
+     if (fHdr.datatype <> kDT_UINT8) and (fHdr.datatype <> kDT_INT16) then exit;
+     setlength(minDx, maxIdx+1);
+     for i := 0 to maxIdx do
+         minDx[i] := infinity;
+     setlength(minVx, maxIdx+1);
+     vol16 := TInt16s(fRawVolBytes);
+     for v := 0 to (fVolumesLoaded-1) do begin //n.b. TTatlas+tlrc.HEAD has two volumes, scan both
+         vx := (v * (dim.x * dim.y * dim.z)) -1;
+         for z := 0 to (dim.z-1) do
+           for y := 0 to (dim.y-1) do
+             for x := 0 to (dim.x-1) do begin
+                 vx := vx + 1;
+                 if (fHdr.datatype = kDT_INT16) then //opimization: loop hoisting
+                    i := vol16[vx]
+                 else
+                     i := fRawVolBytes[vx];
+                 if (i = 0) then continue; //air
+                 if (i > maxIdx) then err := true;
+                 if (i > maxIdx) then continue;
+                 dx := (sqr(c[i].CogXYZ.x - x)+sqr(c[i].CogXYZ.y - y)+sqr(c[i].CogXYZ.z - z));
+                 if dx >= minDx[i] then continue;
+                 minDx[i] := dx;
+                 minVx[i] := vx;
+             end;
+     end;
+     if (err) then
+        printf('VoxelsNearestCogs: Catastrophic error, wrong number of labels');
+      for i := 1 to maxIdx do
+         if not specialsingle(minDx[i]) then //e.g. not infinity, e.g. detected
+            c[i].CogXYZ := vx2xyz(minVx[i]);
+     minVx := nil;
+     minDx := nil;
+end;
+var
+   c: TClusters;
+   vol16 : TInt16s;
+   vx: int64;
+   v, z,y,x,i, o, maxIdx: integer;
+   mm3: single;
+   {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
+begin
+    if (not IsLabels) then exit;
+    if (fHdr.datatype <> kDT_UINT8) and (fHdr.datatype <> kDT_INT16) then exit;
+    {$IFDEF TIMER}startTime := now;{$ENDIF}
+    clusterNotes := GetClusterNotes(self);
+    maxIdx := fLabels.Count - 1; //0=air
+    if maxIdx < 1 then exit;
+    setlength(c,maxIdx+1);
+    c[0] := InitCluster;
+    for i := 1 to maxIdx do
+        c[i] := c[0];
+    if (fHdr.datatype = kDT_INT16) then begin
+       vol16 := TInt16s(fRawVolBytes);
+       for v := 0 to (fVolumesLoaded-1) do begin //n.b. TTatlas+tlrc.HEAD has two volumes, scan both
+          vx := (v * (dim.x * dim.y * dim.z)) -1;
+          for z := 0 to (dim.z-1) do
+            for y := 0 to (dim.y-1) do
+              for x := 0 to (dim.x-1) do begin
+                  vx := vx + 1;
+                  o := vol16[vx];
+                  if o <= 0 then continue;
+                  if o > maxIdx then continue;
+                  c[o].SzMM3 := c[o].SzMM3 + 1;
+                  c[o].CogXYZ.x := c[o].CogXYZ.x + x;
+                  c[o].CogXYZ.y := c[o].CogXYZ.y + y;
+                  c[o].CogXYZ.z := c[o].CogXYZ.z + z;
+              end;
+      end;
+    end else begin
+      for v := 0 to (fVolumesLoaded-1) do begin //n.b. TTatlas+tlrc.HEAD has two volumes, scan both
+          vx := (v * (dim.x * dim.y * dim.z)) -1;
+          for z := 0 to (dim.z-1) do
+            for y := 0 to (dim.y-1) do
+              for x := 0 to (dim.x-1) do begin
+                  vx := vx + 1;
+                  o := fRawVolBytes[vx];
+                  if o = 0 then continue;
+                  if o > maxIdx then continue;
+                  c[o].SzMM3 := c[o].SzMM3 + 1;
+                  c[o].CogXYZ.x := c[o].CogXYZ.x + x;
+                  c[o].CogXYZ.y := c[o].CogXYZ.y + y;
+                  c[o].CogXYZ.z := c[o].CogXYZ.z + z;
+              end;
+      end;
+    end;
+    o := 0;
+    for i := 1 to maxIdx do
+        if c[i].SzMM3 > 0 then
+           o := o + 1;
+    setlength(clusters,o);
+    o := 0;
+    mm3 := VoxMM3();
+    for i := 1 to maxIdx do
+        if c[i].SzMM3 > 0 then begin
+          c[i].Structure := fLabels[i];
+          c[i].PeakStructure := '-';
+          //result in voxels 0..Dim-1
+          c[i].CogXYZ.x := c[i].CogXYZ.x / c[i].SzMM3;
+          c[i].CogXYZ.y := c[i].CogXYZ.y / c[i].SzMM3;
+          c[i].CogXYZ.z := c[i].CogXYZ.z / c[i].SzMM3;
+        end;
+    VoxelsNearestCogs(c, maxIdx);
+    for i := 1 to maxIdx do
+        if c[i].SzMM3 > 0 then begin
+          //result in frac
+          c[i].CogXYZ.x := c[i].CogXYZ.x / (dim.x-1);
+          c[i].CogXYZ.y := c[i].CogXYZ.y / (dim.y-1);
+          c[i].CogXYZ.z := c[i].CogXYZ.z / (dim.z-1);
+          c[i].CogXYZ := FracMM(c[i].CogXYZ);
+          c[i].SzMM3 := c[i].SzMM3 * mm3;
+          c[i].PeakXYZ := c[i].CogXYZ;
+          c[i].Peak := o; //"Peak" is output index, only for sortclusters...
+          clusters[o] := c[i];
+           o := o + 1;
+        end;
+    SortClusters(); //optional: sort by size or cluster index
+    {$IFDEF TIMER}printf(format('Clusterize Atlas time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+end;
+{$ELSE}
+ procedure TNIfTI.GenerateAtlasClusters();
+function VoxelNearestCog(CogXYZ:TVec3; i: integer):TVec3;
+var
+   v,x,y,z, o, vx: integer;
+   minDx, dx: single;
+   vol16 : TInt16s;
+begin
+     result := CogXYZ;
+     minDx := infinity;
+     if (fHdr.datatype = kDT_INT16) then begin
+        vol16 := TInt16s(fRawVolBytes);
+        for v := 0 to (fVolumesLoaded-1) do begin //n.b. TTatlas+tlrc.HEAD has two volumes, scan both
+          vx := (v * (dim.x * dim.y * dim.z)) -1;
+          x := trunc(CogXYZ.x);
+          y := trunc(CogXYZ.x);
+          z := trunc(CogXYZ.x);
+          vx := vx + x + (y* dim.x) + (z * dim.x * dim.y);
+          o := vol16[vx];
+          if (o = i) then
+             exit; //already in location
+        end;
+        for v := 0 to (fVolumesLoaded-1) do begin //n.b. TTatlas+tlrc.HEAD has two volumes, scan both
+           vx := (v * (dim.x * dim.y * dim.z)) -1;
+           for z := 0 to (dim.z-1) do
+             for y := 0 to (dim.y-1) do
+               for x := 0 to (dim.x-1) do begin
+                   vx := vx + 1;
+                   o := vol16[vx];
+                   if o <> i then continue;
+                   dx := sqrt(sqr(CogXYZ.x - x)+sqr(CogXYZ.y - y)+sqr(CogXYZ.z - z));
+                   if dx >= minDx then continue;
+                   minDx := dx;
+                   result := Vec3(x,y,z);
+               end;
+       end;
+     end; //int16
+     if (fHdr.datatype = kDT_UINT8) then begin
+        for v := 0 to (fVolumesLoaded-1) do begin //n.b. TTatlas+tlrc.HEAD has two volumes, scan both
+          vx := (v * (dim.x * dim.y * dim.z)) -1;
+          x := trunc(CogXYZ.x);
+          y := trunc(CogXYZ.x);
+          z := trunc(CogXYZ.x);
+          vx := vx + x + (y* dim.x) + (z * dim.x * dim.y);
+          o := fRawVolBytes[vx];
+          if (o = i) then
+             exit; //already in location
+        end;
+        for v := 0 to (fVolumesLoaded-1) do begin //n.b. TTatlas+tlrc.HEAD has two volumes, scan both
+           vx := (v * (dim.x * dim.y * dim.z)) -1;
+           for z := 0 to (dim.z-1) do
+             for y := 0 to (dim.y-1) do
+               for x := 0 to (dim.x-1) do begin
+                   vx := vx + 1;
+                   o := fRawVolBytes[vx];
+                   if o <> i then continue;
+                   dx := sqrt(sqr(CogXYZ.x - x)+sqr(CogXYZ.y - y)+sqr(CogXYZ.z - z));
+                   if dx >= minDx then continue;
+                   minDx := dx;
+                   result := Vec3(x,y,z);
+               end;
+       end;
+     end; //int8
+end;
+
+var
+   c: TClusters;
+   vol16 : TInt16s;
+   vx: int64;
+   v, z,y,x,i, o, maxIdx: integer;
+   mm3: single;
+   {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
+begin
+    if (not IsLabels) then exit;
+    if (fHdr.datatype <> kDT_UINT8) and (fHdr.datatype <> kDT_INT16) then exit;
+    {$IFDEF TIMER}startTime := now;{$ENDIF}
+    clusterNotes := GetClusterNotes(self);
+    maxIdx := fLabels.Count - 1; //0=air
+    if maxIdx < 1 then exit;
+    setlength(c,maxIdx+1);
+    c[0] := InitCluster;
+    for i := 1 to maxIdx do
+        c[i] := c[0];
+    if (fHdr.datatype = kDT_INT16) then begin
+       vol16 := TInt16s(fRawVolBytes);
+       for v := 0 to (fVolumesLoaded-1) do begin //n.b. TTatlas+tlrc.HEAD has two volumes, scan both
+          vx := (v * (dim.x * dim.y * dim.z)) -1;
+          for z := 0 to (dim.z-1) do
+            for y := 0 to (dim.y-1) do
+              for x := 0 to (dim.x-1) do begin
+                  vx := vx + 1;
+                  o := vol16[vx];
+                  if o <= 0 then continue;
+                  if o > maxIdx then continue;
+                  c[o].SzMM3 := c[o].SzMM3 + 1;
+                  c[o].CogXYZ.x := c[o].CogXYZ.x + x;
+                  c[o].CogXYZ.y := c[o].CogXYZ.y + y;
+                  c[o].CogXYZ.z := c[o].CogXYZ.z + z;
+              end;
+      end;
+    end else begin
+      for v := 0 to (fVolumesLoaded-1) do begin //n.b. TTatlas+tlrc.HEAD has two volumes, scan both
+          vx := (v * (dim.x * dim.y * dim.z)) -1;
+          for z := 0 to (dim.z-1) do
+            for y := 0 to (dim.y-1) do
+              for x := 0 to (dim.x-1) do begin
+                  vx := vx + 1;
+                  o := fRawVolBytes[vx];
+                  if o = 0 then continue;
+                  if o > maxIdx then continue;
+                  c[o].SzMM3 := c[o].SzMM3 + 1;
+                  c[o].CogXYZ.x := c[o].CogXYZ.x + x;
+                  c[o].CogXYZ.y := c[o].CogXYZ.y + y;
+                  c[o].CogXYZ.z := c[o].CogXYZ.z + z;
+              end;
+      end;
+    end;
+    o := 0;
+    for i := 1 to maxIdx do
+        if c[i].SzMM3 > 0 then
+           o := o + 1;
+    setlength(clusters,o);
+    o := 0;
+    mm3 := VoxMM3();
+    for i := 1 to maxIdx do
+        if c[i].SzMM3 > 0 then begin
+          c[i].Structure := fLabels[i];
+          c[i].PeakStructure := '-';
+          //result in voxels 0..Dim-1
+          c[i].CogXYZ.x := c[i].CogXYZ.x / c[i].SzMM3;
+          c[i].CogXYZ.y := c[i].CogXYZ.y / c[i].SzMM3;
+          c[i].CogXYZ.z := c[i].CogXYZ.z / c[i].SzMM3;
+          c[i].CogXYZ := VoxelNearestCog(c[i].CogXYZ, i);
+          //result in frac
+          c[i].CogXYZ.x := c[i].CogXYZ.x / (dim.x-1);
+          c[i].CogXYZ.y := c[i].CogXYZ.y / (dim.y-1);
+          c[i].CogXYZ.z := c[i].CogXYZ.z / (dim.z-1);
+          c[i].CogXYZ := FracMM(c[i].CogXYZ);
+          c[i].SzMM3 := c[i].SzMM3 * mm3;
+          c[i].PeakXYZ := c[i].CogXYZ;
+          c[i].Peak := o; //"Peak" is output index, only for sortclusters...
+          clusters[o] := c[i];
+           o := o + 1;
+        end;
+    SortClusters(); //optional: sort by size or cluster index
+    {$IFDEF TIMER}printf(format('Clusterize Atlas time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+end;
+{$ENDIF}
+
+{$ELSE}
 procedure TNIfTI.GenerateAtlasClusters();
 var
    c: TClusters;
@@ -6987,179 +7586,38 @@ begin
     SortClusters(); //optional: sort by size or cluster index
     {$IFDEF TIMER}printf(format('Clusterize Atlas time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
 end;
-
-(*procedure TNIfTI.GenerateAtlasClusters();
-var
-   c: TClusters;
-   //i: int64;
-   i, v, z,y,x, o, maxIdx: integer;
-   mm3: single;
-   vol16 : TInt16s;
-   {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
-begin
-    if (not IsLabels)  then exit;
-    if (fHdr.datatype <> kDT_UINT8) and (fHdr.datatype <> kDT_INT16) then exit;
-    {$IFDEF TIMER}startTime := now;{$ENDIF}
-    clusterNotes := GetClusterNotes(self);
-    maxIdx := fLabels.Count -1; //-1 as 0=air
-    if maxIdx < 1 then exit;
-    setlength(c,maxIdx+1);
-    c[0] := InitCluster;
-    for i := 1 to maxIdx do
-        c[i] := c[0];
-    for v := 0 to (fVolumesLoaded-1) do begin //n.b. TTatlas+tlrc.HEAD has two volumes, scan both
-      i := (v * (dim.x * dim.y * dim.z)) -1;
-      if (fHdr.datatype <> kDT_UINT8) then begin
-        for z := 0 to (dim.z-1) do
-          for y := 0 to (dim.y-1) do
-            for x := 0 to (dim.x-1) do begin
-                i := i + 1;
-                o := fRawVolBytes[i];
-                if o = 0 then continue; //air
-                if o > maxIdx then continue; //should never happen
-                c[o].SzMM3 := c[o].SzMM3 + 1;
-                c[o].CogXYZ.x := c[o].CogXYZ.x + x;
-                c[o].CogXYZ.y := c[o].CogXYZ.y + y;
-                c[o].CogXYZ.z := c[o].CogXYZ.z + z;
-            end;
-      end else begin
-       vol16 := TInt16s(fRawVolBytes);
-       for z := 0 to (dim.z-1) do
-         for y := 0 to (dim.y-1) do
-           for x := 0 to (dim.x-1) do begin
-               i := i + 1;
-               o := vol16[i];
-               if o = 0 then continue; //air
-               if o > maxIdx then continue; //should never happen
-               c[o].SzMM3 := c[o].SzMM3 + 1;
-               c[o].CogXYZ.x := c[o].CogXYZ.x + x;
-               c[o].CogXYZ.y := c[o].CogXYZ.y + y;
-               c[o].CogXYZ.z := c[o].CogXYZ.z + z;
-           end;
-      end;
-    end;
-    o := 0;
-    for i := 1 to maxIdx do
-        if c[i].SzMM3 > 0 then
-           o := o + 1;
-    setlength(clusters,o);
-    o := 0;
-    mm3 := VoxMM3();
-    for i := 1 to maxIdx do
-        if c[i].SzMM3 > 0 then begin
-          c[i].Structure := fLabels[i];
-          c[i].PeakStructure := '-';
-          //result in voxels 0..Dim-1
-          c[i].CogXYZ.x := c[i].CogXYZ.x / c[i].SzMM3;
-          c[i].CogXYZ.y := c[i].CogXYZ.y / c[i].SzMM3;
-          c[i].CogXYZ.z := c[i].CogXYZ.z / c[i].SzMM3;
-          //result in frac
-          c[i].CogXYZ.x := c[i].CogXYZ.x / (dim.x-1);
-          c[i].CogXYZ.y := c[i].CogXYZ.y / (dim.y-1);
-          c[i].CogXYZ.z := c[i].CogXYZ.z / (dim.z-1);
-          c[i].CogXYZ := FracMM(c[i].CogXYZ);
-          c[i].SzMM3 := c[i].SzMM3 * mm3;
-          c[i].PeakXYZ := c[i].CogXYZ;
-          clusters[o] := c[i];
-          o := o + 1;
-        end;
-    SortClusters();
-    {$IFDEF TIMER}printf(format('Clusterize Atlas time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
-end;       *)
-{$ELSE}
-procedure TNIfTI.GenerateAtlasClusters();
-function CenterOfMass(idx: integer; out sizeMM3: single): TVec3; inline;
-var
-   nVox: int64;
-   x,y,z,i, v: integer;
-   vol16 : TInt16s;
-begin
-  result := Vec3(0,0,0);
-  sizeMM3 := 0;
-  nVox := 0;
-  if min(min(dim.x,dim.y),dim.z) < 2 then exit;
-  if fVolumesLoaded < 1 then exit;
-  for v := 0 to (fVolumesLoaded-1) do begin
-    i := v * (dim.x * dim.y * dim.z);
-    if fHdr.datatype = kDT_UINT8 then begin
-      for z := 0 to (dim.z-1) do
-        for y := 0 to (dim.y-1) do
-          for x := 0 to (dim.x-1) do begin
-            if (fRawVolBytes[i] = idx) then begin
-              nVox := nVox + 1;
-              result.x := result.x + x;
-              result.y := result.y + y;
-              result.z := result.z + z;
-            end;
-            i := i + 1;
-          end;
-    end; //uint8
-    if fHdr.datatype = kDT_INT16 then begin
-       vol16 := TInt16s(fRawVolBytes);
-       for z := 0 to (dim.z-1) do
-         for y := 0 to (dim.y-1) do
-           for x := 0 to (dim.x-1) do begin
-             if (vol16[i] = idx) then begin
-               nVox := nVox + 1;
-               result.x := result.x + x;
-               result.y := result.y + y;
-               result.z := result.z + z;
-             end;
-             i := i + 1;
-           end;
-    end;
-  end; //for v volume
-  if nVox = 0 then exit;
-  //result in voxels 0..Dim-1
-  result.x := result.x / nVox;
-  result.y := result.y / nVox;
-  result.z := result.z / nVox;
-  //result in frac
-  result.x := result.x / (dim.x-1);
-  result.y := result.y / (dim.y-1);
-  result.z := result.z / (dim.z-1);
-  result := FracMM(result);
-  //sizeCC := nVox * VoxMM3()/1000.0;
-  sizeMM3 := nVox * VoxMM3();
-end; //nested CenterOfMass()
-var
-   o, i, n: integer;
-   clust: TCluster;
-   {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
-begin
-     if not IsLabels then exit;
-     (*if (fHdr.datatype = kDT_UINT8) then begin //8-bit shortcut, about 100 times faster
-        GenerateAtlasClusters8bit();
-        exit;
-     end; *)
-     {$IFDEF TIMER}startTime := now;{$ENDIF}
-     clusterNotes := GetClusterNotes(self);
-     n := fLabels.Count -1; //0=air
-     if n < 1 then exit;
-     setlength(clusters,n);
-     o := 0;
-     clust := InitCluster();
-     for i := 0 to (n-1) do begin
-         clust.CogXYZ := CenterOfMass(i+1, clust.SzMM3);
-         if clust.SzMM3 <= 0 then continue;
-         clust.PeakXYZ := clust.CogXYZ;
-         //clust.Peak := i;
-         clusters[o] := clust;
-         //clusters[o].Structure := fLabels[i+1]+ format (' %.1f×%.1f×%.1f %.1fcc',[clust.CogXYZ.x, clust.CogXYZ.y, clust.CogXYZ.z, clust.SzCC]);
-         clusters[o].Structure := fLabels[i+1];
-         clusters[o].PeakStructure := '-';
-         o := o + 1;
-     end;
-     setlength(clusters,o);
-     SortClusters();
-     {$IFDEF TIMER}printf(format('Clusterize Atlas time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
-end;
 {$ENDIF}
+
+function TNIfTI.rawAtlasMax: integer;
+var
+   i,vx: integer;
+   vol16: TInt16s;
+begin
+     //report maximum intensity in indexed atlas, an integer image
+     result := 0;
+     if (fHdr.datatype <> kDT_UINT8) and (fHdr.datatype <> kDT_INT16)  then exit;
+     vx := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3]*max(fHdr.Dim[4],1);
+     if (vx < 1) then exit;
+     if (fHdr.datatype <> kDT_UINT8) then begin
+        result := fRawVolBytes[0];
+        for i := 0 to (vx-1) do
+            if fRawVolBytes[i] > result then
+               result := fRawVolBytes[i];
+     end;
+     if (fHdr.datatype <> kDT_INT16) then begin
+        vol16 := TInt16s(fRawVolBytes);
+        result := vol16[0];
+        for i := 0 to (vx-1) do
+            if fRawVolBytes[i] > result then
+               result := vol16[i];
+     end;
+end;
 
 function TNIfTI.Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; volumeNumber: integer = 0; isKeepContrast: boolean = false): boolean; overload;
 var
    scaleMx: single;
    lLUTname: string;
+   i: integer;
    {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
 begin
   {$IFDEF CACHEUINT8} //release cache, reload on next refresh
@@ -7198,6 +7656,10 @@ begin
         LoadLabelsTxt(fFilename, fLabels);
         if (fLabels.Count < 1) and (( fHdr.vox_offset- fHdr.HdrSz) > 128) then
            LoadLabels(fFilename, fLabels, fHdr.HdrSz, round( fHdr.vox_offset));
+        if (fLabels.Count < 1) then begin
+           for i := 0 to max(rawAtlasMax, 1) do
+               fLabels.Add(format('roi%d',[i]));
+        end;
      end;
       if (fLabels.Count < 1) then begin
         //fHdr.intent_code :=  kNIFTI_INTENT_NON
@@ -7281,9 +7743,9 @@ begin
       printf('Unsupported data format '+inttostr(fHdr.datatype));
   //if IsLabels then
   //   GenerateClusters();
-  if (IsLabels) then
+  if (IsLabels) then begin
      //
-  else if fAutoBalMin = fAutoBalMax then begin //e.g. thresholded data
+  end else if fAutoBalMin = fAutoBalMax then begin //e.g. thresholded data
      fAutoBalMin := fMin;
      fAutoBalMax := fMax;
      fWindowMin := fMin;

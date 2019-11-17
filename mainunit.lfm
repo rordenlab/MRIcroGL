@@ -1,7 +1,7 @@
 object GLForm1: TGLForm1
-  Left = 146
+  Left = 195
   Height = 727
-  Top = 132
+  Top = 83
   Width = 1069
   AllowDropFiles = True
   Caption = 'MRIcroGL'
@@ -2501,6 +2501,10 @@ object GLForm1: TGLForm1
       object ScriptingSaveMenu: TMenuItem
         Caption = 'Save'
         OnClick = ScriptingSaveMenuClick
+      end
+      object NimlMenu: TMenuItem
+        Caption = 'Load NIML'
+        OnClick = NimlMenuClick
       end
       object ScriptingSepMenu: TMenuItem
         Caption = '-'
