@@ -1,7 +1,7 @@
 object GLForm1: TGLForm1
   Left = 195
   Height = 727
-  Top = 83
+  Top = 82
   Width = 1069
   AllowDropFiles = True
   Caption = 'MRIcroGL'

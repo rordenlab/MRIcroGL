@@ -124,6 +124,14 @@ begin
   writeln(S);
 end;
 
+function RunCommandX(exe,args: string; out outputstring: string): boolean;
+//e.g.  RunCommandX('/bin/zsh',' -l -c "which afni"', s)
+begin
+     outputstring := '';
+     if not FileExists(exe) then exit(false);
+     result := RunCommand(exe+' '+args, outputstring);
+end;
+
 function GetFSLdir: string;
 //const FSLBase = '/usr/local/fsl';
 var
@@ -136,12 +144,11 @@ begin
       {$IFDEF UNIX}
       writeln('Searching for FSLDir');
       if not DirectoryExists (result) then
-         if RunCommand('/bin/bash -l -c "which fsl"', s)  then
+         if RunCommandX('/bin/bash', '-l -c "which fsl"', s)  then
             result := extractfiledir(extractfiledir(s));// '/usr/local/fsl/bin/fsl' ->  '/usr/local/fsl'
       if not DirectoryExists (result) then
-         if RunCommand('/bin/zsh -l -c "which fsl"', s)  then
+         if RunCommandX('/bin/zsh','-l -c "which fsl"', s)  then
             result := extractfiledir(extractfiledir(s));// '/usr/local/fsl/bin/fsl' ->  '/usr/local/fsl'
-
       {$ENDIF}
       if DirectoryExists(result) then
          gFSLBASE := result;

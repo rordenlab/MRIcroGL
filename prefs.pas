@@ -55,6 +55,14 @@ begin
          MRU[i] := strs[i];
 end;
 
+function RunCommandX(exe,args: string; out outputstring: string): boolean;
+//e.g.  RunCommandX('/bin/zsh',' -l -c "which afni"', s)
+begin
+     outputstring := '';
+     if not FileExists(exe) then exit(false);
+     result := RunCommand(exe+' '+args, outputstring);
+end;
+
 procedure SetDefaultPrefs (var lPrefs: TPrefs; lEverything: boolean);
 var
   i: integer;
@@ -71,9 +79,9 @@ begin
             AfniDir := expandfilename('~/')+'abin';
             if not DirectoryExists(AfniDir) then begin
                writeln('Searching for AfniDir');
-               if RunCommand('/bin/bash -l -c "which afni"', s) then
+               if RunCommandX('/bin/bash', '-l -c "which afni"', s) then
                   AfniDir := extractfiledir(s)
-               else if RunCommand('/bin/zsh -l -c "which afni"', s) then
+               else if RunCommandX('/bin/zsh','-l -c "which afni"', s) then
                   AfniDir := extractfiledir(s);
             end;
             {$ELSE}

@@ -6603,11 +6603,20 @@ begin
         GLForm1.ViewGPUPaint(nil);
         glFlush;
         glFinish;//<-this would pause until all jobs finished: generally a bad idea! required here
+        {$IFDEF Linux} //QT5 glFinish returns before finishing!
+        sleep(10);
+        glFlush;
+        glFinish;//<-this would pause until all jobs finished: generally a bad idea! required here
+        sleep(10);
+        {$ENDIF}
+        {$IFDEF Windows}
         GLBox.SwapBuffers; //<- required by Windows
+        {$ENDIF}
         {$IFDEF Darwin} //http://lists.apple.com/archives/mac-opengl/2006/Nov/msg00196.html
         glReadPixels(0, 0, w, h, $80E1, $8035, @p[0]); //OSX-Darwin   GL_BGRA = $80E1;  GL_UNSIGNED_INT_8_8_8_8_EXT = $8035;
         {$ELSE} {$IFDEF Linux}
-         glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, @p[0]); //Linux-Windows   GL_RGBA = $1908; GL_UNSIGNED_BYTE
+        // glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, @p[0]); //Linux-Windows   GL_RGBA = $1908; GL_UNSIGNED_BYTE
+         glReadPixels(0, 0, w, h, $80E1, GL_UNSIGNED_BYTE, @p[0]); //https://github.com/rordenlab/MRIcroGL12/issues/9
         {$ELSE}
          glReadPixels(0, 0, w, h, $80E1, GL_UNSIGNED_BYTE, @p[0]); //Linux-Windows   GL_RGBA = $1908; GL_UNSIGNED_BYTE
         {$ENDIF} {$ENDIF}

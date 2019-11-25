@@ -1021,6 +1021,8 @@ begin
              d := d  + vol32[vx + (vol * nVx)];
     end;
     result[vol] := ( d * (1.0/nVxROI) * fHdr.scl_slope) + fHdr.scl_inter;
+    if specialsingle(result[vol]) then
+       result[vol] := 0;
   end;
 end; // VoxIntensityArray()
 
@@ -1060,8 +1062,11 @@ begin
        for vol := 0 to (nVol - 1) do
            result[vol] := vol32[vx + (vol * nVx)];
      end;
-     for vol := 0 to (nVol - 1) do
+     for vol := 0 to (nVol - 1) do begin
          result[vol] := (result[vol] * fHdr.scl_slope) + fHdr.scl_inter;
+         if specialsingle(result[vol]) then
+            result[vol] := 0;  //e.g. Inf+
+     end;
 end; // VoxIntensityArray()
 
 function TNIfTI.VoxIntensity(vox: int64): single; overload; //return intensity of voxel at coordinate
@@ -3723,21 +3728,6 @@ begin
   Stream.Free;
  End;
  result := true;
-
- (*if FSz < 3198000000 then exit;
- u16 := TUint16s(fRawVolBytes);
- vx := volBytes div 2;
- mn := u16[0];
- mx := mn;
- for i := 0 to (vx-1) do begin
-     if u16[i] > mx then mx := u16[i];
-     if u16[i] < mn then mn := u16[i];
-
- end;
- printf(format('>>>>>>> %d..%d', [mn, mx]));
-
- //printf(format('>>>>>>> %s %d %d', [FileName, volBytes, FSz]));
- exit(false);  *)
 end;
 
 
@@ -4266,7 +4256,11 @@ begin
   mn := Scaled2RawIntensity(fHdr, mn);
   mx := Scaled2RawIntensity(fHdr, mx);
   {$ENDIF}
-  slope := kMaxBin / (mx - mn);
+  if mx = mn then begin
+     printf('No variability in Float32 data ');
+     slope := 1;
+  end else
+      slope := kMaxBin / (mx - mn);
   //GLForm1.LayerBox.caption := format('%g',[slope]);
   setlength(histo, kMaxBin+1);//0..kMaxBin
   for i := 0 to kMaxBin do
@@ -6230,6 +6224,7 @@ begin
                 lStr1 := lStr1 + lCh;
             until (lPos > lLength) or (lCh=kCR) or (lCh=kUNIXeoln) {or (lCh=kTab)or (lCh=' ')};
 			      lLabels[lIndex] := lStr1;
+                              printf(format('%d:%s',[lIndex,lStr1]));
 		      end; //if pass 2
 		    end; //if lStr1>0
 	    end; //while not EOF
@@ -7264,8 +7259,10 @@ begin
      if (err) then
         printf('VoxelsNearestCogs: Catastrophic error, wrong number of labels');
       for i := 1 to maxIdx do
-         if not specialsingle(minDx[i]) then //e.g. not infinity, e.g. detected
+         if not specialsingle(minDx[i]) then begin//e.g. not infinity, e.g. detected
             c[i].CogXYZ := vx2xyz(minVx[i]);
+            //c[i].CogXYZ.x := 0;
+         end;
      minVx := nil;
      minDx := nil;
 end;
@@ -7336,6 +7333,13 @@ begin
           c[i].CogXYZ.x := c[i].CogXYZ.x / c[i].SzMM3;
           c[i].CogXYZ.y := c[i].CogXYZ.y / c[i].SzMM3;
           c[i].CogXYZ.z := c[i].CogXYZ.z / c[i].SzMM3;
+          //set peak to actual CoG, without requiring true voxel
+          c[i].PeakXYZ := c[i].CogXYZ;
+          c[i].PeakXYZ.x := c[i].PeakXYZ.x / (dim.x-1);
+          c[i].PeakXYZ.y := c[i].PeakXYZ.y / (dim.y-1);
+          c[i].PeakXYZ.z := c[i].PeakXYZ.z / (dim.z-1);
+          c[i].PeakXYZ := FracMM(c[i].PeakXYZ);
+          c[i].Peak := i;
         end;
     VoxelsNearestCogs(c, maxIdx);
     for i := 1 to maxIdx do
@@ -7346,8 +7350,8 @@ begin
           c[i].CogXYZ.z := c[i].CogXYZ.z / (dim.z-1);
           c[i].CogXYZ := FracMM(c[i].CogXYZ);
           c[i].SzMM3 := c[i].SzMM3 * mm3;
-          c[i].PeakXYZ := c[i].CogXYZ;
-          c[i].Peak := o; //"Peak" is output index, only for sortclusters...
+          //c[i].PeakXYZ := c[i].CogXYZ;
+          //c[i].Peak := o; //"Peak" is output index, only for sortclusters...
           clusters[o] := c[i];
            o := o + 1;
         end;
@@ -7595,7 +7599,10 @@ var
 begin
      //report maximum intensity in indexed atlas, an integer image
      result := 0;
-     if (fHdr.datatype <> kDT_UINT8) and (fHdr.datatype <> kDT_INT16)  then exit;
+     if (fHdr.datatype <> kDT_UINT8) and (fHdr.datatype <> kDT_INT16) then begin
+        printf(format('Unsupported atlas datatype: %d (expected UINT8 or INT16)', [fHdr.datatype]));
+        exit;
+     end;
      vx := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3]*max(fHdr.Dim[4],1);
      if (vx < 1) then exit;
      if (fHdr.datatype <> kDT_UINT8) then begin
@@ -7741,6 +7748,10 @@ begin
        initHistogram();
   end else
       printf('Unsupported data format '+inttostr(fHdr.datatype));
+  if fMin = fMax then begin
+     printf(format('No variability in volume, all voxels have intensity %g',[fMin]));
+      fMax := fMin + 1;
+  end;
   //if IsLabels then
   //   GenerateClusters();
   if (IsLabels) then begin
