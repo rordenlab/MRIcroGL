@@ -4709,7 +4709,7 @@ end;
 
 procedure TGLForm1.SliceZoomChange(Sender: TObject);
 begin
-  //Vol1.SetSlice2DFrac(X,Y,i); ccc
+  if Vol1 = nil then exit;
   Vol1.Slices.ZoomScale := SliceZoom.position/100;
   ViewGPU1.Invalidate;
 end;
@@ -7889,6 +7889,10 @@ var
  shaderNames : TStringList;
  newMenu: TMenuItem;
 begin
+ {$IFDEF LCLGTK2}{$IFDEF LINUX}
+ writeln('If there is a long delay at launch, ensure full GTK2 install: "sudo apt-get install appmenu-gtk2-module"');
+ {$ENDIF}{$ENDIF}
+
  {$IFDEF FPC} Application.ShowButtonGlyphs:= sbgNever; {$ENDIF}
  //OpenDialog1.Filter := kImgFilter;
  isForceReset := false;
@@ -8014,6 +8018,7 @@ begin
   //ViewGPU1.Parent := CenterPanel;
   ViewGPU1.OpenGLMajorVersion := 3;
   ViewGPU1.OpenGLMinorVersion := 3;
+  ViewGPU1.DepthBits:= 0;
   //Multisampling influences borders of vertex shader - orientation cube looks MUCH better with multisampling
   // Has no influence on fragment shader away from edges, e.g. no benefit for volume rendering but no cost?
   ViewGPU1.MultiSampling := 4;
@@ -8101,7 +8106,7 @@ begin
     shaderNames.Free;
   end;
   {$IFDEF MATT1}
-  StoreFMRIMenu.Visible := true;
+  //StoreFMRIMenu.Visible := true;
   {$ENDIF}
   {$IFDEF Darwin}
   //LayerList.Style := lbOwnerDrawFixed;//Dark mode bug https://bugs.freepascal.org/view.php?id=34600

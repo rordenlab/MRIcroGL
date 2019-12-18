@@ -6224,7 +6224,7 @@ begin
                 lStr1 := lStr1 + lCh;
             until (lPos > lLength) or (lCh=kCR) or (lCh=kUNIXeoln) {or (lCh=kTab)or (lCh=' ')};
 			      lLabels[lIndex] := lStr1;
-                              printf(format('%d:%s',[lIndex,lStr1]));
+                              //printf(format('%d:%s',[lIndex,lStr1]));
 		      end; //if pass 2
 		    end; //if lStr1>0
 	    end; //while not EOF

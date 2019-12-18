@@ -417,7 +417,11 @@ begin
      //clean up:
      if isSmoothGrad then
         glDeleteTextures(1,@tempTex3D);
+    {$IFDEF LCLgtk3}
+    glBindFramebuffer(GL_FRAMEBUFFER, 1);
+    {$ELSE}
      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    {$ENDIF}
     GetErrorAll(103,'CreateGradient');
      glDeleteFramebuffers(1, @fb);
      glActiveTexture( GL_TEXTURE0 );  //required if we will draw 2d slices next
@@ -1481,7 +1485,11 @@ begin
   else
       lElevation := 0;
   glUseProgram(programRaycastBetter);
-  glBindFramebuffer(GL_FRAMEBUFFER, 0); //draw to screen
+  {$IFDEF LCLgtk3}
+  glBindFramebuffer(GL_FRAMEBUFFER, 1);
+  {$ELSE}
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  {$ENDIF}
   glActiveTexture(GL_TEXTURE2);
   glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
   glUniform1i(intensityVolLoc, 2);
@@ -1596,7 +1604,11 @@ begin
   if (intensityTexture3D = 0) then
     exit;
   UpdateDraw(Drawing);
-  glBindFramebuffer(GL_FRAMEBUFFER, 0); //draw to screen
+      {$IFDEF LCLgtk3}
+    glBindFramebuffer(GL_FRAMEBUFFER, 1);
+    {$ELSE}
+     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    {$ENDIF}
   glBindFramebuffer(GL_RENDERBUFFER, 0); //draw to screen
   w := glControl.clientwidth;
   h := glControl.clientheight;
@@ -1620,7 +1632,11 @@ begin
   //glViewport(0, 0, glControl.ClientWidth, glControl.ClientHeight); //required for form resize
   glControl.SetViewport();
   glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT);
-  glBindFramebuffer(GL_FRAMEBUFFER, 0); //draw to screen
+  {$IFDEF LCLgtk3}
+glBindFramebuffer(GL_FRAMEBUFFER, 1);
+{$ELSE}
+ glBindFramebuffer(GL_FRAMEBUFFER, 0);
+{$ENDIF}
   glEnable (GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   if (slices2D.NumberOfVertices >= 3) then begin
@@ -1739,7 +1755,11 @@ begin
   //glViewport(0, 0, glControl.ClientWidth, glControl.ClientHeight); //required for form resize
   glControl.SetViewport();
   glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT);
-  glBindFramebuffer(GL_FRAMEBUFFER, 0); //draw to screen
+  {$IFDEF LCLgtk3}
+glBindFramebuffer(GL_FRAMEBUFFER, 1);
+{$ELSE}
+ glBindFramebuffer(GL_FRAMEBUFFER, 0);
+{$ENDIF}
   glEnable (GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   //draw 2D texture
@@ -1844,7 +1864,11 @@ begin
        glUseProgram(programRaycastBetter)
   else
       glUseProgram(programRaycast);
-  glBindFramebuffer(GL_FRAMEBUFFER, 0); //draw to screen
+  {$IFDEF LCLgtk3}
+glBindFramebuffer(GL_FRAMEBUFFER, 1);
+{$ELSE}
+ glBindFramebuffer(GL_FRAMEBUFFER, 0);
+{$ENDIF}
   //bind background intensity (color)
   glActiveTexture(GL_TEXTURE2);
   glBindTexture(GL_TEXTURE_3D, intensityTexture3D);

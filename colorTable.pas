@@ -76,6 +76,14 @@ begin
   lBuff := nil;
 end;
 
+{procedure saveLUT(l:TLUT);
+var
+   i: integer;
+begin
+  for i := 0 to 255 do
+      writeln(format('nodergba%d=%d|%d|%d|%d|',[i, l[i].r, l[i].g, l[i].b, l[i].a]));
+end;}
+
 function defaultLabelLut: TLUT;
 var
    lut: TLUT;
@@ -188,6 +196,7 @@ begin
     for i := 1 to 55 do
         lut[i+200] := lut[i]; //fill 201..255
     result := lut;
+    //saveLUT(lut);
 end;
 
 procedure TCLUT.SetLabels();

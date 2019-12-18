@@ -120,7 +120,6 @@ end;
 // Lanczos3 filter
 
 function Lanczos3Filter(Value: Single): Single;
-
 function SinC(Value: Single): Single;
   begin
     if (Value <> 0.0) then
