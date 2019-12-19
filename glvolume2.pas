@@ -662,12 +662,12 @@ kFragFaster = kFragBase
 
 
 kFragBetter = kFragBase
-+#10'#define BETTER_BUT_SLOWER'
-+#10'vec3 textureSz;'
++#10'//#define BETTER_BUT_SLOWER'
++#10'//vec3 textureSz;'
 +#10'vec4 texture3D(sampler3D vol, vec3 coord) {'
 +#10'  // shift the coordinate from [0,1] to [-0.5, textureSz-0.5]'
 +#10'  //vec3 textureSz = uResolution; //textureSz3D(tex, 0));'
-+#10'  //vec3 textureSz = textureSz3D(vol, 0);'
++#10'  vec3 textureSz = textureSize(vol, 0);'
 +#10'  vec3 coord_grid = coord * textureSz - 0.5;'
 +#10'  vec3 index = floor(coord_grid);'
 +#10'  vec3 fraction = coord_grid - index;'

@@ -20,6 +20,7 @@ void main() {
 	vec4 deltaDir = vec4(dir.xyz * stepSize, stepSize);
 	vec4 gradSample, colorSample;
 	float bgNearest = len; //assume no hit
+	float overFarthest = len;
 	vec4 colAcc = vec4(0.0,0.0,0.0,0.0);
 	vec4 prevGrad = vec4(0.0,0.0,0.0,0.0);
 	vec4 samplePos;
@@ -36,30 +37,25 @@ void main() {
 	if (samplePos.a < clipPos.a)
 		samplePos = clipPos;
 	//end fastpass - optional	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
-	
+	vec4 gradMax = colAcc;
 	if ( overlays < 1 ) { //pass without overlays
 		while (samplePos.a <= len) {
 			colorSample = texture3D(intensityVol,samplePos.xyz);
-			//if (colorSample.a > colAcc.a) //ties generate errors for TT_desai_dd_mpm
-			//	colAcc = colorSample;
-			if (colorSample.a > colAcc.a) //ties generate errors for TT_desai_dd_mpm
-				colAcc = colorSample+0.00001;
+			if (colorSample.a > colAcc.a)
+				colAcc = colorSample;
 			samplePos += deltaDir;
 		} //while samplePos.a < len
-		//colAcc.a = step(0.001, colAcc.a); //good for templates...
 		colAcc.a *= backAlpha;
 		FragColor = colAcc;
 		return;
 	}
 	//overlay pass
-	vec4 gradMax = colAcc;
 	vec4 ocolAcc = vec4(0.0,0.0,0.0,0.0);
 	vec4 prevNorm = ocolAcc;
 	while (samplePos.a <= len) {
 			colorSample = texture3D(intensityVol,samplePos.xyz);
 			if (colorSample.a > colAcc.a)
-				colAcc = colorSample+0.00001;
-			//	colAcc = colorSample;
+				colAcc = colorSample;
 			gradSample= texture3D(gradientVol,samplePos.xyz);
 			if (gradSample.a > gradMax.a)
 				gradMax = gradSample;

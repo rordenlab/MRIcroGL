@@ -19,7 +19,7 @@ uniform float overlayClip = 0.0;
 
 void main() {
 	#ifdef BETTER_BUT_SLOWER
-	textureSz = textureSize(gradientVol, 0);
+	textureSz = textureSize(intensityVol, 0);
 	#endif
     vec3 start = TexCoord1.xyz;
 	vec3 backPosition = GetBackPosition(start);
@@ -120,6 +120,8 @@ void main() {
 	if (samplePos.a < clipPos.a)
 		samplePos = clipPos;
 	//end fastpass - optional
+
+	
 		vec4 overAcc = vec4(0.0,0.0,0.0,0.0);
 		vec4 oprevGrad = vec4(0.0,0.0,0.0,0.0);
 		float overFarthest = len;
@@ -128,13 +130,12 @@ void main() {
 			samplePos += deltaDir;
 			if (colorSample.a < 0.01)
 				continue;
-			if (overAcc.a < 0.3)
-				overFarthest = samplePos.a;
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
 			colorSample.a *=  overlayFuzzy;
 			vec3 a = colorSample.rgb * ambient;
 			float s =  0;
 			vec3 d = vec3(0.0, 0.0, 0.0);
+			overFarthest = samplePos.a;
 			//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
 			gradSample = texture(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
 			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);

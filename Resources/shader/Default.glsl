@@ -107,9 +107,10 @@ void main() {
 	while (samplePos.a <= len) {
 		colorSample = texture3D(intensityOverlay,samplePos.xyz);
 		if (colorSample.a > 0.00) {
+			if (overAcc.a < 0.3)
+				overFarthest = samplePos.a;
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
 			colorSample.a *=  overlayFuzzy;
-			overFarthest = samplePos.a;
 			//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
 			gradSample = texture3D(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
 			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);

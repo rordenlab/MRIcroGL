@@ -20,7 +20,7 @@ uniform float overlayClip = 0.0;
 
 void main() {
 	#ifdef BETTER_BUT_SLOWER
-	textureSz = textureSize(intensityVol, 0);
+	textureSz = textureSize(gradientVol, 0);
 	#endif
     vec3 start = TexCoord1.xyz;
 	vec3 backPosition = GetBackPosition(start);
@@ -42,7 +42,7 @@ void main() {
 	float opacityCorrection = stepSize/sliceSize;
 	float ran = fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453);
 	//fast pass - optional
-	fastPass (len, dir, gradientVol, samplePos);
+	fastPass(len, dir, gradientVol, samplePos);
 	if ((samplePos.a > len) && ( overlays < 1 )) { //no hit: quit here
 		FragColor = colAcc;
 		return;		

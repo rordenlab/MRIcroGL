@@ -201,9 +201,10 @@
       </Unit22>
       <Unit23>
         <Filename Value="glvolume2.pas"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="3"/>
-        <TopLine Value="904"/>
-        <CursorPos X="22" Y="928"/>
+        <TopLine Value="661"/>
+        <CursorPos X="33" Y="665"/>
         <UsageCount Value="92"/>
         <Loaded Value="True"/>
       </Unit23>
@@ -455,10 +456,9 @@
       </Unit58>
       <Unit59>
         <Filename Value="../ct4laz/pl_components/pl_opengl/source/OpenGLPanel.pas"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="1"/>
         <TopLine Value="12"/>
-        <CursorPos X="30" Y="23"/>
+        <CursorPos X="4" Y="17"/>
         <UsageCount Value="10"/>
         <Loaded Value="True"/>
       </Unit59>
@@ -466,7 +466,7 @@
     <Build>
       <CleanOutputFileMask Value="*.ppu;*.ppl;*.o;*.or"/>
     </Build>
-    <JumpHistory Count="15" HistoryIndex="14">
+    <JumpHistory Count="18" HistoryIndex="17">
       <Position1>
         <Filename Value="mainunit.pas"/>
         <Caret Line="274" Column="81" TopLine="256"/>
@@ -527,6 +527,18 @@
         <Filename Value="mainunit.pas"/>
         <Caret Line="12" Column="98"/>
       </Position15>
+      <Position16>
+        <Filename Value="glvolume2.pas"/>
+        <Caret Line="786" Column="33" TopLine="765"/>
+      </Position16>
+      <Position17>
+        <Filename Value="glvolume2.pas"/>
+        <Caret Line="709" Column="46" TopLine="706"/>
+      </Position17>
+      <Position18>
+        <Filename Value="glvolume2.pas"/>
+        <Caret Line="889" Column="20" TopLine="877"/>
+      </Position18>
     </JumpHistory>
     <RunParams>
       <FormatVersion Value="2"/>

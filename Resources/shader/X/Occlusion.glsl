@@ -1,20 +1,17 @@
 //pref
-brighten|float|0.5|2|3.5
+brighten|float|0.5|2.2|3.5
 surfaceColor|float|0.0|1.0|1.0
-boundThresh|float|0.0|0.5|0.95
-edgeBoundMix|float|0|0.9|1
+occlusion|float|0.01|0.1|0.5
 overlayFuzzy|float|0.01|0.5|1
 overlayDepth|float|0.0|0.15|0.99
 overlayClip|float|0|0|1|Does clipping also influence overlay layers?
 //frag
 uniform float brighten = 1.5;
 uniform float surfaceColor = 1.0;
-uniform float boundThresh = 0.95;
-uniform float edgeBoundMix = 0.9;
+uniform float occlusion = 0.2;
 uniform float overlayDepth = 0.3;
 uniform float overlayFuzzy = 0.5;
 uniform float overlayClip = 0.0;
-
 uniform mat3 NormalMatrix;
 uniform sampler2D matcap2D;
 
@@ -30,10 +27,6 @@ void main() {
 	vec4 deltaDir = vec4(dir.xyz * stepSize, stepSize);
 	vec4 gradSample, colorSample;
 	float bgNearest = len; //assume no hit
-	float ambient = 1.0;
-	float diffuse = 0.3;
-	float specular = 0.25;
-	float shininess = 10.0;
 	vec4 colAcc = vec4(0.0,0.0,0.0,0.0);
 	vec4 prevGrad = vec4(0.0,0.0,0.0,0.0);
 	//background pass
@@ -64,48 +57,58 @@ void main() {
 	//end fastpass - optional
 	float ran = fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453);
 	samplePos += deltaDir * ran;
-	float boundAcc = 0.0;
 	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
 	while (samplePos.a <= len) {
-		gradSample = texture3D(gradientVol,samplePos.xyz);
-		samplePos += deltaDir;
-		//next: a hack. e.g. T1 deep white matter might be saturated, bright but no gradient
-		//  the stepSizeX2 previously attempts to make clip planes opque to hide this
-		if (gradSample.a == 0.0) continue;
-		gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
-		//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
-		//if (gradSample.a < prevGrad.a)
-		//	gradSample.rgb = prevGrad.rgb;
-		//prevGrad = gradSample;
-		if (gradSample.a > boundThresh) {
-			float lightNormDot = dot(gradSample.rgb, dir); //with respect to viewer
-			float boundAlpha = pow(1.0-abs(lightNormDot),6.0);
-			boundAlpha = 1.0-pow((1.0 - boundAlpha), opacityCorrection);
-			boundAcc += (1.0 - boundAcc) * boundAlpha;
-		}
-		if (colAcc.a > 0.95) continue;
-		colorSample = texture3D(intensityVol,samplePos.xyz-deltaDir.xyz);
-		colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
-		bgNearest = min(samplePos.a,bgNearest);
-		vec3 n = normalize(normalize(NormalMatrix * gradSample.rgb));
-		vec3 d = texture(matcap2D, n.xy * 0.5 + 0.5).rgb;
-		colorSample.rgb = mix(defaultDiffuse, colorSample.rgb, surfaceColor); //0.67 as default Brighten is 1.5
+		colorSample = texture3D(intensityVol,samplePos.xyz);
+		if (colorSample.a > 0.0) {
+			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
+			bgNearest = min(samplePos.a,bgNearest);
+			gradSample= texture3D(gradientVol,samplePos.xyz);
+			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
+			//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
+			if (gradSample.a < prevGrad.a)
+				gradSample.rgb = prevGrad.rgb;
+			prevGrad = gradSample;
+			vec3 n = normalize(normalize(NormalMatrix * gradSample.rgb));
+			vec3 d = texture(matcap2D, n.xy * 0.5 + 0.5).rgb;
+			vec3 surf = mix(defaultDiffuse, colorSample.rgb, surfaceColor); //0.67 as default Brighten is 1.5
+			colorSample.rgb = d * surf * brighten * colorSample.a;
 			
-		colorSample.rgb *= d * brighten * colorSample.a;
-		colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
+			//float occlude = step(occlusion, gradSample.a); //0=no occlusion, 1=high 
+			float occlude = smoothstep(occlusion, occlusion+0.1, gradSample.a); //0=no occlusion, 1=high 
+			
+			colorSample.a = mix(sqrt(colorSample.a), colorSample.a, occlude);
+			
+			
+			//float occlude = max(gradSample.a - occlusion, 0.0) / (1.0 - occlusion); //1.0 = high occlusion
+			//occlude = smoothstep(0.0, 1.0, occlude);
+			//colorSample.rgb *= (1.0 - occlude);
+			//float occlude = mix(1.0, 0.0, max(gradSample.a - occlusion, 0.0));
+			//colorSample.r = occlude;
+			//float occlude = mix(0.0, 1.0, max(gradSample.a - occlusion, 0.0));
+			//colorSample.a *= occlude;
+			//colorSample.a = mix(colorSample.a, sqrt(colorSample.a),  occlude);
+			
+			//colorSample.a = mix( colorSample.a, sqrt(colorSample.a), occlude);
+			
+			colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
+			if ( colAcc.a > 0.95 )
+				break;
+		}
+		samplePos += deltaDir;
 	} //while samplePos.a < len
 	colAcc.a = colAcc.a/0.95;
-	
-	if ((edgeBoundMix > 0.0) && ((colAcc.a + boundAcc) > 0.0)) {
-		colAcc.rgb = mix(colAcc.rgb, vec3(0.0,0.0,0.0), (edgeBoundMix * boundAcc)/(colAcc.a+(edgeBoundMix * boundAcc)) );
-		colAcc.a = max(colAcc.a, boundAcc);
-	}
 	colAcc.a *= backAlpha;
 	if ( overlays< 1 ) {
 		FragColor = colAcc;
 		return;
 	}
 	//overlay pass
+	float overFarthest = len;
+	float ambient = 1.0;
+	float diffuse = 0.3;
+	float specular = 0.25;
+	float shininess = 10.0;
 	vec4 overAcc = vec4(0.0,0.0,0.0,0.0);
 	prevGrad = vec4(0.0,0.0,0.0,0.0);
 	if (overlayClip > 0)
@@ -119,18 +122,14 @@ void main() {
 	fastPass (len, dir, intensityOverlay, samplePos);
 	if (samplePos.a < clipPos.a)
 		samplePos = clipPos;
+	deltaDir = vec4(dir.xyz * stepSize, stepSize);
 	//end fastpass - optional
-	float overFarthest = len;
 	while (samplePos.a <= len) {
 		colorSample = texture3D(intensityOverlay,samplePos.xyz);
 		if (colorSample.a > 0.00) {
-			if (overAcc.a < 0.3)
-				overFarthest = samplePos.a;
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
 			colorSample.a *=  overlayFuzzy;
-			vec3 a = colorSample.rgb * ambient;
-			float s =  0;
-			vec3 d = vec3(0.0, 0.0, 0.0);
+			overFarthest = samplePos.a;
 			//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
 			gradSample = texture3D(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
 			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
@@ -139,8 +138,9 @@ void main() {
 				gradSample.rgb = prevGrad.rgb;
 			prevGrad = gradSample;
 			float lightNormDot = dot(gradSample.rgb, lightPosition);
-			d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;
-			s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
+			vec3 a = colorSample.rgb * ambient;
+			vec3 d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;
+			float s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
 			colorSample.rgb = a + d + s;
 			colorSample.rgb *= colorSample.a;
 			overAcc= (1.0 - overAcc.a) * colorSample + overAcc;
@@ -150,16 +150,13 @@ void main() {
 		samplePos += deltaDir;
 	} //while samplePos.a < len
 	overAcc.a = overAcc.a/0.95;
-	//end ovelay pass clip plane applied to background ONLY...
-	//if (overAcc.a > 0.0) { //<- conditional not required: overMix always 0 for overAcc.a = 0.0
-		float overMix = overAcc.a;
-		if (((overFarthest) > bgNearest) && (colAcc.a > 0.0)) { //background (partially) occludes overlay
-			float dx = (overFarthest - bgNearest)/1.73;
-			dx = colAcc.a * pow(dx, overlayDepth);
-			overMix *= 1.0 - dx;
-		}
-		colAcc.rgb = mix(colAcc.rgb, overAcc.rgb, overMix);
-		colAcc.a = max(colAcc.a, overAcc.a);
-	//}
+	float overMix = overAcc.a;
+	if (((overFarthest) > bgNearest) && (colAcc.a > 0.0)) { //background (partially) occludes overlay
+		float dx = (overFarthest - bgNearest)/1.73;
+		dx = colAcc.a * pow(dx, overlayDepth);
+		overMix *= 1.0 - dx;
+	}
+	colAcc.rgb = mix(colAcc.rgb, overAcc.rgb, overMix);
+	colAcc.a = max(colAcc.a, overAcc.a);
     FragColor = colAcc;
 }

@@ -24,7 +24,7 @@ uniform float colorTemp = 0.9;
 
 void main() {
 	#ifdef BETTER_BUT_SLOWER
-	textureSz = textureSize(intensityVol, 0);
+	textureSz = textureSize(gradientVol, 0);
 	#endif
     vec3 start = TexCoord1.xyz;
 	vec3 backPosition = GetBackPosition(start);
