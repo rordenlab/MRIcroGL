@@ -19,10 +19,7 @@ uniform float overlayClip = 0.0;
 uniform float doSomething = 0.0;
 
 void main() {
-	#ifdef BETTER_BUT_SLOWER
-	textureSz = textureSize(intensityVol, 0);
-	#endif
-    vec3 start = TexCoord1.xyz;
+	vec3 start = TexCoord1.xyz;
 	vec3 backPosition = GetBackPosition(start);
 	vec3 dir = backPosition - start;
 	float len = length(dir);
@@ -62,7 +59,6 @@ void main() {
 				if (gradSample.a < prevGrad.a)
 					gradSample.rgb = prevGrad.rgb;
 				prevGrad = gradSample;
-				
 				float lightNormDot = dot(gradSample.rgb, lightPosition);
 				vec3 d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;
 				float s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);

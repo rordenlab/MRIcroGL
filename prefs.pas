@@ -4,7 +4,7 @@ unit prefs;
 {$IFDEF Darwin} {$modeswitch objectivec2} {$ENDIF}
 
 interface
-uses {$IFDEF UNIX}Process, {$ENDIF}{$IFDEF Darwin}CocoaAll, {$ENDIF} IniFiles,SysUtils,Dialogs,Classes, SimdUtils, slices2D;
+uses Process, {$IFDEF Darwin}CocoaAll, {$ENDIF} IniFiles,SysUtils,Dialogs,Classes, SimdUtils, slices2D;
 const
   knMRU = 10;
 type

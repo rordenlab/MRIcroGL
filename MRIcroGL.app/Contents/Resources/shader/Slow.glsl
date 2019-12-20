@@ -16,10 +16,7 @@ uniform float overDistance = 0.3;
 uniform float overAlpha = 0.8;
 uniform float overShade = 0.3;
 void main() {
-	#ifdef BETTER_BUT_SLOWER
-	textureSz = textureSize(intensityVol, 0);
-	#endif
-	#line 23
+	#line 20
     vec3 start = TexCoord1.xyz;
 	vec3 backPosition = GetBackPosition(start);
 	vec3 dir = backPosition - start;

@@ -11,9 +11,6 @@ uniform float doJitter = 0.0;
 uniform float showStartEnd = 0.2;
 
 void main() {
-	#ifdef BETTER_BUT_SLOWER
-	textureSz = textureSize(intensityVol, 0);
-	#endif
 	float ambient = 1.0;
 	float diffuse = 0.3;
 	float specular = 0.25;

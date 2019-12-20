@@ -632,6 +632,7 @@ kFragBase = '#version 330'
 
 // GetBackPosition -> when does ray exit unit cube http://prideout.net/blog/?p=64
 
+
 kFragFaster = kFragBase
 +#10'vec4 texture3D(sampler3D vol, vec3 coord) {'
 +#10'	return texture(vol, coord); //trilinear interpolation'

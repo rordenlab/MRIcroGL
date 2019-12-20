@@ -22,9 +22,6 @@ uniform float overShade = 0.3;
 uniform int loops;
 
 void main() {
-	#ifdef BETTER_BUT_SLOWER
-	textureSz = textureSize(intensityVol, 0);
-	#endif
 	//FragColor = vec4(0.0, 1.0, 0.0, 1.0); return;
 	vec3 start = TexCoord1.xyz;
 	vec3 backPosition = GetBackPosition(start);

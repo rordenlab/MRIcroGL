@@ -16,10 +16,7 @@ uniform mat3 NormalMatrix;
 uniform sampler2D matcap2D;
 
 void main() {
-	#ifdef BETTER_BUT_SLOWER
-	textureSz = textureSize(intensityVol, 0);
-	#endif
-    vec3 start = TexCoord1.xyz;
+	vec3 start = TexCoord1.xyz;
 	vec3 backPosition = GetBackPosition(start);
 	vec3 dir = backPosition - start;
 	float len = length(dir);

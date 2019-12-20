@@ -23,10 +23,7 @@ uniform float overlayClip = 0.0;
 uniform float colorTemp = 0.9;
 
 void main() {
-	#ifdef BETTER_BUT_SLOWER
-	textureSz = textureSize(gradientVol, 0);
-	#endif
-    vec3 start = TexCoord1.xyz;
+	vec3 start = TexCoord1.xyz;
 	vec3 backPosition = GetBackPosition(start);
 	vec3 dir = backPosition - start;
 	float len = length(dir);
