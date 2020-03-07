@@ -8,7 +8,8 @@ uses
   cmem, // <- http://wiki.freepascal.org/Parallel_procedures
   {$ENDIF}{$ENDIF}
   //{$IFDEF LCLGtk2}uscale,{$ENDIF}
-  //{$ifdef windows},udark {$endif}
+  //{$ifdef windows},udark, {$endif}
+  {$ifdef windows}Windows,System, {$endif}
   Interfaces, // this includes the LCL widgetset
   Forms, mainunit, TimedDialog, dcm2nii, drawVolume, autoroi,
   nifti_hdr_view, nifti_resize, resize, crop;
@@ -25,6 +26,12 @@ begin
   Application.CreateForm(THdrForm, HdrForm);
   Application.CreateForm(TResizeForm, ResizeForm);
   Application.CreateForm(TCropForm, CropForm);
+  {$ifdef windows}
+   //https://stackoverflow.com/questions/20134421/can-a-windows-gui-program-written-in-lazarus-create-a-console-and-write-to-it-at
+   AllocConsole;      // in Windows unit
+   IsConsole := True; // in System unit
+   SysInitStdIO;      // in System unit  
+  {$endif}
   //{$ifdef windows} SetDarkTheme; {$endif}
   //{$IFDEF LCLGtk2}ConstrainTrackBars();{$ENDIF}  //if unpatched, see https://bugs.freepascal.org/view.php?id=35861
   Application.Run;

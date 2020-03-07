@@ -14,8 +14,7 @@ type
          StartupDisplayOrient, ColorbarSize,ColorbarPosition, Quality1to6, BitmapZoom,
          MaxVox, MultiSample124, ClusterNeighborMethod: integer;
          ScreenCaptureTransparentBackground, LandmarkPanel, LoadFewVolumes,
-         //LabelOrientCube,
-         LabelOrient, RulerVisible, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay,
+         DebugMode, LoadSmooth, LabelOrient, RulerVisible, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay,
          FlipYZ, FlipLR_Radiological, SkipPrefWriting, AutoClusterizeAtlases: boolean;
          AfniDir, CustomDcm2niix, PyLib, MosaicStr, InitScript, PrevScript, PrevBackgroundImage: string;
          ClearColor: TRGBA;
@@ -112,6 +111,8 @@ begin
             ColorbarSize := 50;
             MaxVox := 560;
             Smooth2D := true;
+            LoadSmooth := true;
+            DebugMode := false;
        end;
   end;
   with lPrefs do begin
@@ -265,6 +266,10 @@ begin
   IniBool(lRead,lIniFile, 'ColorbarVisible',lPrefs.ColorbarVisible);
   IniBool(lRead,lIniFile, 'RulerVisible',lPrefs.RulerVisible);
   IniBool(lRead,lIniFile, 'Smooth2D',lPrefs.Smooth2D);
+  IniBool(lRead,lIniFile, 'LoadSmoothOverlays',lPrefs.LoadSmooth);
+  {$ifdef windows}
+  IniBool(lRead,lIniFile, 'DebugMode',lPrefs.DebugMode);
+  {$endif}
   IniBool(lRead,lIniFile, 'LabelOrient',lPrefs.LabelOrient);
   //LabelOrientCube
   IniBool(lRead,lIniFile, 'LoadFewVolumes',lPrefs.LoadFewVolumes);

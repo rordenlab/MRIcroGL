@@ -17,6 +17,9 @@ interface
 {$DEFINE TIF} //load bitmaps, e.g. PNG, BMP, TIFFs not handled by NIfTI_TIFF
 {$DEFINE BMP} //load bitmaps, e.g. PNG, BMP, TIFFs not handled by NIfTI_TIFF
 {$DEFINE BZIP2}
+//{$IFDEF MYTHREADS}
+{$ModeSwitch nestedprocvars}
+//{$ENDIF}
 uses
 
   //{$IFDEF UNIX}cthreads, cmem,{$ENDIF}
@@ -24,6 +27,7 @@ uses
   {$IFDEF BZIP2}bzip2stream,{$ENDIF}
   {$IFDEF BMP} Graphics, GraphType,{$ENDIF}
   {$IFDEF PARALLEL}MTProcs,{$ENDIF}
+  mtprocs,mtpcpu,
   {$IFDEF TIMER} DateUtils,{$ENDIF}
   {$IFDEF FASTGZ} SynZip, {$ENDIF}
   {$IFDEF OPENFOREIGN} nifti_foreign, {$ENDIF}
@@ -534,9 +538,13 @@ begin
 end;
 
 
-procedure printf (lS: AnsiString);
+procedure printf (str: AnsiString);
 begin
-{$IFNDEF WINDOWS} writeln(lS); {$ENDIF}
+{$IFNDEF WINDOWS}
+writeln(str);
+{$ELSE}
+if IsConsole then writeln(str);
+{$ENDIF}
 end;
 
 //{$DEFINE FASTCORREL}
@@ -5077,6 +5085,26 @@ var
   lut: TLUTi;
   rgba: TInt32s;
   {$ENDIF}
+//{$DEFINE PARA}   No benefit from parallel threads
+ {$IFDEF PARA}
+ tPerThread: int64;
+ MaxThreads: integer = 0;
+ {$ENDIF}
+{$IFDEF PARA}
+procedure SubProc(ThreadIndex: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
+var
+	j, tStart, tEnd: int64;
+begin
+	tStart := (ThreadIndex * tPerThread);
+	if (tStart >= vx) then exit; //more threads than slices in Z direction
+	tEnd := tStart + tPerThread - 1; //e.g. if zStart=4 and zPerThread=1 then zEnd=4
+	tEnd := min(tEnd, vx-1); //final thread when slices in Z not evenly divisible by number of threads
+        for j := tStart to tEnd do
+            fVolRGBA[j] := clut.LUT[fCache8[j]];
+end; //SubProc()
+{$ENDIF}
+
+
 begin
  {$IFDEF TIMER}startTime := now;{$ENDIF}
   if (fIsOverlay) then exit; //overlays visualized using DisplayMinMax2Uint8
@@ -5097,6 +5125,15 @@ begin
   startTime := now;
   {$ENDIF}
   setlength(fVolRGBA, vx);
+ {$IFDEF PARA}
+ if (MaxThreads < 1) then MaxThreads :=  GetSystemThreadCount();
+ printf('Threads'+inttostr(MaxThreads));
+ tPerThread := ceil(vx/MaxThreads);
+ ProcThreadPool.DoParallelNested(@SubProc,0,MaxThreads-1, nil, MaxThreads);
+
+  //for i := 0 to (vx - 1) do
+  //   fVolRGBA[i] := clut.LUT[fCache8[i]];
+ {$ELSE} //PARA
   {$IFDEF UNROLL}
   //~20% faster
   lut := TLUTi(clut.LUT);
@@ -5128,6 +5165,7 @@ begin
      fVolRGBA[i] := fLUT[fCache8[i]];
      {$ENDIF}
   {$ENDIF}
+ {$ENDIF} //parap
   ApplyCutout();
   {$IFDEF TIMER}printf(format('Update RGBA time %d', [MilliSecondsBetween(Now,startTime)]));{$ENDIF}
 end;
@@ -5994,6 +6032,7 @@ begin
      end;
      lPos := -1;
      if isLinearReslice then begin //trilinear
+        printf('>>>interp');
         for lZi := 0 to (tarDim.Z-1) do begin
             //these values are the same for all voxels in the slice
             // compute once per slice
@@ -6117,6 +6156,7 @@ begin
               end;
         end;
      end else begin //if trilinear, else nearest neighbor
+        printf('>>>>>NN');
         for lZi := 0 to (tarDim.Z-1) do begin
           //these values are the same for all voxels in the slice
           // compute once per slice
@@ -6388,7 +6428,11 @@ begin
        VolumeReslice(tarMat, tarDim, isInterpolate)
   end else
       VolumeReorient();
-  {$IFDEF TIMER}printf(format('Reorient time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+  {$IFDEF TIMER}
+  i := MilliSecondsBetween(Now,startTime);
+  if (i > 5) then
+     printf(format('Reorient time %d',[i]));
+  {$ENDIF}
   fMat := SForm2Mat(fHdr);
   fInvMat := fMat.inverse;
   {$IFDEF TIMER}startTime := now;{$ENDIF}
@@ -6627,7 +6671,7 @@ begin
      result := max(0,result);
 end;
 
-//{$DEFINE XF2}
+{$DEFINE XF2}
 {$IFDEF XF2}
 procedure TNIfTI.GenerateClusters(LabelMap: TNIfTI; thresh, smallestClusterMM3: single; NeighborMethod: integer; isDarkAndBright: boolean = false); overload;
 label

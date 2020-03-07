@@ -35,7 +35,7 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20191219 BETA'; //++ fixes remove small clusters
+  kVers = '1.2.20200229'; //++ fixes remove small clusters
 type
 
   { TGLForm1 }
@@ -354,6 +354,7 @@ type
     procedure ClusterViewSelectItem(Sender: TObject; Item: TListItem;
       Selected: Boolean);
     procedure EditPasteMenuClick(Sender: TObject);
+    procedure GraphPanelResize(Sender: TObject);
     procedure InvalidateTImerTimer(Sender: TObject);
     procedure LayerAfniBtnClick(Sender: TObject);
     procedure LayerAfniDropChange(Sender: TObject);
@@ -363,6 +364,7 @@ type
     procedure GraphDrawingMenuClick(Sender: TObject);
     procedure LayerFindPeakMenuClick(Sender: TObject);
     procedure LayerIsLabelMenuClick(Sender: TObject);
+    procedure LayerSmoothMenuClick(Sender: TObject);
     procedure MenuItem3Click(Sender: TObject);
     procedure NimlMenuClick(Sender: TObject);
     procedure RemoveSmallClusterMenuClick(Sender: TObject);
@@ -547,6 +549,7 @@ type
     procedure ViewGPUKeyPress(Sender: TObject; var Key: char);
     procedure ViewGPUKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure ViewGPUgKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure ViewGPUgResize(Sender: TObject);
     procedure setShaderSliders;
     procedure SetDarkMode();
     procedure CutoutChange(Sender: TObject);
@@ -581,6 +584,7 @@ type
 implementation
 
 {$R *.lfm}
+
 {$IFDEF METALAPI}
 uses
   {$IFDEF GRAPH}mtlgraph,{$ENDIF}
@@ -630,21 +634,28 @@ var
 var isDescending: boolean = false;
 procedure TGLForm1.ClusterViewColumnClick(Sender: TObject; Column: TListColumn);
 //https://www.delphitips.net/2008/04/10/sort-listview-by-clicking-on-columns/
+var
+ i: integer;
 begin
-
   ClusterView.SortColumn := Column.Index;
+  //ClusterView.AutoSortIndicator:= true;
   //Descending := not Descending;
   isDescending := not isDescending;
-  //ClusterView.SortType := stData;
+  //{$ifndef windows} //next lines require trunk or Lazarus >= 2.0.8
+  for i := 0 to (ClusterView.ColumnCount -1) do begin
+      if (i = Column.Index) then continue;
+      ClusterView.Column[i].SortIndicator:= siNone;
+  end;
+  if isDescending then
+     ClusterView.Column[Column.Index].SortIndicator:= siDescending
+  else
+      ClusterView.Column[Column.Index].SortIndicator:= siAscending;
+  //{$endif}
+  //ClusterView.SortType := stData;   //so
   if ClusterView.SortDirection = sdDescending then
      ClusterView.SortDirection := sdAscending
   else
       ClusterView.SortDirection := sdDescending;
-  // LayerBox.Caption := inttostr(random(888));
-  (*if ClusterView.SortDirection  = sdDescending then
-       caption := 'd'
-    else
-        caption := 'a';  *)
 end;
 
 procedure TGLForm1.ClusterSaveClick(Sender: TObject);
@@ -696,7 +707,6 @@ begin
           if i < ClusterView.Items.Count - 1 then
               contents += kEOLN;
       end;
-  //writeln(contents);
   if (Sender as TMenuItem).tag = 0 then begin
      Clipboard.AsText:= contents;
      exit;
@@ -910,8 +920,9 @@ end;
 
 function CompareFloatText(const S1, S2: string): integer;
 begin
-     result := round(StrToFloatDef(S1,0) - StrToFloatDef(S2,0));
-
+     //result := round(StrToFloatDef(S1,0) - StrToFloatDef(S2,0));
+     result := sign(StrToFloatDef(S1,0) - StrToFloatDef(S2,0));
+     //writeln(format('%g %g %d',[ StrToFloatDef(S1,0), StrToFloatDef(S2,0), result]));
 end;
 
 procedure TGLForm1.ClusterViewCompare(Sender: TObject; Item1, Item2: TListItem;
@@ -925,6 +936,7 @@ begin
     else
         Compare := CompareText(Item1.SubItems[ ClusterView.SortColumn-1], Item2.SubItems[ ClusterView.SortColumn-1]);
   end else begin
+    //LayerBox.caption := inttostr(random(888));
     if ClusterView.SortColumn = 0 then
        Compare := CompareFloatText(Item1.Caption, Item2.Caption)
     else
@@ -971,7 +983,10 @@ end;
 
 procedure printf(str: string);
 begin
-     {$IFDEF UNIX} writeln(str); {$ENDIF}
+     {$IFDEF UNIX} writeln(str);
+     {$ELSE}
+     if IsConsole then writeln(str);
+     {$ENDIF}
 end;
 
 procedure TGLForm1.MorphologyFill(Origin: TVec3; dxOrigin, radiusMM: int64; drawMode: int64);
@@ -1105,9 +1120,7 @@ begin
         if (Fileexists(result)) then exit;
      end;
      result := Filename; //failed to find a match!
-     {$IFDEF UNIX}
      writeln('Unable to find image: "', result,'"');
-     {$ENDIF}
 end;
 
  {$IFDEF MYPY}
@@ -1598,8 +1611,10 @@ begin
     begin
       StrName:= string(PtrName);
       ret := GLForm1.AddBackground(StrName);
-      if not ret then
+      if not ret then begin
          GLForm1.ScriptOutputMemo.Lines.Add('unable to load "'+StrName+'"');
+         printf('unable to load "'+StrName+'"');
+      end;
       Result:= GetPythonEngine.PyBool_FromLong(Ord(ret));
     end;
 end;
@@ -1657,8 +1672,10 @@ begin
     begin
       StrName:= string(PtrName);
       ret := GLForm1.AddLayer(StrName);
-      if not ret then
+      if not ret then begin
          GLForm1.ScriptOutputMemo.Lines.Add('unable to load "'+StrName+'"');
+         printf('unable to load "'+StrName+'"');
+      end;
       Result:= GetPythonEngine.PyBool_FromLong(Ord(ret));
     end;
 end;
@@ -2137,6 +2154,7 @@ begin
   if (v.IsLabels) or (GLForm1.LayerList.Count < 2) then begin
     //either atlas or only image loaded
     v.GenerateClusters(thresh, mm, gPrefs.ClusterNeighborMethod, isDarkAndBright);
+    //GLForm1.ClusterView.visible := true;
     exit;
   end;
   //not an atlas... see if one is loaded
@@ -2144,10 +2162,11 @@ begin
   while (i < GLForm1.LayerList.Count) and (v2 = nil) do begin
     if not vols.Layer(i,v2) then exit;
     if not v2.IsLabels then
-    v2 := nil;
+       v2 := nil;
     i := i + 1;
   end;
   v.GenerateClusters(v2, thresh, mm, method, isDarkAndBright); //v2 is either nil or a label map
+  //GLForm1.ClusterView.visible := (v2 <> nil);
 end;
 
 function PyGENERATECLUSTERS(Self, Args : PPyObject): PPyObject; cdecl;
@@ -3419,6 +3438,23 @@ begin
   //LayerWidgetChange(sender);
 end;
 
+function absFrac(f: single): single;
+begin
+     result := frac(abs(f - round(f)));
+end;
+
+function XYZstr(xyz: TVec3): string;
+var
+   f: single;
+begin
+     f := max(absFrac(xyz.x), absFrac(xyz.y));
+     f := max(absFrac(xyz.z), f);
+     if (f < 0.001) then
+        result := format(' %.0f×%.0f×%.0f', [xyz.x, xyz.y, xyz.z])
+     else
+         result := format(' %.1f×%.1f×%.1f', [xyz.x, xyz.y, xyz.z])
+end;
+
 procedure TGLForm1.MakeList(var c: TClusters);
 var
    i, n: integer;
@@ -3428,10 +3464,11 @@ begin
      ClusterView.Clear;
      n := length(c);
      if n < 1 then exit;
-     isPeak := c[0].Peak <> 0;
+     isLabels := c[0].PeakStructure = '-';
+     isPeak := not isLabels;
+     //isPeak := c[0].Peak <> 0;
      ClusterView.Column[2].Visible:= isPeak;
      ClusterView.Column[3].Visible:= isPeak;
-     isLabels := c[0].PeakStructure = '-';
      ClusterView.Column[4].Visible:= not isLabels;
      for i := 0 to (n-1) do begin
          itm := ClusterView.Items.Add;
@@ -3441,11 +3478,14 @@ begin
          //PeakMax
          itm.SubItems.Add(format('%.1f', [c[i].Peak]));
          //PeakXYZ
-         itm.SubItems.Add(format(' %.1f×%.1f×%.1f', [c[i].PeakXYZ.x, c[i].PeakXYZ.y, c[i].PeakXYZ.z]));
+         itm.SubItems.Add(XYZstr(c[i].PeakXYZ));
+         //itm.SubItems.Add(format(' %.1f!%.1f×%.1f', [c[i].PeakXYZ.x, c[i].PeakXYZ.y, c[i].PeakXYZ.z]));
          //PeakStructure
          itm.SubItems.Add(c[i].PeakStructure);
          //CogXYZ
-         itm.SubItems.Add(format(' %.1f×%.1f×%.1f', [c[i].CogXYZ.x, c[i].CogXYZ.y, c[i].CogXYZ.z]));
+         itm.SubItems.Add(XYZstr(c[i].CogXYZ));
+         //itm.SubItems.Add(format(' %.0f×%.0f×%.0f', [c[i].CogXYZ.x, c[i].CogXYZ.y, c[i].CogXYZ.z]));
+         //itm.SubItems.Add(format(' %.1f×%.1f×%.1f', [c[i].CogXYZ.x, c[i].CogXYZ.y, c[i].CogXYZ.z]));
          //Structure
          itm.SubItems.Add(c[i].Structure);
          //itm.SubItems.Add(format('%d:%s', [i, c[i].Structure])); //add index
@@ -4213,6 +4253,7 @@ begin
   LayerCutoutMenu.Checked := niftiVol.HiddenByCutout;
   LayerZeroIntensityInvisibleMenu.Checked := niftiVol.ZeroIntensityInvisible;
   LayerIsLabelMenu.Checked := niftiVol.IsLabels;
+  LayerSmoothMenu.Checked := Vols.InterpolateOverlays;
   LayerInvertColorMapMenu.Checked := niftiVol.CX.InvertColorMap;
   LayerPrevVolumeMenu.Enabled := (niftiVol.VolumesTotal > 1);
   LayerNextVolumeMenu.Enabled := LayerPrevVolumeMenu.Enabled;
@@ -5498,6 +5539,7 @@ begin
     end;
     if length(v.clusters) < 1 then begin
        showmessage('No clusters open: use "Generate Clusters" or open a template image.');
+       exit;
     end;
  end;
  sliceMM := Vol1.Slice2Dmm(v, vox);
@@ -5541,6 +5583,11 @@ begin
     niftiVol.SetIsLabels(LayerZeroIntensityInvisibleMenu.Checked);
     niftiVol.ForceUpdate(); //defer time consuming work
     updateTimer.enabled := true;
+end;
+
+procedure TGLForm1.LayerSmoothMenuClick(Sender: TObject);
+begin
+  Vols.InterpolateOverlays := GLForm1.LayerSmoothMenu.Checked;
 end;
 
 procedure TGLForm1.MenuItem3Click(Sender: TObject);
@@ -6100,14 +6147,6 @@ begin
 end;
 {$ENDIF}
 
-procedure TGLForm1.ViewGPUgKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
-begin
-     if not DisplayNextMenu.Enabled then exit;
-     if (Key = VK_LEFT) or (Key = VK_Down) then DisplayPrevMenu.Click;
-     if (Key = VK_RIGHT) or (Key = VK_Up) then DisplayNextMenu.Click;
-
-end;
-
 procedure TGLForm1.ViewGPUKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
  var
   sliceMove: TVec3i;
@@ -6214,6 +6253,7 @@ begin
   //gPrefs.colorbar := gClrbar.isVisible;
   VisibleClrbarMenu.Checked := gPrefs.ColorbarVisible;
   Smooth2DCheck.Checked := gPrefs.Smooth2D;
+  Vols.InterpolateOverlays := gPrefs.LoadSmooth;
   RulerCheck.checked := gPrefs.RulerVisible;
   gClrbar.isVisible := VisibleClrbarMenu.checked;
   TransBlackClrbarMenu.Checked := true;
@@ -6710,6 +6750,15 @@ begin
  showmessage('Use paste to insert text from clipboard into scripts');
 end;
 
+
+procedure TGLForm1.GraphPanelResize(Sender: TObject);
+begin
+ {$IFDEF GRAPH}
+ //ViewGPUg.Invalidate;
+ {$ENDIF}
+
+end;
+
 procedure TGLForm1.EditCopyMenuClick(Sender: TObject);
 {$IFNDEF METALAPI}
 var
@@ -6856,6 +6905,27 @@ begin
  {$ENDIF}
 end;
 
+procedure TGLForm1.ViewGPUgKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+begin
+     if not DisplayNextMenu.Enabled then exit;
+     if (Key = VK_LEFT) or (Key = VK_Down) then DisplayPrevMenu.Click;
+     if (Key = VK_RIGHT) or (Key = VK_Up) then DisplayNextMenu.Click;
+     //
+end;
+
+procedure TGLForm1.ViewGPUgResize(Sender: TObject);
+begin
+  {$IFDEF GRAPH}
+  if not DisplayNextMenu.Enabled then exit;
+  ViewGPU1.Invalidate;
+  gGraph.isRedraw := true;
+  ViewGPUg.Invalidate;
+  UpdateLayerBox(false, true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
+  UpdateTimer.Enabled := true;
+  //Caption := format('%d + %d = %d', [GraphPanel.ClientWidth, ClusterPanel.ClientWidth, GLForm1.width]);
+  {$ENDIF}
+end;
+
 procedure TGLForm1.GraphMouseDown(Sender: TObject; Button: TMouseButton;Shift: TShiftState; X, Y: Integer);
 var
    f: double;
@@ -6881,7 +6951,7 @@ begin
      gGraph.HorizontalSelection:= v.VolumeDisplayed;
      gGraph.isRedraw := true;
      ViewGPUg.Invalidate;
-        UpdateLayerBox(false, true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
+     UpdateLayerBox(false, true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
    UpdateTimer.Enabled := true;
      {$ENDIF}
 end;
@@ -7251,6 +7321,9 @@ var
    script : TStringList;
 procedure AddImg();
 begin
+ {$IFDEF WINDOWS}
+ s := ReplaceStr(s, '\', '/');
+ {$ENDIF}
  if layers = 0 then
     script.Add(format('gl.loadimage(''%s'')',[s]) )
  else
@@ -7440,11 +7513,34 @@ begin
  result := format('%s %s', [kVers, w]);
 end;
 
+(*
+{$ASMMODE INTEL}
+function FMA(const A, B, C: TVec4): TVec4;
+begin
+	asm
+          movups    xmm0, [A]
+	  movups    xmm1, [B]
+	  movups    xmm2, [C]
+          vfmadd231ps xmm0, xmm1, xmm2
+          movhlps xmm1, xmm0
+          //ret
+	end;
+end; *)
+
 procedure TGLForm1.AboutMenuClick(Sender: TObject);
 var
    niftiVol: TNIfTI;
    v: string;
+   //A, B, C, D: TVec4;
 begin
+ (*A := V4(0,0,0,0);//+
+ B := V4(10,10,10,10); //+
+ C := V4(1,2,3,4); //*
+ D := V4(0,0,0,0);
+
+ D := FMA(A,B,C);
+ showmessage(format('%g %g %g %g', [D.x, D.y, D.z, D.w])); exit;*)
+
  v := versionStr;
  if not vols.Layer(0,niftiVol) then exit;
  {$IFDEF METALAPI}
@@ -7457,6 +7553,7 @@ begin
  v := v+ kEOLN+ format('Current volume: %d %d %d', [niftiVol.Dim.X, niftiVol.Dim.Y, niftiVol.Dim.Z]);
  {$IFDEF NewCocoa}
  ShowAlertSheet(GLForm1.Handle,'MRIcroGL', v);
+ //MessageBox(Handle, pChar(v), 'MRIcroGL', MB_OK)
  {$ELSE}
  Showmessage('MRIcroGL '+v);
  {$ENDIF}
@@ -7848,6 +7945,8 @@ begin
  ViewGPUg.OnMouseDown := @GraphMouseDown;
  ViewGPUg.OnMouseWheel:= @GraphMouseWheel;
  ViewGPUg.OnKeyDown := @ViewGPUgKeyDown;
+ //ViewGPUg.OnResize:= @ViewGPUgResize;
+ GLForm1.OnResize:=@ViewGPUgResize;
  {$IFDEF METALAPI}
  ViewGPUg.renderView.setSampleCount(4);
  {$ELSE}
@@ -7942,6 +8041,13 @@ begin
       if (gPrefs.DisplayOrient = kMosaicOrient) then
          gPrefs.DisplayOrient := kAxCorSagOrient;//kRenderOrient;
   end;
+  {$ifdef windows}
+  if gPrefs.DebugMode then begin
+   AllocConsole;      // in Windows unit
+   IsConsole := True; // in System unit
+   SysInitStdIO;      // in System unit
+  end;
+  {$endif}
   if MaxVox > 0 then
      gPrefs.MaxVox := MaxVox;
   AnimateTimer.Interval:= gPrefs.AnimationIntervalMsec;
@@ -7983,6 +8089,7 @@ begin
   gLandmark := TLandmark.Create();
   CreateStandardMenus(OpenStandardMenu);
   CreateStandardMenus(OpenAltasMenu);
+  //writeln('>>>>issue 36764');
   if DirectoryExists(GetFSLdir+pathdelim+ 'data'+pathdelim+'standard') then
      OpenFSLMenu.Visible := true;
   CreateStandardMenus(OpenAFNIMenu);
@@ -8115,6 +8222,7 @@ begin
   HelpAboutMenu.Visible := false; //use apple menu
   FileSepMenu.Visible := false;
   FileExitMenu.Visible := false;
+  NewWindowMenu.ShortCut := ShortCut(Word('N'), [ssShift, ssModifier]); //ssCtrl -> ssMeta
   ScriptingRunMenu.ShortCut := ShortCut(Word('R'), [ssModifier]); //ssCtrl -> ssMeta
   OpenMenu.ShortCut := ShortCut(Word('O'), [ssModifier]); //ssCtrl -> ssMeta
   AddOverlayMenu.ShortCut := ShortCut(Word('A'), [ssModifier]); //ssCtrl -> ssMeta

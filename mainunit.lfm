@@ -1,12 +1,12 @@
 object GLForm1: TGLForm1
-  Left = 527
-  Height = 727
-  Top = 55
-  Width = 1069
+  Left = 513
+  Height = 570
+  Top = 23
+  Width = 927
   AllowDropFiles = True
   Caption = 'MRIcroGL'
-  ClientHeight = 727
-  ClientWidth = 1069
+  ClientHeight = 570
+  ClientWidth = 927
   Constraints.MinHeight = 20
   Constraints.MinWidth = 20
   Menu = MainMenu
@@ -19,24 +19,25 @@ object GLForm1: TGLForm1
   LCLVersion = '2.1.0.0'
   object TopPanel: TPanel
     Left = 0
-    Height = 641
+    Height = 484
     Top = 0
-    Width = 1069
+    Width = 927
     Align = alClient
-    ClientHeight = 641
-    ClientWidth = 1069
+    ClientHeight = 484
+    ClientWidth = 927
+    ParentFont = False
     TabOrder = 0
     object ToolPanel: TScrollBox
       Left = 1
-      Height = 639
+      Height = 482
       Top = 1
       Width = 268
       HorzScrollBar.Page = 1
       HorzScrollBar.Visible = False
-      VertScrollBar.Page = 639
+      VertScrollBar.Page = 482
       Align = alLeft
       BorderStyle = bsNone
-      ClientHeight = 639
+      ClientHeight = 482
       ClientWidth = 253
       ParentFont = False
       TabOrder = 0
@@ -1149,6 +1150,7 @@ object GLForm1: TGLForm1
           BorderSpacing.Top = 2
           ItemHeight = 26
           OnChange = AnatDropChange
+          ParentFont = False
           Style = csDropDownList
           TabOrder = 9
           Text = '0'
@@ -1610,13 +1612,13 @@ object GLForm1: TGLForm1
       end
     end
     object ScriptPanel: TPanel
-      Left = 1066
-      Height = 639
+      Left = 924
+      Height = 482
       Top = 1
       Width = 2
       Align = alRight
       BevelOuter = bvNone
-      ClientHeight = 639
+      ClientHeight = 482
       ClientWidth = 2
       Constraints.MinWidth = 2
       ParentFont = False
@@ -1624,12 +1626,12 @@ object GLForm1: TGLForm1
       OnDblClick = ScriptPanelDblClick
       object ScriptBox: TGroupBox
         Left = -8
-        Height = 639
+        Height = 482
         Top = 0
         Width = 10
         Align = alClient
         Caption = 'Scripting'
-        ClientHeight = 620
+        ClientHeight = 463
         ClientWidth = 0
         Constraints.MinWidth = 10
         ParentFont = False
@@ -1637,7 +1639,7 @@ object GLForm1: TGLForm1
         OnDblClick = ScriptPanelDblClick
         object ScriptMemo: TMemo
           Left = 0
-          Height = 414
+          Height = 257
           Top = 0
           Width = 0
           Align = alClient
@@ -1661,7 +1663,7 @@ object GLForm1: TGLForm1
         object ScriptOutputMemo: TMemo
           Left = 0
           Height = 200
-          Top = 420
+          Top = 263
           Width = 0
           Align = alBottom
           BorderStyle = bsNone
@@ -1678,7 +1680,7 @@ object GLForm1: TGLForm1
           Cursor = crVSplit
           Left = 0
           Height = 6
-          Top = 414
+          Top = 257
           Width = 0
           Align = alBottom
           ResizeAnchor = akBottom
@@ -1687,13 +1689,13 @@ object GLForm1: TGLForm1
     end
     object LeftSplitter: TSplitter
       Left = 269
-      Height = 639
+      Height = 482
       Top = 1
       Width = 6
     end
     object RightSplitter: TSplitter
-      Left = 1060
-      Height = 639
+      Left = 918
+      Height = 482
       Top = 1
       Width = 6
       Align = alRight
@@ -1701,10 +1703,11 @@ object GLForm1: TGLForm1
     end
     object CenterPanel: TPanel
       Left = 275
-      Height = 639
+      Height = 482
       Top = 1
-      Width = 785
+      Width = 643
       Align = alClient
+      ParentFont = False
       TabOrder = 4
       OnClick = CenterPanelClick
     end
@@ -1713,8 +1716,8 @@ object GLForm1: TGLForm1
     Cursor = crVSplit
     Left = 0
     Height = 6
-    Top = 641
-    Width = 1069
+    Top = 484
+    Width = 927
     Align = alBottom
     MinSize = 4
     ResizeAnchor = akBottom
@@ -1722,45 +1725,54 @@ object GLForm1: TGLForm1
   object BottomPanel: TPanel
     Left = 0
     Height = 80
-    Top = 647
-    Width = 1069
+    Top = 490
+    Width = 927
     Align = alBottom
     ClientHeight = 80
-    ClientWidth = 1069
+    ClientWidth = 927
+    ParentFont = False
     TabOrder = 2
     object ClusterGraphSplitter: TSplitter
-      Left = 983
+      Left = 841
       Height = 78
       Top = 1
       Width = 5
       Align = alRight
+      MinSize = 6
       ResizeAnchor = akRight
     end
     object GraphPanel: TPanel
-      Left = 988
+      Left = 846
       Height = 78
       Top = 1
       Width = 80
       Align = alRight
-      Constraints.MinWidth = 2
+      Constraints.MinWidth = 8
+      ParentFont = False
       PopupMenu = GraphPopUp
       TabOrder = 1
+      OnResize = GraphPanelResize
     end
     object ClusterPanel: TPanel
       Left = 1
       Height = 78
       Top = 1
-      Width = 982
+      Width = 840
       Align = alClient
+      Caption = 'Layer does not have clusters'
       ClientHeight = 78
-      ClientWidth = 982
+      ClientWidth = 840
+      ParentFont = False
       TabOrder = 2
       object ClusterView: TListView
         Left = 1
         Height = 76
         Top = 1
-        Width = 980
+        Width = 838
         Align = alClient
+        AutoSort = False
+        AutoWidthLastColumn = True
+        BorderStyle = bsNone
         Columns = <        
           item
             Caption = 'Index'
@@ -1777,7 +1789,7 @@ object GLForm1: TGLForm1
           end        
           item
             Caption = 'Peak'
-            Tag = 3
+            Tag = 1
             Width = 42
           end        
           item
@@ -1786,7 +1798,7 @@ object GLForm1: TGLForm1
             MaxWidth = 120
             MinWidth = 20
             Tag = 2
-            Width = 120
+            Width = 80
           end        
           item
             Caption = 'Peak Structure'
@@ -1800,20 +1812,21 @@ object GLForm1: TGLForm1
             Caption = 'XYZ'
             MaxWidth = 120
             MinWidth = 20
-            Width = 120
+            Width = 80
           end        
           item
             Caption = 'Structure'
-            Width = 572
+            Width = 466
           end>
         Constraints.MinWidth = 2
         GridLines = True
+        ParentFont = False
         PopupMenu = ClusterPopUp
         ReadOnly = True
         RowSelect = True
         ScrollBars = ssAutoBoth
         SortColumn = 0
-        SortType = stData
+        SortType = stBoth
         TabOrder = 0
         ViewStyle = vsReport
         OnColumnClick = ClusterViewColumnClick
@@ -2631,6 +2644,7 @@ object GLForm1: TGLForm1
     object LayerSmoothMenu: TMenuItem
       AutoCheck = True
       Caption = 'Load Smooth Overlays'
+      OnClick = LayerSmoothMenuClick
     end
     object LayerResetBrightnessMenu: TMenuItem
       Caption = 'Reset Dark and Bright'
