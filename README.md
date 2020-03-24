@@ -82,6 +82,15 @@ One can also make minor adjustments to these command line options.
 
 ![Head CT](HeadCT.jpg)
 
+## Deploying MRIcroGL
+
+The MRIcroGL executable has more functionality if it can access its `Resources` folder. This folder includes color lookup tables (`lut` folder), Python scripts (`script`), Material Capture (`matcap`), GLSL Shaders (`shader`), default NIfTI images (`standard`), NIfTI atlases (`atlas`), as well as fonts and icons. Therefore, for full functionality, you want the executable to have access to this folder.
+ - For MacOS, the `Resources` folder is placed inside the application package bundle. In other words, if your application is `MRIcroGL.app`, the software expects `MRIcroGL.app/Resources`.
+ - For Windows, place the `Resources` folder in the same folder as `MRIcroGL.exe`.
+ - For Linux, you can place the `Resources` folder in the same folder as the `MRIcroGL` exectuable. If this fails, it will search for a folder  `/usr/local/share/MRIcroGL/Resources`,  `/opt/MRIcroGL/Resources`, `/opt/MRIcroGL/Resources` (assuming you have named the executable `MRIcroGL`). If this also fails, it will look for the folder `$MRICROGL_DIR` where `$MRICROGL_DIR` is an environment variable.
+
+Linux GNome users may also want to setup a [desktop file](https://developer.gnome.org/integration-guide/stable/desktop-files.html.en) with a name like `MRIcroGL.desktop`. A sample is provided in the Resources folder, but this will require minor editing since the `Exec` and `Icon` path must be [absolute](https://stackoverflow.com/questions/3452746/how-can-i-specify-an-icon-with-a-relative-path-for-a-linux-desktop-entry-file) not relative.
+
 ## Scripting and Command Line
 
 You can use all the functions of MRIcroGL using the graphical interface. You can also create [Python scripts](PYTHON.md) to get precise results our automate laborious tasks.

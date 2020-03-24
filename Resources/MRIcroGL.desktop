@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.2.20200315
+Name=MRIcroGL
+Comment=Edit Exec and Icon paths for your system
+Exec=/home/chris/MRIcroGL/MRIcroGL
+Icon=/home/chris/MRIcroGL/Resources/mricrogl.png
+Terminal=false
+Type=Application
+Categories=Utility;Application;
