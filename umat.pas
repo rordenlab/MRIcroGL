@@ -24,7 +24,7 @@ function MatLoadNii(fnm: string; out hdr: TNIFTIHdr; var img: TUInt8s): boolean;
 
 implementation
 //{$DEFINE TIMER}
-{$DEFINE FASTGZ}
+{$include opts.inc} //for  DEFINE FASTGZ
 uses
   {$IFDEF FASTGZ}
   SynZip,

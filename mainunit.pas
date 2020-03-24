@@ -11,7 +11,6 @@ unit mainunit;
 {$ENDIF}
 {$H+}
 {$IFNDEF METALAPI} {$DEFINE MATCAP} {$ENDIF}
-{$DEFINE MYPY} //use Python scripts
 {$DEFINE COMPILEYOKE} //use yoking
 {$DEFINE CLRBAR} //provide color bar
 {$DEFINE GRAPH} //timeseries viewer
@@ -28,7 +27,7 @@ uses
   {$IFDEF MYPY}PythonEngine,  {$ENDIF}
   {$IFDEF LCLCocoa}SysCtl, dos, {$IFDEF NewCocoa} nsappkitext, UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
-  resize, ustat,
+  resize, ustat, LazVersion,
   lcltype, GraphType, Graphics, dcm_load, crop,
   LCLIntf, slices2D, StdCtrls, SimdUtils, Classes, SysUtils, Forms, Controls,clipbrd,
   Dialogs, Menus, ExtCtrls, CheckLst, ComCtrls, Spin, Types, fileutil, ulandmarks, nifti_types,
@@ -607,6 +606,7 @@ const
   kTab = #9;
 var
  gPrefs: TPrefs;
+ gPyRunning: boolean = false;
  gMouseLimitLo, gMouseLimitHi : TPoint;
  gMouse : TPoint = (x: -1; y: -1);
  gMouseDrag: boolean = false;
@@ -631,6 +631,31 @@ var
 {$DEFINE isCocoaOpenGL}
 {$ENDIF}{$ENDIF}
 
+procedure GenerateClustersCore(var v: TNIfTI; thresh, mm: single; method: integer; isDarkAndBright: boolean);
+var
+  i: integer = 0;
+  v2: TNIfTI;
+begin
+  GLForm1.ClusterView.tag := -1;
+  if (v.IsLabels) or (GLForm1.LayerList.Count < 2) then begin
+    //either atlas or only image loaded
+    v.GenerateClusters(thresh, mm, gPrefs.ClusterNeighborMethod, isDarkAndBright);
+    //GLForm1.ClusterView.visible := true;
+    exit;
+  end;
+  //not an atlas... see if one is loaded
+  v2 := nil;
+  while (i < GLForm1.LayerList.Count) and (v2 = nil) do begin
+    if not vols.Layer(i,v2) then exit;
+    if not v2.IsLabels then
+       v2 := nil;
+    i := i + 1;
+  end;
+  v.GenerateClusters(v2, thresh, mm, method, isDarkAndBright); //v2 is either nil or a label map
+  //GLForm1.ClusterView.visible := (v2 <> nil);
+end;
+
+
 var isDescending: boolean = false;
 procedure TGLForm1.ClusterViewColumnClick(Sender: TObject; Column: TListColumn);
 //https://www.delphitips.net/2008/04/10/sort-listview-by-clicking-on-columns/
@@ -642,6 +667,8 @@ begin
   //Descending := not Descending;
   isDescending := not isDescending;
   //{$ifndef windows} //next lines require trunk or Lazarus >= 2.0.8
+  //{$IFDEF (LCL_FULLVERSION > 2080600)}
+  {$IF laz_fullversion >= 2000800}
   for i := 0 to (ClusterView.ColumnCount -1) do begin
       if (i = Column.Index) then continue;
       ClusterView.Column[i].SortIndicator:= siNone;
@@ -650,7 +677,7 @@ begin
      ClusterView.Column[Column.Index].SortIndicator:= siDescending
   else
       ClusterView.Column[Column.Index].SortIndicator:= siAscending;
-  //{$endif}
+  {$ENDIF}
   //ClusterView.SortType := stData;   //so
   if ClusterView.SortDirection = sdDescending then
      ClusterView.SortDirection := sdAscending
@@ -1128,7 +1155,7 @@ end;
   PythonIO : TPythonInputOutput;
   PyMod: TPythonModule;
   PyEngine: TPythonEngine = nil;
-  gPyRunning: boolean = false;
+
   {$IFDEF Darwin}
   const
        kBasePath = '/Library/Frameworks/Python.framework/Versions/';
@@ -2143,30 +2170,6 @@ begin
        v.ForceUpdate(); //defer time consuming work
        GLForm1.UpdateTimer.Enabled := true;
     end;
-end;
-
-procedure GenerateClustersCore(var v: TNIfTI; thresh, mm: single; method: integer; isDarkAndBright: boolean);
-var
-  i: integer = 0;
-  v2: TNIfTI;
-begin
-  GLForm1.ClusterView.tag := -1;
-  if (v.IsLabels) or (GLForm1.LayerList.Count < 2) then begin
-    //either atlas or only image loaded
-    v.GenerateClusters(thresh, mm, gPrefs.ClusterNeighborMethod, isDarkAndBright);
-    //GLForm1.ClusterView.visible := true;
-    exit;
-  end;
-  //not an atlas... see if one is loaded
-  v2 := nil;
-  while (i < GLForm1.LayerList.Count) and (v2 = nil) do begin
-    if not vols.Layer(i,v2) then exit;
-    if not v2.IsLabels then
-       v2 := nil;
-    i := i + 1;
-  end;
-  v.GenerateClusters(v2, thresh, mm, method, isDarkAndBright); //v2 is either nil or a label map
-  //GLForm1.ClusterView.visible := (v2 <> nil);
 end;
 
 function PyGENERATECLUSTERS(Self, Args : PPyObject): PPyObject; cdecl;
@@ -5012,7 +5015,9 @@ begin
      exit;
  end;
  {$ELSE}
- Showmessage('Scripting not yet implemented');
+ //Showmessage('Scripting not yet implemented');
+ ScriptOutputMemo.Lines.Add('Not compiled for scripting');
+ printf('Not compiled for scripting');
  {$ENDIF}
 end;
 
@@ -7332,6 +7337,9 @@ begin
 end;
 //e.g. ./MRIcroGL -std  motor -cm actc -dr 2 4
 begin
+     {$IFNDEF MYPY}
+     exit;
+     {$ENDIF}
      script := TStringList.Create;
      script.Add('import gl');
      i := 1;
@@ -8023,6 +8031,9 @@ begin
   //check - on darwin form drop file
   if (gPrefs.InitScript = '') and (MaxVox < 1) and (ParamCount >= 1) and (not isForceReset) then //and (fileexists(ParamStr(ParamCount))) then
      gPrefs.InitScript := '-';
+  {$IFNDEF MYPY}
+  gPrefs.InitScript := '';
+  {$ENDIF}
   if (length(gPrefs.InitScript) > 0) and (gPrefs.InitScript <> '-') and (not fileexists(gPrefs.InitScript)) then begin
      if (upcase(ExtractFileExt(ParamStr(i))) = '.PY') or (upcase(ExtractFileExt(ParamStr(i))) = '.TXT') then begin
         {$IFDEF UNIX}writeln('Unable to find script '+gPrefs.InitScript);{$ENDIF}
@@ -8089,7 +8100,6 @@ begin
   gLandmark := TLandmark.Create();
   CreateStandardMenus(OpenStandardMenu);
   CreateStandardMenus(OpenAltasMenu);
-  //writeln('>>>>issue 36764');
   if DirectoryExists(GetFSLdir+pathdelim+ 'data'+pathdelim+'standard') then
      OpenFSLMenu.Visible := true;
   CreateStandardMenus(OpenAFNIMenu);
@@ -8105,6 +8115,12 @@ begin
   end;
   if (length(gPrefs.InitScript) > 0) then
      s := '+'; //load borg for quick load
+  {$IFNDEF MYPY}
+  if ParamCount > 0 then begin
+     s := ParamStr(1);
+     gPrefs.InitScript := '';
+  end;
+  {$ENDIF}
   //TODO: house keeping with new volumes: autoload cluster AutoClusterizeAtlases
   vols := TNIfTIs.Create(s,  gPrefs.ClearColor, gPrefs.LoadFewVolumes, gPrefs.MaxVox, isOK); //to do: warning regarding multi-volume files?
   //niftiVol := TNIfTI.Create('/Users/rorden/metal_demos/tar.nii');
@@ -8214,6 +8230,10 @@ begin
   end;
   {$IFDEF MATT1}
   //StoreFMRIMenu.Visible := true;
+  {$ENDIF}
+  {$IFNDEF MYPY}
+  ScriptingMenu.Visible:= false;
+  ScriptOutputMemo.Lines.Add('Not compiled for scripting');
   {$ENDIF}
   {$IFDEF Darwin}
   //LayerList.Style := lbOwnerDrawFixed;//Dark mode bug https://bugs.freepascal.org/view.php?id=34600

@@ -24,23 +24,61 @@ Once you have downloaded the software, extract the archive and run the executabl
 
 ![MRI](MRI.jpg)
 
-## Compiling
+## Compiling with the Graphical Interface
 
 It is generally recommended that download a pre-compiled executable (see previous section). However, you can compile your own copy from source code.
 
- - Download and install [Lazarus 2.0 or later](https://www.lazarus-ide.org/).
+ - Download and install [Lazarus 2.0.6 or later](https://www.lazarus-ide.org/).
  - Get the [Metal-Demos repository](https://github.com/neurolabusc/Metal-Demos), for example: `git clone https://github.com/neurolabusc/Metal-Demos`.
  - Get the [MRIcroGL12 repository]( https://github.com/rordenlab/MRIcroGL12.git), for example: `git clone https://github.com/neurolabusc/MRIcroGL12`.
+ - The Metal-Demos and MRIcroGL12 folders should share the same parent folder, e.g. `~/src/MRIcroGL12` and `~/src/Metal-Demos`. 
  - If you are using MacOS and want to build for Apple Metal (instead of OpenGL):
    * Get the [lazmetalcontrol repository](https://github.com/genericptr/Metal-Framework).
    * Use the Lazarus Package menu to open and install the lazmetal control.
    * Open the MRIcroGL project with Lazarus and use the "Project Inspector" to add lazmetalcontrol as a dependency.
    * Uncomment the line '{$DEFINE METALAPI}' in mainunit.pas.
  - You will need [python4lazarus_package](https://github.com/Alexey-T/Python-for-Lazarus), but hopefully Lazarus will detect and install this for you automatically.
- - Use the "Run" command to compile and run your project.
- - Note you can also compile from the command line - [the MRIcroGL 1.0 web page provides details](https://github.com/neurolabusc/MRIcroGL).
+ - Use the `Run` command from the `Run` menu compile and run your project.
 
 Alternatively, Debian/Ubuntu Linux users may want to look at the [docker script](./DOCKER.md) that provides a line-by-line recipt for compiling MRIcroGL from the command line.
+
+## Compiling with the Command Line
+
+It is generally recommended that download a pre-compiled executable (see previous section). However, you can compile your own copy from source code. Download and install [Lazarus 2.0.6 or later](https://www.lazarus-ide.org/), at which point the lazbuild command should be available from the command line.
+
+
+For Linux (GTK2) or Windows, the compilation will look like this :
+
+```
+git clone https://github.com/rordenlab/MRIcroGL12.git
+git clone https://github.com/neurolabusc/Metal-Demos.git
+cd MRIcroGL12
+lazbuild --verbose-pkgsearch lazopenglcontext --verbose-pkgsearch python4lazarus_package
+lazbuild  -B MRIcroGL.lpr
+```
+
+For MacOS, you will want to specify the modern Cocoa widgetset, rather than the legacy Cocoa widgetset:
+
+```
+git clone https://github.com/rordenlab/MRIcroGL12.git
+git clone https://github.com/neurolabusc/Metal-Demos.git
+cd MRIcroGL12
+lazbuild --ws=cocoa --verbose-pkgsearch lazopenglcontext --verbose-pkgsearch python4lazarus_package
+lazbuild  -B --ws=cocoa MRIcroGL.lpi
+```
+
+One can also compile for Linux (qt5). Users will need to install [libqt5pas 1.2.8 or later](https://github.com/davidbannon/libqt5pas/releases). This version is more recent than the version provided with Ubuntu 18.04 and Mageia 7.1, so users of many operating systems will have to download the library from Github rather than the conventional install (e.g. `sudo apt install libqt5pas`):
+```
+git clone https://github.com/rordenlab/MRIcroGL12.git
+git clone https://github.com/neurolabusc/Metal-Demos.git
+cd MRIcroGL12
+lazbuild --verbose-pkgsearch lazopenglcontext --verbose-pkgsearch python4lazarus_package
+lazbuild  -B --ws=qt5 MRIcroGL.lpi
+```
+
+One can also make minor adjustments to these command line options. 
+ - `--ws=gtk3` will compile for the GTK3 widgetset. Support for GTK3 is experimental and not all features work (e.g. color selection dialog). Unfortunately, GTK3 does not support [OpenGL multi-sampling](https://github.com/aklomp/gtk3-opengl/issues/2) so the results can never match GTK2 or QT5.
+ - Compiling `MRIcroGL_NoPython.lpi` will compile without Python scripting support ().
 
 ![Head CT](HeadCT.jpg)
 

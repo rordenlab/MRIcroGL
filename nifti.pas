@@ -2,7 +2,7 @@ unit nifti;
 {$IFDEF FPC}{$mode objfpc}{$H+}{$ENDIF}
 {$DEFINE CUSTOMCOLORS}
 interface
-{$DEFINE FASTGZ}
+{$include opts.inc} //for  DEFINE FASTGZ
 {$DEFINE TIMER} //reports load times to stdout (Unix only)
 {$IFDEF FPC}
  {$DEFINE GZIP}
@@ -26,8 +26,8 @@ uses
   {$IFDEF AFNI}afni_fdr,{$ENDIF}
   {$IFDEF BZIP2}bzip2stream,{$ENDIF}
   {$IFDEF BMP} Graphics, GraphType,{$ENDIF}
-  {$IFDEF PARALLEL}MTProcs,{$ENDIF}
-  mtprocs,mtpcpu,
+  {$IFDEF PARALLEL}MTProcs,mtprocs,mtpcpu,{$ENDIF}
+
   {$IFDEF TIMER} DateUtils,{$ENDIF}
   {$IFDEF FASTGZ} SynZip, {$ENDIF}
   {$IFDEF OPENFOREIGN} nifti_foreign, {$ENDIF}
@@ -5452,13 +5452,13 @@ begin
 end;
 
 {$IFDEF BMP}
-{$IFDEF Darwin}
-function xRGB(i: TRGB): TRGB;
+{$IFDEF UNIX}
+(*function xRGB(i: TRGB): TRGB;
 begin
      result.r := i.B;
      result.g := i.G;
      result.b := i.R;
-end;
+end;*)
 
 function xRGBA(i: TRGBA): TRGBA;
 begin
@@ -5486,11 +5486,12 @@ function LoadBmpAsNifti(fnm: string; var  rawData: TUInt8s; var nhdr: TNIFTIHdr)
 var
    pic : TPicture;
    RawImage: TRawImage;
-   SrcPtr, DestPtr: PInteger;
-   y,i,nBytes: integer;
+   RowPtr, SrcPtr, DestPtr: PInteger;
+   n, x, y,i,nBytes: integer;
    //LTempBitmap : TBitmap;
-   {$IFDEF Darwin}
-   v24s: TRGBs;
+   Row32: TUInt8s;
+   {$IFDEF UNIX}
+   //v24s: TRGBs;
    v32s: TRGBAs;
    {$ENDIF}
 begin
@@ -5517,7 +5518,21 @@ begin
       FreeAndNil(LTempBitmap);
     end;
   end; *)
+     (*if pic.Bitmap.PixelFormat = pf24bit then begin
+         //https://forum.lazarus.freepascal.org/index.php?topic=29701.0
+         LTempBitmap := TBitmap.Create;
+         try
+           LTempBitmap.PixelFormat := pf24bit;
+           LTempBitmap.SetSize(pic.Bitmap.Width, pic.Bitmap.Height);
+           LTempBitmap.Canvas.Draw(0, 0, pic.Bitmap);
+           pic.Bitmap.PixelFormat := pf32bit;
+           pic.Bitmap.Canvas.Draw(0, 0, LTempBitmap);
+         finally
+           FreeAndNil(LTempBitmap);
+         end;
+       end;*)
   //Assert( pic.Bitmap.PixelFormat = pf24bit); //<- does nothing!
+  //Assert( pic.Bitmap.PixelFormat = pf32bit); //<- does nothing!
  case pic.Bitmap.PixelFormat of
      pf8bit: nhdr.bitpix:=8;
      pf16bit: nhdr.bitpix:=16;
@@ -5549,22 +5564,55 @@ begin
  {$ENDIF}
  DestPtr := PInteger(@rawData[0]);
  nBytes :=  nhdr.dim[1] * (nhdr.bitpix div 8);
- for y := 0 to nhdr.dim[2] - 1 do begin
-     System.Move(SrcPtr^, DestPtr^, nBytes);
-     {$IFDEF FLIPBMP}
-     Dec(PByte(SrcPtr), RawImage.Description.BytesPerLine);
-     {$ELSE}
-     Inc(PByte(SrcPtr), RawImage.Description.BytesPerLine);
-     {$ENDIF}
-     Inc(PByte(DestPtr), nBytes);
+ if nhdr.bitpix = 24 then begin
+    nBytes :=  nhdr.dim[1] * 4;
+    SetLength (Row32, nBytes);
+    RowPtr := PInteger(@Row32[0]);
+    n := 0;
+    for y := 0 to nhdr.dim[2] - 1 do begin
+        System.Move(SrcPtr^, RowPtr^, nBytes);
+        {$IFDEF FLIPBMP}
+        Dec(PByte(SrcPtr), RawImage.Description.BytesPerLine);
+        {$ELSE}
+        Inc(PByte(SrcPtr), RawImage.Description.BytesPerLine);
+        {$ENDIF}
+        i := 0;
+        for x := 1 to nhdr.dim[1] do begin
+            rawData[n+2] := Row32[i];
+            //n += 1;
+            i += 1;
+            rawData[n+1] := Row32[i];
+            //n += 1;
+            i += 1;
+            rawData[n] := Row32[i];
+            //n += 1;
+            n += 3;
+            i += 1;
+            i += 1;
+
+        end;
+    end;
+    Row32 := nil;
+    nBytes :=  nhdr.dim[1] * (nhdr.bitpix div 8);
+ end else begin
+   for y := 0 to nhdr.dim[2] - 1 do begin
+       System.Move(SrcPtr^, DestPtr^, nBytes);
+       {$IFDEF FLIPBMP}
+       Dec(PByte(SrcPtr), RawImage.Description.BytesPerLine);
+       {$ELSE}
+       Inc(PByte(SrcPtr), RawImage.Description.BytesPerLine);
+       {$ENDIF}
+       Inc(PByte(DestPtr), nBytes);
+   end;
  end;
- {$IFDEF Darwin} //MacOS RGBA order
+ {$IFDEF UNIX} //MacOS RGBA order
+ (*printf('Import '+inttostr(nhdr.bitpix)+'-bit bitmap');
  if nhdr.bitpix = 24 then begin
     nBytes := nhdr.dim[1] * nhdr.dim[2];
     v24s := TRGBs(rawData);
     for i := 0 to (nBytes-1) do
         v24s[i] := xRGB(v24s[i]);
- end;
+ end;*)
  if nhdr.bitpix = 32 then begin
     nBytes := nhdr.dim[1] * nhdr.dim[2];
     v32s := TRGBAs(rawData);
