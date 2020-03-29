@@ -52,8 +52,9 @@ For Linux (GTK2) or Windows, the compilation will look like this :
 ```
 git clone https://github.com/rordenlab/MRIcroGL12.git
 git clone https://github.com/neurolabusc/Metal-Demos.git
+git clone https://github.com/Alexey-T/Python-for-Lazarus.git
+lazbuild --build-ide= --add-package lazopenglcontext ./Python-for-Lazarus/python4lazarus/python4lazarus_package.lpk
 cd MRIcroGL12
-lazbuild --verbose-pkgsearch lazopenglcontext --verbose-pkgsearch python4lazarus_package
 lazbuild  -B MRIcroGL.lpr
 ```
 
@@ -62,8 +63,9 @@ For MacOS, you will want to specify the modern Cocoa widgetset, rather than the 
 ```
 git clone https://github.com/rordenlab/MRIcroGL12.git
 git clone https://github.com/neurolabusc/Metal-Demos.git
+git clone https://github.com/Alexey-T/Python-for-Lazarus.git
+lazbuild --build-ide=  --ws=cocoa --add-package lazopenglcontext ./Python-for-Lazarus/python4lazarus/python4lazarus_package.lpk
 cd MRIcroGL12
-lazbuild --ws=cocoa --verbose-pkgsearch lazopenglcontext --verbose-pkgsearch python4lazarus_package
 lazbuild  -B --ws=cocoa MRIcroGL.lpi
 ```
 
@@ -71,8 +73,9 @@ One can also compile for Linux (qt5). Users will need to install [libqt5pas 1.2.
 ```
 git clone https://github.com/rordenlab/MRIcroGL12.git
 git clone https://github.com/neurolabusc/Metal-Demos.git
+git clone https://github.com/Alexey-T/Python-for-Lazarus.git
+lazbuild --build-ide= --add-package lazopenglcontext ./Python-for-Lazarus/python4lazarus/python4lazarus_package.lpk
 cd MRIcroGL12
-lazbuild --verbose-pkgsearch lazopenglcontext --verbose-pkgsearch python4lazarus_package
 lazbuild  -B --ws=qt5 MRIcroGL.lpi
 ```
 
