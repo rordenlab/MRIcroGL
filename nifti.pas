@@ -3413,12 +3413,6 @@ begin
   Quat2Mat(fHdr);
   //read the image data
   volBytes := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3]* (fHdr.bitpix div 8);
-  if  (fVolumeDisplayed > 0) and (fVolumeDisplayed < HdrVolumes(fHdr)) and (fIsOverlay) then begin
-      Stream.Seek(round(fHdr.vox_offset)+(fVolumeDisplayed*volBytes),soFromBeginning);
-  end else begin
-      fVolumeDisplayed := 0;
-      Stream.Seek(round(fHdr.vox_offset),soFromBeginning);
-  end;
   fVolumesLoaded := max(HdrVolumes(fHdr),1);
   fVolumesTotal :=  fVolumesLoaded;
   if (HdrVolumes(fHdr) > 1) and (not fIsOverlay) then begin
@@ -3430,6 +3424,12 @@ begin
      if fVolumesLoaded < 1 then fVolumesLoaded := 1;
      if fVolumesLoaded > HdrVolumes(fHdr) then fVolumesLoaded := HdrVolumes(fHdr);
      volBytes := volBytes * fVolumesLoaded;
+  end;
+  if  (fVolumeDisplayed > 0) and (fVolumeDisplayed < HdrVolumes(fHdr)) and (fIsOverlay) then begin
+      Stream.Seek(round(fHdr.vox_offset)+(fVolumeDisplayed*volBytes),soFromBeginning);
+  end else begin
+      fVolumeDisplayed := 0;
+      Stream.Seek(round(fHdr.vox_offset),soFromBeginning);
   end;
   SetLength (fRawVolBytes, volBytes);
   Stream.ReadBuffer (fRawVolBytes[0], volBytes);
@@ -5589,7 +5589,6 @@ begin
             n += 3;
             i += 1;
             i += 1;
-
         end;
     end;
     Row32 := nil;
@@ -5879,7 +5878,11 @@ var
    F_Filename,lExt: string;
 begin
  result := false;
- if (length(fFilename) < 1) or (not FileExists(fFilename)) then exit;
+ if (length(fFilename) < 1) then exit;
+ if (not FileExists(fFilename)) or (FSize(fFilename) < 1) then begin
+   printf('Missing or empty file '+fFilename);
+   exit;
+ end;
  fVolumesLoaded := 1;
  fVolumesTotal :=  fVolumesLoaded;
  lExt := extractfileextX (fFilename);
