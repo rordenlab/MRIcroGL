@@ -128,6 +128,10 @@ function getDefaultDcm2niix2(): string;
 begin
   {$IFDEF UNIX}
   result := ResourceDir + pathdelim + kExeName;
+  if fileexists(result) then exit;
+  result := '/usr/bin/' + kExeName;
+  if fileexists(result) then exit;
+  result := '/usr/local/bin/' + kExeName;
   {$ELSE}
   result := ResourceDir + pathdelim + kExeName+'.exe';
   {$ENDIF}

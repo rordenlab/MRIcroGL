@@ -5452,7 +5452,7 @@ begin
 end;
 
 {$IFDEF BMP}
-{$IFDEF UNIX}
+//{$IFDEF UNIX}
 (*function xRGB(i: TRGB): TRGB;
 begin
      result.r := i.B;
@@ -5480,7 +5480,7 @@ begin
  result.g := round(Y - 0.344136 * (Cb-128) - 0.714136 * (Cr-128) );
  result.b := round(Y + 1.772 * (Cb-128));
 end;*)
-{$ENDIF}
+//{$ENDIF}
 
 function LoadBmpAsNifti(fnm: string; var  rawData: TUInt8s; var nhdr: TNIFTIHdr): boolean;
 var
@@ -5490,10 +5490,10 @@ var
    n, x, y,i,nBytes: integer;
    //LTempBitmap : TBitmap;
    Row32: TUInt8s;
-   {$IFDEF UNIX}
+   //{$IFDEF UNIX}
    //v24s: TRGBs;
    v32s: TRGBAs;
-   {$ENDIF}
+   //{$ENDIF}
 begin
  result := false;
  pic := TPicture.create;
@@ -5604,7 +5604,7 @@ begin
        Inc(PByte(DestPtr), nBytes);
    end;
  end;
- {$IFDEF UNIX} //MacOS RGBA order
+ //{$IFDEF UNIX} //MacOS RGBA order
  (*printf('Import '+inttostr(nhdr.bitpix)+'-bit bitmap');
  if nhdr.bitpix = 24 then begin
     nBytes := nhdr.dim[1] * nhdr.dim[2];
@@ -5619,7 +5619,7 @@ begin
         v32s[i] := xRGBA(v32s[i]);
         //v32s[i] := xYCbCR(v32s[i]);
  end;
- {$ENDIF}
+ //{$ENDIF}
  result := true;
  pic.free;
 end;

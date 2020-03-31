@@ -34,7 +34,7 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20200229'; //++ fixes remove small clusters
+  kVers = '1.2.20200331'; //++ fixes remove small clusters
 type
 
   { TGLForm1 }
