@@ -1709,7 +1709,6 @@ object GLForm1: TGLForm1
       Align = alClient
       ParentFont = False
       TabOrder = 4
-      OnClick = CenterPanelClick
     end
   end
   object TBSplitter: TSplitter

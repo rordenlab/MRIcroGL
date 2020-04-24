@@ -272,6 +272,7 @@ begin
   {$endif}
   IniBool(lRead,lIniFile, 'LabelOrient',lPrefs.LabelOrient);
   //LabelOrientCube
+  IniBool(lRead,lIniFile, 'ScreenCaptureTransparentBackground',lPrefs.ScreenCaptureTransparentBackground);
   IniBool(lRead,lIniFile, 'LoadFewVolumes',lPrefs.LoadFewVolumes);
   IniBool(lRead,lIniFile, 'LandmarkPanel',lPrefs.LandmarkPanel);
   IniBool(lRead,lIniFile, 'FlipYZ',lPrefs.FlipYZ);

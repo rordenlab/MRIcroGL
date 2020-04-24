@@ -34,7 +34,7 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20200331'; //++ fixes remove small clusters
+  kVers = '1.2.20200331+'; //+ fixes remove small clusters
 type
 
   { TGLForm1 }
@@ -346,7 +346,6 @@ type
     procedure AfniDetailsMenuClick(Sender: TObject);
     procedure AfniDirMenuClick(Sender: TObject);
     procedure BetterRenderTimerTimer(Sender: TObject);
-    procedure CenterPanelClick(Sender: TObject);
     procedure ClusterByMenuClick(Sender: TObject);
     procedure ClusterViewMouseUp(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
@@ -2082,6 +2081,17 @@ begin
     end;
 end;
 
+function pyBMPTRANSPARENT(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  transparent: integer;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, 'i:transparent', @transparent)) then begin
+       gPrefs.ScreenCaptureTransparentBackground := (transparent = 1);
+    end;
+end;
+
 function PyCONTRASTMINMAX(Self, Args : PPyObject): PPyObject; cdecl;
 var
   MN,MX: single;
@@ -2491,6 +2501,7 @@ begin
     AddMethod('azimuthelevation', @PyAZIMUTHELEVATION, ' azimuthelevation(azi, elev) -> Sets the camera location.');
     AddMethod('backcolor', @PyBACKCOLOR, ' backcolor(r, g, b) -> changes the background color, for example backcolor(255, 0, 0) will set a bright red background');
     AddMethod('bmpzoom', @PyBMPZOOM, ' bmpzoom(z) -> changes resolution of savebmp(), for example bmpzoom(2) will save bitmaps at twice screen resolution');
+    AddMethod('bmptransparent', @pyBMPTRANSPARENT, ' bmptransparent(v) -> set if bitmaps use transparent (1) or opaque (0) background');
     AddMethod('cameradistance', @PyCAMERADISTANCE, ' cameradistance(z) -> Sets the viewing distance from the object.');
     AddMethod('colorbarposition', @PyCOLORBARPOSITION, ' colorbarposition(p) -> Set colorbar position (0=off, 1=top, 2=right).');
     AddMethod('colorbarsize', @PyCOLORBARSIZE, ' colorbarsize(p) -> Change width of color bar f is a value 0.01..0.5 that specifies the fraction of the screen used by the colorbar.');
@@ -5314,10 +5325,7 @@ begin
   CreateStandardMenus(OpenAFNIMenu);
 end;
 
-procedure TGLForm1.CenterPanelClick(Sender: TObject);
-begin
 
-end;
 
 procedure TGLForm1.ClusterByMenuClick(Sender: TObject);
 var
