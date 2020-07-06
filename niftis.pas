@@ -164,7 +164,7 @@ begin
            if (vol.OpacityPercent = 0) then continue;
            nUsed := nUsed + 1;
            vol8 := vol.DisplayMinMax2Uint8;
-           lut := vol.ColorTable;
+           lut := vol.GetColorTable;
            lut[0] := setRGBA(lut[1].r, lut[1].g, lut[1].b, 0); //<- better for render
            mn := min(vol.DisplayMin, vol.DisplayMax);
            mx := max(vol.DisplayMin, vol.DisplayMax);
@@ -275,6 +275,8 @@ begin
      backColor := setRGBA(0,0,0,0);
      nii := TNIfTI.Create(niftiFileName, backColor, niis[0].Mat, niis[0].Dim, false, result); //false: use nearest neighbor for VOI
      if not result then exit;
+     //nii.Header.scl_inter := 0.0;
+     //nii.Header.scl_slope := 1.0;
      if (nii.Header.datatype = kDT_UINT8) then
         Drawing.voiCreate(nii.Dim.x, nii.Dim.y, nii.Dim.z, nii.fRawVolBytes)
      else

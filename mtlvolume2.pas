@@ -1,25 +1,32 @@
 unit mtlvolume2;
 {$mode objfpc}
 {$modeswitch objectivec1}
+
 {$H+}
 interface
 
 {$DEFINE GPUGRADIENTS} //Computing volume gradients on the GPU is much faster than using the CPU
 {$DEFINE VIEW2D}
 {$DEFINE CUBE}
+{$DEFINE MATCAP}
 uses
-    {$IFDEF CUBE} mtlcube, {$ENDIF}
+    CocoaAll, MacOSAll,
+    //CFBase, CGImage, CGDataProvider, CGColorSpace, MetalKit, CocoaAll,
+    {$IFDEF MATCAP} intfgraphics, graphtype, Graphics,  {$ENDIF}
+    {$IFDEF CUBE} Forms, mtlcube, {$ENDIF}
     mtlfont, mtlclrbar, VectorMath, MetalPipeline, MetalControl, Metal, MetalUtils,
     SysUtils, Math, nifti, niftis, SimdUtils, Classes
     {$IFDEF VIEW2D}, drawvolume, slices2D, colorEditor{$ENDIF};
 const
  kDefaultDistance = 2.25;
  kMaxDistance = 40;
+ kQualityBest = 5;
 type
   TGPUVolume = class
       private
         {$IFDEF VIEW2D}
         colorEditorVertexBuffer, sliceVertexBuffer, renderVertexBuffer, lineVertexBuffer: MTLBufferProtocol;
+        {$IFDEF GPUGRADIENTS}blurShader, sobelShader,{$ENDIF}
         shader2D, shader2Dn, shaderLines2D: TMetalPipeline;
         MeshRenderPassDescriptor: MTLRenderPassDescriptor;
         slices2D: TSlices2D;
@@ -28,14 +35,15 @@ type
         txt: TGPUFont;
         drawVolTex, drawVolLut: MTLTextureProtocol;
         {$ENDIF}
-        RayCastQuality1to6, maxDim, fAzimuth,fElevation: integer;
+        RayCastQuality1to5, maxDim, fAzimuth,fElevation: integer;
         shaderPrefs: TShaderPrefs;
         prefValues: array [1..kMaxUniform] of single;
         fDistance, overlayNum: single;
         fLightPos, fClipPlane: TVec4;
         indexBuffer, vertexBuffer: MTLBufferProtocol;
-        shader3D: TMetalPipeline;
+        shader3D, shader3Dbetter: TMetalPipeline;
         volTex, gradTex, overlayVolTex, overlayGradTex: MTLTextureProtocol;
+        {$IFDEF MATCAP} matCapTex: MTLTextureProtocol;{$ENDIF}
         mtlControl: TMetalControl;
         clrbar: TGPUClrbar;
         {$IFDEF CUBE} gCube :TGPUCube; {$ENDIF}
@@ -47,7 +55,8 @@ type
         procedure CreateOverlayTextures(Dim: TVec3i; volRGBA: TRGBAs);
         procedure CreateGradientVolumeGPU(Xsz,Ysz,Zsz: integer; var inTex, grTex: MTLTextureProtocol);
       public
-        ClipThick: single; //TO DO: support in Metal
+        ClipThick: single;
+        matcapLoc: integer;
         {$IFDEF VIEW2D}
         SelectionRect: TVec4;
         property ShowColorEditor: boolean read colorEditorVisible write colorEditorVisible;
@@ -65,7 +74,8 @@ type
         procedure PaintMosaic2D(var vol: TNIfTI; Drawing: TDraw; MosaicString: string);
         {$ENDIF}
         procedure UpdateOverlays(vols: TNIfTIs);
-        property Quality1to6: integer read RayCastQuality1to6 write RayCastQuality1to6;
+        property Quality1to5: integer read RayCastQuality1to5 write RayCastQuality1to5;
+
         property ShaderSliders: TShaderPrefs read shaderPrefs write shaderPrefs;
         property Azimuth: integer read fAzimuth write fAzimuth;
         property Elevation: integer read fElevation write fElevation;
@@ -77,9 +87,10 @@ type
         procedure Paint(var vol: TNIfTI);
         procedure SetShader(shaderName: string; isUpdatePrefs: boolean = true);
         procedure SetShaderSlider(idx: integer; newVal: single);
-        procedure SaveBmp(filename: string);
+        procedure SaveBmp(filename: string; hasAlpha: boolean);
         procedure SetColorBar(fromColorbar: TGPUClrbar);
         procedure  SetTextContrast(clearclr: TRGBA);
+        {$IFDEF MATCAP} function SetMatCap(fnm: string): boolean; {$ENDIF}
         destructor Destroy; override;
   end;
 
@@ -110,11 +121,161 @@ type
     modelViewProjectionMatrix: TMat4;
   end;
   TFragUniforms = record //Uniforms for fragment shader
-    stepSize, sliceSize, numOverlays, backAlpha: TScalar;
+    stepSize, sliceSize, numOverlays, clipThick: TScalar;
+    backAlpha, pad1, pad2, pad3: TScalar;
     rayDir: TVec4;
     lightPos: TVec4;
     clipPlane: TVec4;
+    normMatrix: TMat4;
   end;
+
+{$IFDEF MATCAP}
+
+procedure FlipVertical (var px: TPicture);
+var
+  p: array of byte;
+  i, half, b: integer;
+  LoPtr, HiPtr: PInteger;
+begin
+    if px.Height < 3 then exit;
+    half := (px.Height div 2);
+    b := px.Bitmap.RawImage.Description.BytesPerLine;
+    LoPtr := PInteger(px.Bitmap.RawImage.Data);
+    HiPtr := PInteger(px.Bitmap.RawImage.Data+ ((px.Height -1) * b));
+    setlength(p, b);
+    for i := 1 to half do begin
+          System.Move(LoPtr^,p[0],b); //(src, dst,sz)
+          System.Move(HiPtr^,LoPtr^,b); //(src, dst,sz)
+          System.Move(p[0],HiPtr^,b); //(src, dst,sz)
+          Inc(PByte(LoPtr), b );
+          Dec(PByte(HiPtr), b);
+    end;
+end; //FlipVertical()
+
+procedure CreateBmp(var px: TPicture);
+Type
+  TRGBquad = PACKED RECORD
+     rgbBlue,rgbGreen,rgbRed,rgbAlpha: byte;
+    end;
+  TQuadRA = array [1..1] of TRGBQuad;
+  RGBQuadp = ^TQuadRA;
+function rgb2quad(R,G,B: Byte): TRGBquad;
+begin
+  result.rgbRed:= (R);
+  result.rgbGreen:= (G);
+  result.rgbBlue:= (B);
+  result.rgbAlpha:= 0;
+end;
+const
+  x = 256;
+  y = 256;
+var
+  i, j, k: integer;
+  lBuff: RGBQuadp;
+  Ptr: pointer;
+  AImage: TLazIntfImage;
+  lRawImage: TRawImage;
+begin
+  GetMem(lBuff, x*y* sizeof(TRGBQuad));
+  k := 1;
+  for j := 1 to y do
+      for i :=  1 to x do begin
+          //lBuff^[k] := rgb2quad(256-i,i-1,256-j);
+          lBuff^[k] := rgb2quad(256-j,256-j,256-j);
+          k := k + 1;
+      end;
+  lRawImage.Init;
+  //lRawImage.Description.Init_BPP32_B8G8R8A8_BIO_TTB(0,0);
+  lRawImage.Description.Init_BPP32_R8G8B8A8_BIO_TTB(x,y);
+  lRawImage.CreateData(true);
+  AImage := TLazIntfImage.Create(x,y);
+  AImage.SetRawImage(lRawImage);
+  AImage.BeginUpdate;
+  i := 1;
+  for j := 0 to (y-1) do begin
+    ptr := AImage.GetDataLineStart(j);
+    Move(lBuff^[i], Ptr^, x * sizeof(TRGBQuad));
+    inc(i, x);
+  end;
+  AImage.EndUpdate;
+  px.Bitmap.LoadFromIntfImage(AImage);
+  FreeMem(lBuff);
+end;
+
+
+function TGPUVolume.SetMatCap(fnm: string): boolean;
+var
+  px: TPicture;
+  bmpHt, bmpWid: integer;
+  isPng : boolean;
+  pngTexDesc: MTLTextureDescriptor;
+  pngRegion: MTLRegion;
+  AImage: TLazIntfImage;
+  lRawImage: TRawImage;
+  //ifnm, MatCapDir: string;
+begin
+  result := false;
+  if (not fileexists(fnm)) and (fnm <> '') then begin
+       //MatCapDir := ExtractFilePath(ShaderDir)+ 'matcap';
+       fnm := ExtractFilePath(ShaderDir)+ 'matcap'+pathdelim+fnm+'.jpg';
+  end;
+  //if (fnm <> '') and (not fileexists(fnm)) then begin
+  px := TPicture.Create;
+  if not fileexists(fnm) then begin
+     if fnm <> '' then
+        writeln('Unable to find MatCap "'+fnm+'"');
+     CreateBmp(px)
+  end else begin
+    isPng := upcase(ExtractFileExt(fnm)) = '.PNG';
+    try
+      if isPng then
+          px.LoadFromFile(fnm)
+      else begin
+        lRawImage.Init;
+        //lRawImage.Description.Init_BPP32_B8G8R8A8_BIO_TTB(0,0);
+        lRawImage.Description.Init_BPP32_R8G8B8A8_BIO_TTB(0,0);
+        lRawImage.CreateData(false);
+        AImage := TLazIntfImage.Create(0,0);
+        try
+          AImage.SetRawImage(lRawImage);
+          AImage.LoadFromFile(fnm);
+          px.Bitmap.LoadFromIntfImage(AImage);
+        finally
+          AImage.Free;
+        end;
+      end;
+    except
+      px.Bitmap.Width:=0;
+    end;
+  end;
+  if (px.Bitmap.PixelFormat <> pf32bit ) or (px.Bitmap.Width < 1) or (px.Bitmap.Height < 1) then begin
+     writeln('Error loading 32-bit MatCap '+fnm);
+     exit;
+  end;
+  FlipVertical(px);
+  bmpHt := px.Bitmap.Height;
+  bmpWid := px.Bitmap.Width;
+  if px.Bitmap.PixelFormat <> pf32bit then
+     exit; //distance stored in ALPHA field
+  pngTexDesc := MTLTextureDescriptor.alloc.init.autorelease;
+  pngTexDesc.setTextureType(MTLTextureType2D);
+  if isPng then
+     pngTexDesc.setPixelFormat(MTLPixelFormatBGRA8Unorm)
+  else
+      pngTexDesc.setPixelFormat(MTLPixelFormatRGBA8Unorm);
+  //pngTexDesc.setPixelFormat(MTLPixelFormatBGRA8Unorm);
+  pngTexDesc.setWidth(bmpWid);
+  pngTexDesc.setHeight(bmpHt);
+  pngTexDesc.setDepth(1);
+  if (matCapTex <> nil) then matCapTex.release;
+  matCapTex := mtlControl.renderView.device.newTextureWithDescriptor(pngTexDesc);
+  Fatal(matCapTex = nil, format('mtlfont: newTextureWithDescriptor failed %dx%d', [bmpHt, bmpWid]));
+  pngRegion := MTLRegionMake3D(0, 0, 0, bmpWid, bmpHt, 1);
+  matCapTex.replaceRegion_mipmapLevel_withBytes_bytesPerRow(pngRegion, 0, PInteger(px.Bitmap.RawImage.Data), bmpWid*4);
+  px.Free;
+  result := true;
+end;
+{$ENDIF}
 
 procedure  TGPUVolume.SetTextContrast(clearclr: TRGBA);
 begin
@@ -130,18 +291,26 @@ begin
     prefValues[idx] :=newVal;
 end;
 
-procedure TGPUVolume.SaveBmp(filename: string);
+procedure TGPUVolume.SaveBmp(filename: string; hasAlpha: boolean);
 begin
-     MTLWriteTextureToFile(pChar(filename));
+  if filename = '' then
+     MTLWriteTextureToClipboard(hasAlpha)
+  else
+      MTLWriteTextureToFile(pChar(filename), hasAlpha);
 end;
 
 procedure TGPUVolume.SetShader(shaderName: string; isUpdatePrefs: boolean = true);
 var
  options: TMetalPipelineOptions;
  i: integer;
+ //str: NSString;
+ //Attrib: NSDictionary;
+ //defaultLibrary: MTLLibraryProtocol;
+ libraryOptions : TMetalLibraryOptions;
 begin
  if not isUpdatePrefs then exit; //only for opengl switching between "Better"
  options := TMetalPipelineOptions.Default;
+
  options.libraryName := shaderName;
  if not fileexists(shaderName) then
     writeln('Unable to find shader ' + shaderName);
@@ -153,12 +322,25 @@ begin
  options.pipelineDescriptor.colorAttachmentAtIndex(0).setSourceAlphaBlendFactor(MTLBlendFactorSourceAlpha);
  options.pipelineDescriptor.colorAttachmentAtIndex(0).setDestinationRGBBlendFactor(MTLBlendFactorOneMinusSourceAlpha);
  options.pipelineDescriptor.colorAttachmentAtIndex(0).setDestinationAlphaBlendFactor(MTLBlendFactorOneMinusSourceAlpha);
+ options.fragmentShader:= 'fragmentShader';
  shader3D := MTLCreatePipeline(options);
+ libraryOptions := TMetalLibraryOptions.Default;
+ libraryOptions.name := shaderName;
+ libraryOptions.preprocessorMacros := NSDictionary.dictionaryWithObject_forKey(NSSTR('CUBIC'), NSSTR('CUBIC'));
+ options.shaderLibrary := MTLCreateLibrary(libraryOptions);
+ shader3Dbetter := MTLCreatePipeline(options);
  //if not isUpdatePrefs then exit;
  shaderPrefs := loadShaderPrefs(shaderName);
+ matcapLoc := -1;
  if (shaderPrefs.nUniform > 0) and (shaderPrefs.nUniform <= kMaxUniform) then
-    for i := 1 to shaderPrefs.nUniform do
-        prefValues[i] := shaderPrefs.Uniform[i].DefaultV;
+    for i := 1 to shaderPrefs.nUniform do begin
+            if (shaderPrefs.Uniform[i].Widget = 3) then begin
+               matcapLoc := 1;
+               shaderPrefs.nUniform := shaderPrefs.nUniform - 1;
+               break;
+            end;
+            prefValues[i] := shaderPrefs.Uniform[i].DefaultV;
+    end;
  //MTLSetDepthStencil(shader3D, MTLCompareFunctionLess, true);
 end;
 
@@ -201,12 +383,28 @@ begin
  if not fileexists(shaderName) then
   writeln('Unable to find ' + shaderName);
  shaderLines2D  := MTLCreatePipeline(options);
+ //
+ options := TMetalPipelineOptions.Default;
+ shaderName := ShaderDir+pathdelim+'_Blur3d.metal';
+ {$IFDEF GPUGRADIENTS}
+ options.libraryName := shaderName;
+ if not fileexists(shaderName) then
+    writeln('Unable to find ' + shaderName);
+ options.kernelFunction := 'sobelKernel';  //blur kernel
+ sobelShader := MTLCreatePipeline(options);
+ options.kernelFunction := 'blurKernel';  //blur kernel
+ blurShader := MTLCreatePipeline(options);
+ {$ENDIF}
  //Create(fnm : string; out success: boolean; var fromView: TMetalControl);
  colorEditor := TColorEditor.Create;
  //colorEditorVisible := false;
  Txt := TGPUFont.Create(ResourcePath('Roboto', 'png'),  success, mtlControl); //<-multi-channel channel fonts glmtext
  slices2D := TSlices2D.Create(Txt);
- {$IFDEF CUBE} gCube := TGPUCube.Create(mtlControl); {$ENDIF}
+ {$IFDEF CUBE}
+ gCube := TGPUCube.Create(mtlControl);
+ if (Screen.PixelsPerInch < 100) then
+    gCube.Size:= gCube.Size * 1.5; //Check Darwin Retina vs Windows HiDPI
+ {$ENDIF}
  CreateDrawTex(pti(4,4,4), nil);
  CreateDrawColorTable;
  {$ENDIF}
@@ -233,12 +431,13 @@ begin
   lineVertexBuffer := nil;
   fAzimuth := 110;
   fElevation := 30;
-  RaycastQuality1to6 := 5;
+  RaycastQuality1to5 := 5;
   SelectionRect := Vec4(-1,0,0,0);
   fLightPos := Vec4(0, 0.707, 0.707, 0);
   //fLightPos := Vec4(0, 0.087, 0.996, 0);
   fClipPlane := Vec4(0, 0, 0, -1);
   ClipThick := 1.0;
+  matcapLoc := 1;
   //fLightPos := Vec4(0,0.0,0.707, 0.0);
   //fClearColor.r := 200;
   //fClearColor.g := 200;
@@ -247,6 +446,11 @@ begin
   colorEditorVisible := false;
   isSmooth2D := true;
   shaderPrefs.nUniform:= 0;
+  {$IFDEF MATCAP}
+  matCapTex  := nil;
+  //SetMatCap(ResourceFolderPath+pathdelim+'matcap'+pathdelim+'RedPlastic.jpg');
+  SetMatCap('');
+  {$ENDIF}
 end;
 
 function VertVertex(x, y, z: TScalar): TVertVertex;
@@ -277,10 +481,9 @@ begin
 end;
 
 procedure TGPUVolume.CreateGradientVolumeGPU(Xsz,Ysz,Zsz: integer; var inTex, grTex: MTLTextureProtocol);
+{$IFDEF GPUGRADIENTS}
 var
   grTexDesc: MTLTextureDescriptor;
-  options: TMetalPipelineOptions;
-  blurShader, sobelShader : TMetalPipeline;
   threadgroupSize: MTLSize;
   threadgroupCount: MTLSize;
   tempTex: MTLTextureProtocol;
@@ -301,12 +504,6 @@ begin
   threadgroupCount.width  := (Xsz  + threadgroupSize.width -  1) div threadgroupSize.width;
   threadgroupCount.height := (Ysz + threadgroupSize.height - 1) div threadgroupSize.height;
   threadgroupCount.depth := (Zsz + threadgroupSize.depth - 1) div threadgroupSize.depth;
-  options := TMetalPipelineOptions.Default;
-  options.libraryName := ShaderDir+pathdelim+'_Blur3d.metal';
-  options.kernelFunction := 'sobelKernel';  //blur kernel
-  sobelShader := MTLCreatePipeline(options);
-  options.kernelFunction := 'blurKernel';  //blur kernel
-  blurShader := MTLCreatePipeline(options);
   MTLBeginCommand;
   MTLBeginEncoding(blurShader);
      MTLSetTexture(inTex, 0); //in
@@ -320,11 +517,14 @@ begin
    MTLEndEncoding;
   //MTLEndCommand;
   MTLEndCommand(true); //<- syncrhonous: waitUntilCompleted, reduce flicker
-  sobelShader.Free;
-  blurShader.Free;
   tempTex.release;
   tempTex := nil;
 end;
+{$ELSE}
+begin
+     //
+end;
+{$ENDIF}
 
 procedure TGPUVolume.CreateDrawColorTable;//1D texture for drawing
 var
@@ -533,17 +733,16 @@ begin
   result := round(p1 + frac * (p2 - p1));
 end;//linear interpolation
 
-function ComputeStepSize (Quality1to10, Slices: integer): single;
+function ComputeStepSize (Quality1to5, Slices: integer): single;
 var
+  i : integer;
   f: single;
 begin
-  f := Quality1to10;
-  if f <= 1 then
-    f := 0.25;
-  if f > 10 then
-    f := 10;
-  f := f/10;
-  f := lerp (slices*0.25,slices*2.0,f);
+  //if (i = 0) then i := 2; //dynamic (1=0.4, 2=0.55 ... 5=1.0
+  i := Quality1to5 - 1;
+  i := max(i,0);
+  i := min(i,4); //quality 5 is same as 4 but adds cubic sampling
+  f := lerp(slices*0.4,slices*1.0, i/4); //0.4..1.0
   if f < 10 then
     f := 10;
   result := 1/f;
@@ -730,6 +929,9 @@ begin
   modelMatrix *= TMat4.RotateZ(DegToRad(lAzimuth));
   modelMatrix *= TMat4.Translate(-0.5, -0.5, -0.5); //pivot around 0.5 as cube spans 0..1
   modelLightPos := (modelMatrix.Transpose * fLightPos);
+
+  fragUniforms.normMatrix := modelMatrix.Inverse.Transpose;
+  //
   //model matrix in pixel space
   modelMatrix := TMat4.Identity;
   modelMatrix *= TMat4.Translate(lRender.Left, lRender.Bottom,0);
@@ -738,6 +940,7 @@ begin
   modelMatrix *= TMat4.RotateX(-DegToRad(90-lElevation));
   modelMatrix *= TMat4.RotateZ(DegToRad(lAzimuth));
   modelMatrix *= TMat4.Translate(-0.5, -0.5, -0.5); //pivot around 0.5 as cube spans 0..1
+
   projectionMatrix := TMat4.Ortho(0, mtlControl.clientwidth, 0, mtlControl.clientheight, 0.01, 2);
   vertUniforms.modelViewProjectionMatrix := ( projectionMatrix * modelMatrix);
   rayDir.x := 0; RayDir.y := 0; rayDir.z := 1; RayDir.w := 0;
@@ -753,17 +956,25 @@ begin
      fragUniforms.backAlpha :=  1
   else
       fragUniforms.backAlpha:= vol.OpacityPercent/100;
+  fragUniforms.clipThick := clipThick;
   fragUniforms.clipPlane := fClipPlane;
-  fragUniforms.sliceSize := 1/maxDim;
+  fragUniforms.sliceSize := 1.0/maxDim;
   //fragUniforms.stepSize := 1.0/ ((maxDim*0.25)+ (maxDim*1.75)* (RayCastQuality1to10/10));
-  fragUniforms.stepSize := ComputeStepSize (RayCastQuality1to6, maxDim);
+  fragUniforms.stepSize := ComputeStepSize (RayCastQuality1to5, maxDim);
   //MTLBeginFrame();
-    MTLSetShader(shader3D);
+    //if Quality1to5 = kQualityBest then
+       MTLSetShader(shader3Dbetter);
+    //else
+    //    MTLSetShader(shader3D);
     MTLSetVertexBytes(@vertUniforms, sizeof(vertUniforms), 1);
     MTLSetFragmentTexture(volTex, 0);
     MTLSetFragmentTexture(gradTex, 1);
     MTLSetFragmentTexture(overlayVolTex, 2);
     MTLSetFragmentTexture(overlayGradTex, 3);
+    {$IFDEF MATCAP}
+    if (matcapLoc >= 0) then
+       MTLSetFragmentTexture(matcapTex, 4);
+    {$ENDIF}
     MTLSetVertexBuffer(vertexBuffer, 0, 0);
     MTLSetFragmentBytes(@fragUniforms, sizeof(fragUniforms), 1);
     if ShaderPrefs.nUniform > 1 then
@@ -992,6 +1203,7 @@ begin
   modelMatrix *= TMat4.Translate(-vol.Scale.X/2, -vol.Scale.Y/2, -vol.Scale.Z/2);
   modelLightPos := (modelMatrix.Transpose * fLightPos);
   modelMatrix *= TMat4.Scale(vol.Scale.X, vol.Scale.Y, vol.Scale.Z); //for volumes that are rectangular not square
+  fragUniforms.normMatrix := modelMatrix.Inverse.Transpose;
   if fDistance = 0 then
      scale := 1
   else
@@ -1017,17 +1229,25 @@ begin
      fragUniforms.backAlpha :=  1
   else
       fragUniforms.backAlpha:= vol.OpacityPercent/100;
+  fragUniforms.clipThick := clipThick;
   //GLForm1.Caption := format('>> %g', [fragUniforms.backAlpha]);
   fragUniforms.sliceSize := 1/maxDim;
   //fragUniforms.stepSize := 1.0/ ((maxDim*0.25)+ (maxDim*1.75)* (RayCastQuality1to10/10));
-  fragUniforms.stepSize := ComputeStepSize (RayCastQuality1to6, maxDim);
+  fragUniforms.stepSize := ComputeStepSize (RayCastQuality1to5, maxDim);
   MTLBeginFrame();
-    MTLSetShader(shader3D);
+    if RayCastQuality1to5 = kQualityBest then
+       MTLSetShader(shader3Dbetter)
+    else
+        MTLSetShader(shader3D);
     MTLSetVertexBytes(@vertUniforms, sizeof(vertUniforms), 1);
     MTLSetFragmentTexture(volTex, 0);
     MTLSetFragmentTexture(gradTex, 1);
     MTLSetFragmentTexture(overlayVolTex, 2);
     MTLSetFragmentTexture(overlayGradTex, 3);
+    {$IFDEF MATCAP}
+    if (matcapLoc >= 0) then
+       MTLSetFragmentTexture(matcapTex, 4);
+    {$ENDIF}
     MTLSetVertexBuffer(vertexBuffer, 0, 0);
     MTLSetFragmentBytes(@fragUniforms, sizeof(fragUniforms), 1);
     if ShaderPrefs.nUniform > 1 then
@@ -1066,6 +1286,7 @@ begin
     {$ENDIF}
   MTLEndFrame;
 end;
+
 
 end.
 

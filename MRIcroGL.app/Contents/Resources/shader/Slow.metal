@@ -5,9 +5,10 @@
 //shininess|float|0.01|10.0|30
 //boundThresh|float|0.0|0.5|0.95
 //edgeBoundMix|float|0|0|1
-//overDistance|float|0.0|0.3|1
-//overAlpha|float|0.0|1.6|2.0
-//overShade|float|0.0|0.3|1.0
+//overlayDistance|float|0.0|0.35|1
+//overlayShade|float|0.01|0.3|1.0
+//overlayClip|float|0|0|1
+
 //vert
 #include <metal_stdlib>
 //xcrun -sdk macosx metal -c Default.metal -o Render.air
@@ -16,8 +17,7 @@ using namespace metal;
 
 struct CustomFragUniforms {
 	float ambient, diffuse, specular, shininess, boundThresh,edgeBoundMix,
-	overDistance,overAlpha,overShade;
-
+	overlayDistance, overlayShade, overlayClip;
 };
 
 struct VertexIn {
@@ -38,10 +38,12 @@ struct FragUniforms {
 	float stepSiz;
 	float sliceSiz;
 	float overlayNum;
-	float backAlpha;
+	float clipThick;
+	float backAlpha, pad1, pad2, pad3;
 	float4 rayDir;
 	float4 lightPos;
 	float4 clipPlane;
+	float4x4 normMatrix;
 };
 
 vertex VertexOut vertexShader(  unsigned int vertexID               [[ vertex_id ]],
@@ -66,135 +68,260 @@ float3 GetBackPosition (float3 startPosition, float3 rayDir) {
 	return startPosition + (rayDir * min(t.x, t.y));
 }
 
+#ifdef CUBIC
+float4 texture(texture3d<float> vol, float3 coord) {
+	constexpr sampler textureSampler (mag_filter::linear,min_filter::linear);
+	return (vol.sample(textureSampler, coord));			
+}
+
+/*
+https://github.com/DannyRuijters/CubicInterpolationWebGL
+License applicable to function texture3D():
+Copyright (c) 2008-2013, Danny Ruijters. All rights reserved.
+Ported to Apple Metal API 2020 by Chris Rorden
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+*  Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+*  Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+*  Neither the name of the copyright holders nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+*/
+float4 texture3Df(texture3d<float> vol, float3 coord) {
+  // shift the coordinate from [0,1] to [-0.5, textureSz-0.5]
+  float3 textureSz = float3(vol.get_width(), vol.get_height(), vol.get_depth());
+  float3 coord_grid = coord * textureSz - 0.5;
+  float3 index = floor(coord_grid);
+  float3 fraction = coord_grid - index;
+  float3 one_frac = 1.0 - fraction;
+  float3 w0 = 1.0/6.0 * one_frac*one_frac*one_frac;
+  float3 w1 = 2.0/3.0 - 0.5 * fraction*fraction*(2.0-fraction);
+  float3 w2 = 2.0/3.0 - 0.5 * one_frac*one_frac*(2.0-one_frac);
+  float3 w3 = 1.0/6.0 * fraction*fraction*fraction;
+  float3 g0 = w0 + w1;
+  float3 g1 = w2 + w3;
+  float3 mult = 1.0 / textureSz;
+  
+  float3 h0 = mult * ((w1 / g0) - 0.5 + index);  //h0 = w1/g0 - 1, move from [-0.5, textureSz-0.5] to [0,1]
+  float3 h1 = mult * ((w3 / g1) + 1.5 + index);  //h1 = w3/g1 + 1, move from [-0.5, textureSz-0.5] to [0,1]
+  // fetch the eight linear interpolations
+  // weighting and fetching is interleaved for performance and stability reasons
+  float4 tex000 =  texture(vol,h0);
+  float4 tex100 =  texture(vol,float3(h1.x, h0.y, h0.z));
+  tex000 = mix(tex100, tex000, g0.x);  //weigh along the x-direction
+  float4 tex010 =  texture(vol,float3(h0.x, h1.y, h0.z));
+  float4 tex110 =  texture(vol,float3(h1.x, h1.y, h0.z));
+  tex010 = mix(tex110, tex010, g0.x);  //weigh along the x-direction
+  tex000 = mix(tex010, tex000, g0.y);  //weigh along the y-direction
+  float4 tex001 =  texture(vol,float3(h0.x, h0.y, h1.z));
+  float4 tex101 =  texture(vol,float3(h1.x, h0.y, h1.z));
+  tex001 = mix(tex101, tex001, g0.x);  //weigh along the x-direction
+  float4 tex011 =  texture(vol,float3(h0.x, h1.y, h1.z));
+  float4 tex111 =  texture(vol,h1);
+  tex011 = mix(tex111, tex011, g0.x);  //weigh along the x-direction
+  tex001 = mix(tex011, tex001, g0.y);  //weigh along the y-direction
+  return mix(tex001, tex000, g0.z);  //weigh along the z-direction
+}
+#endif
+
+
 fragment float4 fragmentShader(VertexOut  in [[stage_in]],
                texture3d<float> volTexture [[ texture(0) ]],
                texture3d<float> gradTexture [[ texture(1) ]],
                texture3d<float> overlayVolTexture [[ texture(2) ]],
                texture3d<float> overlayGradTexture [[ texture(3) ]],
-               const device FragUniforms* fragUniforms    	[[ buffer(1) ]],
+			   const device FragUniforms* fragUniforms    	[[ buffer(1) ]],
                const device CustomFragUniforms* customFragUniforms    	[[ buffer(2) ]]
                ) {
 	//return float4(1,0,1,1);
 	constexpr sampler textureSampler (mag_filter::linear,min_filter::linear);
-    float3 start = in.color.rgb;
-    float3 backPosition = GetBackPosition(start, fragUniforms->rayDir.xyz);
-	float sliceSize = fragUniforms->sliceSiz;//for opacity correction
-	float stepSize = fragUniforms->stepSiz;//sampling rate
-	float3 dir = backPosition - start;
-	float4 clipPlane = fragUniforms->clipPlane;
-	float len = length(dir);
-	dir = normalize(dir);
-	float clipStart = 0.0;
-	float clipEnd = len;
-	float stepSizeX2 = -stepSize;
-
-	if (clipPlane.a > -0.5) {
-		bool frontface = (dot(dir , clipPlane.xyz) > 0.0);
-		float dis = dot(dir,clipPlane.xyz);
-		if (dis != 0.0  )  dis = (-clipPlane.a - dot(clipPlane.xyz, start.xyz-0.5)) / dis;
-		//test: "return" fails on 2006MacBookPro10.4ATI1900, "discard" fails on MacPro10.5NV8800
-		//if (((frontface) && (dis >= len)) || ((!frontface) && (dis <= 0.0)))
-		// return float4(0.0,0.0,0.0,0.0);
-		//if ((dis > 0.0) && (dis < len)) {
-		//	if (frontface)
-		//		start = start + dir * dis;
-		//	else
-		//		backPosition =  start + dir * (dis);
-		//	len = length(backPosition - start);
-		//}
-		if (frontface) {
-			clipStart = dis;
-			stepSizeX2 = clipStart + (stepSize * 2); //avoid specular effects in clip plane
-		} else
-			clipEnd =  dis;
-	}
-	bool hasOverlays = (fragUniforms->overlayNum > 0);
+	float2 gl_FragCoord = float2(in.position.xy); //random jitter to reduce wood grain
 	float3 lightPosition = fragUniforms->lightPos.xyz;
+	float clipThick = fragUniforms->clipThick;
+	int overlays = round(fragUniforms->overlayNum);
 	float ambient = customFragUniforms->ambient;
-	float overDistance = customFragUniforms->overDistance;
+	float overlayClip = customFragUniforms->overlayClip;	
 	float diffuse = customFragUniforms->diffuse;
 	float specular = customFragUniforms->specular;
 	float shininess = customFragUniforms->shininess;
 	float edgeBoundMix = customFragUniforms->edgeBoundMix;
 	float3 lightDirHeadOn = fragUniforms->rayDir.xyz;
-	float overShade = customFragUniforms->overShade;
+	float overlayShade = customFragUniforms->overlayShade;
 	float boundThresh = customFragUniforms->boundThresh;
-	float overAlpha = customFragUniforms->overAlpha;
-	float overAlphaFrac = overAlpha;
-	if (overAlphaFrac > 1.0) overAlphaFrac = 1.0;
-	float3 deltaDir = dir * stepSize;
-	float4 gradSample, colorSample,colAcc = float4(0.0,0.0,0.0,0.0);
-	float4 overAcc = float4(0.0,0.0,0.0,0.0);
-	float4 prevGrad = float4(0.0,0.0,0.0,0.0);
-	float4 oprevGrad = float4(0.0,0.0,0.0,0.0);
-	float lengthAcc = 0.0;
 	float edgeThresh = 0.01;
 	float edgeExp = 0.5;
-	float3 samplePos = start.xyz;
-	float overDepth = -1;
-	float backDepthEnd, backDepthStart = -1;
-	float2 gl_FragCoord = float2(in.position.xy); //random jitter to reduce wood grain
-	//stochastic jitter http://www.mccauslandcenter.sc.edu/mricrogl/shaders
-	samplePos += deltaDir* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453));
-	float alphaTerminate = 0.95;
+	
+	//float3x3 normalMatrix = float3x3(fragUniforms->normMatrix[0].xyz, fragUniforms->normMatrix[1].xyz, fragUniforms->normMatrix[2].xyz);
+	float sliceSize = fragUniforms->sliceSiz;//for opacity correction
+	float stepSize = fragUniforms->stepSiz;//sampling rate
+	float4 clipPlane = fragUniforms->clipPlane;
+	float3 start = in.color.rgb;
+	float3 backPosition = GetBackPosition(start, fragUniforms->rayDir.xyz);
+	float3 dir = backPosition - start;
+	float len = length(dir);
+	float noClipLen = len;
+	dir = normalize(dir);
+	float4 deltaDir = float4(dir.xyz * stepSize, stepSize);
+	float4 gradSample, colorSample;
+	float bgNearest = len; //assume no hit
+	float4 colAcc = float4(0.0,0.0,0.0,0.0);
+	float4 prevGrad = float4(0.0,0.0,0.0,0.0);
+	float4 overAcc = float4(0.0,0.0,0.0,0.0);
+	float4 oprevGrad = float4(0.0,0.0,0.0,0.0);
+	float overNearest = len;
+	//background pass
+	float4 samplePos = float4(start.xyz, 0.0);
+	//start applyClip(): Apple Metal does not support inout, so classic C
+	float cdot = dot(dir,clipPlane.xyz);
+	if  ((clipPlane.a > 1.0) || (cdot == 0.0)) {
+		//return samplePos;'
+	} else {
+		bool frontface = (cdot > 0.0);
+		float dis = (-clipPlane.a - dot(clipPlane.xyz, samplePos.xyz-0.5)) / cdot;
+		float  disBackFace = (-(clipPlane.a-clipThick) - dot(clipPlane.xyz, samplePos.xyz-0.5)) / cdot;
+		if (((frontface) && (dis >= len)) || ((!frontface) && (dis <= 0.0)))
+			samplePos.a = len + 1.0;
+		else if (frontface) {
+			dis = max(0.0, dis);
+			samplePos = float4(samplePos.xyz+dir * dis, dis);
+			len = min(disBackFace, len);
+		} else {
+			len = min(dis, len);
+			disBackFace = max(0.0, disBackFace);
+			samplePos = float4(samplePos.xyz+dir * disBackFace, disBackFace);
+		}
+	}
+	float4 clipPos = samplePos;
+	//end: applyClip()
+	float opacityCorrection = stepSize/sliceSize;
+	//fast pass - optional
+	float4 deltaDirX2 = float4(dir.xyz * max(stepSize, sliceSize * 1.95), max(stepSize, sliceSize * 1.95));
+	while  ( volTexture.sample(textureSampler, samplePos.xyz).a == 0.0) {
+			samplePos += deltaDirX2;
+			if (samplePos.a > len) break;
+	}
+	samplePos -= deltaDirX2;
+	//end fast pass
+
+	//if ((samplePos.a > len) && ( !hasOverlays )) { //no hit: quit here
+	if ((samplePos.a > len) && ( overlays < 1 )) {
+		return colAcc;	
+	}	
+	if (samplePos.a < clipPos.a) {
+		samplePos = clipPos;
+		bgNearest = clipPos.a;
+		float stepSizeX2 = samplePos.a + (stepSize * 2.0);
+		while (samplePos.a <= stepSizeX2) {
+			colorSample = (volTexture.sample(textureSampler, samplePos.xyz));
+			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
+			colorSample.a = clamp(colorSample.a*3.0,0.0, 1.0);
+			colorSample.rgb *= colorSample.a;
+			colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
+			samplePos += deltaDir;
+		}
+		
+	}
+	//end fastpass - optional
+	float ran = fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453);
+	samplePos += deltaDir * ran;
+	float clipLen = len;
+	if (overlays > 0) {
+		if (overlayClip > 0)
+			samplePos = clipPos;
+		else {
+			len = noClipLen;
+			samplePos = float4(start.xyz +deltaDir.xyz* ran, 0.0);
+		}
+	}
 	float boundAcc = 0.0;
 	float boundAcc2 = 0.0;
-	float opacityCorrection = stepSize/sliceSize;
-	if (hasOverlays)
+	//float3 defaultDiffuse = float3(0.5, 0.5, 0.5);
+	float alphaTerminate = 0.95;
+	if (overlays > 0)
 		alphaTerminate = 2.0; //force exhaustive search
-	while (lengthAcc <= len) {
-		if ((lengthAcc <= clipStart) || (lengthAcc > clipEnd))
-			colorSample = float4(0.0,0.0,0.0,0.0);
-		else {
-			colorSample = (volTexture.sample(textureSampler, samplePos));
-			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
-			if ((colorSample.a > 0.01) && (lengthAcc > stepSizeX2)) {
-				if (backDepthStart < 0) backDepthStart = lengthAcc;
-				backDepthEnd = lengthAcc;
-				//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
-				gradSample = (gradTexture.sample(textureSampler, samplePos)).rgba;
-				gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
-				//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
-				if (gradSample.a < prevGrad.a)
-					gradSample.rgb = prevGrad.rgb;
-				prevGrad = gradSample;
-				//Edge shading - darken edges parallel with viewing direction
-				float lightNormDot = dot(gradSample.rgb, lightDirHeadOn); //with respect to viewer
-				float edgeVal = pow(1.0-abs(lightNormDot),edgeExp) * pow(gradSample.a,0.3);
-				if (edgeVal >= edgeThresh)
-					colorSample.rgb = mix(colorSample.rgb, float3(0.0,0.0,0.0), pow((edgeVal-edgeThresh)/(1.0-edgeThresh),4.0));
-
-
-				lightNormDot = dot(gradSample.rgb, lightPosition);
-				float3 a = colorSample.rgb * ambient;
-				float3 d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;
-				float s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
-				//
-				if (gradSample.a > boundThresh) {
+	colorSample = float4(0.0,0.0,0.0,0.0);
+	while (samplePos.a <= len) {
+		//if (samplePos.a > clipPos.a) {
+		if ((samplePos.a > clipPos.a) && (samplePos.a <= clipLen)) {
+		
+			#ifdef CUBIC
+			colorSample = texture3Df(volTexture, samplePos.xyz);
+			#else
+			colorSample = (volTexture.sample(textureSampler, samplePos.xyz));
+			#endif
+			if (colorSample.a > 0.0)  {
+					colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
+					bgNearest = min(samplePos.a, bgNearest);
+					//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
+					#ifdef CUBIC
+					gradSample = texture3Df(gradTexture, samplePos.xyz);
+					#else
+					gradSample = (gradTexture.sample(textureSampler, samplePos.xyz));
+					#endif
+					gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
+					//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
+					if (gradSample.a < prevGrad.a)
+						gradSample.rgb = prevGrad.rgb;
+					prevGrad = gradSample;
+					//Edge shading - darken edges parallel with viewing direction
 					float lightNormDot = dot(gradSample.rgb, lightDirHeadOn); //with respect to viewer
-					float boundAlpha = pow(1.0-abs(lightNormDot),6.0);
-					boundAlpha = 1.0-pow((1.0 - boundAlpha), opacityCorrection);
-					boundAcc += (1.0 - boundAcc2) * boundAlpha;
-					boundAcc2 += (1.0 - boundAcc2) * boundAlpha;
-				}
+					float edgeVal = pow(1.0-abs(lightNormDot),edgeExp) * pow(gradSample.a,0.3);
+					if (edgeVal >= edgeThresh)
+						colorSample.rgb = mix(colorSample.rgb, float3(0.0,0.0,0.0), pow((edgeVal-edgeThresh)/(1.0-edgeThresh),4.0));
 
-				colorSample.rgb = a + d + s;
-			}
-		}
 
-		if (hasOverlays) {
-			float4 ocolorSample = (overlayVolTexture.sample(textureSampler, samplePos));
+					lightNormDot = dot(gradSample.rgb, lightPosition);
+					float3 a = colorSample.rgb * ambient;
+					float3 d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;
+					float s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
+					//
+					if (gradSample.a > boundThresh) {
+						float lightNormDot = dot(gradSample.rgb, lightDirHeadOn); //with respect to viewer
+						float boundAlpha = pow(1.0-abs(lightNormDot),6.0);
+						boundAlpha = 1.0-pow((1.0 - boundAlpha), opacityCorrection);
+						boundAcc += (1.0 - boundAcc2) * boundAlpha;
+						boundAcc2 += (1.0 - boundAcc2) * boundAlpha;
+					}
+					colorSample.rgb = a + d + s;
+			} //inside volume
+		} //after clip plane
+		if (overlays > 0) {
+			#ifdef CUBIC
+			float4 ocolorSample = texture3Df(overlayVolTexture,samplePos.xyz);
+			#else
+			float4 ocolorSample = (overlayVolTexture.sample(textureSampler, samplePos.xyz));
+			#endif
 			ocolorSample.a = 1.0-pow((1.0 - ocolorSample.a), opacityCorrection);
 			if (ocolorSample.a > 0.01) {
-				gradSample = (overlayGradTexture.sample(textureSampler, samplePos)).rgba;
+				#ifdef CUBIC
+				gradSample = texture3Df(overlayGradTexture,samplePos.xyz);
+				#else
+				gradSample = (overlayGradTexture.sample(textureSampler, samplePos.xyz));
+				#endif
 				gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
 				if (gradSample.a < oprevGrad.a)
 					gradSample.rgb = oprevGrad.rgb;
 				oprevGrad = gradSample;
-				if (overDepth < 0) overDepth = lengthAcc;
+				overNearest= min(overNearest, samplePos.a);
 				//Edge shading - darken edges parallel with viewing direction
 				float lightNormDot = dot(gradSample.rgb, lightDirHeadOn); //with respect to viewer
-				float edgeVal = pow(1.0-abs(lightNormDot),edgeExp) * pow(gradSample.a,overShade);
+				float edgeVal = pow(1.0-abs(lightNormDot),edgeExp) * pow(gradSample.a, overlayShade);
 				ocolorSample.a = pow(ocolorSample.a, 1.0 -edgeVal);
 				ocolorSample.rgb = mix(ocolorSample.rgb, float3(0.0,0.0,0.0), edgeVal);
 
@@ -204,10 +331,9 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 				float3 d = max(lightNormDot, 0.0) * ocolorSample.rgb * diffuse;
 				float s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
 				ocolorSample.rgb = a + d + s;
-				ocolorSample.a *= overAlphaFrac;
+				//ocolorSample.a *= overAlphaFrac;
 
 				if ( ocolorSample.a > 0.2) {
-					//if (overDepth == 0) overDepth = i;
 					float overRatio = colorSample.a/(ocolorSample.a);
 					if (colorSample.a > 0.02)
 						colorSample.rgb = mix( colorSample.rgb, ocolorSample.rgb, overRatio);
@@ -224,10 +350,9 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 		} //if hasOverlays
 		colorSample.rgb *= colorSample.a;
 		colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
-		samplePos += deltaDir;
-		lengthAcc += stepSize;
-		if ( lengthAcc >= len || colAcc.a > alphaTerminate )
+		if ( colAcc.a > alphaTerminate )
 			break;
+		samplePos += deltaDir;
 	}
 	colAcc.a *= fragUniforms->backAlpha;
 
@@ -235,26 +360,21 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 		colAcc.rgb = mix(colAcc.rgb, float3(0.0,0.0,0.0), (edgeBoundMix * boundAcc)/(colAcc.a+(edgeBoundMix * boundAcc)) );
 		colAcc.a = max(colAcc.a, boundAcc);
 	}
-	if ((overAcc.a > 0.01) && (overAlpha > 1.0))  {
-		colAcc.a=max(colAcc.a,overAcc.a);
-		if ( (overDistance > 0.0) && (overDepth > backDepthStart) && (backDepthEnd > backDepthStart)) {
-			if (overDepth > backDepthEnd) overDepth = backDepthStart; // backDepthEnd
-			float dx = float(overDepth-backDepthStart)/ float(backDepthEnd - backDepthStart);
-			dx = pow(1.0-dx, overDistance);
-			dx = pow(dx, 2.0);
-			overAcc *= dx;
-		}
-		//overAlphaFrac = (overAlpha - 1.0);
-		overAlphaFrac = overAcc.a * (overAlpha - 1.0);
-		if (overAcc.a > 0.0)
-			colAcc.rgb=mix(colAcc.rgb, overAcc.rgb,  overAlphaFrac);
+	if ((overlays < 1) || (overAcc.a == 0.0)) //if no overlay for this pixel
+		return colAcc; 
+	colAcc.a=max(colAcc.a, overAcc.a);
+	if (overNearest <= bgNearest) { //if overlay closer than background
+		colAcc.rgb=mix(colAcc.rgb, overAcc.rgb,  overAcc.a);
+		return colAcc;
 	}
+	//overlay behind surface
+	//overlay behind surface
+	float depth = (overNearest - bgNearest) / 1.732; //opposite corners of cube are 1.732 from each other
+	depth = depth + customFragUniforms->overlayDistance;
+	depth = min(depth, 1.0);
+	depth = sqrt(depth);
+	colAcc.rgb = mix(overAcc.rgb, colAcc.rgb,  depth);
+    
+	return colAcc;
 
-
-	//if ( colAcc.a < 1.0 )
-	//	colAcc.rgb = mix(clearColor,colAcc.rgb,colAcc.a);
-
-	//colAcc = ocolAcc;
-	//colAcc.a = colAcc.a/0.95;
-    return float4(colAcc);
 }

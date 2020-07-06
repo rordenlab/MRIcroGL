@@ -30,9 +30,8 @@ void main() {
 	float shininess = 10.0;
 	vec4 colAcc = vec4(0.0,0.0,0.0,0.0);
 	vec4 prevGrad = vec4(0.0,0.0,0.0,0.0);
-	vec4 samplePos;
 	//background pass
-	samplePos = vec4(start.xyz +deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)), 0.0);
+	vec4 samplePos = vec4(start.xyz, 0.0);
 	vec4 clipPos = applyClip(dir, samplePos, len);
 	float stepSizeX2 = samplePos.a + (stepSize * 2.0);
 	//fast pass - optional
@@ -44,12 +43,14 @@ void main() {
 	if (samplePos.a < clipPos.a)
 		samplePos = clipPos;
 	//end fastpass - optional
+	float ran = fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453);
+	samplePos += deltaDir * ran;
 	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
 	int isSurface = 0;
 	if ( overlays < 1 ) isSurface = 1;
 	vec4 overSample = vec4(0.0,0.0,0.0,0.0);
 	while (samplePos.a <= len) {
-		colorSample = texture3D(intensityVol,samplePos.xyz);
+		colorSample = texture3D(intensityVol, samplePos.xyz);
 		colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);
 		if (colorSample.a > 0.01) {
 			bgNearest = min(samplePos.a,bgNearest);
@@ -61,7 +62,7 @@ void main() {
 				if (gradSample.a < prevGrad.a)
 					gradSample.rgb = prevGrad.rgb;
 				prevGrad = gradSample;
-				vec3 n = normalize(normalize(NormalMatrix * gradSample.rgb));
+				vec3 n = normalize(NormalMatrix * gradSample.rgb);
 				vec2 uv = n.xy * 0.5 + 0.5;
 				vec3 d = texture(matcap2D,uv.xy).rgb;
 				vec3 surf = mix(defaultDiffuse, a, surfaceColor); //0.67 as default Brighten is 1.5
@@ -73,7 +74,7 @@ void main() {
 				float overlaySearchDepth = overlayDepth * sliceSize;
 				float maxA = 0.0;
 				while (overPos.a <= overlaySearchDepth) {
-					vec4 overSam = texture3D(intensityOverlay,overPos.xyz);
+					vec4 overSam = texture3D(intensityOverlay, overPos.xyz);
 					overPos += deltaDir;
 					if (overSam.a > 0.0) {
 						maxA = max(maxA, overSam.a);

@@ -66,7 +66,7 @@ void main() {
 			if (gradSample.a < prevGrad.a)
 				gradSample.rgb = prevGrad.rgb;
 			prevGrad = gradSample;
-			vec3 n = normalize(normalize(NormalMatrix * gradSample.rgb));
+			vec3 n = normalize(NormalMatrix * gradSample.rgb);
 			vec3 d = texture(matcap2D, n.xy * 0.5 + 0.5).rgb;
 			vec3 surf = mix(defaultDiffuse, colorSample.rgb, surfaceColor); //0.67 as default Brighten is 1.5
 			colorSample.rgb = d * surf * brighten * colorSample.a;

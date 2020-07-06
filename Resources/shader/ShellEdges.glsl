@@ -70,7 +70,6 @@ void main() {
 			if (gradSample.a < prevGrad.a)
 				gradSample.rgb = prevGrad.rgb;
 			prevGrad = gradSample;
-			colorSample = gradSample;
 			gradSample.rgb = gradSample.rgb*2.0 - 1.0; //do not normalize: vec3(0,0,0)!!
 			if (gradSample.a > boundThresh) {
 					float lightNormDot = dot(gradSample.rgb, lightDirHeadOn); //with respect to viewer
@@ -78,22 +77,20 @@ void main() {
 					boundAlpha = 1.0-pow((1.0 - boundAlpha), opacityCorrection);
 					boundAcc += (1.0 - boundAcc) * boundAlpha;
 			}
-			colorSample = edgeColor; //color with alpha = 0.0
+			//colorSample = edgeColor; //color with alpha = 0.0
 			if  (gradSample.a > edgeThresh) {
 				float edge = smoothstep(edgeThresh, 1.0, gradSample.a);
 				edge = pow(edge,edgeExp);
 				colorSample.a = edge;
-				//vec3 n = normalize(normalize(NormalMatrix * gradSample.rgb));
-				//vec2 uv = n.xy * 0.5 + 0.5;
-				//colorSample.rgb = texture(matcap2D,uv.xy).rgb * brighten;
 				float lightNormDot = dot(gradSample.rgb, lightPosition); //with respect to light location
 				if (lightNormDot > 0.0) edge +=   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
 				colorSample.rgb = edgeColor.rgb * edge;
+				colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
+				colorSample.rgb *= colorSample.a;
+				//accumulate color
+				colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
 			}
-			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
-			colorSample.rgb *= colorSample.a;
-			//accumulate color
-			colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
+
 	} //while samplePos.a < len
 	if ((edgeBoundMix > 0.0) && ((colAcc.a + boundAcc) > 0.0)) {
 		colAcc.rgb = mix(colAcc.rgb, vec3(0.0,0.0,0.0), (edgeBoundMix * boundAcc)/(colAcc.a+(edgeBoundMix * boundAcc)) );

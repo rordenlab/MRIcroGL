@@ -68,7 +68,7 @@ Type
         fKnownOrientation, fIsNativeEndian: boolean;
         fFileName,fShortName, fBidsName: string;
         fVolRGBA: TRGBAs;
-        fLabels: TStringList;
+        //fLabels: TStringList;
         fhistogram: TLUT;
         fisLinearReslice, fIsOverlay, fIsDrawing: boolean; //booleans do not generate 32-bit RGBA images
         {$IFDEF CACHEUINT8}
@@ -124,6 +124,8 @@ Type
         function mm3toVox(mm3: single) : integer; //e.g. if 3x3x3mm voxels (27mm) and input is 28, return 2
         //procedure robustMinMax(var rMin, rMax: single);
       public
+        fLabels: TStringList;
+        fLabelMask: TUInt8s;
         fRawVolBytes: TUInt8s;
         LoadFewVolumes: boolean;
         SortClustersBySize : boolean;
@@ -144,7 +146,8 @@ Type
         property VolumesTotal: integer read fVolumesTotal; //1 for 3D data, for 4D 1..hdr.dim[4] depending on RAM
         property KnownOrientation: boolean read fKnownOrientation;
         {$IFDEF CUSTOMCOLORS}
-        property ColorTable: TLUT read clut.fLUT write clut.fLUT;
+        function GetColorTable: TLUT;
+        //property ColorTable: TLUT read clut.fLUT write clut.fLUT;
         function FullColorTable: TCLUTrec;
         property CX: TCLUT read clut write clut;
         {$ELSE}
@@ -217,6 +220,7 @@ Type
         function DisplayRGBGreen(): TUInt8s;
         procedure SetDisplayColorScheme(clutFileName: string; cTag: integer);
         procedure SetDisplayVolume(newDisplayVolume: integer);
+        //procedure SetLabelMask(Idx: integer; isMasked: boolean);
         procedure ForceUpdate;
         procedure SetClusters(c: TClusters; notes: string);
         {$IFDEF CPUGRADIENTS}
@@ -240,6 +244,26 @@ implementation
 
 uses mainunit, nifti_resize;
 //uses reorient;
+
+(*procedure TNIfTI.SetLabelMask(Idx: integer; isMasked: boolean);
+var
+   i: integer;
+begin
+     if fLabels.Count < 1 then exit;
+     if fLabelMask = nil then begin
+        SetLength(fLabelMask, fLabels.Count );
+        for i := 0 to fLabels.Count - 1 do
+            fLabelMask[i] := 0;
+     end;
+
+end;*)
+
+{$IFDEF CUSTOMCOLORS}
+function TNIfTI.GetColorTable: TLUT;
+begin
+     result := clut.LUT;
+end;
+{$ENDIF}
 
 FUNCTION specialsingle (var s:single): boolean;
 //returns true if s is Infinity, NAN or Indeterminate
@@ -1335,7 +1359,7 @@ begin
    lSliceSz := lXdim*lYdim;
    lnVox := lSliceSz*lZDim;
     if (lnVox < 0) or (lXDim < 3) or (lYDim < 3) or (lZDim < 3) then begin
-	    printf('Smooth3DNII error: Image dimensions are not large enough to filter.');
+	    printf(format ('Smooth3DNII error: Image dimensions are not large enough to filter %dx%dx%d.',[lXDim,lYDim,lZDim]));
 	    exit;
    end;
   setlength(lSmoothImg,lnVox);
@@ -3565,7 +3589,6 @@ var
    lExt: string;
 begin
  result := false;
-
  if fileexists(niftiFileName) then begin
     Showmessage('Unable to overwrite existing file "'+niftiFileName+'".');
     exit;
@@ -4791,6 +4814,7 @@ var
    vol8: TUInt8s;
    vol16: TInt16s;
    vol32f: TFloat32s;
+   //j: integer;
 begin
  vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
  setlength(fCache8, vx);
@@ -4802,13 +4826,31 @@ begin
        fCache8[v] := ((round(vol32f[v+skipVx])-1) mod 100)+1;
  end else if fHdr.datatype = kDT_INT16 then begin //16 bit data
    vol16 := TInt16s(vol8);
-   for v := 0 to (vx-1) do
-       fCache8[v] := ((vol16[v+skipVx]-1) mod 100)+1;
+   if fLabelMask <> nil then begin
+        for v := 0 to (vx-1) do
+            if fLabelMask[vol16[v+skipVx]] <> 1 then
+               fCache8[v] := ((vol16[v+skipVx]-1) mod 100)+1
+            else
+                fCache8[v] := 0;
+   end else
+       for v := 0 to (vx-1) do
+           fCache8[v] := ((vol16[v+skipVx]-1) mod 100)+1;
  end else begin
      if (fHdr.datatype <> kDT_UNSIGNED_CHAR) then
         printf('Unsupported label datatype '+inttostr(fHdr.datatype));
      for v := 0 to (vx-1) do
             fCache8[v] := vol8[v+skipVx];
+     if fLabelMask <> nil then begin
+        for v := 0 to (vx-1) do
+            if fLabelMask[fCache8[v]] = 1 then
+                 fCache8[v] := 0;
+        (*j := 0;
+        for v := 0 to length(fLabelMask)-1 do
+            if fLabelMask[v] = 0 then
+                 j := j + 1;
+        writeln(inttostr(j)+'<<<<visible regions'+inttostr(random(123))); *)
+
+     end;
  end; //if ... else 8bit
 end;
 
@@ -4942,7 +4984,7 @@ begin
     fWindowMinCache8 := fWindowMin;
     fWindowMaxCache8 := fWindowMax;
     fOpacityPctCache8 := fOpacityPct;
-    clut.NeedsUpdate := false;
+    clut.NeedsUpdate := true; //<- 20200606 CRUCIAL CHANGE
     exit;
   end;
   setlength(fCache8, vx);
@@ -5242,6 +5284,7 @@ begin
   //following for overlays, which we load one at a time, and often need to reslice...
   //close old image
   fLabels.clear;
+  fLabelMask := nil;
   //fRawVolBytes := nil;
   //fVolRGBA := nil;
   fCache8 := nil;
@@ -5764,6 +5807,87 @@ begin
 end;
 {$ENDIF}
 
+function LoadImgASCII(FileName : AnsiString; var  rawData: TUInt8s; var lHdr: TNIFTIHdr): boolean;
+//TODO: support 4D ASCII: note VTK-ASCII only 3D. ASCII not good for random access 4D files
+var
+   f: file;
+   str: string;
+   strlst: TStringList;
+   u8: TUint8s;
+   i16: TInt16s;
+   u16: TUInt16s;
+   i32: TInt32s;
+   u32: TUInt32s;
+   f32: TFloat32s;
+   f64: TFloat64s;
+   i, nvox, volBytes, FSz: int64;
+begin
+     result := false;
+     lHdr.regular := 'r'; //we use a regular of "A" to denote ASCII encoding
+     lHdr.Dim[4] := 1;
+     volBytes := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3] * (lHdr.bitpix div 8);
+     FSz := FSize(FileName);
+     FSz := FSz - round(lHdr.vox_offset);
+     if FSz < 1 then begin
+        printf('ASCII file corrupted: ' + FileName);
+        exit;
+     end;
+     setlength(str, FSz);
+     FileMode := fmOpenRead;
+     AssignFile(f, FileName);
+     FileMode := fmOpenRead;  //Set file access to read only
+     Reset(f, 1);
+     Seek(f, round(lHdr.vox_offset)); //NIfTI2 has 4 byte padding to be divisible by 8
+     BlockRead(f, str[1], FSz);
+     FileMode := 2;
+     CloseFile(f);
+     nvox := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3];
+     strlst:=TStringList.Create;
+     strlst.DelimitedText := str;
+     str := '';
+     if (strlst.count < nvox) then begin
+        printf(format('Found %d voxels, expected %d: %s', [strlst.count, nvox, FileName]));
+        exit;
+     end;
+     printf(format('Found %d voxels, expected %d', [strlst.count, nvox]));
+     SetLength (rawData, volBytes);
+     if lHdr.datatype = kDT_UINT8 then begin
+     	u8 := TUInt8s(rawData);
+     	for i := 0 to (nvox - 1) do
+     		u8[i] := StrToIntDef(strlst[i],0);
+     end else if lHdr.datatype = kDT_INT16 then begin
+     	i16 := TInt16s(rawData);
+     	for i := 0 to (nvox - 1) do
+     		i16[i] := StrToIntDef(strlst[i],0);
+     end else if lHdr.datatype = kDT_UINT16 then begin
+     	u16 := TUInt16s(rawData);
+     	for i := 0 to (nvox - 1) do
+     		u16[i] := StrToIntDef(strlst[i],0);
+     end else if lHdr.datatype = kDT_INT32 then begin
+     	i32 := TInt32s(rawData);
+     	for i := 0 to (nvox - 1) do
+     		i32[i] := StrToIntDef(strlst[i],0);
+     end else if lHdr.datatype = kDT_UINT32 then begin
+     	u32 := TUInt32s(rawData);
+     	for i := 0 to (nvox - 1) do
+     		u32[i] := StrToIntDef(strlst[i],0);
+     end else  if lHdr.datatype = kDT_FLOAT then begin
+     	f32 := TFloat32s(rawData);
+     	for i := 0 to (nvox - 1) do
+     		f32[i] := StrToFloatDef(strlst[i],0);
+     end else  if lHdr.datatype = kDT_DOUBLE then begin
+     	f64 := TFloat64s(rawData);
+     	for i := 0 to (nvox - 1) do
+     		f64[i] := StrToFloatDef(strlst[i],0);
+     end else begin
+     	printf('Unsupported ASCII data type '+inttostr(lHdr.datatype));
+     	exit;
+     end;
+     strlst:=TStringList.Create;
+     strlst.free;
+     result := true;
+end;
+
 function TNIfTI.loadForeign(FileName : AnsiString; var  rawData: TUInt8s; var lHdr: TNIFTIHdr): boolean;// Load 3D data
 //Uncompressed .nii or .hdr/.img pair
 var
@@ -5825,7 +5949,9 @@ begin
    result := LoadHdrRawImgGZ(FileName, swapEndian,  rawData, lHdr)
  else if gzBytes < 0 then
     result := LoadImgGZ(FileName, swapEndian,  rawData, lHdr)
- else begin
+ else if lHdr.regular = 'A' then
+    result := LoadImgASCII(FileName, rawData, lHdr)
+ else begin //raw
    volBytes := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3] * (lHdr.bitpix div 8);
    FSz := FSize(FileName);
    if (FSz < (round(lHdr.vox_offset)+volBytes)) then begin
@@ -5837,7 +5963,7 @@ begin
     Stream.Seek(round(lHdr.vox_offset),soFromBeginning);
     if (overlayVol > 0) and (not isDimPermute2341) then begin
          Stream.Seek(overlayVol * volBytes,soFromCurrent);
-         overlayVol := 0; //tiger
+         overlayVol := 0;
     end else begin
         if (lHdr.dim[4] > 1) then
            volBytes := volBytes * lHdr.dim[4];
@@ -6083,7 +6209,6 @@ begin
      end;
      lPos := -1;
      if isLinearReslice then begin //trilinear
-        printf('>>>interp');
         for lZi := 0 to (tarDim.Z-1) do begin
             //these values are the same for all voxels in the slice
             // compute once per slice
@@ -6207,7 +6332,6 @@ begin
               end;
         end;
      end else begin //if trilinear, else nearest neighbor
-        printf('>>>>>NN');
         for lZi := 0 to (tarDim.Z-1) do begin
           //these values are the same for all voxels in the slice
           // compute once per slice
@@ -6418,6 +6542,7 @@ begin
   {$ENDIF}
   fisLinearReslice := isInterpolate;
   fLabels.Clear;
+  fLabelMask := nil;
   IsInterpolated := false;
   fBidsName := '';
   fFilename := niftiFileName;
@@ -7727,6 +7852,7 @@ begin
   fCache8 := nil;
   {$ENDIF}
   fLabels.Clear;
+  fLabelMask := nil;
   fBidsName := '';
   IsInterpolated := false;
   fFilename := niftiFileName;

@@ -1,17 +1,18 @@
 object GLForm1: TGLForm1
-  Left = 513
+  Left = 559
   Height = 570
   Top = 23
-  Width = 927
+  Width = 881
   AllowDropFiles = True
   Caption = 'MRIcroGL'
   ClientHeight = 570
-  ClientWidth = 927
+  ClientWidth = 881
   Constraints.MinHeight = 20
   Constraints.MinWidth = 20
   Menu = MainMenu
   OnClose = FormClose
   OnCloseQuery = FormCloseQuery
+  OnCreate = FormCreate
   OnDestroy = FormDestroy
   OnDropFiles = FormDropFiles
   OnShow = FormShow
@@ -21,10 +22,10 @@ object GLForm1: TGLForm1
     Left = 0
     Height = 484
     Top = 0
-    Width = 927
+    Width = 881
     Align = alClient
     ClientHeight = 484
-    ClientWidth = 927
+    ClientWidth = 881
     ParentFont = False
     TabOrder = 0
     object ToolPanel: TScrollBox
@@ -456,9 +457,9 @@ object GLForm1: TGLForm1
           Hint = 'Render quality: higher values are slower but look better. Smallest value is dynamic: initially poor quality with high quality after pause.'
           Top = 2
           Width = 80
-          Max = 6
+          Max = 5
           OnChange = UpdateShaderSettings
-          Position = 6
+          Position = 0
           TickStyle = tsNone
           BorderSpacing.Left = 4
           BorderSpacing.Top = 2
@@ -1604,7 +1605,6 @@ object GLForm1: TGLForm1
           Anchors = [akTop, akLeft, akRight]
           BorderSpacing.Top = 2
           Constraints.MaxHeight = 66
-          Lines.Strings = (          )
           OnChange = MosaicTextChange
           ParentFont = False
           TabOrder = 7
@@ -1612,7 +1612,7 @@ object GLForm1: TGLForm1
       end
     end
     object ScriptPanel: TPanel
-      Left = 924
+      Left = 878
       Height = 482
       Top = 1
       Width = 2
@@ -1694,7 +1694,7 @@ object GLForm1: TGLForm1
       Width = 6
     end
     object RightSplitter: TSplitter
-      Left = 918
+      Left = 872
       Height = 482
       Top = 1
       Width = 6
@@ -1705,10 +1705,11 @@ object GLForm1: TGLForm1
       Left = 275
       Height = 482
       Top = 1
-      Width = 643
+      Width = 597
       Align = alClient
       ParentFont = False
       TabOrder = 4
+      OnClick = CenterPanelClick
     end
   end
   object TBSplitter: TSplitter
@@ -1716,7 +1717,7 @@ object GLForm1: TGLForm1
     Left = 0
     Height = 6
     Top = 484
-    Width = 927
+    Width = 881
     Align = alBottom
     MinSize = 4
     ResizeAnchor = akBottom
@@ -1725,14 +1726,14 @@ object GLForm1: TGLForm1
     Left = 0
     Height = 80
     Top = 490
-    Width = 927
+    Width = 881
     Align = alBottom
     ClientHeight = 80
-    ClientWidth = 927
+    ClientWidth = 881
     ParentFont = False
     TabOrder = 2
     object ClusterGraphSplitter: TSplitter
-      Left = 841
+      Left = 795
       Height = 78
       Top = 1
       Width = 5
@@ -1741,11 +1742,12 @@ object GLForm1: TGLForm1
       ResizeAnchor = akRight
     end
     object GraphPanel: TPanel
-      Left = 846
+      Left = 800
       Height = 78
       Top = 1
       Width = 80
       Align = alRight
+      Constraints.MinHeight = 6
       Constraints.MinWidth = 8
       ParentFont = False
       PopupMenu = GraphPopUp
@@ -1756,18 +1758,18 @@ object GLForm1: TGLForm1
       Left = 1
       Height = 78
       Top = 1
-      Width = 840
+      Width = 794
       Align = alClient
       Caption = 'Layer does not have clusters'
       ClientHeight = 78
-      ClientWidth = 840
+      ClientWidth = 794
       ParentFont = False
       TabOrder = 2
       object ClusterView: TListView
         Left = 1
         Height = 76
         Top = 1
-        Width = 838
+        Width = 792
         Align = alClient
         AutoSort = False
         AutoWidthLastColumn = True
@@ -1815,7 +1817,7 @@ object GLForm1: TGLForm1
           end        
           item
             Caption = 'Structure'
-            Width = 466
+            Width = 420
           end>
         Constraints.MinWidth = 2
         GridLines = True
@@ -1836,8 +1838,8 @@ object GLForm1: TGLForm1
     end
   end
   object MainMenu: TMainMenu
-    left = 512
-    top = 16
+    Left = 512
+    Top = 16
     object AppleMenu: TMenuItem
       Caption = ''
       object AboutMenu: TMenuItem
@@ -1936,8 +1938,11 @@ object GLForm1: TGLForm1
       end
       object ImportTIFFMenu: TMenuItem
         Caption = 'Convert TIFF to NIfTI'
-        Visible = False
         OnClick = ImportTIFFMenuClick
+      end
+      object ImportTIFFFolderMenu: TMenuItem
+        Caption = 'Convert Folder of 2D TIFFs to NIfTI'
+        OnClick = ImportTIFFFolderMenuClick
       end
       object ToolsMenu: TMenuItem
         Caption = 'Tools'
@@ -2544,8 +2549,8 @@ object GLForm1: TGLForm1
     end
   end
   object OpenDialog1: TOpenDialog
-    left = 304
-    top = 16
+    Left = 304
+    Top = 16
   end
   object ColorDialog1: TColorDialog
     Color = clBlack
@@ -2571,26 +2576,26 @@ object GLForm1: TGLForm1
       'ColorS=F0FBFF'
       'ColorT=A4A0A0'
     )
-    left = 304
-    top = 80
+    Left = 304
+    Top = 80
   end
   object SaveDialog1: TSaveDialog
     DefaultExt = '.png'
     Options = [ofNoReadOnlyReturn, ofEnableSizing, ofViewDetail]
-    left = 304
-    top = 147
+    Left = 304
+    Top = 147
   end
   object UpdateTimer: TTimer
     Enabled = False
     Interval = 100
     OnTimer = UpdateTimerTimer
-    left = 408
-    top = 16
+    Left = 408
+    Top = 16
   end
   object LayerPopup: TPopupMenu
     OnPopup = LayerPopupPopup
-    left = 512
-    top = 80
+    Left = 512
+    Top = 80
     object LayerUpMenu: TMenuItem
       Caption = 'Move Up'
       OnClick = LayerUpDownClick
@@ -2688,48 +2693,48 @@ object GLForm1: TGLForm1
   object ScriptOpenDialog: TOpenDialog
     DefaultExt = '.py'
     Filter = 'Python scripts|*.py'
-    left = 304
-    top = 216
+    Left = 304
+    Top = 216
   end
   object YokeTimer: TTimer
     Enabled = False
     Interval = 200
     OnTimer = YokeTimerTimer
-    left = 408
-    top = 360
+    Left = 408
+    Top = 360
   end
   object AnimateTimer: TTimer
     Enabled = False
     Interval = 100
     OnTimer = AnimateTimerTimer
-    left = 408
-    top = 147
+    Left = 408
+    Top = 147
   end
   object LayerWidgetChangeTimer: TTimer
     Enabled = False
     Interval = 200
     OnTimer = LayerWidgetChangeTimerTimer
-    left = 408
-    top = 80
+    Left = 408
+    Top = 80
   end
   object InvalidateTImer: TTimer
     Enabled = False
     Interval = 1
     OnTimer = InvalidateTImerTimer
-    left = 408
-    top = 216
+    Left = 408
+    Top = 216
   end
   object BetterRenderTimer: TTimer
     Enabled = False
     Interval = 500
     OnTimer = BetterRenderTimerTimer
-    left = 408
-    top = 288
+    Left = 408
+    Top = 288
   end
   object AfniPopup: TPopupMenu
     OnPopup = LayerPopupPopup
-    left = 512
-    top = 147
+    Left = 512
+    Top = 147
     object AfniDetailsMenu: TMenuItem
       Caption = 'Details'
       OnClick = AfniDetailsMenuClick
@@ -2753,8 +2758,8 @@ object GLForm1: TGLForm1
     end
   end
   object ClusterPopUp: TPopupMenu
-    left = 512
-    top = 216
+    Left = 512
+    Top = 216
     object ClusterCopyMenu: TMenuItem
       Caption = 'Copy table to clipboard'
       OnClick = ClusterSaveClick
@@ -2766,8 +2771,8 @@ object GLForm1: TGLForm1
     end
   end
   object GraphPopUp: TPopupMenu
-    left = 512
-    top = 292
+    Left = 512
+    Top = 292
     object GraphSaveTxtMenu: TMenuItem
       Caption = 'Save Graph as Text'
       OnClick = GraphSaveMenuClick

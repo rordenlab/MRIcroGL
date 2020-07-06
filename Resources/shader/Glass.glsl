@@ -93,7 +93,7 @@ void main() {
 			}
 			colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
 			if ( colAcc.a > 0.95 )
-			break;
+				break;
 		}
 		samplePos += deltaDir;
 	} //while samplePos.a < len

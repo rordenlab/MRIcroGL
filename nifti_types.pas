@@ -190,6 +190,7 @@ kNIFTI_INTENT_QUATERNION =1010;
  procedure NIFTIhdr_SwapBytes (var lAHdr: TNIFTIhdr); //Swap Byte order for the Analyze type
  function Swap2(s : SmallInt): smallint;
  procedure swap4(var s : LongInt);
+ procedure Xswap4r( var s:single);
  procedure swap8(var s : int64);
  procedure Xswap8r(var s : double);
  procedure NII_Clear (out lHdr: TNIFTIHdr);

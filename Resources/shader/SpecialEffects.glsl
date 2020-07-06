@@ -51,26 +51,9 @@ void main() {
 		colorSample = texture3D(intensityVol,samplePos.xyz);
 		colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSizeX/sliceSize);
 		if (colorSample.a > 0.0) {
-			if (showGradient > 0.5) {
-				//colorSample.rgb = abs(texture3D(gradientVol,samplePos.xyz).rgb);
-				//colorSample.rgb = colorSample.rgb*2.0 - 1.0;
-				//colorSample.rgb = abs(colorSample.rgb);
-				
+			if (showGradient > 0.5)
 				colorSample.rgb = abs(texture3D(gradientVol,samplePos.xyz).rgb *2.0 - 1.0);
-				
-			}
 			bgNearest = min(samplePos.a,bgNearest);
-				//gradSample= texture3D(gradientVol,samplePos.xyz);
-				//gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
-				//if (gradSample.a < prevGrad.a)
-				//	gradSample.rgb = prevGrad.rgb;
-				//prevGrad = gradSample;
-				//vec3 a = colorSample.rgb * ambient;
-				//float lightNormDot = dot(gradSample.rgb, lightPosition);
-				//vec3 d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;
-				//float s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
-				//colorSample.rgb = a + d + s;
-
 			colorSample.rgb *= colorSample.a;
 			colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
 			if ( colAcc.a > 0.95 )

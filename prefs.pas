@@ -4,14 +4,15 @@ unit prefs;
 {$IFDEF Darwin} {$modeswitch objectivec2} {$ENDIF}
 
 interface
-uses Process, {$IFDEF Darwin}CocoaAll, {$ENDIF} IniFiles,SysUtils,Dialogs,Classes, SimdUtils, slices2D;
+uses Process, {$IFDEF Darwin}CocoaAll, {$ENDIF} IniFiles,SysUtils,Dialogs,Classes, SimdUtils, Math, slices2D;
 const
   knMRU = 10;
+  kMaxVoxDefault = 560;
 type
   TMRU =  array [1..knMRU] of string;
   TPrefs = record
          GradientMode, AnimationIntervalMsec, LineWidth, StartupWindowMode,DisplayOrient,
-         StartupDisplayOrient, ColorbarSize,ColorbarPosition, Quality1to6, BitmapZoom,
+         StartupDisplayOrient, ColorbarSize,ColorbarPosition, Quality1to5, BitmapZoom,
          MaxVox, MultiSample124, ClusterNeighborMethod: integer;
          ScreenCaptureTransparentBackground, LandmarkPanel, LoadFewVolumes,
          DebugMode, LoadSmooth, LabelOrient, RulerVisible, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay,
@@ -109,7 +110,7 @@ begin
             FlipLR_Radiological := true;
             AutoClusterizeAtlases := true;
             ColorbarSize := 50;
-            MaxVox := 560;
+            MaxVox := kMaxVoxDefault; //560;
             Smooth2D := true;
             LoadSmooth := true;
             DebugMode := false;
@@ -123,7 +124,7 @@ begin
     ColorBarPosition := 3;
     SkipPrefWriting := false;
     FlipYZ := false;
-    Quality1to6 := 0;
+    Quality1to5 := 0;
     MosaicStr := 'H 0.2 S 0.5 0.3 A 0.5; S 0.2 C 0.3 A 0.4';
     if ScreenCaptureTransparentBackground then
        ClearColor.A := 0;
@@ -246,7 +247,10 @@ begin
   IniStr(lRead, lIniFile, 'CustomDcm2niixExe', lPrefs.CustomDcm2niix);
   //Ints
   IniInt(lRead,lIniFile, 'ClusterNeighborMethod', lPrefs.ClusterNeighborMethod);
-  IniInt(lRead,lIniFile, 'Quality1to6', lPrefs.Quality1to6);
+  IniInt(lRead,lIniFile, 'Quality1to5', lPrefs.Quality1to5);
+  lPrefs.Quality1to5 := max(0, lPrefs.Quality1to5);
+  lPrefs.Quality1to5 := min(5, lPrefs.Quality1to5);
+
   IniInt(lRead,lIniFile, 'ColorbarPosition',lPrefs.ColorBarPosition);
   IniInt(lRead,lIniFile, 'ColorbarSize', lPrefs.ColorbarSize);
   IniInt(lRead,lIniFile, 'BitmapZoom', lPrefs.BitmapZoom);

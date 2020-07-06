@@ -32,12 +32,11 @@ It is generally recommended that download a pre-compiled executable (see previou
  - Get the [Metal-Demos repository](https://github.com/neurolabusc/Metal-Demos), for example: `git clone https://github.com/neurolabusc/Metal-Demos`.
  - Get the [MRIcroGL12 repository]( https://github.com/rordenlab/MRIcroGL12.git), for example: `git clone https://github.com/neurolabusc/MRIcroGL12`.
  - The Metal-Demos and MRIcroGL12 folders should share the same parent folder, e.g. `~/src/MRIcroGL12` and `~/src/Metal-Demos`. 
+ - You will need [python4lazarus_package](https://github.com/Alexey-T/Python-for-Lazarus), but hopefully Lazarus will detect and install this for you automatically.
  - If you are using MacOS and want to build for Apple Metal (instead of OpenGL):
    * Get the [lazmetalcontrol repository](https://github.com/genericptr/Metal-Framework).
    * Use the Lazarus Package menu to open and install the lazmetal control.
-   * Open the MRIcroGL project with Lazarus and use the "Project Inspector" to add lazmetalcontrol as a dependency.
-   * Uncomment the line '{$DEFINE METALAPI}' in mainunit.pas.
- - You will need [python4lazarus_package](https://github.com/Alexey-T/Python-for-Lazarus), but hopefully Lazarus will detect and install this for you automatically.
+   * Open and compile the MRIcroGL_Metal.lpi project instead of the MRIcroGL.lpi project with Lazarus.
  - Use the `Run` command from the `Run` menu compile and run your project.
 
 Alternatively, Debian/Ubuntu Linux users may want to look at the [docker script](./DOCKER.md) that provides a line-by-line recipt for compiling MRIcroGL from the command line.
@@ -129,29 +128,38 @@ You can also control MRIcroGL from the command line.
 
 MRIcroGL uses NIfTI as its native format. However, you can drag-and-drop files of various formats and the software should automatically detect and load these images.
 
- - [AFNI Brik](https://afni.nimh.nih.gov/pub/dist/doc/program_help/README.attributes.html)(.head).
- - [Analyze](http://imaging.mrc-cbu.cam.ac.uk/imaging/FormatAnalyze)(.hdr).
- - [Bio-Rad PIC](https://docs.openmicroscopy.org/bio-formats/5.8.2/formats/bio-rad-pic.html)(.pic).
- - [Blender Voxel data](http://pythology.blogspot.com/2014/08/you-can-do-cool-stuff-with-manual.html)(.bvox).
- - [BrainVoyager VMR](https://support.brainvoyager.com/brainvoyager/automation-development/84-file-formats/343-developer-guide-2-6-the-format-of-vmr-files)(.vmr, .v16).
- - [DeltaVision](https://docs.openmicroscopy.org/bio-formats/5.8.2/formats/deltavision.html)(.dv).
- - [DICOM](http://people.cas.sc.edu/rorden/dicom/index.html)(varies).
- - [ECAT](http://nipy.org/nibabel/reference/nibabel.ecat.html)(.v).
- - [FreeSurfer MGH/MGZ Volume](https://surfer.nmr.mgh.harvard.edu/fswiki/FsTutorial/MghFormat)(.mgh/.mgz).
- - [Guys Image Processing Lab](http://rview.colin-studholme.net/rview/rv9manual/fileform.html#GIPL)(.gipl).
- - [ICS Image Cytometry Standard](https://onlinelibrary.wiley.com/doi/epdf/10.1002/cyto.990110502)(.ics).
- - [Interfile](https://www.ncbi.nlm.nih.gov/pubmed/2616095)(.varies, limited support).
- - [ITK MHA/MHD](https://itk.org/Wiki/MetaIO/Documentation)(.mha/.mhd).
- - [Leica TIFF](https://en.wikipedia.org/wiki/TIFF)(.lsm).
- - [MRTrix Volume](https://mrtrix.readthedocs.io/en/latest/getting_started/image_data.html)(.mif/.mih; not all variants supported).
- - [NIfTI](https://brainder.org/2012/09/23/the-nifti-file-format/)(.hdr/.nii/.nii.gz/.voi).
- - [NRRD](http://teem.sourceforge.net/nrrd/format.html)(.nhdr/.nrrd).
- - [POV-Ray Density_File](https://www.povray.org/documentation/view/3.6.1/374/)(.df3).
- - [TIFF](https://en.wikipedia.org/wiki/TIFF)(.tif/.tiff/varies).
- - [Spectroscopic Imaging, VIsualization and Computing (SIVIC)](https://radiology.ucsf.edu/research/labs/nelson#accordion-software)(.idf).
- - [Stimulate Sdt](https://www.cmrr.umn.edu/stimulate/stimUsersGuide/node57.html)(.spr/.sdt)
- - [Vaa3D](https://github.com/Vaa3D)(.v3draw).
- - [VTK Legacy Voxel Format](https://www.vtk.org/wp-content/uploads/2015/04/file-formats.pdf)(.vtk).
+ - [AFNI Brik] (https://afni.nimh.nih.gov/pub/dist/doc/program_help/README.attributes.html) (.head).
+ - [Analyze] (http://imaging.mrc-cbu.cam.ac.uk/imaging/FormatAnalyze) (.hdr).
+ - [Bio-Rad PIC] (https://docs.openmicroscopy.org/bio-formats/5.8.2/formats/bio-rad-pic.html) (.pic).
+ - [Blender Voxel data] (http://pythology.blogspot.com/2014/08/you-can-do-cool-stuff-with-manual.html) (.bvox).
+ - [BrainVoyager VMR] (https://support.brainvoyager.com/brainvoyager/automation-development/84-file-formats/343-developer-guide-2-6-the-format-of-vmr-files) (.vmr, .v16).
+ - [DeltaVision] (https://docs.openmicroscopy.org/bio-formats/5.8.2/formats/deltavision.html) (.dv).
+ - [DeskVOX and Virvo] (http://ivl.calit2.net/wiki/index.php/VOX_and_Virvo) (.rvf, .xvf).
+ - [Digital Imaging and Communications in Medicine (DICOM)] (https://people.cas.sc.edu/rorden/dicom/index.html)(extension varies)
+   - Simple DICOM images can be imported by dragging and dropping.
+   - Use the Import menu's  `Convert DICOM to NIfTI` item for advanced conversion.
+ - [Drishti PVL Processed VoLume](http://paulbourke.net/dataformats/pvl/) (.pvl.nc).
+ - [ECAT](http://nipy.org/nibabel/reference/nibabel.ecat.html) (.v).
+ - [FreeSurfer MGH/MGZ Volume](https://surfer.nmr.mgh.harvard.edu/fswiki/FsTutorial/MghFormat) (.mgh/.mgz).
+ - [Guys Image Processing Lab](http://rview.colin-studholme.net/rview/rv9manual/fileform.html#GIPL) (.gipl).
+ - [ICS Image Cytometry Standard](https://onlinelibrary.wiley.com/doi/epdf/10.1002/cyto.990110502) (.ics).
+ - [Interfile](https://www.ncbi.nlm.nih.gov/pubmed/2616095) (.varies, limited support).
+ - [ITK MHA/MHD](https://itk.org/Wiki/MetaIO/Documentation) (.mha/.mhd).
+ - [MRTrix Volume](https://mrtrix.readthedocs.io/en/latest/getting_started/image_data.html) (.mif/.mih; not all variants supported).
+ - [NIfTI](https://brainder.org/2012/09/23/the-nifti-file-format/) (.hdr/.nii/.nii.gz/.voi).
+ - [NRRD](http://teem.sourceforge.net/nrrd/format.html) (.nhdr/.nrrd).
+ - [POV-Ray Density_File](https://www.povray.org/documentation/view/3.6.1/374/) (.df3).
+ - [Portable Network Graphics](https://en.wikipedia.org/wiki/Portable_Network_Graphics) (.png).
+ - [Portable PixMap](http://paulbourke.net/dataformats/ppm/) (.pgm, .ppm, .pnm).
+ - [Spectroscopic Imaging, Visualization and Computing (SIVIC)](https://radiology.ucsf.edu/research/labs/nelson#accordion-software)(.idf).
+ - [Stimulate Sdt](https://www.cmrr.umn.edu/stimulate/stimUsersGuide/node57.html) (.spr/.sdt)
+ - [Tagged Image File Format](http://paulbourke.net/dataformats/tiff/) (.tiff, .tif, [.lsm](https://www.mathworks.com/matlabcentral/fileexchange/8412-lsm-file-toolbox)).
+   - Simple TIFF images can be imported by dragging and dropping.
+   - Use the Import menu's  `Convert TIFF to NIfTI` item to convert most TIFFs (this allows you to specify pixel dimensions).
+   - Use the Import menu's  `To Convert Folder of 2D TIFFs to NIfTI` to stack a series of TIFF files as a single volume (e.g. [DigiMorph](http://digimorph.org/specimens/Meriones_unguiculatus/)).
+ - [Vaa3D](https://github.com/Vaa3D) (.v3draw).
+ - [VTK Legacy Voxel Format](https://www.vtk.org/wp-content/uploads/2015/04/file-formats.pdf) (.vtk).
+ - [VTK XML Voxel Format](https://vtk.org/Wiki/VTK_XML_Formats) (.vti).
 
 If your image format is not supported directly by MRIcroGL, you may want to see if it is supported by the [Bio-Formats module](https://docs.openmicroscopy.org/bio-formats/5.9.2/supported-formats.html) of [ImageJ/Fiji](https://fiji.sc). If so, you can open the image with the module and save it as NIfTI or NRRD to read it with MRIcroGL.
 
@@ -172,6 +180,7 @@ MRIcroGL uses single-pass raycasting to generate volume renderings.
 There are many terrific free tools for viewing medical imaging data. Since they are free, consider downloading a few and using the best tool for the task at hand. Below are a couple of my personal favorites.
 
  - [MRIcron](https://www.nitrc.org/projects/mricron) is similar and does not require OpenGL, but it is unable to generate interactive renderings.
+ - [Drishti](https://github.com/nci/drishti) has powerful rendering abilities, though support for medical imaging formats is limited.
  - [FSLeyes](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FSLeyes) has many similar features, as well as rich support for [FSL](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/). Variants require either OpenGL 1.4 or OpenGL 2.1.
  - [Mango](http://ric.uthscsa.edu/mango/) is a nice viewer.
  - [Slicer 3D](https://www.slicer.org) is daunting at first, but provides tremendous power and flexibility.

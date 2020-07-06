@@ -81,7 +81,7 @@ void main() {
 					gradSample.rgb = prevGrad.rgb;
 				prevGrad = gradSample;
 				gradAcc = (1.0 - gradAcc.a) * prevGrad + gradAcc;
-				vec3 n = normalize(normalize(NormalMatrix * gradSample.rgb));
+				vec3 n = normalize(NormalMatrix * gradSample.rgb);
 				vec2 uv = n.xy * 0.5 + 0.5;
 				vec3 d = texture(matcap2D,uv.xy).rgb;
 				vec3 surf = mix(defaultDiffuse, a, surfaceColor); //0.67 as default Brighten is 1.5
@@ -100,7 +100,7 @@ void main() {
 	if ((samplePos.a < len) && (surfaceHardness > 0.0) && (gradSample.a > 0.001)) {
 		colorSample = texture3D(intensityVol,samplePos.xyz);
 		colorSample = mix(colorSample, colorMax, intensityMix);
-		vec3 n = normalize(normalize(NormalMatrix * gradSample.rgb));
+		vec3 n = normalize(NormalMatrix * gradSample.rgb);
 		vec2 uv = n.xy * 0.5 + 0.5;
 		vec3 d = texture(matcap2D,uv.xy).rgb;
 		vec3 surf = mix(defaultDiffuse, colorSample.rgb, surfaceColor); //0.67 as default Brighten is 1.5

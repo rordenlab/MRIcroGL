@@ -22,7 +22,7 @@ const
  kGradientModeGPUSlow = 2; //high precision smooth
  kGradientModeCPUSlowest = 3; //highest precision
 
- kQualityBest = 6;
+ kQualityBest = 5;
 type
   TGPUVolume = class
       private
@@ -36,7 +36,7 @@ type
         txt: TGPUFont;
         {$ENDIF}
         shaderPrefs: TShaderPrefs;
-        RayCastQuality1to6, maxDim,fAzimuth,fElevation, overlayNum, overlayGradTexWidth: integer;
+        RayCastQuality1to5, maxDim,fAzimuth,fElevation, overlayNum, overlayGradTexWidth: integer;
         fDistance: single;
         fLightPos: TVec4;
         fClipPlane: TVec4;
@@ -84,7 +84,7 @@ type
         {$IFDEF MATCAP}procedure SetMatCap(lFilename: string);{$ENDIF}
         //procedure CreateOverlayTextures();
         procedure UpdateOverlays(vols: TNIfTIs);
-        property Quality1to6: integer read RayCastQuality1to6 write RayCastQuality1to6;
+        property Quality1to5: integer read RayCastQuality1to5 write RayCastQuality1to5;
         property ShaderSliders: TShaderPrefs read shaderPrefs write shaderPrefs;
         procedure SetShaderSlider(idx: integer; newVal: single);
         property Azimuth: integer read fAzimuth write fAzimuth;
@@ -1050,7 +1050,7 @@ begin
   fElevation := 30;
   overlayNum := 0;
   overlayGradTexWidth := 2; //refresh
-  RaycastQuality1to6 := 5;
+  RaycastQuality1to5 := 5;
   SelectionRect := Vec4(-1,0,0,0);
   fLightPos := Vec4(0, 0.707, 0.707, 0);
   ClipThick := 1;
@@ -1198,7 +1198,6 @@ begin
   glControl.MakeCurrent();
   overlayNum := vols.NumLayers -1; //-1 as we ignore background
   if (overlayNum < 1)  then begin //background only
-      //GLForm1.LayerBox.Caption := '>>>'+inttostr(random(888));
     if (overlayGradientTexture3D = 0) or (overlayGradTexWidth > 1) then //e.g. update texture after user closes overlays
        CreateOverlayTextures(Vol.Dim, nil); // <- empty overlay texture
     exit; //no overlays
@@ -1374,25 +1373,16 @@ begin
   result := round(p1 + frac * (p2 - p1));
 end;//linear interpolation
 
-function ComputeStepSize (Quality1to6, Slices: integer): single;
+function ComputeStepSize (Quality1to5, Slices: integer): single;
 var
   i : integer;
   f: single;
 begin
   //if (i = 0) then i := 2; //dynamic (1=0.4, 2=0.55 ... 5=1.0
-  i := Quality1to6 - 1;
+  i := Quality1to5 - 1;
   i := max(i,0);
-  i := min(i,4); //quality 6 is same as 5 but adds cubic sampling
+  i := min(i,4); //quality 5 is same as 4 but adds cubic sampling
   f := lerp(slices*0.4,slices*1.0, i/4); //0.4..1.0
-  //f := lerp(slices*0.4,slices*1.0, i/4); 0.5..1.0
-
-   (*if i > 5 then
-     i := i - 1; //5 and 6 have same slices, 6 adds cubic slicing
-  f := i/10;
-  if (f < 0.5) then
-    f := lerp (slices*0.25,slices*1.75, f)
-  else
-      f := lerp (0.0,slices*2.0,f); *)
   if f < 10 then
     f := 10;
   result := 1/f;
@@ -1835,7 +1825,7 @@ begin
      LoadTexture(vol, false);
   if (intensityTexture3D = 0) then
     exit;
-  if Quality1to6 = kQualityBest then
+  if Quality1to5 = kQualityBest then
        glUseProgram(programRaycastBetter)
   else
       glUseProgram(programRaycast);
@@ -1866,7 +1856,7 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
   glBindTexture(GL_TEXTURE_3D, overlayGradientTexture3D);
   glUniform1i(overlayGradientVolLoc, 5);
   //bind other uniforms
-  glUniform1f(stepSizeLoc, ComputeStepSize(Quality1to6, maxDim)) ;
+  glUniform1f(stepSizeLoc, ComputeStepSize(Quality1to5, maxDim)) ;
   if vol.IsLabels then
      glUniform1f(backAlphaLoc, 1)
   else

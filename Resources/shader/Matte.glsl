@@ -6,7 +6,6 @@ shininess|float|0.01|10.0|30|Specular reflections can be rough or precise
 overlayFuzzy|float|0.01|0.5|1|Do overlay layers have blurry surfaces?
 overlayDepth|float|0.0|0.3|0.8|Can we see overlay layers deep beneath the background image?
 overlayClip|float|0|0|1|Does clipping also influence overlay layers?
-doSomething|float|0|0.5|1|Does clipping also influence overlay layers?
 
 //frag
 uniform float ambient = 1.0;
@@ -16,7 +15,6 @@ uniform float shininess = 10.0;
 uniform float overlayFuzzy = 0.5;
 uniform float overlayDepth = 0.3;
 uniform float overlayClip = 0.0;
-uniform float doSomething = 0.0;
 
 void main() {
 	vec3 start = TexCoord1.xyz;

@@ -110,7 +110,7 @@ begin
   mNSStr := NSString(CFStringCreateWithPascalString(kCFAllocatorDefault, MessageStr, kCFStringEncodingUTF8));//message
   okNSStr := NSString(CFStringCreateWithPascalString(kCFAllocatorDefault, 'OK', kCFStringEncodingUTF8));//button caption
   fNSStr := NSString(CFStringCreateWithPascalString(kCFAllocatorDefault, '%@', kCFStringEncodingUTF8));//format
-  NSBeginAlertSheet(tNSStr,okNSStr,nil,nil,theWindow,theID,nil,nil,nil,fNSStr, [mNSStr]);
+  NSBeginAlertSheet(tNSStr,okNSStr,nil,nil,theWindow,theID,nil,nil,nil,fNSStr, mNSStr);
 end;
 
 var

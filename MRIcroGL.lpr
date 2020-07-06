@@ -12,7 +12,7 @@ uses
   {$ifdef windows}Windows, {$endif}
   Interfaces, // this includes the LCL widgetset
   Forms, mainunit, TimedDialog, dcm2nii, drawVolume, autoroi,
-  nifti_hdr_view, nifti_resize, resize, crop;
+  nifti_hdr_view, nifti_resize, resize, crop, tiff2nifti;
 
 {$R *.res}
 begin

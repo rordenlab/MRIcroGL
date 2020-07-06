@@ -19,9 +19,9 @@ sobelKernel(texture3d<half>  inTexture  [[texture(AAPLTextureIndexInput)]],
         // Return early if the pixel is out of bounds
         return;
     }
-    float dX = 1.0/outTexture.get_width(); //voxel width as fraction of texture width
-    float dY = 1.0/outTexture.get_height(); //voxel height as fraction of texture height
-	float dZ = 1.0/outTexture.get_depth(); //voxel depth as fraction of texture height
+    float dX = 1.0/(outTexture.get_width() - 1.0); //voxel width as fraction of texture width
+    float dY = 1.0/(outTexture.get_height() - 1.0); //voxel height as fraction of texture height
+	float dZ = 1.0/(outTexture.get_depth() - 1.0); //voxel slice as fraction of texture slices
 	float3 vx = float3(gid.xyz) * float3(dX,dY,dZ); //pixel to fractional coordinates
 	float blurVox = 1.2;
 	dX *= blurVox;
@@ -44,7 +44,6 @@ sobelKernel(texture3d<half>  inTexture  [[texture(AAPLTextureIndexInput)]],
 	gradientSample.rgb = normalize(gradientSample.rgb);
 	gradientSample.rgb =  (gradientSample.rgb * 0.5)+0.5;
     outTexture.write(half4(gradientSample), gid);
-    //outTexture.write(half4(inColor.rgb, 0.5), gid);
 }
 
 kernel void
@@ -57,26 +56,25 @@ blurKernel(texture3d<half>  inTexture  [[texture(AAPLTextureIndexInput)]],
         // Return early if the pixel is out of bounds
         return;
     }
-    float dX = 1.0/outTexture.get_width(); //voxel width as fraction of texture width
-    float dY = 1.0/outTexture.get_height(); //voxel height as fraction of texture height
-	float dZ = 1.0/outTexture.get_depth(); //voxel depth as fraction of texture height
+    float dX = 1.0/(outTexture.get_width() - 1.0); //voxel width as fraction of texture width
+    float dY = 1.0/(outTexture.get_height() - 1.0); //voxel height as fraction of texture height
+	float dZ = 1.0/(outTexture.get_depth() - 1.0); //voxel slice as fraction of texture slices
 	float3 vx = float3(gid.xyz) * float3(dX,dY,dZ); //pixel to fractional coordinates
 	float blurVox = 0.7;
 	dX *= blurVox;
 	dY *= blurVox;
 	dZ *= blurVox;
 	constexpr sampler textureSampler (mag_filter::linear,min_filter::linear);
-	half4 inColor;
-	inColor  = inTexture.sample(textureSampler,vx+float3(+dX,+dY,+dZ));
-	inColor += inTexture.sample(textureSampler,vx+float3(+dX,-dY,+dZ));
-	inColor += inTexture.sample(textureSampler,vx+float3(-dX,+dY,+dZ));
-	inColor += inTexture.sample(textureSampler,vx+float3(-dX,-dY,+dZ));
+	float alpha;
+	alpha  = inTexture.sample(textureSampler,vx+float3(+dX,+dY,+dZ)).a;
+	alpha += inTexture.sample(textureSampler,vx+float3(+dX,-dY,+dZ)).a;
+	alpha += inTexture.sample(textureSampler,vx+float3(-dX,+dY,+dZ)).a;
+	alpha += inTexture.sample(textureSampler,vx+float3(-dX,-dY,+dZ)).a;
 	//below
-	inColor += inTexture.sample(textureSampler,vx+float3(+dX,+dY,-dZ));
-	inColor += inTexture.sample(textureSampler,vx+float3(+dX,-dY,-dZ));
-	inColor += inTexture.sample(textureSampler,vx+float3(-dX,+dY,-dZ));
-	inColor += inTexture.sample(textureSampler,vx+float3(-dX,-dY,-dZ));
-	inColor *= 0.125;
-    outTexture.write(half4(inColor.rgb, inColor.a), gid);
-    //outTexture.write(half4(inColor.rgb, 0.5), gid);
+	alpha += inTexture.sample(textureSampler,vx+float3(+dX,+dY,-dZ)).a;
+	alpha += inTexture.sample(textureSampler,vx+float3(+dX,-dY,-dZ)).a;
+	alpha += inTexture.sample(textureSampler,vx+float3(-dX,+dY,-dZ)).a;
+	alpha += inTexture.sample(textureSampler,vx+float3(-dX,-dY,-dZ)).a;
+	alpha *= 0.125;
+	outTexture.write(half4(alpha, alpha, alpha, alpha), gid);
 }

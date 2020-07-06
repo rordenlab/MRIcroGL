@@ -2,7 +2,7 @@ unit mainunit;
 
 {$IFDEF LCLCocoa}
  //MetalAPI supported on modern MacOS: disable for Linux, Windows and old MacOS
-   //{$DEFINE METALAPI}
+   //{$DEFINE METALAPI} //set in ProjectOptions/CompilerOptions/CustomOptions: -dMETALAPI
    {$modeswitch objectivec1}
    {$DEFINE NewCocoa}
 {$ENDIF}
@@ -10,7 +10,7 @@ unit mainunit;
   error: you must compile for the Cocoa widgetset (ProjectOptions/Additions&Overrides)
 {$ENDIF}
 {$H+}
-{$IFNDEF METALAPI} {$DEFINE MATCAP} {$ENDIF}
+{$DEFINE MATCAP}
 {$DEFINE COMPILEYOKE} //use yoking
 {$DEFINE CLRBAR} //provide color bar
 {$DEFINE GRAPH} //timeseries viewer
@@ -27,14 +27,14 @@ uses
   {$IFDEF MYPY}PythonEngine,  {$ENDIF}
   {$IFDEF LCLCocoa}SysCtl, dos, {$IFDEF NewCocoa} nsappkitext, UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
-  resize, ustat, LazVersion,
+  ctypes, resize, ustat, LazVersion, nifti_tiff, tiff2nifti,
   lcltype, GraphType, Graphics, dcm_load, crop,
   LCLIntf, slices2D, StdCtrls, SimdUtils, Classes, SysUtils, Forms, Controls,clipbrd,
   Dialogs, Menus, ExtCtrls, CheckLst, ComCtrls, Spin, Types, fileutil, ulandmarks, nifti_types,
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20200331+'; //+ fixes remove small clusters
+  kVers = '1.2.20200707'; //+ fixes remove small clusters
 type
 
   { TGLForm1 }
@@ -84,6 +84,7 @@ type
     AfniQMenu: TMenuItem;
     GraphOpenAddMenu: TMenuItem;
     LayerClusterOptsMenu: TMenuItem;
+    ImportTIFFFolderMenu: TMenuItem;
     NimlMenu: TMenuItem;
     OpenAFNIMenu: TMenuItem;
     ClusterPopUp: TPopupMenu;
@@ -338,6 +339,7 @@ type
     ZTrackBar: TTrackBar;
     procedure AfniPMenuClick(Sender: TObject);
     procedure AfniQMenuClick(Sender: TObject);
+    procedure CenterPanelClick(Sender: TObject);
     procedure ClusterSaveClick(Sender: TObject);
     procedure ClusterViewColumnClick(Sender: TObject; Column: TListColumn);
     procedure ClusterViewCompare(Sender: TObject; Item1, Item2: TListItem;
@@ -352,7 +354,9 @@ type
     procedure ClusterViewSelectItem(Sender: TObject; Item: TListItem;
       Selected: Boolean);
     procedure EditPasteMenuClick(Sender: TObject);
+    procedure FormCreate(Sender: TObject);
     procedure GraphPanelResize(Sender: TObject);
+    procedure ImportTIFFFolderMenuClick(Sender: TObject);
     procedure InvalidateTImerTimer(Sender: TObject);
     procedure LayerAfniBtnClick(Sender: TObject);
     procedure LayerAfniDropChange(Sender: TObject);
@@ -630,6 +634,15 @@ var
 {$DEFINE isCocoaOpenGL}
 {$ENDIF}{$ENDIF}
 
+{$IFDEF DBUG}
+procedure DebugLn(str: string);  //2022
+begin
+{$IFDEF UNIX}
+        writeln(str);
+{$ENDIF}
+end;
+{$ENDIF}
+
 procedure GenerateClustersCore(var v: TNIfTI; thresh, mm: single; method: integer; isDarkAndBright: boolean);
 var
   i: integer = 0;
@@ -697,7 +710,6 @@ begin
   contents := '';
   row := '';
   contents := 'MRIcroGL '+kVers+kEOLN;
-  contents += 'Warning: clusters are a beta feature'+kEOLN;
   //if vols.Layer(GLForm1.LayerList.ItemIndex,niftiVol) then
   if vols.Layer(ClusterView.tag,niftiVol) then
      contents += 'Notes: '+niftiVol.clusterNotes+kEOLN;
@@ -938,6 +950,12 @@ begin
   thresh := q2VoxelIntensity(v.afnis[i].FDRcurv, q, v.afnis[i].maxAbsVal, true);
   LayerChange(LayerList.ItemIndex, -1, -1, thresh, thresh);
 end;
+
+procedure TGLForm1.CenterPanelClick(Sender: TObject);
+begin
+
+end;
+
 {$ELSE}
 begin
      showmessage('Not compiled with AFNI support');
@@ -1436,6 +1454,180 @@ begin
   ScriptOutputMemo.Lines.Add(ANSIString(Data));
 end;
 
+function PyGUI_INPUT(Self, Args : PPyObject): PPyObject; cdecl;
+var
+ caption, prompt, default: string;
+ n: integer;
+begin
+ caption := 'Input Required';
+ prompt := 'Input Required';
+ default := '';
+ n := GetPythonEngine.PyTuple_Size(args);
+ if n > 0 then
+    caption := GetPythonEngine.PyString_AsString(GetPythonEngine.PyTuple_GetItem(Args,0));
+ if n > 1 then
+    prompt := GetPythonEngine.PyString_AsString(GetPythonEngine.PyTuple_GetItem(Args,1));
+ if n > 2 then
+    default := GetPythonEngine.PyString_AsString(GetPythonEngine.PyTuple_GetItem(Args,2));
+ default := InputBox(caption,prompt,default);
+ Result := GetPythonEngine.PyString_FromString(PAnsiChar(default+#0));
+end;
+
+(*function PyARRAY(Self, Args : PPyObject): PPyObject; cdecl;
+var
+   py_tuple: PPyObject;
+   n: integer;
+   str: string;
+begin
+ Result:= GetPythonEngine.PyBool_FromLong(Ord(False));
+ n := GetPythonEngine.PyTuple_Size(args);
+ GLForm1.ScriptOutputMemo.lines.add('>>'+inttostr(n));
+ py_tuple :=   GetPythonEngine.PyTuple_GetItem(Args,0);
+ //PyArg_ParseTuple
+ n := GetPythonEngine.PyTuple_Size(py_tuple);
+ GLForm1.ScriptOutputMemo.lines.add('>>'+inttostr(n));
+ //str := GetPythonEngine.PyString_AsString(ob);
+ //GLForm1.ScriptOutputMemo.lines.add('>>'+ str +'<<');
+end;   *)
+
+function PyATLASSHOWHIDE(Self, Args : PPyObject; isHide: boolean): PPyObject; cdecl;
+//https://stackoverflow.com/questions/8001923/python-extension-module-with-variable-number-of-arguments
+var
+  layer, i, isHide01, n, idx, maxIdx: integer;
+  //f: single;
+  v: TNIfTI;
+  ob:PPyObject;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(False));
+  n := GetPythonEngine.PyTuple_Size(args);
+  if (n < 1) then begin
+       GLForm1.ScriptOutputMemo.lines.add('atlashide: requires at least one argument (layer) ');
+       exit;
+  end;
+  ob :=   GetPythonEngine.PyTuple_GetItem(Args,0);
+  if(ob = nil) then exit;
+  if (GetPythonEngine.PyNumber_Check(ob) <> 1) then begin
+     GLForm1.ScriptOutputMemo.lines.add('atlashide: layer argument should be an integer');
+     exit;
+  end;
+  layer := GetPythonEngine.PyLong_AsLong(ob);
+  if (layer < 0) or (layer >= vols.NumLayers) then begin
+     GLForm1.ScriptOutputMemo.lines.add('atlashide: layer should be in range 0..'+inttostr(vols.NumLayers-1));
+     exit;
+  end;
+  if not vols.Layer(layer,v) then begin
+     GLForm1.ScriptOutputMemo.lines.add('atlashide: fatal error');
+     exit;
+  end;
+  if (not v.IsLabels) or (v.fLabels.count < 1) then begin
+     GLForm1.ScriptOutputMemo.lines.add('atlashide: selected layer is not an indexed label map (NIfTI header intention not Labels)');
+     GLForm1.updateTimer.Enabled := true;
+     exit;
+  end;
+  //GLForm1.ScriptOutputMemo.lines.add('atlashide:::: '+inttostr(v.fLabels.count));
+  maxIdx := v.fLabels.count - 1;
+  //for i := 0 to  v.fLabels.count -1 do
+  //    GLForm1.ScriptOutputMemo.lines.add(inttostr(i)+':'+v.fLabels[i]);
+  if (v.fLabelMask = nil) or (length(v.fLabelMask) < v.fLabels.count) then begin
+     setlength(v.fLabelMask, v.fLabels.count);
+     for i := 0 to  maxIdx do
+            v.fLabelMask[i] := 0; //assume no masks
+  end;
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  isHide01 := 0;
+  if isHide then
+     isHide01 := 1;
+  if n < 2 then begin
+     for i := 0 to  maxIdx do
+         v.fLabelMask[i] := isHide01;
+     v.ForceUpdate;
+     //if (layer > 0) then
+     //   Vol1.UpdateOverlays(vols);
+     exit;
+  end;
+  i := 1;
+  while i < n do begin
+        ob :=   GetPythonEngine.PyTuple_GetItem(Args,i);
+        if(ob = nil) then break;
+        if (GetPythonEngine.PyNumber_Check(ob) <> 1) then begin
+            GLForm1.ScriptOutputMemo.lines.add('Error: all arguments should be integers');
+            break;
+        end;
+        idx := GetPythonEngine.PyLong_AsLong(ob);
+        idx := min(idx, maxIdx);
+        idx := max(0, idx);
+        v.fLabelMask[idx] := isHide01;
+        //GLForm1.ScriptOutputMemo.lines.add(format('=%d->%d', [i,A]));
+        i := i + 1;
+  end;
+  v.ForceUpdate;
+  //if (layer > 0) then
+  //   Vol1.UpdateOverlays(vols);
+end; //PyATLASSHOWHIDE()
+
+function PyATLASHIDE(Self, Args : PPyObject): PPyObject; cdecl;
+begin
+     result := PyATLASSHOWHIDE(Self, Args, true);
+end; //PyAtlasHide
+
+function PyATLASSHOW(Self, Args : PPyObject): PPyObject; cdecl;
+begin
+     result := PyATLASSHOWHIDE(Self, Args, false);
+end; //PyAtlasHide
+
+function PyATLASMAXINDEX(Self, Args : PPyObject): PPyObject; cdecl;
+var
+ v: TNIfTI;
+ layer: integer;
+begin
+  Result:= GetPythonEngine.PyInt_FromLong(-1);
+  with GetPythonEngine do
+    if Bool(PyArg_ParseTuple(Args, 'i:atlasmaxindex', @layer)) then begin
+       if (layer < 0) or (layer >= vols.NumLayers) then begin
+          GLForm1.ScriptOutputMemo.lines.add('atlasmaxindex: layer should be in range 0..'+inttostr(vols.NumLayers-1));
+          exit;
+       end;
+       if not vols.Layer(layer,v) then begin
+          GLForm1.ScriptOutputMemo.lines.add('atlasmaxindex: fatal error');
+          exit;
+       end;
+       if (not v.IsLabels) or (v.fLabels.count < 1) then begin
+          GLForm1.ScriptOutputMemo.lines.add('atlasmaxindex: not a label map (NIfTI header intention or labels missing)');
+          exit;
+       end;
+
+       Result:= GetPythonEngine.PyInt_FromLong(v.fLabels.count-1);
+    end;
+end;
+
+function PyATLASLABELS(Self, Args : PPyObject): PPyObject; cdecl;
+var
+ v: TNIfTI;
+ layer, i: integer;
+ str: string;
+begin
+  str := '';
+  Result:= GetPythonEngine.PyString_FromString(PAnsiChar(str+#0));
+  with GetPythonEngine do
+    if Bool(PyArg_ParseTuple(Args, 'i:atlaslabels', @layer)) then begin
+       if (layer < 0) or (layer >= vols.NumLayers) then begin
+          GLForm1.ScriptOutputMemo.lines.add('atlaslabels: layer should be in range 0..'+inttostr(vols.NumLayers-1));
+          exit;
+       end;
+       if not vols.Layer(layer,v) then begin
+          GLForm1.ScriptOutputMemo.lines.add('atlaslabels: fatal error');
+          exit;
+       end;
+       if (not v.IsLabels) or (v.fLabels.count < 2) then begin
+          GLForm1.ScriptOutputMemo.lines.add('atlaslabels: not a label map (NIfTI header intention or labels missing)');
+          exit;
+       end;
+       for i := 1 to v.fLabels.count -1 do
+       str := str + inttostr(i)+#9+v.fLabels[i]+ #10;
+       //str := str + format('%d\t%s\n', [i, v.fLabels[i]]);//+ #10;
+       Result:= GetPythonEngine.PyString_FromString(PAnsiChar(str+#0));
+    end;
+end;
 {$IFDEF PYOBSOLETE}
 function PyAZIMUTH(Self, Args : PPyObject): PPyObject; cdecl;
 var
@@ -1650,6 +1842,12 @@ begin
   Result:= GetPythonEngine.PyBool_FromLong(Ord(TRUE));
   vols.CloseAllOverlays;
   GLForm1.UpdateLayerBox(true);
+end;
+
+function PyOVERLAYCOUNT(Self, Args : PPyObject): PPyObject; cdecl;
+begin
+  with GetPythonEngine do
+    Result:= PyInt_FromLong(vols.NumLayers) - 1; //indexed from 0, e.g. background is layer 0, first overlay is 1...
 end;
 
 function PyMOSAIC(Self, Args : PPyObject): PPyObject; cdecl;
@@ -1943,10 +2141,12 @@ begin
   with GetPythonEngine do
     if Boolean(PyArg_ParseTuple(Args, 'i:graphscaling', @Style)) then
     begin
-       gGraph.Style := Style;
-       gGraph.isRedraw := true;
-       ViewGPUg.Invalidate;
-     Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+      {$IFDEF GRAPH}
+      gGraph.Style := Style;
+      gGraph.isRedraw := true;
+      ViewGPUg.Invalidate;
+      {$ENDIF}
+      Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
     end;
 end;
 
@@ -2498,6 +2698,11 @@ procedure TGLForm1.PyModInitialization(Sender: TObject);
 begin
   with Sender as TPythonModule do begin
     //AddMethod('smoothmask', @PySMOOTHMASK, ' smoothmask(i) -> Blur edges of a masked image.');
+    AddMethod('atlashide', @PyATLASHIDE, ' atlashide(layer, indices...) -> Hide all (e.g. "atlashide(1)") or some (e.g. "atlashide(1, 17, 22)") regions of an atlas.');
+    AddMethod('atlasshow', @PyATLASSHOW, ' atlasshow(layer, indices...) -> Show all (e.g. "atlasshow(1)") or some (e.g. "atlasshow(1, 17, 22)") regions of an atlas.');
+    AddMethod('atlasmaxindex', @PyATLASMAXINDEX, ' atlasmaxindex(layer) -> Returns maximum region humber in specified atlas. For example, if you load the CIT168 atlas (which has 15 regions) as your background image, then atlasmaxindex(0) will return 15.');
+    AddMethod('atlaslabels', @PyATLASLABELS, ' atlasmaxindex(layer) -> Returns string listing all regions in an atlas');
+    //AddMethod('array', @PyARRAY, 'profound');
     AddMethod('azimuthelevation', @PyAZIMUTHELEVATION, ' azimuthelevation(azi, elev) -> Sets the camera location.');
     AddMethod('backcolor', @PyBACKCOLOR, ' backcolor(r, g, b) -> changes the background color, for example backcolor(255, 0, 0) will set a bright red background');
     AddMethod('bmpzoom', @PyBMPZOOM, ' bmpzoom(z) -> changes resolution of savebmp(), for example bmpzoom(2) will save bitmaps at twice screen resolution');
@@ -2506,6 +2711,8 @@ begin
     AddMethod('colorbarposition', @PyCOLORBARPOSITION, ' colorbarposition(p) -> Set colorbar position (0=off, 1=top, 2=right).');
     AddMethod('colorbarsize', @PyCOLORBARSIZE, ' colorbarsize(p) -> Change width of color bar f is a value 0.01..0.5 that specifies the fraction of the screen used by the colorbar.');
     AddMethod('coloreditor', @PyCOLOREDITOR, ' coloreditor(s) -> Show (1) or hide (0) color editor and histogram.');
+    AddMethod('colorfromzero', @PyCOLORFROMZERO, ' colorfromzero(layer, isFromZero) -> Color scheme display range from zero (1) or from treshold value (0)?');
+    AddMethod('colorname', @PyOVERLAYCOLORNAME, ' colorname(layer, colorName) -> Set the colorscheme for the target overlay (0=background layer) to a specified name.');
     AddMethod('clipazimuthelevation', @PyCLIPAZIMUTHELEVATION, ' clipazimuthelevation(depth, azi, elev) -> Set a view-point independent clip plane.');
     AddMethod('clipthick', @PyCLIPTHICK, ' clipthick(thick) -> Set size of clip plane slab (0..1).');
     AddMethod('cutout', @PyCUTOUT, ' cutout(L,A,S,R,P,I) -> Remove sector from volume.');
@@ -2513,6 +2720,7 @@ begin
     ////isSmoothEdges: boolean = true; isSingleObject: boolean = true; OtsuLevels : integer = 5
     AddMethod('fullscreen', @PyFULLSCREEN, ' fullscreen(max) -> Form expands to size of screen (1) or size is maximized (0).');
     AddMethod('generateclusters', @PyGENERATECLUSTERS, ' generateclusters(layer |,thresh, minClusterMM3, method, bimodal) -> create list of distinct regions. Optionally provide cluster intensity, minimum cluster size, neighbor method(1=faces,2=faces+edges,3=faces+edges+corners). If bimodal = 1, both dark and bright clusters are detected.');
+    AddMethod('gui_input', @PyGUI_INPUT, 'gui_input(caption, prompt, default) -> allow user to type value into a dialog box.');
     AddMethod('graphscaling', @PyGRAPHSCALING, ' graphscaling(type) -> Vertical axis of graph is raw (0), demeaned (1) normalized -1..1 (2) normalized 0..1 (3) or percent (4).');
     AddMethod('hiddenbycutout', @PyHIDDENBYCUTOUT, ' hiddenbycutout(layer, isHidden) -> Will cutout hide (1) or show (0) this layer?');
     AddMethod('invertcolor', @PyINVERTCOLOR, ' invertcolor(layer, isInverted) -> Is color intensity inverted (1) or not (0) this layer?');
@@ -2525,10 +2733,9 @@ begin
     AddMethod('orthoviewmm', @PyORTHOVIEWMM, ' orthoviewmm(x,y,z) -> Show 3 orthogonal slices of the brain, specified in millimeters.');
     AddMethod('opacity', @PyOPACITY, ' opacity(opacityPct) -> Is the background image transparent (0), translucent (~50) or opaque (100)?');
     AddMethod('overlayadditiveblending', @PyOVERLAYADDITIVEBLENDING, ' overlayadditiveblending(v) -> Merge overlays using additive (1) or multiplicative (0) blending.');
-    AddMethod('overlaymaskwithbackground', @PyOVERLAYMASKWITHBACKGROUND, 'overlaymaskwithbackground(v) -> hide (1) or show (0) overlay voxels that are transparent in background image.');
     AddMethod('overlaycloseall', @PyOVERLAYCLOSEALL, ' overlaycloseall() -> Close all open overlays.');
-    AddMethod('colorname', @PyOVERLAYCOLORNAME, ' colorname(layer, colorName) -> Set the colorscheme for the target overlay (0=background layer) to a specified name.');
-    AddMethod('colorfromzero', @PyCOLORFROMZERO, ' colorfromzero(layer, isFromZero) -> Color scheme display range from zero (1) or from treshold value (0)?');
+    AddMethod('overlaycount', @PyOVERLAYCOUNT, ' overlaycount() -> Return number of overlays currently open.');
+    AddMethod('overlaymaskwithbackground', @PyOVERLAYMASKWITHBACKGROUND, 'overlaymaskwithbackground(v) -> hide (1) or show (0) overlay voxels that are transparent in background image.');
     AddMethod('overlayload', @PyOVERLAYLOAD, ' overlayload(filename) -> Load an image on top of prior images.');
     AddMethod('overlayloadsmooth', @PyOVERLAYLOADSMOOTH, ' overlayloadsmooth(0) -> Will future overlayload() calls use smooth (1) or jagged (0) interpolation?');
     AddMethod('minmax', @PyOVERLAYMINMAX, ' minmax(layer, min, max) -> Sets the color range for the overlay (layer 0 = background).');
@@ -2622,7 +2829,7 @@ begin
   gPyRunning := false;
   if  GlForm1.ScriptOutputMemo.Tag = 123 then
       GLForm1.Close
-  else if (gPrefs.DisplayOrient = kRenderOrient)  and (Vol1.Quality1to6 = 0) and (not gPyRunning) then
+  else if (gPrefs.DisplayOrient = kRenderOrient)  and (Vol1.Quality1to5 = 0) and (not gPyRunning) then
        BetterRenderTimer.enabled := true;
   result := true;
 end;
@@ -3358,35 +3565,41 @@ begin
      Application.ProcessMessages;
 end;
 
+
 procedure TGLForm1.ImportTIFFMenuClick(Sender: TObject);
+var
+  openDlg: TOpenDialog;
 begin
-(*var
-  lF: integer;
-  dlg : TOpenDialog;
-  fnm: string;
-begin
-  dlg := TOpenDialog.Create(self);
-  dlg.InitialDir := ExtractFileDir(gPrefs.PrevBackgroundImage);//GetCurrentDir;
-  {$IFDEF Darwin}
-  if PosEx('.app', dlg.InitialDir) > 0  then
-        dlg.InitialDir := HomeDir(false);
-  {$ENDIF}
-  dlg.Options := [ofAllowMultiSelect,ofFileMustExist];
-  dlg.filter := 'TIFF/LSM Images|*.*';
-  if not dlg.Execute then begin
-     dlg.Free;
+  openDlg := TOpenDialog.Create(application);
+  openDlg.Title := 'Select text file with graph data';
+  openDlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+  if not Fileexists(openDlg.InitialDir) then
+     openDlg.InitialDir := GetCurrentDir;
+  openDlg.Filter := 'TIFF file|*.*|TIFF extensions|*.lsm;*.tif;*.tiff';
+  openDlg.DefaultExt := '';
+  openDlg.FilterIndex := 1;
+  if not openDlg.Execute then begin
+     openDlg.Free;
      exit;
   end;
-  if dlg.Files.Count < 1 then
-     exit;
-  fnm := '';
-  for lF := 0 to (dlg.Files.Count-1) do
-      fnm := SaveTIFFAsNifti(dlg.Files[lF]);
-  dlg.Free;
-  if fnm <> '' then
-     AddBackground(fnm)
-  else
-     showmessage('Unable to convert image(s): make sure they are TIFF format');*)
+  convertTiff2NIfTI(openDlg.Filename);
+  openDlg.Free;
+end;
+
+procedure TGLForm1.ImportTIFFFolderMenuClick(Sender: TObject);
+var
+   indir: string;
+begin
+ indir := extractfiledir(gPrefs.PrevBackgroundImage);
+ {$ifdef darwin}
+ //Darwin does not show dialog title
+ showmessage('Select a folder with all the 2D TIFFs (e.g. from DigiMorph). They must be the same dimension and slice order matches alphabetical order of names.');
+ if PosEx('.app/Contents/Resources', indir) > 0 then
+ indir := '';
+ {$endif}
+ if indir = '' then
+    indir := GetUserDir;
+  convertTiffDir(indir);
 end;
 
 procedure TGLForm1.FormClose(Sender: TObject; var CloseAction: TCloseAction);
@@ -3439,6 +3652,7 @@ begin
   if pct <> niftiVol.OpacityPercent then isChange := true;
   if mn <> niftiVol.DisplayMin then isChange := true;
   if mx <> niftiVol.DisplayMax then isChange := true;
+  if Vols.OverlaysNeedsUpdate then isChange := true; //magma 20200606
   if (not isChange) then exit;
   if Vols.MaskWithBackground then ForceOverlayUpdate();
   niftiVol.SetDisplayMinMaxNoUpdate(mn, mx); //defer time consuming work
@@ -3578,11 +3792,11 @@ begin
            if isMultiVol1 then
               GraphPanel.width := BottomPanel.Width div 2
            else
-               GraphPanel.width := 0;
+               GraphPanel.width := 8;
         end else if isMultiVol1 then
             GraphPanel.width := BottomPanel.ClientWidth - ClusterGraphSplitter.width - 8;
         if (not hasClusters) and (not isMultiVol1) then
-           BottomPanel.Height := 2
+           BottomPanel.Height := 8
         else if (BottomPanel.Height < 20) then
              BottomPanel.Height := round(GLForm1.Height * 0.25);
      end;
@@ -3594,7 +3808,7 @@ begin
      LayerDarkEdit.Enabled := not v.Drawing;
      LayerBrightEdit.Enabled := not v.Drawing;
      LayerColorDrop.Enabled := not v.Drawing;
-     if v.IsLabels then
+     if (v.IsLabels) or (v.Header.datatype = kDT_RGB) or (v.Header.datatype = kDT_RGBA32) then
         LayerColorDrop.Enabled := false;
      LayerDarkEdit.Text := format('%.6g', [v.DisplayMin]);
      LayerBrightEdit.Text := format('%.6g', [v.DisplayMax]);
@@ -3606,6 +3820,7 @@ begin
         MakeList(v.clusters); //tue
         //Layerbox.caption := format('layer %d clusters %d', [i, length(v.clusters)]);
         ClusterView.tag := LayerList.ItemIndex;
+
      end;
      {$IFDEF AFNI}
      isAFNI := length(v.afnis) > 0;
@@ -3622,6 +3837,7 @@ begin
      LayerAfniDrop.Visible := isAFNI;
      LayerAfniBtn.Visible := isAFNI;
      {$ENDIF}
+     //LayerClusterMenu.click;
 end;
 
 procedure TGLForm1.LayerChange(layer, colorTag, opacityPercent: integer; displayMin, displayMax: single); //kNaNsingle
@@ -3645,6 +3861,7 @@ begin
         isChanged := true;
         mx := displayMax;
      end;
+     //if v.NeedsUpdate() then isChanged := true; //magma
      if (isChanged) then
         v.SetDisplayMinMaxNoUpdate(mn, mx);
      if (colorTag >= 0) and (v.FullColorTable.Tag <> colorTag) then begin
@@ -4352,13 +4569,13 @@ end;
 procedure TGLForm1.HelpPrefMenuClick(Sender: TObject);
 var
   PrefForm: TForm;
-  bmpEdit: TEdit;
+  bmpEdit, maxVoxEdit: TEdit;
   LoadFewVolumesCheck, LandMarkCheck,
   {$IFDEF LCLCocoa} DarkModeCheck, RetinaCheck,{$ENDIF}
   ClusterizeAtlasCheck, BitmapAlphaCheck, RadiologicalCheck: TCheckBox;
   OkBtn, AdvancedBtn: TButton;
-  bmpLabel: TLabel;
-  WindowCombo : TComboBox;
+  bmpLabel, maxVoxLabel: TLabel;
+  RenderQCombo, WindowCombo : TComboBox;
   isAdvancedPrefs  {$IFDEF LCLCocoa}, isDarkModeChanged, isRetinaChanged {$ENDIF}: boolean;
 begin
   PrefForm:=TForm.Create(GLForm1);
@@ -4367,18 +4584,39 @@ begin
   PrefForm.Caption:='Preferences';
   PrefForm.Position := poScreenCenter;
   PrefForm.BorderStyle := bsDialog;
+  //RenderQuality
+  RenderQCombo:=TComboBox.create(PrefForm);
+  RenderQCombo.Parent:=PrefForm;
+  RenderQCombo.AutoSize:= true;
+  RenderQCombo.Width := 420;
+  RenderQCombo.Items.Add('Render Quality: Adaptive (flicker)');
+  RenderQCombo.Items.Add('Render Quality: Poorest (fastest)');
+  RenderQCombo.Items.Add('Render Quality: Poor');
+  RenderQCombo.Items.Add('Render Quality: Medium');
+  RenderQCombo.Items.Add('Render Quality: Better');
+  RenderQCombo.Items.Add('Render Quality: Best (slowest)');
+  RenderQCombo.ItemIndex:=  gPrefs.Quality1to5;
+  RenderQCombo.Style := csDropDownList;
+  RenderQCombo.AnchorSide[akTop].Side := asrTop;
+  RenderQCombo.AnchorSide[akTop].Control := PrefForm;
+  RenderQCombo.BorderSpacing.Top := 6;
+  RenderQCombo.AnchorSide[akLeft].Side := asrLeft;
+  RenderQCombo.AnchorSide[akLeft].Control := PrefForm;
+  RenderQCombo.BorderSpacing.Left := 6;
+  RenderQCombo.Anchors := [akTop, akLeft];
+  RenderQCombo.Parent:=PrefForm;
   //Startup window size
   WindowCombo:=TComboBox.create(PrefForm);
   WindowCombo.Parent:=PrefForm;
   WindowCombo.AutoSize:= true;
-  WindowCombo.Width := 320;
+  WindowCombo.Width := 420;
   WindowCombo.Items.Add('Startup: As Window');
   WindowCombo.Items.Add('Startup: Maximized');
   WindowCombo.Items.Add('Startup: Full Screen');
   WindowCombo.ItemIndex:=  gPrefs.StartupWindowMode;
   WindowCombo.Style := csDropDownList;
-  WindowCombo.AnchorSide[akTop].Side := asrTop;
-  WindowCombo.AnchorSide[akTop].Control := PrefForm;
+  WindowCombo.AnchorSide[akTop].Side := asrBottom;
+  WindowCombo.AnchorSide[akTop].Control := RenderQCombo;
   WindowCombo.BorderSpacing.Top := 6;
   WindowCombo.AnchorSide[akLeft].Side := asrLeft;
   WindowCombo.AnchorSide[akLeft].Control := PrefForm;
@@ -4386,11 +4624,36 @@ begin
   WindowCombo.Anchors := [akTop, akLeft];
   WindowCombo.Parent:=PrefForm;
   //Bitmap Scale
+  maxVoxLabel:=TLabel.create(PrefForm);
+  maxVoxLabel.Width := PrefForm.Width - 86;
+  maxVoxLabel.Caption := 'Reduce volumes larger than (default '+inttostr(kMaxVoxDefault)+', 2048 for 8Gb graphics cards)';
+  maxVoxLabel.AnchorSide[akTop].Side := asrBottom;
+  maxVoxLabel.AnchorSide[akTop].Control := WindowCombo;
+  maxVoxLabel.BorderSpacing.Top := 6;
+  maxVoxLabel.AnchorSide[akLeft].Side := asrLeft;
+  maxVoxLabel.AnchorSide[akLeft].Control := PrefForm;
+  maxVoxLabel.BorderSpacing.Left := 6;
+  maxVoxLabel.Anchors := [akTop, akLeft];
+  maxVoxLabel.Parent:=PrefForm;
+  //maxVox edit
+  maxVoxEdit := TEdit.Create(PrefForm);
+  maxVoxEdit.Width := 60;
+  maxVoxEdit.AutoSize := true;
+  maxVoxEdit.Text := inttostr(gPrefs.MaxVox);
+  maxVoxEdit.AnchorSide[akTop].Side := asrCenter;
+  maxVoxEdit.AnchorSide[akTop].Control := maxVoxLabel;
+  maxVoxEdit.BorderSpacing.Top := 6;
+  maxVoxEdit.AnchorSide[akLeft].Side := asrRight;
+  maxVoxEdit.AnchorSide[akLeft].Control := maxVoxLabel;
+  maxVoxEdit.BorderSpacing.Left := 8;
+  maxVoxEdit.Anchors := [akTop, akLeft];
+  maxVoxEdit.Parent:=PrefForm;
+  //Bitmap Scale
   bmpLabel:=TLabel.create(PrefForm);
   bmpLabel.Width := PrefForm.Width - 86;
   bmpLabel.Caption := 'Bitmap zoom (large values create huge images)';
   bmpLabel.AnchorSide[akTop].Side := asrBottom;
-  bmpLabel.AnchorSide[akTop].Control := WindowCombo;
+  bmpLabel.AnchorSide[akTop].Control := maxVoxEdit;
   bmpLabel.BorderSpacing.Top := 6;
   bmpLabel.AnchorSide[akLeft].Side := asrLeft;
   bmpLabel.AnchorSide[akLeft].Control := PrefForm;
@@ -4544,6 +4807,8 @@ begin
   gPrefs.AutoClusterizeAtlases := ClusterizeAtlasCheck.Checked;
   Vol1.Slices.RadiologicalConvention := gPrefs.FlipLR_Radiological;
   gPrefs.BitmapZoom:= strtointdef(bmpEdit.Text,1);
+  gPrefs.maxVox :=  strtointdef(maxVoxEdit.Text, kMaxVoxDefault);
+  gPrefs.maxVox := max(80, gPrefs.MaxVox);
   gPrefs.LoadFewVolumes := LoadFewVolumesCheck.Checked;
   if (gPrefs.ScreenCaptureTransparentBackground <>  BitmapAlphaCheck.Checked) then begin
      gPrefs.ScreenCaptureTransparentBackground :=  BitmapAlphaCheck.Checked;
@@ -4551,6 +4816,11 @@ begin
         gPrefs.ClearColor.A := 0
      else
          gPrefs.ClearColor.A := 255;
+  end;
+  gPrefs.Quality1to5 := RenderQCombo.ItemIndex;
+  if gPrefs.Quality1to5 <> Vol1.Quality1to5 then begin
+     Vol1.Quality1to5 := gPrefs.Quality1to5;
+     QualityTrack.Position := gPrefs.Quality1to5;
   end;
   gPrefs.StartupWindowMode := WindowCombo.ItemIndex;
   vols.LoadFewVolumes  := gPrefs.LoadFewVolumes;
@@ -4693,7 +4963,6 @@ begin
         niftiVol.Save(dlg.FileName);
  end;
  dlg.Free;
-
 end;
 
 procedure TGLForm1.ScriptingPyVersionClick(Sender: TObject);
@@ -4823,21 +5092,24 @@ end;
 procedure TGLForm1.UpdateColorbar;
 var
  i, n: integer;
- niftiVol: TNIfTI;
+ v: TNIfTI;
 begin
   {$IFDEF CLRBAR}
   n := vols.NumLayers;
   if n < 1 then exit;
   if n < 2 then begin //with single background image show color range for background
-    if not vols.Layer(0,niftiVol) then exit;
-    gClrbar.SetLUT(1, niftiVol.ColorTable, niftiVol.DisplayMin,niftiVol.DisplayMax, niftiVol.CX.FromZero);
+    if not vols.Layer(0, v) then exit;
+    if (v.IsLabels) or  (v.Header.datatype = kDT_RGBA32) or (v.Header.datatype = kDT_RGB) then exit;
+    gClrbar.SetLUT(1, v.GetColorTable, v.DisplayMin, v.DisplayMax, v.CX.FromZero);
     gClrbar.Number := 1;
   end else begin //when overlays are loaded, show color range of overlays
+      gClrbar.Number := 0;
       for i := 1 to (n-1) do begin
-          if not vols.Layer(i,niftiVol) then exit;
-          gClrbar.SetLUT(i, niftiVol.ColorTable, niftiVol.DisplayMin,niftiVol.DisplayMax, niftiVol.CX.FromZero);
+          if not vols.Layer(i, v) then exit;
+          if (v.IsLabels) or  (v.Header.datatype = kDT_RGBA32) or (v.Header.datatype = kDT_RGB) then continue;
+          gClrbar.SetLUT(i, v.GetColorTable, v.DisplayMin, v.DisplayMax, v.CX.FromZero);
+          gClrbar.Number := gClrbar.Number + 1;
       end;
-      gClrbar.Number := n - 1;
   end;
   {$ENDIF}
 end;
@@ -4867,6 +5139,7 @@ begin
        else
            gGraph.AddLine(graphLine,format('%s [%d %d %d]',[niftiVol.ShortName, vox.x, vox.y, vox.z]), true);
        ViewGPUg.Invalidate;
+       //gGraph.isRedraw:= true;  //2021
        setlength(graphLine, 0);
      end;
      {$ENDIF}
@@ -5055,6 +5328,7 @@ begin
     GLForm1.LayerChange(vols.NumLayers-1, vols.NumLayers-1, -1, kNaNsingle, kNaNsingle); //kNaNsingle
   UpdateLayerBox(true);
   UpdateColorbar();
+  //LayerClusterMenuClick(nil);
   //Vol1.UpdateOverlays(vols);
   UpdateTimer.Enabled:= true;
   //ViewGPU1.Invalidate;
@@ -5129,6 +5403,9 @@ begin
     ZCoordEdit.Text := '0';
     SetXHairPosition(0,0,0 );
   end;
+  {$IFDEF GRAPH}
+  ViewGPUg.Invalidate; //20200606 for Metal
+  {$ENDIF}
   exit(true);
 end;
 
@@ -5929,7 +6206,7 @@ begin
  if MatCapDrop.Items.Count < 1 then exit;
  if MatCapDrop.ItemIndex < 0 then
     MatCapDrop.ItemIndex := 0;
-  Vol1.SetMatCap(MatCapDrop.Items[MatCapDrop.ItemIndex]);
+ Vol1.SetMatCap(MatCapDrop.Items[MatCapDrop.ItemIndex]);
   ViewGPU1.Invalidate;
  {$ENDIF}
 end;
@@ -6466,7 +6743,8 @@ begin
   ViewGPU1.Width := w;
   ViewGPU1.Height := h;
   {$IFDEF METALAPI}
-  Vol1.SaveBmp(bmpName);
+  ViewGPU1.Invalidate;
+  Vol1.SaveBmp(bmpName, gPrefs.ScreenCaptureTransparentBackground);
   {$ELSE}
   ViewGPU1.MakeCurrent();
   ViewGPU1.Width := w;
@@ -6602,8 +6880,8 @@ var
   DestPtr: PInteger;
 begin
  if (gPrefs.BitmapZoom = 1) and (gPrefs.DisplayOrient <> kMosaicOrient) then begin
-    q := Vol1.Quality1to6;
-    Vol1.Quality1to6 := 6;
+    q := Vol1.Quality1to5;
+    Vol1.Quality1to5 := 5;
     //if (gPrefs.DisplayOrient <> kRenderOrient) then exit;
     if q <> 6 then begin
        GLForm1.BetterRenderTimer.Enabled := false;
@@ -6611,7 +6889,7 @@ begin
        GLForm1.ViewGPUPaint(nil);
     end;
     result := ScreenShot(GLBox, gPrefs.ScreenCaptureTransparentBackground); //update Metal-Demos if you get an error here
-    Vol1.Quality1to6 := q;
+    Vol1.Quality1to5 := q;
     exit;
  end;
  w := GLBox.ClientWidth;
@@ -6643,8 +6921,8 @@ begin
 
  end;
  GLBox.MakeCurrent;
- q := Vol1.Quality1to6;
- Vol1.Quality1to6 := 6;
+ q := Vol1.Quality1to5;
+ Vol1.Quality1to5 := 5;
  //if (q > 5) then GLForm1.ReloadShader(false); //best quality
  w4 := 4 * w;
  yOut := 0;
@@ -6709,7 +6987,7 @@ begin
  {$ENDIF}
  GLBox.disableTiledScreenShot();
  GLbox.ReleaseContext;
- Vol1.Quality1to6 := q;
+ Vol1.Quality1to5 := q;
  setlength(p, 0);
  //if (q <= 5) then GLForm1.ReloadShader(false); //best quality
  ViewGPU1.Invalidate;
@@ -6720,7 +6998,13 @@ procedure TGLForm1.GraphSaveBitmapMenuClick(Sender: TObject);
 {$IFDEF GRAPH}
 {$IFDEF METALAPI}
 begin
-  Showmessage('TODO: Metal graphics screen capture');
+ //ViewGPU1.MakeCurrent(false);
+ //ViewGPUg.Invalidate;
+ //gGraph.SaveBmp(''); //2021
+ //exit;
+ if not SaveDialog1.execute then exit;
+ //bmp := ScreenShotGL(ViewGPUg);
+ gGraph.SaveBmp(SaveDialog1.Filename, gPrefs.ScreenCaptureTransparentBackground);
 end;
 {$ELSE}
 var
@@ -6763,6 +7047,11 @@ begin
  showmessage('Use paste to insert text from clipboard into scripts');
 end;
 
+procedure TGLForm1.FormCreate(Sender: TObject);
+begin
+  //GraphShow();
+end;
+
 
 procedure TGLForm1.GraphPanelResize(Sender: TObject);
 begin
@@ -6776,6 +7065,7 @@ procedure TGLForm1.EditCopyMenuClick(Sender: TObject);
 {$IFNDEF METALAPI}
 var
   bmp: TBitmap;
+{$ENDIF}
 begin
   if (ClusterView.Focused) then begin
      ClusterCopyMenu.Click;
@@ -6793,16 +7083,16 @@ begin
     ScriptMemo.CopyToClipboard;
     exit;
  end;
+ {$IFNDEF METALAPI}
  bmp := ScreenShotGL(ViewGPU1);
  if (bmp = nil) then exit;
  Clipboard.Assign(bmp);
  bmp.Free;
-end;
 {$ELSE}
-begin
-//
-end;
+  ViewGPU1.Invalidate; //in case Graph has context
+  Save2Bmp('');
 {$ENDIF}
+end;
 
 procedure TGLForm1.DisplayAnimateMenuClick(Sender: TObject);
 begin
@@ -6929,12 +7219,15 @@ end;
 procedure TGLForm1.ViewGPUgResize(Sender: TObject);
 begin
   {$IFDEF GRAPH}
-  if not DisplayNextMenu.Enabled then exit;
+  inherited;
+  ViewGPUg.Invalidate;
+
+  (*if not DisplayNextMenu.Enabled then exit;
   ViewGPU1.Invalidate;
   gGraph.isRedraw := true;
   ViewGPUg.Invalidate;
   UpdateLayerBox(false, true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
-  UpdateTimer.Enabled := true;
+  UpdateTimer.Enabled := true; *)
   //Caption := format('%d + %d = %d', [GraphPanel.ClientWidth, ClusterPanel.ClientWidth, GLForm1.width]);
   {$ENDIF}
 end;
@@ -7207,18 +7500,24 @@ png: TPortableNetworkGraphic;
 begin
  while (isBusy) or (GLForm1.Updatetimer.enabled) do
        Application.ProcessMessages; //apply any time consuming updates
- fnm := ChangeFileExt(fnm,'.png');
- fnm := ensurePath(fnm);
+ if fnm <> '' then begin
+    fnm := ChangeFileExt(fnm,'.png');
+    fnm := ensurePath(fnm);
+ end;
  {$IFDEF METALAPI} //to do: OpenGL must using tiling due to "pixel ownership problem"
- q := Vol1.Quality1to6;
- Vol1.Quality1to6 := 6;
+ q := Vol1.Quality1to5;
+ Vol1.Quality1to5 := 5;
+ //gPyRunning := true;
+ BetterRenderTimer.tag := 0;
+ //BetterRenderTimer.enabled := false; //20200616
  if (gPrefs.DisplayOrient = kMosaicOrient) and (gPrefs.MosaicStr <> '') then begin
-    SaveMosaicBmp(fnm);
-    Vol1.Quality1to6 := q;
+     SaveMosaicBmp(fnm);
+    Vol1.Quality1to5 := q;
     exit;
  end;
- Vol1.SaveBmp(fnm);
- Vol1.Quality1to6 := q;
+ ViewGPU1.Invalidate; //20200616
+ Vol1.SaveBmp(fnm, gPrefs.ScreenCaptureTransparentBackground);
+ Vol1.Quality1to5 := q;
  {$ELSE}
   bmp := ScreenShotGL(ViewGPU1);
   if (bmp = nil) then exit;
@@ -7304,8 +7603,9 @@ procedure TGLForm1.UpdateShaderSettings(Sender: TObject);
 var
    v: boolean;
 begin
- //q := Vol1.Quality1to6;
- Vol1.Quality1to6 := QualityTrack.Position;
+ //q := Vol1.Quality1to5;
+ //???METAL??? QualityTrack.Position :=
+ Vol1.Quality1to5 := QualityTrack.Position;
  Vol1.LightPosition := sph2cartDeg90Light(LightAziTrack.Position, LightElevTrack.Position);
  //Caption := format('%g %g %g', [Vol1.LightPosition.X, Vol1.LightPosition.Y, Vol1.LightPosition.Z]);
  if ClipDepthTrack.Position = 0 then
@@ -7318,10 +7618,7 @@ begin
     ClipElevTrack.enabled := v;
     ClipThickTrack.enabled := v;
  end;
- //if (q > 5) <> (Vol1.Quality1to6 > 5) then begin  //changed from or to "best"
- //   ReloadShader(false);
-    //caption := inttostr(random(888));
- Vol1.ClipThick := ClipThickTrack.Position/ClipThickTrack.Max;
+ Vol1.ClipThick := 1.73 * ClipThickTrack.Position/ClipThickTrack.Max; //1.73 as opposite corners of 1x1x1mm cube are 1.73mm apart
  ClipBox.Hint := (format('clipazimuthelevation(%.2f %d %d)',[ClipDepthTrack.Position/ClipDepthTrack.Max , ClipAziTrack.Position, ClipElevTrack.Position]));
  ViewGPU1.Invalidate;
 end;
@@ -7411,6 +7708,9 @@ begin
  if not vols.Layer(0,niftiVol) then exit;
  if (gPrefs.InitScript <> '') then begin
     UpdateTimer.Tag := 0;
+    {$IFDEF METALAPI}{$IFDEF GRAPH}
+    ViewGPUg.InvalidateOnResize := true; //20200606
+    {$ENDIF} {$ENDIF}
     s := gPrefs.InitScript;
     gPrefs.InitScript := '';
     //if ParamCount < 1 then exit;
@@ -7460,6 +7760,9 @@ end;
 
 {$IFDEF LCLCocoa}
 function HWmodel : AnsiString;
+{$macro on}
+type
+  PSysCtl = {$IF FPC_FULLVERSION>30100}pcint{$ELSE}pchar{$ENDIF};
 var
   mib : array[0..1] of Integer;
   status : Integer;
@@ -7469,22 +7772,22 @@ var
   len : Int32;
   {$ENDIF}
   p   : PChar;
-
 begin
  mib[0] := CTL_HW;
  mib[1] := HW_MODEL;
- status := fpSysCtl(PChar(@mib), Length(mib), Nil, @len, Nil, 0);
+ status := fpSysCtl(PSysCtl(@mib), Length(mib), Nil, @len, Nil, 0);
+ //status := fpSysCtl(PCInt(@mib), Length(mib), Nil, @len, Nil, 0);
  if status <> 0 then RaiseLastOSError;
-
  GetMem(p, len);
-
  try
-   status := fpSysCtl(PChar(@mib), Length(mib), p, @len, Nil, 0);
+   status := fpSysCtl(PSysCtl(@mib), Length(mib), p, @len, Nil, 0);
    if status <> 0 then RaiseLastOSError;
    Result := p;
  finally
    FreeMem(p);
  end;
+ Result := Result + ' FPC:'+inttostr(FPC_FULLVERSION);
+ Result := Result;
 end;
 {$ENDIF}
 
@@ -7556,7 +7859,6 @@ begin
 
  D := FMA(A,B,C);
  showmessage(format('%g %g %g %g', [D.x, D.y, D.z, D.w])); exit;*)
-
  v := versionStr;
  if not vols.Layer(0,niftiVol) then exit;
  {$IFDEF METALAPI}
@@ -7925,21 +8227,23 @@ var
   ViewGPU1.Invalidate;
 end;
 
+{$IFDEF GRAPH}{$IFDEF METALAPI}
+var
+ gGraphPrepared : boolean = false;
+{$ENDIF}{$ENDIF}
+
 procedure TGLForm1.GraphPaint(Sender: TObject);
 begin
  {$IFDEF GRAPH}
-  gGraph.Paint(ViewGPUg);
- {$ENDIF}
-end;
+ {$IFDEF METALAPI}
+ if not gGraphPrepared then begin
+    ViewGPUgPrepare(Sender);
+    gGraphPrepared := true;
+ end;
 
-procedure TGLForm1.ViewGPUgPrepare(Sender: TObject);
-begin
-  {$IFDEF GRAPH}
-  {$IFDEF METALAPI}
-  ViewGPUg.SetPreferredFrameRate(0);
-  ViewGPUg.InvalidateOnResize := true;
-  {$ENDIF}
-  {$ENDIF}
+ {$ENDIF}
+ gGraph.Paint(ViewGPUg);  //2021
+ {$ENDIF}
 end;
 
 {$IFDEF GRAPH}
@@ -7947,7 +8251,7 @@ procedure TGLForm1.GraphShow();
 begin
  {$IFDEF METALAPI}
  ViewGPUg :=  TMetalControl.Create(GLForm1);
- ViewGPUg.OnPrepare := @ViewGPUgPrepare;
+ //ViewGPUg.OnPrepare := @ViewGPUgPrepare; //20200606 not now!
  {$ELSE}
  ViewGPUg :=  TOpenGLControl.Create(GLForm1);
  //ViewGPUg.DoubleBuffered:= false;
@@ -7955,17 +8259,25 @@ begin
  ViewGPUg.OpenGLMinorVersion:= 3;
  ViewGPUg.MultiSampling:=4;
  {$ENDIF}
+ //2022
  ViewGPUg.Parent := GraphPanel;
  ViewGPUg.Align:= alClient;
+ ViewGPUg.Constraints.MinHeight:=4;
+ ViewGPUg.Constraints.MinWidth:=4;
+ //2025
  ViewGPUg.OnPaint := @GraphPaint;
  ViewGPUg.OnMouseDown := @GraphMouseDown;
  ViewGPUg.OnMouseWheel:= @GraphMouseWheel;
  ViewGPUg.OnKeyDown := @ViewGPUgKeyDown;
- //ViewGPUg.OnResize:= @ViewGPUgResize;
- GLForm1.OnResize:=@ViewGPUgResize;
+ ViewGPUg.OnResize:=@ViewGPUgResize;
  {$IFDEF METALAPI}
  ViewGPUg.renderView.setSampleCount(4);
  {$ELSE}
+ //ViewGPUg.OnPaint := @GraphPaint;
+ //ViewGPUg.OnMouseDown := @GraphMouseDown;
+ //ViewGPUg.OnMouseWheel:= @GraphMouseWheel;
+ //ViewGPUg.OnKeyDown := @ViewGPUgKeyDown;
+ //ViewGPUg.OnResize:=@ViewGPUgResize;
  ViewGPUg.MakeCurrent(false);
  {$IFDEF LCLCocoa}
  ViewGPUg.setRetina(true);
@@ -7982,7 +8294,6 @@ begin
  {$ENDIF}
  gGraph := TGPUGraph.Create(ViewGPUg);
  GraphClearMenuClick(nil);
-
 end;
 {$ELSE}
 procedure TGLForm1.GraphShow();
@@ -8007,7 +8318,6 @@ begin
  {$IFDEF LCLGTK2}{$IFDEF LINUX}
  writeln('If there is a long delay at launch, ensure full GTK2 install: "sudo apt-get install appmenu-gtk2-module"');
  {$ENDIF}{$ENDIF}
-
  {$IFDEF FPC} Application.ShowButtonGlyphs:= sbgNever; {$ENDIF}
  //OpenDialog1.Filter := kImgFilter;
  isForceReset := false;
@@ -8133,7 +8443,7 @@ begin
   vols := TNIfTIs.Create(s,  gPrefs.ClearColor, gPrefs.LoadFewVolumes, gPrefs.MaxVox, isOK); //to do: warning regarding multi-volume files?
   //niftiVol := TNIfTI.Create('/Users/rorden/metal_demos/tar.nii');
   //niftiVol := TNIfTI.Create('/Users/rorden/metal_demos/rmotor.nii.gz', niftiVol.Mat, niftiVol.Dim);
-    GraphShow();
+  GraphShow();
   {$IFDEF METALAPI}
   ViewGPU1 :=  TMetalControl.Create(CenterPanel);
   //ViewGPU1.OnPrepare := @ViewGPUPrepare;
@@ -8282,7 +8592,11 @@ begin
   UpdateLayerBox(true);
   UpdateVisibleBoxes();
   UpdateOpenRecent();
-  QualityTrack.Position:= gPrefs.Quality1to6;
+  {$IFDEF METALAPI}
+  if gPrefs.Quality1to5 = 5 then
+     QualityTrack.Position:= 4; //???METAL???
+  {$ENDIF}
+          QualityTrack.Position:= gPrefs.Quality1to5;
   {$IFNDEF METALAPI}
   if gPrefs.InitScript <> '' then
      UpdateTimer.Enabled:=true;
@@ -8310,6 +8624,7 @@ begin
   UpdateTimer.Tag := 1;
   UpdateTimer.Enabled:=true;
   {$ENDIF}
+  //QualityTrack.Position:= gPrefs.Quality1to5;
   gClrbar:= TGPUClrbar.Create(ViewGPU1);
   Vol1.SetColorBar(gClrBar);
   gClrbar.RulerColor := SetRGBA(Vol1.Slices.LineColor);
@@ -8325,7 +8640,7 @@ begin
   Vol1.SetTextContrast(gPrefs.ClearColor);
   Vol1.Slices.RadiologicalConvention := gPrefs.FlipLR_Radiological;
   Vol1.Slices.LabelOrient := gPrefs.LabelOrient;
-  Vol1.Quality1to6:= gPrefs.Quality1to6;
+  Vol1.Quality1to5 := gPrefs.Quality1to5;
   Vol1.Slices.LineWidth := gPrefs.LineWidth;
   LineWidthEdit.Value := gPrefs.LineWidth;
 end;
@@ -8413,8 +8728,32 @@ begin
      BetterRenderTimer.Enabled := false;
      if (gPrefs.DisplayOrient <> kRenderOrient) then exit;
      BetterRenderTimer.Tag := 1;
-     ViewGPUPaint(sender);
+     ViewGPU1.Invalidate;
+     //ViewGPUPaint(sender); //<- this causes the graph to get repainted with the rendering!
 end;
+
+
+procedure TGLForm1.ViewGPUgPrepare(Sender: TObject);
+begin
+  {$IFDEF GRAPH}
+  {$IFDEF METALAPI}
+  //ViewGPUg.Invalidate;  //2021
+  {$IFDEF DBUG} DebugLn('>>Prepare');{$ENDIF}
+  ViewGPUg.SetPreferredFrameRate(0);
+  //2022
+  //ViewGPUg.InvalidateOnResize := true; //20200606 : no longer works
+
+ (*ViewGPUg.OnPaint := @GraphPaint;
+
+ ViewGPUg.OnMouseDown := @GraphMouseDown;
+ ViewGPUg.OnMouseWheel:= @GraphMouseWheel;
+ ViewGPUg.OnKeyDown := @ViewGPUgKeyDown;
+ ViewGPUg.OnResize:=@ViewGPUgResize;
+ ViewGPUg.Invalidate;*)
+  {$ENDIF}
+  {$ENDIF}
+end;
+
 procedure TGLForm1.ViewGPUPaint(Sender: TObject);
 var
    niftiVol: TNIfTI;
@@ -8432,7 +8771,17 @@ begin
   if not vols.Layer(0,niftiVol) then exit;
   isBusyCore := true;
   {$IFDEF METALAPI}
- if not isPrepared then ViewGPUPrepare(Sender);
+ if not isPrepared then begin
+    ViewGPUPrepare(Sender);
+    {$IFDEF GRAPH}
+
+    //ViewGPUgPrepare(Sender);
+    //ViewGPUg.invalidate;
+    //gGraph.Paint(ViewGPUg);    //2021
+    //ViewGPUg.InvalidateOnResize := true; //20200606 : no longer works
+    {$ENDIF}
+
+ end;
  MTLSetClearColor(MTLClearColorMake(gPrefs.ClearColor.r/255, gPrefs.ClearColor.g/255, gPrefs.ClearColor.b/255, gPrefs.ClearColor.A/255));
  {$ELSE}
  ViewGPU1.MakeCurrent(false);
@@ -8441,19 +8790,29 @@ begin
  {$ENDIF}
   if gPrefs.DisplayOrient = kMosaicOrient then
        Vol1.PaintMosaic2D(niftiVol, vols.Drawing, gPrefs.MosaicStr)
- else if (gPrefs.DisplayOrient = kRenderOrient) and (BetterRenderTimer.Tag <> 0) then begin //render view
-      q := Vol1.Quality1to6;
-      Vol1.Quality1to6 := 6;
-      BetterRenderTimer.Tag := 0;
+  else if (gPrefs.DisplayOrient = kRenderOrient) and (BetterRenderTimer.Tag <> 0) then begin //render view
+      q := Vol1.Quality1to5;
+      Vol1.Quality1to5 := 5;
       Vol1.Paint(niftiVol);
-      Vol1.Quality1to6 := q;
+      //GraphPaint(nil);
+      BetterRenderTimer.Tag := 0;
+      Vol1.Quality1to5 := q;
  end else if gPrefs.DisplayOrient = kRenderOrient then begin //render view
     Vol1.Paint(niftiVol);
-    if (Vol1.Quality1to6 = 0) and (not gPyRunning) then
+    if (Vol1.Quality1to5 = 0) and (not gPyRunning) then
        BetterRenderTimer.enabled := true;
  end else
      Vol1.Paint2D(niftiVol, vols.Drawing, gPrefs.DisplayOrient);
  isBusyCore := false;
+ {$IFDEF METALAPI}  {$IFDEF GRAPH}
+ //if (gGraph.isRedraw) and (gGraph.numLines > 0) then
+ (*if forceGraph then begin
+    gGraph.isRedraw := true;
+    forceGraph := false;
+    ViewGPUg.invalidate;  //2021
+ end;*)
+ {$ENDIF} {$ENDIF}
+
 end;
 
 procedure TGLForm1.FormDestroy(Sender: TObject);
