@@ -131,6 +131,7 @@ Type
         SortClustersBySize : boolean;
         HiddenByCutout: boolean;
         IsShrunken : boolean;
+        IsFightInterpolationBleeding: boolean;
         IsInterpolated : boolean;
         ZeroIntensityInvisible: boolean;
         MaxVox: integer; //maximum number of voxels in any dimension
@@ -4244,7 +4245,7 @@ end;
 var
   vol32: TFloat32s;
   //n0: int64;//masked images have huge numbers of zeros!
-  thresh, sum, i,vx: int64;
+  thresh, sum, i,vx, nZero: int64;
   mn : Single = 1.0 / 0.0;
   mx : Single = (- 1.0) / (0.0);
   v, slope: single;
@@ -4255,6 +4256,7 @@ begin
   vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
   //{$DEFINE RESCALE32}
   //n0 := 0;
+  nZero := 0;
   {$IFDEF RESCALE32}
   for i := 0 to (vx-1) do begin
      if (specialsingle(vol32[i])) then vol32[i] := 0.0;
@@ -4264,6 +4266,8 @@ begin
         mn := vol32[i];
      if vol32[i] > mx then
         mx := vol32[i];
+     if vol32[i] = 0 then
+        nZero := nZero + 1;
   end;
   //the for loop above has applied the scale and intercept
   // next lines ensure we do not apply them again!
@@ -4278,6 +4282,8 @@ begin
         mn := v;
      if v > mx then
         mx := v;
+     if v = 0 then
+        nZero := nZero + 1;
   end;
   {$ENDIF}
   //robustMinMax(mn,mx);
@@ -4327,6 +4333,10 @@ begin
      fAutoBalMax := ((i+1) * 1/slope) + mn;
   initHistogram(histo);
   histo := nil;
+  if nZero > round(0.75 * vx) then begin //thresholded image
+     fAutoBalMin := 0;
+     fAutoBalMax := 0;
+  end;
   {$IFDEF TIMER}
   //printf(format('float voxels %d slope %g inter %g',[vx, fHdr.scl_slope, fHdr.scl_inter]));
   //printf(format('n0 = %d (%g)', [n0, n0/vx]));
@@ -6151,6 +6161,7 @@ var
    lOverlap : boolean = false;
    inVox, outvox: int64;
    minNegNotZero, minPosNotZero, minNegThresh, minPosThresh: single;
+   minNegNotZeroI, minPosNotZeroI, minNegThreshI, minPosThreshI: integer;
 begin
      if prod(tarDim) < 1 then exit;
      if (tarMat = fMat) and (tarDim.X = fDim.X) and (tarDim.Y = fDim.Y) and (tarDim.Z = fDim.Z) then exit;
@@ -6206,6 +6217,12 @@ begin
       lXx[lXi] := lXi*m[0,0];
       lXy[lXi] := lXi*m[1,0];
       lXz[lXi] := lXi*m[2,0];
+     end;
+     if (dataType = kDT_FLOAT) then begin
+        inVox := prod(fDim);
+        for i := 0 to (inVox-1) do
+            if specialsingle(in32f[i]) then
+                in32f[i] := 0;
      end;
      lPos := -1;
      if isLinearReslice then begin //trilinear
@@ -6284,8 +6301,7 @@ begin
                              {x+1,y+1,z+1}+((lXreal*lYreal*lZreal)*in32[lXo+1+lMaxY+lMaxZ]) );
                           end;
                           kDT_FLOAT: begin
-                               out32f[lPos] :=
-                                 (
+                               out32f[lPos] := (
                              {all min} ( (lXrM1*lYrM1*lZrM1)*in32f[lXo+lMinY+lMinZ])
                              {x+1}+((lXreal*lYrM1*lZrM1)*in32f[lXo+1+lMinY+lMinZ])
                              {y+1}+((lXrM1*lYreal*lZrM1)*in32f[lXo+lMaxY+lMinZ])
@@ -6300,37 +6316,104 @@ begin
                 end;//z
             end;//y
         end;//z
-        //handle intepolation of thresholded 32-bit data
-        if (dataType = kDT_FLOAT) then begin
+        if (fHdr.scl_inter = 0.0) then begin //Fight Interpolation Bleeding
            //consider data thresholded at z > 3.0: do not allow interpolated values below this!
            // values 0..1.5 will be set to zero, values 1.5..3 will be set to 3
           inVox := prod(fDim);
           outVox := prod(tarDim);
           minPosNotZero := infinity;
-          for i := 0 to (inVox-1) do
-              if (in32f[i] > 0) and (in32f[i] <  minPosNotZero) then
-                 minPosNotZero := in32f[i]; //closest positive to zero
           minNegNotZero := -infinity;
-          for i := 0 to (inVox-1) do
-              if (in32f[i] < 0) and (in32f[i] >  minNegNotZero) then
-                 minNegNotZero := in32f[i]; //closest negative to zero
-          minNegThresh := minNegNotZero * 0.5;
-          minPosThresh := minPosNotZero * 0.5;
-          for i := 0 to (outVox-1) do
-              if (out32f[i] < 0) and (out32f[i] >  minNegNotZero) then begin
-                 if out32f[i] > minNegThresh then
-                    out32f[i] := 0
-                 else
-                     out32f[i] := minNegNotZero; //closest negative to zero
-              end;
-          for i := 0 to (outVox-1) do
-              if (out32f[i] > 0) and (out32f[i] <  minPosNotZero) then begin
-                 if out32f[i] < minPosThresh then
-                    out32f[i] := 0
-                 else
-                     out32f[i] := minPosNotZero; //closest negative to zero
-              end;
-        end;
+           if (dataType = kDT_UNSIGNED_CHAR) then begin
+             for i := 0 to (inVox-1) do
+                 if (in8[i] > 0) and (in8[i] <  minPosNotZero) then
+                    minPosNotZero := in8[i]; //closest positive to zero
+             minPosNotZeroI := round(minPosNotZero);
+             minPosThreshI := round(minPosNotZero * 0.5);
+             for i := 0 to (outVox-1) do
+                 if (out8[i] > 0) and (out8[i] <  minPosNotZeroI) then begin
+                    if out8[i] < minPosThreshI then
+                       out8[i] := 0
+                    else
+                        out8[i] := minPosNotZeroI; //closest negative to zero
+                 end;
+           end; //dataType = kDT_UNSIGNED_CHAR
+          if (dataType = kDT_SIGNED_SHORT) then begin
+            for i := 0 to (inVox-1) do
+                if (in16[i] > 0) and (in16[i] <  minPosNotZero) then
+                   minPosNotZero := in16[i]; //closest positive to zero
+            for i := 0 to (inVox-1) do
+                if (in16[i] < 0) and (in16[i] >  minNegNotZero) then
+                   minNegNotZero := in16[i]; //closest negative to zero
+            minNegNotZeroI := round(minNegNotZero);
+            minPosNotZeroI := round(minPosNotZero);
+            minNegThreshI := round(minNegNotZero * 0.5);
+            minPosThreshI := round(minPosNotZero * 0.5);
+            for i := 0 to (outVox-1) do
+                if (out16[i] < 0) and (out16[i] >  minNegNotZeroI) then begin
+                   if out16[i] > minNegThreshI then
+                      out16[i] := 0
+                   else
+                       out16[i] := minNegNotZeroI; //closest negative to zero
+                end;
+            for i := 0 to (outVox-1) do
+                if (out16[i] > 0) and (out16[i] <  minPosNotZeroI) then begin
+                   if out16[i] < minPosThreshI then
+                      out16[i] := 0
+                   else
+                       out16[i] := minPosNotZeroI; //closest negative to zero
+                end;
+          end; //dataType = kDT_SIGNED_SHORT
+           if (dataType = kDT_SIGNED_INT) then begin
+             for i := 0 to (inVox-1) do
+                 if (in32[i] > 0) and (in32[i] <  minPosNotZero) then
+                    minPosNotZero := in32[i]; //closest positive to zero
+             for i := 0 to (inVox-1) do
+                 if (in32[i] < 0) and (in32[i] >  minNegNotZero) then
+                    minNegNotZero := in32[i]; //closest negative to zero
+             minNegNotZeroI := round(minNegNotZero);
+             minPosNotZeroI := round(minPosNotZero);
+             minNegThreshI := round(minNegNotZero * 0.5);
+             minPosThreshI := round(minPosNotZero * 0.5);
+             for i := 0 to (outVox-1) do
+                 if (out32[i] < 0) and (out32[i] >  minNegNotZeroI) then begin
+                    if out32[i] > minNegThreshI then
+                       out32[i] := 0
+                    else
+                        out32[i] := minNegNotZeroI; //closest negative to zero
+                 end;
+             for i := 0 to (outVox-1) do
+                 if (out32[i] > 0) and (out32[i] <  minPosNotZeroI) then begin
+                    if out32[i] < minPosThreshI then
+                       out32[i] := 0
+                    else
+                        out32[i] := minPosNotZeroI; //closest negative to zero
+                 end;
+           end; //dataType = kDT_SIGNED_INT
+          if (dataType = kDT_FLOAT) then begin
+            for i := 0 to (inVox-1) do
+                if (in32f[i] > 0) and (in32f[i] <  minPosNotZero) then
+                   minPosNotZero := in32f[i]; //closest positive to zero
+            for i := 0 to (inVox-1) do
+                if (in32f[i] < 0) and (in32f[i] >  minNegNotZero) then
+                   minNegNotZero := in32f[i]; //closest negative to zero
+            minNegThresh := minNegNotZero * 0.5;
+            minPosThresh := minPosNotZero * 0.5;
+            for i := 0 to (outVox-1) do
+                if (out32f[i] < 0) and (out32f[i] >  minNegNotZero) then begin
+                   if out32f[i] > minNegThresh then
+                      out32f[i] := 0
+                   else
+                       out32f[i] := minNegNotZero; //closest negative to zero
+                end;
+            for i := 0 to (outVox-1) do
+                if (out32f[i] > 0) and (out32f[i] <  minPosNotZero) then begin
+                   if out32f[i] < minPosThresh then
+                      out32f[i] := 0
+                   else
+                       out32f[i] := minPosNotZero; //closest negative to zero
+                end;
+          end; //dataType = kDT_FLOAT
+        end; //IsControlInterpolationBleeding
      end else begin //if trilinear, else nearest neighbor
         for lZi := 0 to (tarDim.Z-1) do begin
           //these values are the same for all voxels in the slice
@@ -8033,6 +8116,7 @@ begin
  LoadFewVolumes := false;
  SortClustersBySize := true;
  ZeroIntensityInvisible := false;
+ IsFightInterpolationBleeding := false;
  IsShrunken := false;
  IsInterpolated := false;
  MaxVox := 1024;
@@ -8078,6 +8162,7 @@ var
 {$ENDIF}
 begin
  IsShrunken := false;
+ IsFightInterpolationBleeding := false;
  SortClustersBySize := false;
  LoadFewVolumes := lLoadFewVolumes;
  ZeroIntensityInvisible := false;

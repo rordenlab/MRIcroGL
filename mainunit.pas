@@ -34,7 +34,7 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20200707'; //+ fixes remove small clusters
+  kVers = '1.2.20200707+'; //+ fixes remove small clusters
 type
 
   { TGLForm1 }
@@ -1464,31 +1464,14 @@ begin
  default := '';
  n := GetPythonEngine.PyTuple_Size(args);
  if n > 0 then
-    caption := GetPythonEngine.PyString_AsString(GetPythonEngine.PyTuple_GetItem(Args,0));
+    caption := GetPythonEngine.PyString_AsAnsiString(GetPythonEngine.PyTuple_GetItem(Args,0));
  if n > 1 then
-    prompt := GetPythonEngine.PyString_AsString(GetPythonEngine.PyTuple_GetItem(Args,1));
+    prompt := GetPythonEngine.PyString_AsAnsiString(GetPythonEngine.PyTuple_GetItem(Args,1));
  if n > 2 then
-    default := GetPythonEngine.PyString_AsString(GetPythonEngine.PyTuple_GetItem(Args,2));
+    default := GetPythonEngine.PyString_AsAnsiString(GetPythonEngine.PyTuple_GetItem(Args,2));
  default := InputBox(caption,prompt,default);
  Result := GetPythonEngine.PyString_FromString(PAnsiChar(default+#0));
 end;
-
-(*function PyARRAY(Self, Args : PPyObject): PPyObject; cdecl;
-var
-   py_tuple: PPyObject;
-   n: integer;
-   str: string;
-begin
- Result:= GetPythonEngine.PyBool_FromLong(Ord(False));
- n := GetPythonEngine.PyTuple_Size(args);
- GLForm1.ScriptOutputMemo.lines.add('>>'+inttostr(n));
- py_tuple :=   GetPythonEngine.PyTuple_GetItem(Args,0);
- //PyArg_ParseTuple
- n := GetPythonEngine.PyTuple_Size(py_tuple);
- GLForm1.ScriptOutputMemo.lines.add('>>'+inttostr(n));
- //str := GetPythonEngine.PyString_AsString(ob);
- //GLForm1.ScriptOutputMemo.lines.add('>>'+ str +'<<');
-end;   *)
 
 function PyATLASSHOWHIDE(Self, Args : PPyObject; isHide: boolean): PPyObject; cdecl;
 //https://stackoverflow.com/questions/8001923/python-extension-module-with-variable-number-of-arguments

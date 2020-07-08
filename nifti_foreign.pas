@@ -76,12 +76,12 @@ type
         procedure UnGZip(const FileName: string; buffer: bytep; offset, sz: integer);
   {$ENDIF}
 {$ENDIF}
-function readAFNIHeader (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isAllVolumesSame: boolean;  var AFNIs: TAFNIs; var fLabels: TStringList): boolean; overload;
-function readAFNIHeader (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean; overload;
+function readAFNIHeader(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isAllVolumesSame: boolean;  var AFNIs: TAFNIs; var fLabels: TStringList): boolean; overload;
+function readAFNIHeader(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean; overload;
 
 function isINTERFILE(var fname: string): boolean;
-function readForeignHeader (var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean; out xDim64: int64): boolean; overload;
-function readForeignHeader (var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean): boolean; overload;
+function readForeignHeader(var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean; out xDim64: int64): boolean; overload;
+function readForeignHeader(var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean): boolean; overload;
 
 procedure convertForeignToNifti(var nhdr: TNIFTIhdr);
 function FSize (lFName: String): Int64;
@@ -893,7 +893,7 @@ begin
   sList.Free;
 end;
 
-function nii_readVmr (var fname: string; isV16: boolean; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+function readVmr (var fname: string; isV16: boolean; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 //http://support.brainvoyager.com/automation-aamp-development/23-file-formats/385-developer-guide-26-the-format-of-vmr-files.html
 Type
   Tvmr_header = packed record //Next: VMR Format Header structure
@@ -987,9 +987,9 @@ begin
   convertForeignToNifti(nhdr);
   nhdr.descrip := 'VMR'+kIVers;
   result := true;
-end; //nii_readVmr()
+end; //readVmr()
 
-function nii_readV3draw(var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+function readV3draw(var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 //https://github.com/Vaa3D
 // https://github.com/fiji/Vaa3d_Reader/blob/master/src/main/java/org/janelia/vaa3d/reader/Vaa3d_Reader.java
 Type
@@ -1079,9 +1079,9 @@ begin
   convertForeignToNifti(nhdr);
   nhdr.descrip := 'V3draw'+kIVers;
   result := true;
-end; //nii_readV3draw
+end; //readV3draw
 
-function nii_readDf3 (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+function readDf3 (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 //https://www.povray.org/documentation/view/3.6.1/374/
 //The df3 format consists of a 6 byte header of three 16-bit integers (big endian)
 //The header is followed by x*y*z unsigned integer bytes of data with a resolution of 8, 16 or 32 bit.
@@ -1143,9 +1143,9 @@ begin
   convertForeignToNifti(nhdr);
   nhdr.descrip := 'DF3'+kIVers;
   result := true;
-end; //nii_readDf3
+end; //readDf3
 
-function nii_readXVF (var fname: string; var nhdr: TNIFTIhdr): boolean;
+function readXVF (var fname: string; var nhdr: TNIFTIhdr): boolean;
 //http://ivl.calit2.net/wiki/index.php/VOX_and_Virvo
 //http://web.eng.ucsd.edu/~jschulze/projects/vox/release/deskvox2_00b.txt
 //https://github.com/deskvox/deskvox/blob/f43bc19ecd82c2c2bcc5d7dfb7e65aa9ae99f57d/virvo/virvo/vvvoldesc.h
@@ -1230,9 +1230,9 @@ begin
   convertForeignToNifti(nhdr);
   nhdr.descrip := 'XVF'+kIVers;
   result := true;
-end; //nii_readXVF
+end; //readXVF
 
-function nii_readRVF (var fname: string; var nhdr: TNIFTIhdr): boolean;
+function readRVF (var fname: string; var nhdr: TNIFTIhdr): boolean;
 //http://ivl.calit2.net/wiki/index.php/VOX_and_Virvo
 //http://web.eng.ucsd.edu/~jschulze/projects/vox/release/deskvox2_00b.txt
 Type
@@ -1283,13 +1283,233 @@ begin
   convertForeignToNifti(nhdr);
   nhdr.descrip := 'RVF'+kIVers;
   result := true;
-end; //nii_readRVF
+end; //readRVF
 
-function nii_readBVox (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+
+function readXRaw (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+//https://twitter.com/ephtracy/status/653721698328551424
+Type
+  Tbv_header = packed record //Next: XRaw Format Header structure
+        magic: UINT32; //'XRAW'
+        datatype: UINT8; // 0=uint, 1=int, 2=float
+        channels: UINT8; //4=RGBA, 3=RGB, 2=RB, 1=R
+        bits: UINT8; //8, 16, 32
+        bitsPerIndex: UINT8; //0=scalar, 8=256, 16=32768
+        nx, ny, nz: UINT32; //
+        nPal: UINT32; //0, 256, or 32768
+  end; // Tbv_header;
+var
+   bhdr : Tbv_header;
+   lHdrFile: file;
+   nvox, FSz : integer;
+begin
+  result := false;
+  {$I-}
+  AssignFile(lHdrFile, fname);
+  FileMode := fmOpenRead;  //Set file access to read only
+  Reset(lHdrFile, 1);
+  {$I+}
+  if ioresult <> 0 then begin
+        NSLog('Error in reading XRaw header.'+inttostr(IOResult));
+        FileMode := 2;
+        exit;
+  end;
+  FSz := Filesize(lHdrFile);
+  bhdr.nx :=  0; //BlockRead should be out not var: https://fpc-pascal.freepascal.narkive.com/M2rzyAkf/blockread-and-buffers
+  BlockRead(lHdrFile, bhdr, sizeof(Tbv_header));
+  CloseFile(lHdrFile);
+  swapEndian := false;
+  {$IFDEF ENDIAN_BIG}
+  swapEndian := true;
+  pswap4i(longint(bhdr.magic));
+  pswap4i(longint(bhdr.nx));
+  pswap4i(longint(bhdr.ny));
+  pswap4i(longint(bhdr.nz));
+  pswap4i(longint(bhdr.nPal));
+  {$ELSE}
+  swapEndian := false;
+  {$ENDIF}
+  if bhdr.magic <> 1463898712 then begin
+    NSLog('Not a valid XRaw file: should begin "XRAW"');
+    exit;
+  end;
+  nVox := bhdr.nx * bhdr.ny * bhdr.nz * 1;
+  if (nVox + sizeof(Tbv_header) ) > FSz then begin
+    NSLog(format('Not a valid XRaw file: filesize too small (%dx%dx%d voxels)',[bhdr.nx, bhdr.ny, bhdr.nz]));
+    exit;
+  end;
+  nhdr.dim[0]:=3;//3D
+  nhdr.dim[1]:=bhdr.nx;
+  nhdr.dim[2]:=bhdr.ny;
+  nhdr.dim[3]:=bhdr.nz;
+  //datatype: UINT8; // 0=uint, 1=int, 2=float
+  //channels: UINT8; //4=RGBA, 3=RGB, 2=RB, 1=R
+  //bits: UINT8; //8, 16, 32
+  //bitsPerIndex: UINT8; //0=scalar, 8=256, 16=32768
+  nhdr.datatype := 0; //unsupported
+  if bhdr.datatype = 0 then begin //0=uint
+     if bhdr.bits = 8 then
+       nhdr.datatype := kDT_UINT8;
+     if bhdr.bits = 16 then
+       nhdr.datatype := kDT_UINT16;
+     if bhdr.bits = 32 then
+       nhdr.datatype := kDT_UINT32;
+  end;
+  if bhdr.datatype = 1 then begin //1=int
+     if bhdr.bits = 8 then
+       nhdr.datatype := kDT_INT8;
+     if bhdr.bits = 16 then
+       nhdr.datatype := kDT_INT16;
+     if bhdr.bits = 32 then
+       nhdr.datatype := kDT_INT32;
+  end;
+  if (bhdr.datatype = 2) and (bhdr.bits = 32) then //1=int
+     nhdr.datatype := kDT_FLOAT32;
+  if (bhdr.bitsPerIndex = 0) and (bhdr.channels > 1) then begin //scalar not palette
+     if (bhdr.bits = 8) and (bhdr.channels = 3) then
+       nhdr.datatype := kDT_RGB
+     else if (bhdr.bits = 8) and (bhdr.channels = 4) then
+         nhdr.datatype := kDT_RGBA32
+     else
+         nhdr.datatype := 0; //unsupported
+  end;
+  if (nhdr.datatype = 0) then begin
+    NSLog(format('Unsupported XRaw file type. datatype: %d channels %d bits %d bitsPerIndex %d',[bhdr.datatype, bhdr.channels, bhdr.bits, bhdr.bitsPerIndex]));
+    exit;
+  end;
+  nhdr.vox_offset := sizeof(Tbv_header);
+  convertForeignToNifti(nhdr);
+  nhdr.descrip := 'XRaw'+kIVers;
+  result := true;
+end; //readXRaw
+
+function readVox (var fname: string; var nhdr: TNIFTIhdr): boolean;
+//slab6 vox format
+Type
+  Tbv_header = packed record //Next: Vox Format Header structure
+        nz, ny, nx : LongInt;
+  end; // Tbv_header;
+var
+   bhdr : Tbv_header;
+   lHdrFile: file;
+   Sz, FSz : integer;
+begin
+  result := false;
+  {$I-}
+  AssignFile(lHdrFile, fname);
+  FileMode := fmOpenRead;  //Set file access to read only
+  Reset(lHdrFile, 1);
+  {$I+}
+  if ioresult <> 0 then begin
+        NSLog('Error in reading BVox header.'+inttostr(IOResult));
+        FileMode := 2;
+        exit;
+  end;
+  FSz := Filesize(lHdrFile);
+  bhdr.nx :=  0; //BlockRead should be out not var: https://fpc-pascal.freepascal.narkive.com/M2rzyAkf/blockread-and-buffers
+  BlockRead(lHdrFile, bhdr, sizeof(Tbv_header));
+  CloseFile(lHdrFile);
+  {$IFDEF ENDIAN_BIG}
+  pswap4i(longint(bhdr.nx));
+  pswap4i(longint(bhdr.ny));
+  pswap4i(longint(bhdr.nz));
+  {$ENDIF}
+  Sz := bhdr.nx * bhdr.ny * bhdr.nz + sizeof(Tbv_header);
+  if (Sz <> FSz) and ((768 + Sz ) <> FSz) then begin //768 byte RGB palette as footer
+     //there are so many other formats that use the extension .vox, and Slab6 has no magic signature, so do not report a misleading error
+     //NSLog(format('Not a valid Slab6 Vox file (%dx%dx%d) expected %d or %d bytes.',[bhdr.nx, bhdr.ny, bhdr.nz, Sz, Sz+768]));
+     exit;
+  end;
+  nhdr.dim[0]:=3;//3D
+  nhdr.dim[1]:=bhdr.nx;
+  nhdr.dim[2]:=bhdr.ny;
+  nhdr.dim[3]:=bhdr.nz;
+  nhdr.datatype := kDT_UINT8;
+  nhdr.vox_offset := sizeof(Tbv_header);
+  SetSForm(nhdr);
+  convertForeignToNifti(nhdr);
+  nhdr.descrip := 'Slab6VOX'+kIVers;
+  result := true;
+end; //readVox
+
+(* //SPARSE STORAGE
+function readVox (var fname: string; var nhdr: TNIFTIhdr): boolean;
+//https://github.com/DGtal-team/DGtalTools/blob/master/converters/vol2vox.cpp
+Type
+  Thdr = packed record //signature always at start of file
+        magic, version: UINT32;
+  end;
+  TChunk = packed record
+        id, szBytes, nChild: UINT32;
+  end;
+
+var
+   h : Thdr;
+   chunk: Tchunk;
+   f: file;
+   FSz, ChunkEnd : integer;
+begin
+  result := false;
+  {$I-}
+  AssignFile(f, fname);
+  FileMode := fmOpenRead;  //Set file access to read only
+  Reset(f, 1);
+  {$I+}
+  if ioresult <> 0 then begin
+        NSLog('Error in reading BVox header.'+inttostr(IOResult));
+        FileMode := 2;
+        exit;
+  end;
+  FSz := Filesize(f);
+  h.magic :=  0; //BlockRead should be out not var: https://fpc-pascal.freepascal.narkive.com/M2rzyAkf/blockread-and-buffers
+  BlockRead(f, h, sizeof(Thdr));
+  {$IFDEF ENDIAN_BIG}
+  pswap4i(longint(h.magic));
+  pswap4i(longint(h.version));
+  {$ENDIF}
+  if (h.magic <> 542658390) then begin
+     CloseFile(f);
+     result := readVoxSlab6(fname, nhdr);
+     exit;
+  end;
+  if (h.version > 150) then begin
+    CloseFile(f);
+    NSLog(format('Unsupported .VOX version %d',[h.version]));
+    exit;
+  end;
+  nhdr.vox_offset := 0;
+  nhdr.dim[1] := 0;
+  while (filepos(f)+sizeof(TChunk)) < FSz do begin
+       BlockRead(f, chunk, sizeof(Tchunk));
+       {$IFDEF ENDIAN_BIG}
+       pswap4i(longint(chunk.id));
+       pswap4i(longint(chunk.szBytes));
+       pswap4i(longint(chunk.nChild));
+       {$ENDIF}
+       chunkEnd := filepos(f) + chunk.szBytes;
+       if chunk.id = 1313423693 then begin //MAIN
+          //NSLog('MAIN');
+       end;
+      if chunk.id = 1163544915 then begin //SIZE
+         NSLog('SiZE');
+      end;
+      if chunk.id = 1230657880 then begin //XYZI
+         NSLog('XYZI');
+      end;
+      seek(f, chunkEnd);
+  end;
+  CloseFile(f);
+   convertForeignToNifti(nhdr);
+  nhdr.descrip := 'VOX'+kIVers;
+  result := true;
+end; //readVox *)
+
+
+function readBVox (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 //http://pythology.blogspot.com/2014/08/you-can-do-cool-stuff-with-manual.html
 Type
-  Tbv_header = packed record //Next: PIC Format Header structure
-        nx, ny, nz, nvol : LongInt; //  0,4,8,12
+  Tbv_header = packed record //Next: BVox Format Header structure
+        nx, ny, nz, nvol : LongInt;
   end; // Tbv_header;
 var
    bhdr : Tbv_header;
@@ -1347,9 +1567,9 @@ begin
   convertForeignToNifti(nhdr);
   nhdr.descrip := 'BVOX'+kIVers;
   result := true;
-end; //nii_readBVox
+end; //readBVox
 
-function nii_readDeltaVision (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+function readDeltaVision (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 const
      kDV_HEADER_SIZE = 1024;
      kSIG_NATIVE = 49312;
@@ -1438,7 +1658,7 @@ begin
   convertForeignToNifti(nhdr);
   nhdr.descrip := 'DV'+kIVers;
   result := true;
-end; //nii_readDeltaVision
+end; //readDeltaVision
 
 procedure pswap4ui(var s : uint32);
 type
@@ -1458,7 +1678,7 @@ begin
   s:=outguy.Long;
 end; //proc swap4
 
-function nii_readGipl (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+function readGipl (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 const
      kmagic_number =4026526128;
 Type
@@ -1566,10 +1786,10 @@ begin
   end;
   result := true;
     nhdr.descrip := 'GIPL'+kIVers;
-end; //nii_readGipl
+end; //readGipl
 
-function nii_readpic (var fname: string; var nhdr: TNIFTIhdr): boolean;
-//function nii_readpic (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
+function readpic (var fname: string; var nhdr: TNIFTIhdr): boolean;
+//function readpic (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
 //https://github.com/jefferis/pic2nifti/blob/master/libpic2nifti.c
 const
      kBIORAD_HEADER_SIZE  = 76;
@@ -1679,7 +1899,7 @@ begin
   result := true;
 end;
 
-function nii_readEcat(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
+function readEcat(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
 Const
   ECAT7_BYTE =1;
   (*ECAT7_VAXI2 =2;
@@ -1864,7 +2084,7 @@ begin
 CloseFile(lHdrFile);
 end; //ECAT
 
-function readVOLHeader (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+function readVOL(var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 // original format by Barthold Lichtenbelt, 1998
 // for Mark Dow's vol format see http://paulbourke.net/dataformats/vol/
 //   Ogles2 volumeReaders.cpp for more details
@@ -1928,7 +2148,7 @@ begin
 	result := true;
 end;
 
-function readMGHHeader (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean; out xDim64: int64): boolean;
+function readMGH(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean; out xDim64: int64): boolean;
 Type
   Tmgh = packed record //Next: MGH Format Header structure
    version, width,height,depth,nframes,mtype,dof : longint;
@@ -2081,7 +2301,7 @@ type TFByte =  File of Byte;
        exit(true);
   end;
 
-function readVTKHeader (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
+function readVTK(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
 //VTK Simple Legacy Formats : STRUCTURED_POINTS : BINARY
 // http://daac.hpc.mil/gettingStarted/VTK_DataFormats.html
 // https://github.com/bonilhamusclab/MRIcroS/blob/master/%2BfileUtils/%2Bvtk/readVtk.m
@@ -2205,7 +2425,7 @@ begin
   nhdr.descrip := 'VTK'+kIVers;
 end;
 
-function readMHAHeader (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
+function readMHA(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
 //Read VTK "MetaIO" format image
 //http://www.itk.org/Wiki/ITK/MetaIO/Documentation#Reading_a_Brick-of-Bytes_.28an_N-Dimensional_volume_in_a_single_file.29
 //https://www.assembla.com/spaces/plus/wiki/Sequence_metafile_format
@@ -2942,7 +3162,7 @@ begin
 end; //readMIF()
 {$ENDIF}
 
-function readICSHeader(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
+function readICS(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
 label
 	666;
 var
@@ -3082,7 +3302,7 @@ begin
   nhdr.descrip := 'ICS'+kIVers;
 end; //readICSHeader
 
-function nii_readpgm (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+function readpgm (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 //http://netpbm.sourceforge.net/doc/pgm.html
 //http://paulbourke.net/dataformats/ppm/
 label
@@ -3162,7 +3382,7 @@ begin
 666:
 	CloseFile(FP);
 	Filemode := 2;
-end; //nii_readpgm()
+end; //readpgm()
 
 function ReadUInt32(fname: string; offset: integer; swapEndian: boolean): UInt32;
 var
@@ -3196,7 +3416,7 @@ begin
   result := i;
 end;
 
-function readVTIHeader (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
+function readVTI(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
 //https://vtk.org/Wiki/VTK_XML_Formats
 //similar to *.vtp/*.vtu  described here http://www.earthmodels.org/software/vtk-and-paraview/vtk-file-formats
 function parseField(field, str: string): string;
@@ -3420,9 +3640,9 @@ begin
   		nhdr.vox_offset := headerSize;
   end;
   nhdr.descrip := 'VTI'+kIVers;
-end; //readVTIHeader()
+end; //readVTI()
 
-function readNRRDHeader (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean): boolean;
+function readNRRD(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean): boolean;
 //http://www.sci.utah.edu/~gk/DTI-data/
 //http://teem.sourceforge.net/nrrd/format.html
 //https://github.com/addisonElliott/matnrrd
@@ -3763,7 +3983,7 @@ begin
   nhdr.descrip := 'NRRD'+kIVers;
   //showmessage(floattostr(nhdr.vox_offset));
   //nhdr.vox_offset := 209;
-end; //readNRRDHeader()
+end; //readNRRD()
 
 procedure THD_daxes_to_NIFTI (var nhdr: TNIFTIhdr; xyzDelta, xyzOrigin: vect3; orientSpecific: ivect3);
 //see http://afni.nimh.nih.gov/pub/dist/src/thd_matdaxes.c
@@ -3879,7 +4099,7 @@ begin
   //Report_Mat(nhdr);
 end;
 
-function nii_readIdf (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+function readIdf (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 //UCSF IDF format used by SIVIC
 label
   666;
@@ -4022,7 +4242,7 @@ begin
   end;
   convertForeignToNifti(nhdr);
   nhdr.descrip := 'IDF'+kIVers;
-end; //nii_readIdf
+end; //readIdf
 
 function isINTERFILE(var fname: string): boolean;
 var
@@ -4108,7 +4328,7 @@ begin
     sList.Free;
 end;
 
-function nii_readInterfile (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+function readInterfile (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 //interfile
 //https://www.researchgate.net/publication/21707960_A_file_format_for_the_exchange_of_nuclear_medicine_image_data_A_specification_of_interfile_version_33
 label
@@ -4281,7 +4501,7 @@ begin
   convertForeignToNifti(nhdr);
 end; //read INTERFILE
 
-function readVFFHeader (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+function readVFF(var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 //http://cbi.nyu.edu/svn/mrTools/trunk/mrLoadRet/File/loadVFF.m
 label
   666;
@@ -4414,7 +4634,7 @@ begin
   nhdr.aux_file := 'VFF'+kIVers;
 end;
 
-function readSPRHeader (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+function readSPR(var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 //SLicer3D export format https://www.cmrr.umn.edu/stimulate/stimUsersGuide/node57.html
 label
   666;
@@ -4577,7 +4797,7 @@ begin
 	result := copy(s, b, e-b);
 end;
 
-function readAFNIHeader (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isAllVolumesSame: boolean;  var AFNIs: TAFNIs; var fLabels: TStringList): boolean; overload;
+function readAFNIHeader(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isAllVolumesSame: boolean;  var AFNIs: TAFNIs; var fLabels: TStringList): boolean; overload;
 label
   666;
 var
@@ -4960,7 +5180,7 @@ begin
      setlength(AFNIs,0); //e.g. for T1 scan, the AFNI fields hold no useful information
 end;
 
-function readAFNIHeader (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean; overload;
+function readAFNIHeader(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean; overload;
 var
     AFNIs: TAFNIs;
     isAllVolumesSame: boolean;
@@ -4968,7 +5188,7 @@ var
 begin
   fLabels := TStringList.Create;
   AFNIs := nil;
-  result := readAFNIHeader (fname, nhdr, gzBytes, swapEndian, isAllVolumesSame, AFNIs, fLabels);
+  result := readAFNIHeader(fname, nhdr, gzBytes, swapEndian, isAllVolumesSame, AFNIs, fLabels);
   fLabels.free;
   setlength(AFNIs,0);
   if isAllVolumesSame then exit;
@@ -5209,7 +5429,7 @@ begin
 	mArray.Free;
 end; //readPVLNC()
 
-function readForeignHeader (var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean; out xDim64: int64): boolean; overload;
+function readForeignHeader(var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean; out xDim64: int64): boolean; overload;
 var
   lExt, lExt2GZ: string;
 begin
@@ -5230,15 +5450,15 @@ begin
   end;
 
   if (lExt = '.DV') then
-     result := nii_readDeltaVision(lFilename, lHdr, swapEndian)
+     result := readDeltaVision(lFilename, lHdr, swapEndian)
   else if (lExt = '.V') then
-       result := nii_readEcat(lFilename, lHdr, gzBytes, swapEndian)
+       result := readEcat(lFilename, lHdr, gzBytes, swapEndian)
   else if (lExt = '.VMR') then
-       result := nii_readVmr(lFilename, false, lHdr, swapEndian)
+       result := readVmr(lFilename, false, lHdr, swapEndian)
   else if (lExt = '.V16') then
-       result := nii_readVmr(lFilename, true, lHdr, swapEndian)
+       result := readVmr(lFilename, true, lHdr, swapEndian)
   else if (lExt = '.DF3') then
-       result := nii_readDf3(lFilename, lHdr, swapEndian)
+       result := readDf3(lFilename, lHdr, swapEndian)
   else if (lExt = '.BRIK.GZ') or (lExt2GZ = '.BRIK')  then begin
        lFilename := ChangeFileExt(lFilename, '');
        lFilename := ChangeFileExt(lFilename, '.HEAD');
@@ -5247,49 +5467,53 @@ begin
        lFilename := ChangeFileExt(lFilename, '.HEAD');
        result := readAFNIHeader(lFilename, lHdr, gzBytes, swapEndian)
   end else if (lExt = '.BVOX') then
-       result := nii_readBVox(lFilename, lHdr, swapEndian)
+       result := readBVox(lFilename, lHdr, swapEndian)
   else if (lExt = '.GIPL') then
-       result := nii_readGipl(lFilename, lHdr, swapEndian)
+       result := readGipl(lFilename, lHdr, swapEndian)
   else if (lExt = '.IDF') or (lExt = '.BYT') or (lExt = '.INT2') or (lExt = '.REAL') then
-       result := nii_readIdf(lFilename, lHdr, swapEndian)
+       result := readIdf(lFilename, lHdr, swapEndian)
   else if (lExt = '.RAW') then
     result := readRAW(lFilename, lHdr, swapEndian)
   else if (lExt = '.NC') then
     result := readPVLNC(lFilename, lHdr, swapEndian)
   else if (lExt = '.PIC') then
-    result := nii_readpic(lFilename, lHdr)
+    result := readpic(lFilename, lHdr)
   else if (lExt = '.PGM') or (lExt = '.PPM') or (lExt = '.PNM') then
-    result := nii_readpgm(lFilename, lHdr, swapEndian)
+    result := readpgm(lFilename, lHdr, swapEndian)
   else if (lExt = '.VTK') then
-    result := readVTKHeader(lFilename, lHdr, gzBytes, swapEndian)
+    result := readVTK(lFilename, lHdr, gzBytes, swapEndian)
   else if (lExt = '.MGH') or (lExt = '.MGZ') then
-    result := readMGHHeader(lFilename, lHdr, gzBytes, swapEndian, xDim64)
+    result := readMGH(lFilename, lHdr, gzBytes, swapEndian, xDim64)
   else if (lExt = '.MHD') or (lExt = '.MHA') then
-    result := readMHAHeader(lFilename, lHdr, gzBytes, swapEndian)
+    result := readMHA(lFilename, lHdr, gzBytes, swapEndian)
   else if (lExt = '.ICS') then
-    result := readICSHeader(lFilename, lHdr, gzBytes, swapEndian)
+    result := readICS(lFilename, lHdr, gzBytes, swapEndian)
   else if ((lExt2GZ = '.MIF') or (lExt = '.MIF') or (lExt = '.MIH')) then
        result := readMIF(lFilename, lHdr, gzBytes, swapEndian)
   else if (lExt = '.NRRD') or (lExt = '.NHDR') then
-       result := readNRRDHeader(lFilename, lHdr, gzBytes, swapEndian, isDimPermute2341)
+       result := readNRRD(lFilename, lHdr, gzBytes, swapEndian, isDimPermute2341)
   else if (lExt = '.HEAD')  then
     result := readAFNIHeader(lFilename, lHdr, gzBytes, swapEndian)
   else if (lExt = '.RVF') then
-     result := nii_readRVF(lFilename, lHdr)
+     result := readRVF(lFilename, lHdr)
   else if (lExt = '.XVF') then
-     result := nii_readXVF(lFilename, lHdr)
+     result := readXVF(lFilename, lHdr)
   else if (lExt = '.SPR') then
-    result := readSPRHeader(lFilename, lHdr, swapEndian)
+    result := readSPR(lFilename, lHdr, swapEndian)
   else if (lExt = '.V3DRAW') then
-    result := nii_readV3draw(lFilename, lHdr, swapEndian)
+    result := readV3draw(lFilename, lHdr, swapEndian)
   else if (lExt = '.VFF') then
-    result := readVFFHeader(lFilename, lHdr, swapEndian)
+    result := readVFF(lFilename, lHdr, swapEndian)
   else if (lExt = '.VOL') then
-    result := readVOLHeader(lFilename, lHdr, swapEndian)
+    result := readVOL(lFilename, lHdr, swapEndian)
+  else if (lExt = '.VOX') then
+    result := readVOX(lFilename, lHdr)
   else if (lExt = '.VTI') then
-       result := readVTIHeader(lFilename, lHdr, gzBytes, swapEndian);
+       result := readVTI(lFilename, lHdr, gzBytes, swapEndian)
+  else if (lExt = '.XRAW') then
+     result := readXRaw(lFilename, lHdr, swapEndian);
   if (not result) and (isINTERFILE(lFilename)) then
-     result := nii_readInterfile(lFilename, lHdr, swapEndian);
+     result := readInterfile(lFilename, lHdr, swapEndian);
   if (not result) and (isTIFF(lFilename)) then
     NSLog('Use ImageJ/Fiji to convert TIFF and LSM files to NIfTI (or NRRD) for viewing')
   else if (not result) then begin
@@ -5301,11 +5525,11 @@ begin
     xDim64 := lHdr.dim[1];
 end;
 
-function readForeignHeader (var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean): boolean; overload;
+function readForeignHeader(var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean): boolean; overload;
 var
     xDim64: int64;
 begin
-    result := readForeignHeader (lFilename, lHdr, gzBytes, swapEndian, isDimPermute2341, xDim64);
+    result := readForeignHeader(lFilename, lHdr, gzBytes, swapEndian, isDimPermute2341, xDim64);
 end;
 
 end.
