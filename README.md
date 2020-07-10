@@ -128,14 +128,14 @@ You can also control MRIcroGL from the command line.
 
 MRIcroGL uses NIfTI as its native format. However, you can drag-and-drop files of various formats and the software should automatically detect and load these images.
 
- - [AFNI Brik] (https://afni.nimh.nih.gov/pub/dist/doc/program_help/README.attributes.html) (.head).
- - [Analyze] (http://imaging.mrc-cbu.cam.ac.uk/imaging/FormatAnalyze) (.hdr).
- - [Bio-Rad PIC] (https://docs.openmicroscopy.org/bio-formats/5.8.2/formats/bio-rad-pic.html) (.pic).
- - [Blender Voxel data] (http://pythology.blogspot.com/2014/08/you-can-do-cool-stuff-with-manual.html) (.bvox).
- - [BrainVoyager VMR] (https://support.brainvoyager.com/brainvoyager/automation-development/84-file-formats/343-developer-guide-2-6-the-format-of-vmr-files) (.vmr, .v16).
- - [DeltaVision] (https://docs.openmicroscopy.org/bio-formats/5.8.2/formats/deltavision.html) (.dv).
- - [DeskVOX and Virvo] (http://ivl.calit2.net/wiki/index.php/VOX_and_Virvo) (.rvf, .xvf).
- - [Digital Imaging and Communications in Medicine (DICOM)] (https://people.cas.sc.edu/rorden/dicom/index.html)(extension varies)
+ - [AFNI Brik](https://afni.nimh.nih.gov/pub/dist/doc/program_help/README.attributes.html) (.head).
+ - [Analyze](http://imaging.mrc-cbu.cam.ac.uk/imaging/FormatAnalyze) (.hdr).
+ - [Bio-Rad PIC](https://docs.openmicroscopy.org/bio-formats/5.8.2/formats/bio-rad-pic.html) (.pic).
+ - [Blender Voxel data](http://pythology.blogspot.com/2014/08/you-can-do-cool-stuff-with-manual.html) (.bvox).
+ - [BrainVoyager VMR](https://support.brainvoyager.com/brainvoyager/automation-development/84-file-formats/343-developer-guide-2-6-the-format-of-vmr-files) (.vmr, .v16).
+ - [DeltaVision](https://docs.openmicroscopy.org/bio-formats/5.8.2/formats/deltavision.html) (.dv).
+ - [DeskVOX and Virvo](http://ivl.calit2.net/wiki/index.php/VOX_and_Virvo) (.rvf, .xvf).
+ - [Digital Imaging and Communications in Medicine (DICOM)](https://people.cas.sc.edu/rorden/dicom/index.html)(extension varies)
    - Simple DICOM images can be imported by dragging and dropping.
    - Use the Import menu's  `Convert DICOM to NIfTI` item for advanced conversion.
  - [Drishti PVL Processed VoLume](http://paulbourke.net/dataformats/pvl/) (.pvl.nc).
@@ -151,6 +151,7 @@ MRIcroGL uses NIfTI as its native format. However, you can drag-and-drop files o
  - [POV-Ray Density_File](https://www.povray.org/documentation/view/3.6.1/374/) (.df3).
  - [Portable Network Graphics](https://en.wikipedia.org/wiki/Portable_Network_Graphics) (.png).
  - [Portable PixMap](http://paulbourke.net/dataformats/ppm/) (.pgm, .ppm, .pnm).
+ - [slab6 volume format](https://github.com/aframevr/aframe/issues/1891) (.vox)
  - [Spectroscopic Imaging, Visualization and Computing (SIVIC)](https://radiology.ucsf.edu/research/labs/nelson#accordion-software)(.idf).
  - [Stimulate Sdt](https://www.cmrr.umn.edu/stimulate/stimUsersGuide/node57.html) (.spr/.sdt)
  - [Tagged Image File Format](http://paulbourke.net/dataformats/tiff/) (.tiff, .tif, [.lsm](https://www.mathworks.com/matlabcentral/fileexchange/8412-lsm-file-toolbox)).
@@ -160,6 +161,7 @@ MRIcroGL uses NIfTI as its native format. However, you can drag-and-drop files o
  - [Vaa3D](https://github.com/Vaa3D) (.v3draw).
  - [VTK Legacy Voxel Format](https://www.vtk.org/wp-content/uploads/2015/04/file-formats.pdf) (.vtk).
  - [VTK XML Voxel Format](https://vtk.org/Wiki/VTK_XML_Formats) (.vti).
+ - [xraw from MagicaVoxel](https://ephtracy.github.io) (.xraw)
 
 If your image format is not supported directly by MRIcroGL, you may want to see if it is supported by the [Bio-Formats module](https://docs.openmicroscopy.org/bio-formats/5.9.2/supported-formats.html) of [ImageJ/Fiji](https://fiji.sc). If so, you can open the image with the module and save it as NIfTI or NRRD to read it with MRIcroGL.
 

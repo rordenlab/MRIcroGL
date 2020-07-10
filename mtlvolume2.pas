@@ -9,12 +9,14 @@ interface
 {$DEFINE VIEW2D}
 {$DEFINE CUBE}
 {$DEFINE MATCAP}
+{$DEFINE CLRBAR}
 uses
     CocoaAll, MacOSAll,
     //CFBase, CGImage, CGDataProvider, CGColorSpace, MetalKit, CocoaAll,
     {$IFDEF MATCAP} intfgraphics, graphtype, Graphics,  {$ENDIF}
     {$IFDEF CUBE} Forms, mtlcube, {$ENDIF}
-    mtlfont, mtlclrbar, VectorMath, MetalPipeline, MetalControl, Metal, MetalUtils,
+    {$IFDEF CLRBAR} mtlclrbar, {$ENDIF}
+    mtlfont,  VectorMath, MetalPipeline, MetalControl, Metal, MetalUtils,
     SysUtils, Math, nifti, niftis, SimdUtils, Classes
     {$IFDEF VIEW2D}, drawvolume, slices2D, colorEditor{$ENDIF};
 const
@@ -45,7 +47,7 @@ type
         volTex, gradTex, overlayVolTex, overlayGradTex: MTLTextureProtocol;
         {$IFDEF MATCAP} matCapTex: MTLTextureProtocol;{$ENDIF}
         mtlControl: TMetalControl;
-        clrbar: TGPUClrbar;
+        {$IFDEF CLRBAR}clrbar: TGPUClrbar; {$ENDIF}
         {$IFDEF CUBE} gCube :TGPUCube; {$ENDIF}
         procedure LoadCube();
         procedure LoadTexture(var vol: TNIfTI);
@@ -88,7 +90,7 @@ type
         procedure SetShader(shaderName: string; isUpdatePrefs: boolean = true);
         procedure SetShaderSlider(idx: integer; newVal: single);
         procedure SaveBmp(filename: string; hasAlpha: boolean);
-        procedure SetColorBar(fromColorbar: TGPUClrbar);
+        {$IFDEF CLRBAR} procedure SetColorBar(fromColorbar: TGPUClrbar); {$ENDIF}
         procedure  SetTextContrast(clearclr: TRGBA);
         {$IFDEF MATCAP} function SetMatCap(fnm: string): boolean; {$ENDIF}
         destructor Destroy; override;
@@ -106,7 +108,7 @@ begin
   txt.free;
   {$ENDIF}
   {$IFDEF CUBE} gCube.free; {$ENDIF}
-  clrbar.free;
+  {$IFDEF CLRBAR} clrbar.free; {$ENDIF}
   inherited;
 end;
 
@@ -293,10 +295,10 @@ end;
 
 procedure TGPUVolume.SaveBmp(filename: string; hasAlpha: boolean);
 begin
-  if filename = '' then
+  (*if filename = '' then
      MTLWriteTextureToClipboard(hasAlpha)
   else
-      MTLWriteTextureToFile(pChar(filename), hasAlpha);
+      MTLWriteTextureToFile(pChar(filename), hasAlpha);TODO*)
 end;
 
 procedure TGPUVolume.SetShader(shaderName: string; isUpdatePrefs: boolean = true);
@@ -310,7 +312,6 @@ var
 begin
  if not isUpdatePrefs then exit; //only for opengl switching between "Better"
  options := TMetalPipelineOptions.Default;
-
  options.libraryName := shaderName;
  if not fileexists(shaderName) then
     writeln('Unable to find shader ' + shaderName);
@@ -408,17 +409,38 @@ begin
  CreateDrawTex(pti(4,4,4), nil);
  CreateDrawColorTable;
  {$ENDIF}
+ {$IFDEF MATCAP}
+ if matCapTex = nil then
+    SetMatCap('');
+ {$ENDIF}
 end;
 
+{$IFDEF CLRBAR}
 procedure TGPUVolume.SetColorBar(fromColorbar: TGPUClrbar);
 begin
      clrbar := fromColorbar;
+end;
+{$ENDIF}
+
+function TGPUVolume.Slice2Dmm(var vol: TNIfTI; out vox: TVec3i): TVec3;
+begin
+  if (slices2D = nil) then exit;
+  result := slices2D.FracMM(vol.Mat, vol.Dim, vox);
+end;
+
+procedure TGPUVolume.SetSlice2DFrac(frac : TVec3);
+begin
+
+  if (slices2D = nil) or (frac.x < 0.0) or (frac.y < 0.0) or (frac.z < 0.0) then exit;
+  slices2D.sliceFrac := frac;
 end;
 
 constructor TGPUVolume.Create(fromView: TMetalControl);
 begin
   mtlControl := fromView;
-  clrbar := nil;
+  shader3Dbetter := nil;
+  {$IFDEF CLRBAR}clrbar := nil;{$ENDIF}
+  slices2D := nil;
   volTex := nil;
   gradTex := nil;
   overlayVolTex := nil;
@@ -449,7 +471,7 @@ begin
   {$IFDEF MATCAP}
   matCapTex  := nil;
   //SetMatCap(ResourceFolderPath+pathdelim+'matcap'+pathdelim+'RedPlastic.jpg');
-  SetMatCap('');
+  //SetMatCap('');
   {$ENDIF}
 end;
 
@@ -756,17 +778,6 @@ type
       backAlpha, drawAlpha, pad1, pad2: TScalar;
   end;
 
-function TGPUVolume.Slice2Dmm(var vol: TNIfTI; out vox: TVec3i): TVec3;
-begin
-    result := slices2D.FracMM(vol.Mat, vol.Dim, vox);
-end;
-
-procedure TGPUVolume.SetSlice2DFrac(frac : TVec3);
-begin
-  if (frac.x < 0.0) or (frac.y < 0.0) or (frac.z < 0.0) then exit;
-  slices2D.sliceFrac := frac;
-end;
-
 (*function TGPUVolume.ColorEditorMouseDown(mouseX, mouseY: integer): boolean;
 begin
    if not colorEditorVisible then exit(false);
@@ -798,6 +809,7 @@ begin
     exit;
   w := mtlControl.clientwidth;
   h := mtlControl.clientheight;
+  {$IFDEF CLRBAR}
   if (clrbar <> nil) and (clrbar.PanelFraction < 1.0) and (clrbar.PanelFraction > 0.0) then begin
      if (clrbar.isVertical) then
         w := round(w * (1.0-clrbar.PanelFraction))
@@ -806,7 +818,7 @@ begin
    scale := slices2D.Update(vol.Scale, w, h, DisplayOrient, mtlControl.clientheight);
    w := mtlControl.clientwidth;
    h := mtlControl.clientheight;
-  end else
+  end else   {$ENDIF}
       scale := slices2D.Update(vol.Scale, w, h, DisplayOrient);
   if SelectionRect.x > 0 then
      slices2D.DrawOutLine(SelectionRect.X,h-SelectionRect.Y,SelectionRect.Z,h-SelectionRect.W);
@@ -873,9 +885,11 @@ begin
     txt.DrawText();
     rulerPx := (scale)/vol.MaxMM ;//pixels per mm
     rulerPx := rulerPx * 100; //ruler is 10cm = 100mm
+    {$IFDEF CLRBAR}
     clrbar.RulerPixels:= rulerPx;
     if clrbar <> nil then
      clrbar.Draw();
+    {$ENDIF}
   MTLEndFrame;
   //GLForm1.caption := inttostr(slices2D.NumberOfLineVertices) +' '+inttostr(random(888));
 end;
@@ -1106,6 +1120,7 @@ procedure TGPUVolume.PaintMosaic2D(var vol: TNIfTI; Drawing: TDraw; MosaicString
     h := mtlControl.clientheight;
     //next two lines only difference between Paint2D and PainMosaic2D
     //slices2D.Update(vol.Scale, w, h, DisplayOrient);
+    {$IFDEF CLRBAR}
     if clrbar <> nil then begin
          f := clrbar.PanelFraction;
          //GLForm1.Caption := format('%d %.2g',[round(h), f]);
@@ -1115,7 +1130,7 @@ procedure TGPUVolume.PaintMosaic2D(var vol: TNIfTI; Drawing: TDraw; MosaicString
             else
                h := h - (h * f);
          end;
-    end;
+    end; {$ENDIF}
     slices2D.UpdateMosaic(MosaicString, vol.Mat, vol.InvMat, vol.Dim, vol.Scale, w,h);
     w := mtlControl.clientwidth;
     h := mtlControl.clientheight;
@@ -1168,9 +1183,11 @@ procedure TGPUVolume.PaintMosaic2D(var vol: TNIfTI; Drawing: TDraw; MosaicString
         MTLSetVertexBytes(@vertUniforms, sizeof(vertUniforms), 1);
         MTLDraw(MTLPrimitiveTypeTriangle, 0, slices2D.NumberOfLineVertices);
       end;
+      {$IFDEF CLRBAR}
       clrbar.RulerPixels:= 0;
       if clrbar <> nil then
        clrbar.Draw();
+      {$ENDIF}
       //we do not know the background color - might be nice to have black text if background is white!
       txt.DrawText();
     MTLEndFrame;
@@ -1274,9 +1291,11 @@ begin
     end;
     {$ENDIF}
     //draw render
+    {$IFDEF CLRBAR}
     clrbar.RulerPixels:= 0;
     if clrbar <> nil then
        clrbar.Draw();
+    {$ENDIF}
     {$IFDEF CUBE}
     if Slices.LabelOrient then begin
        gCube.Azimuth:=fAzimuth;

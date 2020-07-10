@@ -7,12 +7,14 @@ interface
 {$DEFINE VIEW2D}
 {$DEFINE CUBE}
 {$DEFINE MATCAP}
+{$DEFINE CLRBAR}
 {$DEFINE TIMER} //reports GPU gradient time to stdout (Unix only)
 uses
   {$IFDEF MATCAP} GraphType, FPImage, IntfGraphics, LCLType,{$ENDIF}
   {$IFDEF TIMER} DateUtils,{$ENDIF}
  {$IFDEF CUBE} Forms, glcube, {$ENDIF}
- retinahelper,glclrbar, niftis, SimdUtils, glcorearb, gl_core_utils, VectorMath, Classes, SysUtils, Graphics,
+  {$IFDEF CLRBAR}glclrbar,  {$ENDIF}
+ retinahelper, niftis, SimdUtils, glcorearb, gl_core_utils, VectorMath, Classes, SysUtils, Graphics,
     math, OpenGLContext, dialogs, nifti {$IFDEF VIEW2D}, drawvolume, colorEditor, slices2D, glfont{$ENDIF};
 const
  kDefaultDistance = 2.25;
@@ -40,7 +42,7 @@ type
         fDistance: single;
         fLightPos: TVec4;
         fClipPlane: TVec4;
-        clrbar: TGPUClrbar;
+        {$IFDEF CLRBAR}clrbar: TGPUClrbar;{$ENDIF}
         glControl: TOpenGLControl;
         prefLoc: array [1..kMaxUniform] of GLint;
         overlayGradientVolLoc, overlayIntensityVolLoc,
@@ -97,7 +99,7 @@ type
         constructor Create(fromView: TOpenGLControl);
         procedure Paint(var vol: TNIfTI);
         procedure SetShader(shaderName: string);
-        procedure SetColorBar(fromColorbar: TGPUClrbar);
+        {$IFDEF CLRBAR}procedure SetColorBar(fromColorbar: TGPUClrbar);{$ENDIF}
         procedure  SetTextContrast(clearclr: TRGBA);
         destructor Destroy; override;
   end;
@@ -119,7 +121,7 @@ begin
   txt.free;
   {$ENDIF}
   {$IFDEF CUBE} gCube.free; {$ENDIF}
-  clrbar.free;
+  {$IFDEF CLRBAR} clrbar.free; {$ENDIF}
   inherited;
 end;
 
@@ -1027,10 +1029,12 @@ begin
      showmessage(GLErrorStr);
 end;
 
+{$IFDEF CLRBAR}
 procedure TGPUVolume.SetColorBar(fromColorbar: TGPUClrbar);
 begin
      clrbar := fromColorbar;
 end;
+{$ENDIF}
 
 procedure TGPUVolume.SetGradientMode(newMode: integer);
 begin
@@ -1044,7 +1048,7 @@ constructor TGPUVolume.Create(fromView: TOpenGLControl);
 begin
   glControl := fromView;
   gradientMode := kGradientModeGPUSlow;
-  clrbar := nil;
+  {$IFDEF CLRBAR}clrbar := nil;{$ENDIF}
   fDistance := kDefaultDistance;
   fAzimuth := 110;
   fElevation := 30;
@@ -1578,6 +1582,7 @@ begin
   w := glControl.clientwidth;
   h := glControl.clientheight;
   //load
+  {$IFDEF CLRBAR}
   clrbar.RulerPixels:= 0;
   if clrbar <> nil then begin
        f := clrbar.PanelFraction;
@@ -1588,6 +1593,7 @@ begin
              h := h - (h * f);
        end;
   end;
+  {$ENDIF}
   slices2D.UpdateMosaic(MosaicString, vol.Mat, vol.InvMat, vol.Dim, vol.Scale, w,h);
   w := glControl.clientwidth;
   h := glControl.clientheight;
@@ -1671,8 +1677,10 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
     glBindVertexArray(vaoLine2D);
     glDrawArrays(GL_TRIANGLES, 0, slices2D.NumberOfLineVertices);
   end;
+  {$IFDEF CLRBAR}
   if clrbar <> nil then
    clrbar.Draw();
+  {$ENDIF}
    txt.DrawText();
   glControl.SwapBuffers;
 end;
@@ -1697,6 +1705,7 @@ begin
   w := glControl.clientwidth;
   h := glControl.clientheight;
   //load
+  {$IFDEF CLRBAR}
   if (clrbar <> nil) and (clrbar.PanelFraction < 1.0) and (clrbar.PanelFraction > 0.0) then begin
      if (clrbar.isVertical) then
         w := round(w * (1.0-clrbar.PanelFraction))
@@ -1705,7 +1714,7 @@ begin
      scale := slices2D.Update(vol.Scale, w, h, DisplayOrient, glControl.clientheight);
      w := glControl.clientwidth;
      h := glControl.clientheight;
-  end else
+  end else {$ENDIF}
       scale := slices2D.Update(vol.Scale, w, h, DisplayOrient);
   if SelectionRect.x > 0 then
      slices2D.DrawOutLine(SelectionRect.X,h-SelectionRect.Y, SelectionRect.Z,h-SelectionRect.W);
@@ -1792,9 +1801,11 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
   //GLForm1.LayerBox.caption := format('%g %g', [scale, vol.MaxMM]);    //uses mainunit
   rulerPx := (scale)/vol.MaxMM ;//pixels per mm
   rulerPx := rulerPx * 100; //ruler is 10cm = 100mm
+  {$IFDEF CLRBAR}
   clrbar.RulerPixels:= rulerPx;
   if clrbar <> nil then
    clrbar.Draw();
+  {$ENDIF}
   glControl.SwapBuffers;
   //reset linear interpolation - much better for rendering and mosaics
   if not isSmooth2D then begin
@@ -1935,9 +1946,11 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
   {$ENDIF}
   glDisable(GL_CULL_FACE);
   //draw color editor
+  {$IFDEF CLRBAR}
   clrbar.RulerPixels:= 0;
   if clrbar <> nil then
    clrbar.Draw();
+  {$ENDIF}
   if colorEditorVisible then begin
      w := glControl.clientwidth;
      h := glControl.clientheight;

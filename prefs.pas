@@ -95,6 +95,7 @@ begin
             //MultiSample := true;
             MultiSample124 := 4;
             DisplayOrient:= kAxCorSagOrient; //kRenderOrient;
+            //DisplayOrient:= kRenderOrient;
             StartupDisplayOrient := DisplayOrient;
             DarkMode := false;
             GradientMode := 2; //kGradientModeGPUSlow

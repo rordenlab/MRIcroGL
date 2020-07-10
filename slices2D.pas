@@ -303,6 +303,7 @@ end;*)
 constructor TSlices2D.Create(sdffont: TSDFFont);
 //constructor TSlices2D.Create();
 begin
+  sliceFrac2D := Vec3(0.5, 0.5, 0.5);
   txt := sdffont;
   fontScale := 1;
   fZoomScale := 1;
@@ -323,8 +324,7 @@ begin
   lineVerts := nil;
   newLines := false;
   newSlices := false;
-  sliceFrac2D := Vec3(0.5, 0.5, 0.5);
-  lineClr := Vec4(0.5, 0.5, 0.7, 1.0);
+   lineClr := Vec4(0.5, 0.5, 0.7, 1.0);
 end;
 
 procedure TSlices2D.DrawLineLBWH(left,bottom,width,height: single);
@@ -1008,7 +1008,7 @@ function TSlices2D.FracMM(Mat: TMat4; Dim: TVec3i; out vox: TVec3i): TVec3;
 var
   vox0: TVec3;
 begin
-     //result := sliceFrac2D; exit;
+     //writeln(format('%gx%gx%g %dx%dx%d', [sliceFrac2D.x, sliceFrac2D.y, sliceFrac2D.z, Dim.x, Dim.y, Dim.z]));
      vox0.x := trunc(sliceFrac2D.x * Dim.x);
      vox0.y := trunc(sliceFrac2D.y * Dim.y);
      vox0.z := trunc(sliceFrac2D.z * Dim.z);

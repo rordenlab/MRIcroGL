@@ -34,7 +34,7 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20200707+'; //+ fixes remove small clusters
+  kVers = '1.2.20200707++'; //+ fixes remove small clusters
 type
 
   { TGLForm1 }
@@ -85,6 +85,7 @@ type
     GraphOpenAddMenu: TMenuItem;
     LayerClusterOptsMenu: TMenuItem;
     ImportTIFFFolderMenu: TMenuItem;
+    ScriptHaltMenu: TMenuItem;
     NimlMenu: TMenuItem;
     OpenAFNIMenu: TMenuItem;
     ClusterPopUp: TPopupMenu;
@@ -372,6 +373,7 @@ type
     procedure RemoveSmallClusterMenuClick(Sender: TObject);
     procedure RulerVisible();
     procedure RulerCheckChange(Sender: TObject);
+    procedure ScriptHaltMenuClick(Sender: TObject);
     procedure ScriptingSepMenuClick(Sender: TObject);
     procedure UpdateCropMask(msk: TVec6);
     procedure CreateOverlapImageMenuClick(Sender: TObject);
@@ -620,6 +622,7 @@ var
  vols: TNIfTIs;
  gLandmark : TLandmark;
  {$IFDEF METALAPI}
+ //isFormShown: boolean = false;
  isPrepared: boolean = false;
  ViewGPU1: TMetalControl;
  {$IFDEF GRAPH}ViewGPUg: TMetalControl;{$ENDIF}
@@ -1747,10 +1750,12 @@ var
   D: single;
 begin
   Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  {$IFDEF CLRBAR}
   with GetPythonEngine do
     if Boolean(PyArg_ParseTuple(Args, 'f:colorbarsize', @D)) then
        gClrbar.SizeFraction := D;
   ViewGPU1.Invalidate;
+  {$ENDIF}
 end;
 
 function PyCOLOREDITOR(Self, Args : PPyObject): PPyObject; cdecl;
@@ -2187,6 +2192,7 @@ var
   v: boolean;
 begin
   Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  {$IFDEF CLRBAR}
   with GetPythonEngine do
     if Bool(PyArg_ParseTuple(Args, 'i:colorbarposition', @p)) then begin
        //GLForm1.LayerChange(0, -1, PCT, kNaNsingle, kNaNsingle); //kNaNsingle
@@ -2199,6 +2205,7 @@ begin
        GLForm1.SetColorBarPosition;
        ViewGPU1.Invalidate;
     end;
+  {$ENDIF}
 end;
 
 function PyOVERLAYOPACITY(Self, Args : PPyObject): PPyObject; cdecl;
@@ -2538,6 +2545,7 @@ var
   clr: TVec4;
 begin
   Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  {$IFDEF CLRBAR}
   with GetPythonEngine do
     if Boolean(PyArg_ParseTuple(Args, 'iii:linecolor', @R,@G,@B)) then begin
       clr := Vol1.Slices.LineColor;
@@ -2546,6 +2554,7 @@ begin
       gClrbar.RulerColor := SetRGBA(Vol1.Slices.LineColor);
       GLFOrm1.RulerVisible();
     end;
+  {$ENDIF}
 end;
 
 function PyLINEWIDTH(Self, Args : PPyObject): PPyObject; cdecl;
@@ -2802,14 +2811,17 @@ begin
   result := true;
   ScriptOutputMemo.lines.Add('Running Python script');
   gPyRunning := true;
+  GLForm1.ScriptingRunMenu.caption := 'Halt';
   try
      PyEngine.ExecStrings(GLForm1.ScriptMemo.Lines);
   except
     ScriptOutputMemo.lines.Add('Python Engine Failed');
     gPyRunning := false;
   end;
-  ScriptOutputMemo.lines.Add('Python Succesfully Executed');
+  if gPyRunning then
+     ScriptOutputMemo.lines.Add('Python Succesfully Executed');
   gPyRunning := false;
+  GLForm1.ScriptingRunMenu.caption := 'Run';
   if  GlForm1.ScriptOutputMemo.Tag = 123 then
       GLForm1.Close
   else if (gPrefs.DisplayOrient = kRenderOrient)  and (Vol1.Quality1to5 = 0) and (not gPyRunning) then
@@ -3879,13 +3891,14 @@ var
     clr: TRGBA;
 begin
   if vols = nil then exit; //mungo : mosaic selected before image is loaded
+  {$IFDEF CLRBAR}
   clr := gClrBar.RulerColor;
   if (RulerCheck.checked) then
       clr.A := 255
    else
        clr.A := 0;
    gClrbar.RulerColor := clr;
-
+   {$ENDIF}
 end;
 
 procedure TGLForm1.RulerCheckChange(Sender: TObject);
@@ -3893,6 +3906,17 @@ begin
   if vols = nil then exit; //mungo : mosaic selected before image is loaded
  RulerVisible();
  ViewGPU1.Invalidate;
+end;
+
+procedure TGLForm1.ScriptHaltMenuClick(Sender: TObject);
+begin
+  (*if gPyRunning then begin
+     //PyEngine.PyErr_SetString(PyExc_KeyboardInterrupt^, 'Terminated');
+     //PyEngine.PyExc_KeyboardInterrupt();
+     //ScriptOutputMemo.Lines.Add('Unable to run script: a script is already running.');
+     PyEngine.PyErr_SetString(@PyEngine.PyExc_KeyboardInterrupt^, 'Terminated');
+    exit;
+  end;*)
 end;
 
 procedure TGLForm1.ScriptingSepMenuClick(Sender: TObject);
@@ -3916,8 +3940,10 @@ begin
  if not ColorDialog1.Execute then exit;
  clr := Vec4(Red(ColorDialog1.Color)/255.0, Green(ColorDialog1.Color)/255.0, Blue(ColorDialog1.Color)/255.0, clr.a/255.0);
  Vol1.Slices.LineColor := clr;
+ {$IFDEF CLRBAR}
  gClrbar.RulerColor := SetRGBA(clr);
  RulerVisible();
+ {$ENDIF}
  ViewGPU1.Invalidate;
 end;
 
@@ -5271,8 +5297,16 @@ begin
  if gPyRunning then begin
    //PyEngine.PyErr_SetString(PyExc_KeyboardInterrupt^, 'Terminated');
    //PyEngine.PyExc_KeyboardInterrupt();
-   ScriptOutputMemo.Lines.Add('Unable to run script: a script is already running.');
+   PyEngine.PyErr_SetString(PyEngine.PyExc_KeyboardInterrupt^, 'Operation cancelled') ;
+   ScriptOutputMemo.Lines.Add('Halting script ("Run" called while script still running).');
+   //ScriptOutputMemo.Lines.Add('Unable to run script: a script is already running.');
+   //PyEngine.PyEval_AcquireThread();
+
+   //PyEngine.PyEval_AcquireThread(PyEngine.ThreadState);
+   //PyEngine.PyErr_SetString(PyEngine.PyExc_KeyboardInterrupt^, 'Terminated');
+   //PyEngine.PyEval_ReleaseThread(PyEngine.ThreadState);
    //PyEngine.PyErr_SetString(@PyEngine.PyExc_KeyboardInterrupt^, 'Terminated');
+   //PyEngine.PyExc_KeyboardInterrupt();
    exit;
  end;
  if PyExec() then exit;
@@ -6521,14 +6555,18 @@ begin
   LayerMaskWithBackgroundMenu.Checked := Vols.MaskWithBackground;
   //GLForm1.MosaicMenu.Checked := true;
   //gPrefs.DisplayOrient := kMosaicOrient;
+  {$IFDEF CLRBAR}
   gClrbar.SizeFraction := gPrefs.ColorbarSize/1000;
+  {$ENDIF}
   SetDefaultPrefs(gPrefs, false);
   //gPrefs.colorbar := gClrbar.isVisible;
   VisibleClrbarMenu.Checked := gPrefs.ColorbarVisible;
   Smooth2DCheck.Checked := gPrefs.Smooth2D;
   Vols.InterpolateOverlays := gPrefs.LoadSmooth;
   RulerCheck.checked := gPrefs.RulerVisible;
+  {$IFDEF CLRBAR}
   gClrbar.isVisible := VisibleClrbarMenu.checked;
+  {$ENDIF}
   TransBlackClrbarMenu.Checked := true;
   ClrbarClr(4);
   //gPrefs.ColorBarPosition := 3;
@@ -6558,7 +6596,9 @@ begin
     gPrefs.LineWidth := 1;
     Vol1.Slices.LineWidth := 1;
     Vol1.Slices.LineColor := Vec4(0.5, 0.5, 0.7, 1.0);
+    {$IFDEF CLRBAR}
     gClrbar.RulerColor := SetRGBA(Vol1.Slices.LineColor);
+    {$ENDIF}
     RulerVisible();
     SetDefaultPrefs(gPrefs,true);
     UpdateOpenRecent();
@@ -6702,6 +6742,7 @@ begin
   if (gPrefs.DisplayOrient <> kMosaicOrient) or (gPrefs.MosaicStr = '') then exit;
   if not vols.Layer(0,vol) then exit;
   Vol1.Slices.MosaicScale(gPrefs.MosaicStr, vol.Mat, vol.InvMat, vol.Dim, vol.Scale, w,h);
+  {$IFDEF CLRBAR}
   if not gClrbar.isVisible then exit;
   f := gClrBar.PanelFraction;
   if (f > 0.0) then begin
@@ -6711,6 +6752,7 @@ begin
     else
         h := round(h * f);
   end;
+  {$ENDIF}
 end;
 
 {$IFDEF METALAPI}
@@ -7029,12 +7071,6 @@ begin
  end;
  showmessage('Use paste to insert text from clipboard into scripts');
 end;
-
-procedure TGLForm1.FormCreate(Sender: TObject);
-begin
-  //GraphShow();
-end;
-
 
 procedure TGLForm1.GraphPanelResize(Sender: TObject);
 begin
@@ -7586,8 +7622,6 @@ procedure TGLForm1.UpdateShaderSettings(Sender: TObject);
 var
    v: boolean;
 begin
- //q := Vol1.Quality1to5;
- //???METAL??? QualityTrack.Position :=
  Vol1.Quality1to5 := QualityTrack.Position;
  Vol1.LightPosition := sph2cartDeg90Light(LightAziTrack.Position, LightElevTrack.Position);
  //Caption := format('%g %g %g', [Vol1.LightPosition.X, Vol1.LightPosition.Y, Vol1.LightPosition.Z]);
@@ -8287,6 +8321,14 @@ begin
 end;
 {$ENDIF}
 
+procedure TGLForm1.FormCreate(Sender: TObject);
+begin
+ {$IFDEF METALAPI}
+ ViewGPU1 :=  TMetalControl.Create(CenterPanel);
+ Vol1 := TGPUVolume.Create(ViewGPU1);
+ {$ENDIF}
+end;
+
 procedure TGLForm1.FormShow(Sender: TObject);
 //const
 //  kImgFilter = 'Volumes|*.nii;*.nii.gz;*.HEAD;*.hdr;*.nrrd;*.nhdr;*.mgh;*.mgz;*.mhd;*.mha|NIfTI|*.nii|Compressed NIfTI|*.nii.gz|All|*.*';
@@ -8428,7 +8470,7 @@ begin
   //niftiVol := TNIfTI.Create('/Users/rorden/metal_demos/rmotor.nii.gz', niftiVol.Mat, niftiVol.Dim);
   GraphShow();
   {$IFDEF METALAPI}
-  ViewGPU1 :=  TMetalControl.Create(CenterPanel);
+  //must be done at FormCreate, not FormShow!: ViewGPU1 :=  TMetalControl.Create(CenterPanel);
   //ViewGPU1.OnPrepare := @ViewGPUPrepare;
   //EditMenu.Visible := true; //to do: copy bitmap
   //Smooth2DCheck.Visible := false; //to do: Metal nearest neighbor must change shader
@@ -8452,6 +8494,7 @@ begin
     printf('Multisampling disabled: orientation cube might look jagged. Performance benefit unlikely.');
     ViewGPU1.MultiSampling := 1;
   end;
+  Vol1 := TGPUVolume.Create(ViewGPU1);
   {$ENDIF}
   //ViewGPU1.Parent := GLForm1;
   ViewGPU1.Parent := CenterPanel;
@@ -8465,8 +8508,7 @@ begin
   ViewGPU1.OnMouseUp := @ViewGPUMouseUp;
   ViewGPU1.OnMouseWheel := @ViewGPUMouseWheel;
   ViewGPU1.OnPaint := @ViewGPUPaint;
-  //ViewGPU1.DoubleBuffered:= false; //<- must be true for Windows OS
-  Vol1 := TGPUVolume.Create(ViewGPU1);
+  //for Metal, Must be done at FormCreate, not FormShow! Vol1 := TGPUVolume.Create(ViewGPU1);
   //Vol1.Slices.RadiologicalConvention := gPrefs.FlipLR_Radiological;
   {$IFNDEF METALAPI}
   {$IFDEF LCLCocoa}
@@ -8592,11 +8634,14 @@ begin
     SetXHairPosition(0,0,0 );
   end;
   SetToolPanelMaxWidth();
+  {$IFDEF METALAPI}
+  //isFormShown := true;
+  {$ENDIF}
 end;
 
 procedure TGLForm1.ViewGPUPrepare(Sender: TObject);
 begin
-  {$IFDEF METALAPI}
+ {$IFDEF METALAPI}
   isPrepared := true;
   ViewGPU1.SetPreferredFrameRate(0);
   Vol1.Prepare(ShaderDir+ pathdelim + ShaderDrop.Items[0]+kExt);
@@ -8608,17 +8653,21 @@ begin
   UpdateTimer.Enabled:=true;
   {$ENDIF}
   //QualityTrack.Position:= gPrefs.Quality1to5;
+  {$IFDEF CLRBAR}
   gClrbar:= TGPUClrbar.Create(ViewGPU1);
   Vol1.SetColorBar(gClrBar);
   gClrbar.RulerColor := SetRGBA(Vol1.Slices.LineColor);
   RulerVisible();
   gClrbar.isVisible := gPrefs.ColorbarVisible;
   VisibleClrbarMenu.checked := gPrefs.ColorbarVisible;
+  {$ENDIF}
   Smooth2DCheck.Checked := gPrefs.Smooth2D;
   RulerCheck.checked := gPrefs.RulerVisible;
   TextAndCubeMenu.Checked := gPrefs.LabelOrient;
   SetColorBarPosition;
+  {$IFDEF CLRBAR}
   gClrbar.SizeFraction := gPrefs.ColorbarSize/1000;
+  {$ENDIF}
   UpdateColorbar();
   Vol1.SetTextContrast(gPrefs.ClearColor);
   Vol1.Slices.RadiologicalConvention := gPrefs.FlipLR_Radiological;
@@ -8742,6 +8791,10 @@ var
    niftiVol: TNIfTI;
    q: integer;
 begin
+
+ {$IFDEF METALAPI}
+ //if not isFormShown then exit;
+ {$ENDIF}
   if isBusy then exit; //invalidateTimer
   (*if isBusy then begin
      InvalidateTimer.enabled := true;
@@ -8757,15 +8810,15 @@ begin
  if not isPrepared then begin
     ViewGPUPrepare(Sender);
     {$IFDEF GRAPH}
-
     //ViewGPUgPrepare(Sender);
     //ViewGPUg.invalidate;
     //gGraph.Paint(ViewGPUg);    //2021
     //ViewGPUg.InvalidateOnResize := true; //20200606 : no longer works
     {$ENDIF}
-
  end;
  MTLSetClearColor(MTLClearColorMake(gPrefs.ClearColor.r/255, gPrefs.ClearColor.g/255, gPrefs.ClearColor.b/255, gPrefs.ClearColor.A/255));
+ //gPrefs.DisplayOrient := kRenderOrient;
+ //Vol1.Paint2D(niftiVol, vols.Drawing, gPrefs.DisplayOrient);
  {$ELSE}
  ViewGPU1.MakeCurrent(false);
  glClearColor(gPrefs.ClearColor.R/255, gPrefs.ClearColor.G/255, gPrefs.ClearColor.B/255, gPrefs.ClearColor.A/255);

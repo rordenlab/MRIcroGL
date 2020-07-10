@@ -2519,8 +2519,14 @@ object GLForm1: TGLForm1
         Caption = 'Save'
         OnClick = ScriptingSaveMenuClick
       end
+      object ScriptHaltMenu: TMenuItem
+        Caption = 'Halt'
+        Visible = False
+        OnClick = ScriptHaltMenuClick
+      end
       object NimlMenu: TMenuItem
         Caption = 'Load NIML'
+        Visible = False
         OnClick = NimlMenuClick
       end
       object ScriptingSepMenu: TMenuItem
