@@ -36,10 +36,17 @@ void main() {
 	float stepSizeX2 = samplePos.a + (stepSize * 2.0);
 	//fast pass - optional
 	fastPass (len, dir, intensityVol, samplePos);
-	if (samplePos.a > len) { //no hit: quit here
+	#if ( __VERSION__ > 300 )
+	if ((samplePos.a > len) && ( overlays < 1 )) { //no hit
 		FragColor = colAcc;
-		return;		
+		return;
 	}
+	#else
+	if ((textureSz.x < 1) || ((samplePos.a > len) && ( overlays < 1 ))) { //no hit
+		gl_FragColor = colAcc;
+		return;		
+	}	
+	#endif
 	if (samplePos.a < clipPos.a)
 		samplePos = clipPos;
 	//end fastpass - optional
@@ -50,13 +57,13 @@ void main() {
 	if ( overlays < 1 ) isSurface = 1;
 	vec4 overSample = vec4(0.0,0.0,0.0,0.0);
 	while (samplePos.a <= len) {
-		colorSample = texture3D(intensityVol, samplePos.xyz);
+		colorSample = texture3Df(intensityVol, samplePos.xyz);
 		colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);
 		if (colorSample.a > 0.01) {
 			bgNearest = min(samplePos.a,bgNearest);
 			if (samplePos.a > stepSizeX2) {
 				vec3 a = colorSample.rgb * ambient;
-				gradSample= texture3D(gradientVol,samplePos.xyz);
+				gradSample= texture3Df(gradientVol,samplePos.xyz);
 				gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
 				//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
 				if (gradSample.a < prevGrad.a)
@@ -64,7 +71,7 @@ void main() {
 				prevGrad = gradSample;
 				vec3 n = normalize(NormalMatrix * gradSample.rgb);
 				vec2 uv = n.xy * 0.5 + 0.5;
-				vec3 d = texture(matcap2D,uv.xy).rgb;
+				vec3 d = texture2D(matcap2D,uv.xy).rgb;
 				vec3 surf = mix(defaultDiffuse, a, surfaceColor); //0.67 as default Brighten is 1.5
 				colorSample.rgb = d * surf * brighten;
 			} else
@@ -74,7 +81,7 @@ void main() {
 				float overlaySearchDepth = overlayDepth * sliceSize;
 				float maxA = 0.0;
 				while (overPos.a <= overlaySearchDepth) {
-					vec4 overSam = texture3D(intensityOverlay, overPos.xyz);
+					vec4 overSam = texture3Df(intensityOverlay, overPos.xyz);
 					overPos += deltaDir;
 					if (overSam.a > 0.0) {
 						maxA = max(maxA, overSam.a);
@@ -98,5 +105,9 @@ void main() {
 	} //while samplePos.a < len
 	colAcc.a = colAcc.a/0.95;
 	colAcc.a *= backAlpha;
-    FragColor = colAcc;
+	#if ( __VERSION__ > 300 )
+	FragColor = colAcc;
+	#else
+	gl_FragColor = colAcc;
+	#endif
 }

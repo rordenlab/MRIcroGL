@@ -84,6 +84,7 @@ function readForeignHeader(var lFilename: string; var lHdr: TNIFTIhdr; var gzByt
 function readForeignHeader(var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean): boolean; overload;
 
 procedure convertForeignToNifti(var nhdr: TNIFTIhdr);
+{$IFDEF Darwin} function IsReadable(fnm: string): boolean; {$ENDIF} //Used to detect if files in MacOS sandbox
 function FSize (lFName: String): Int64;
 function isTIFF(fnm: string): boolean;
 procedure nifti_mat44_to_quatern( lR :mat44; out qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac : single);
@@ -107,6 +108,35 @@ begin
   {$IFDEF UNIX} writeln(str);{$ENDIF}
 end;
 
+{$IFDEF Darwin}
+function IsReadable(fnm: string): boolean;
+label 222;
+var
+  f: file;
+  b: byte;
+begin
+  result := false;
+  if not fileexists(fnm) then goto 222;
+  if FSize(fnm) < 2 then goto 222;
+  AssignFile(f, fnm);
+  {$I+}
+  try
+    FileMode := fmOpenRead;  //Set file access to read only
+    Reset(f, 1);
+    if ioresult <> 0 then
+       exit;
+    b := 0;
+    BlockRead(f, b, sizeof(b)); //Byte-order Identifier
+    CloseFile(f);
+    result := true;
+  except
+    result := false;
+  end;
+  222:
+  if result then exit;
+  printf('Unable to read file (not in sandbox?): '+fnm);
+end;
+{$ENDIF}
 
 {$IFDEF GL10}
 procedure NII_SetIdentityMatrix (var lHdr: TNIFTIHdr); //create neutral rotation matrix
@@ -2146,7 +2176,158 @@ begin
 	convertForeignToNifti(nhdr);
 	nhdr.descrip := 'VOL'+kIVers;
 	result := true;
+end; //readVOL
+
+function readAim(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
+procedure readKeyAim(field: string; var str: string; out x,y,z: single);
+//Orig-ISQ-Dim-um                                 20480      20480      12300
+var
+	st, en: integer;
+	s: string;
+	strlst: TStringList;
+begin
+	x := kNANsingle;
+	y := kNANsingle;
+	z := kNANsingle;
+	st := PosEx(field,  str);
+	if st < 1 then exit();
+	st := st + length(field);
+	en := PosEx(chr($0A),  str, st);
+	if en < 2 then exit();
+	s := copy(str, st, en-st);
+	s := trim(s);
+	strlst:=TStringList.Create;
+	strlst.DelimitedText := s;
+	if strlst.Count > 0 then
+		x := strtoFloatDef(strlst[0], kNANsingle);
+	if strlst.Count > 1 then
+		y := strtoFloatDef(strlst[1], kNANsingle);
+	if strlst.Count > 2 then
+		z := strtoFloatDef(strlst[2], kNANsingle);
+	strlst.Free;
 end;
+//https://www.researchgate.net/publication/320077296_AIMreader_python_implementation_and_examples
+const
+	kheaderints = 32;
+var
+	AIM_ints: array [0..(kheaderints-1)] of longint;
+	f: file;
+	binSz, strSz, i: integer;
+	x, y, z, xp, yp, zp: single;
+	str: string;
+	fSz: int64;
+begin
+	result := false;
+	result := false;
+	FileMode := fmOpenRead;
+	gzBytes := 0;
+	{$I-}
+	AssignFile(f, fname);
+	FileMode := 0;  //Set file access to read only
+	Reset(f, 1);
+	fSz := FileSize(f);
+	{$I+}
+	if ioresult <> 0 then begin
+		NSLog('Error in reading AIM header.'+inttostr(IOResult));
+		FileMode := 2;
+		exit;
+	end;
+	BlockRead(f, AIM_ints, sizeof(AIM_ints));
+	CloseFile(f);
+	FileMode := 2;
+	{$IFDEF ENDIAN_BIG} //data always stored big endian
+	for i := 0 to (kheaderints -1) do
+		swap4(AIM_ints[i]);
+	swapEndian := true;
+	{$ELSE}
+	swapEndian := false;
+	{$ENDIF}
+        (* //not all AIM files start with signature, see SEGMENTED_V20TRUE_BIN.AIM;1
+        if (AIM_ints[0] <> 1145915713) then begin
+		NSLog('Error AIM images should begin "AIMD".');
+		exit;
+	end;*)
+        str := '';
+	nhdr.datatype := 0;
+	if (AIM_ints[5] = 16) then begin
+		//-> version 020
+		if (AIM_ints[10] = 131074) then
+			nhdr.datatype := kDT_INT16
+		else if (AIM_ints[10] = 65537)  then
+			nhdr.datatype := kDT_UINT8
+		else if (AIM_ints[10] = 1376257) or (AIM_ints[10] = 524290)  then
+			str := '(compressed)'
+		else
+			nhdr.datatype :=  1;//str := 'Datatype='+inttostr(AIM_ints[10]);
+		strSz := AIM_ints[2];
+		binSz := 160;
+		nhdr.vox_offset := strSz + binSz;
+		nhdr.dim[1] := AIM_ints[14];
+		nhdr.dim[2] := AIM_ints[15];
+		nhdr.dim[3] := AIM_ints[16];
+	end else begin
+		//-> version 030
+		if (AIM_ints[17] = 131074) then
+			nhdr.datatype := kDT_INT16
+		else if (AIM_ints[17] = 65537)  then
+			nhdr.datatype := kDT_UINT8
+		else if (AIM_ints[17] = 1376257) or (AIM_ints[17] = 524290)  then
+			str := '(compressed)'
+		else
+			nhdr.datatype :=  1;//str := 'Datatype='+inttostr(AIM_ints[17]);
+		strSz := AIM_ints[8];
+		binSz := 280;
+		nhdr.vox_offset := strSz + binSz;
+		nhdr.dim[1] := AIM_ints[24];
+		nhdr.dim[2] := AIM_ints[26];
+		nhdr.dim[3] := AIM_ints[28];
+    end;
+    if nhdr.datatype =  1 then exit; //do not report: since not all AIM files have a signature, perhaps not an AIM format file at all
+    if (nhdr.datatype = 0) or (strSz < 1) or (nhdr.vox_offset > fSz) then begin
+    	NSLog('Unable to read AIM file. Offset='+inttostr(round(nhdr.vox_offset))+' '+str);
+    	exit;
+    end;
+    //read string header
+	AssignFile(f, fname);
+	FileMode := 0;  //Set file access to read only
+	Reset(f,1);
+	Seek(f, sizeof(AIM_ints));
+	SetLength(str, strSz);
+	BlockRead(f, Str[1],strSz);
+	CloseFile(f);
+	FileMode := 2;
+	readKeyAim('Orig-GOBJ-Dim-p',str, xp,yp,zp); //Resolution
+	if (xp = kNANsingle) then
+		readKeyAim('Orig-ISQ-Dim-p',str, xp,yp,zp); //Resolution
+	readKeyAim('Orig-GOBJ-Dim-um', str, x,y,z); //Field of View
+	if (x = kNANsingle) then
+		readKeyAim('Orig-ISQ-Dim-um', str, x,y,z); //Field of View
+	if (zp <> kNANsingle) and (z <> kNANsingle) then begin
+		if (x > 0) and (xp > 0) then
+			nhdr.pixdim[1] := x / xp;
+		if (y > 0) and (yp > 0) then
+			nhdr.pixdim[2] := y / yp;
+		if (z > 0) and (zp > 0) then
+			nhdr.pixdim[3] := z / zp;
+	end;
+	nhdr.xyzt_units := 3; //microns
+	readKeyAim('Density: intercept', str, x,y,z);
+	if x <> kNANsingle then
+		nhdr.scl_inter := x;
+	readKeyAim('Density: slope', str, x,y,z);
+	if x <> kNANsingle then
+		nhdr.scl_slope := x;
+	readKeyAim('Scaled by factor', str, x,y,z);
+	readKeyAim('scale (el_size factor)', str, xp,yp,zp);
+	//writeln(format('%g %dx%dx%d', [nhdr.vox_offset, nhdr.dim[1], nhdr.dim[2], nhdr.dim[3]]));
+	convertForeignToNifti(nhdr);
+	nhdr.descrip := 'AIM'+kIVers;
+	if x <> kNANsingle then
+		nhdr.aux_file := format('Scaling %g', [x]);
+	if xp <> kNANsingle then
+		nhdr.db_name := format('Factor %g', [xp]);
+	result := true;
+end; //readAIM()
 
 function readMGH(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean; out xDim64: int64): boolean;
 Type
@@ -3384,6 +3565,24 @@ begin
 	Filemode := 2;
 end; //readpgm()
 
+procedure swap4u(var s : UInt32);
+type
+  swaptype = packed record
+    case byte of
+      0:(Word1,Word2 : word); //word is 16 bit
+      1:(Long:LongInt);
+  end;
+  swaptypep = ^swaptype;
+var
+  inguy:swaptypep;
+  outguy:swaptype;
+begin
+  inguy := @s; //assign address of s to inguy
+  outguy.Word1 := swap(inguy^.Word2);
+  outguy.Word2 := swap(inguy^.Word1);
+  s:=outguy.Long;
+end;
+
 function ReadUInt32(fname: string; offset: integer; swapEndian: boolean): UInt32;
 var
 	f: file;
@@ -3396,8 +3595,30 @@ begin
   BlockRead(f, i, sizeof(i));
   CloseFile(f);
   if swapEndian then
-  	Xswap4r(single(i));
+  	swap4u(i);
   result := i;
+end;
+
+procedure swap8u(var s : UInt64);
+type
+  swaptype = packed record
+    case byte of
+      0:(Word1,Word2,Word3,Word4 : word); //word is 16 bit
+  end;
+  swaptypep = ^swaptype;
+var
+  inguy:swaptypep;
+  outguy:swaptype;
+begin
+  inguy := @s; //assign address of s to inguy
+  outguy.Word1 := swap(inguy^.Word4);
+  outguy.Word2 := swap(inguy^.Word3);
+  outguy.Word3 := swap(inguy^.Word2);
+  outguy.Word4 := swap(inguy^.Word1);
+  inguy^.Word1 := outguy.Word1;
+  inguy^.Word2 := outguy.Word2;
+  inguy^.Word3 := outguy.Word3;
+  inguy^.Word4 := outguy.Word4;
 end;
 
 function ReadUInt64(fname: string; offset: integer; swapEndian: boolean): UInt64;
@@ -3412,7 +3633,7 @@ begin
   BlockRead(f, i, sizeof(i));
   CloseFile(f);
   if swapEndian then
-  	Xswap8r(double(i));
+  	swap8u(i);
   result := i;
 end;
 
@@ -5442,14 +5663,18 @@ begin
   result := false;
   if FSize(lFilename) < 32 then //NRRD headers can be very short
       exit;
+  {$IFDEF Darwin}
+  if not IsReadable(lFilename) then exit;
+  {$ENDIF}
   lExt := UpCaseExt(lFilename);
   lExt2GZ := '';
   if (lExt = '.GZ') or (lExt = '.BZ2') then begin
      lExt2GZ := changefileext(lFilename,'');
      lExt2GZ := UpCaseExt(lExt2GZ);
   end;
-
-  if (lExt = '.DV') then
+  if (PosEx('.AIM',lExt) = 1) then
+       result := readAim(lFilename, lHdr, gzBytes, swapEndian)
+  else if (lExt = '.DV') then
      result := readDeltaVision(lFilename, lHdr, swapEndian)
   else if (lExt = '.V') then
        result := readEcat(lFilename, lHdr, gzBytes, swapEndian)

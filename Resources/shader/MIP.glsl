@@ -26,17 +26,24 @@ void main() {
 	float stepSizeX2 = samplePos.a + (stepSize * 2.0);
 	//fast pass - optional
 	fastPass (len, dir, intensityVol, samplePos);
-	if ((samplePos.a > len) && ( overlays < 1 )) { //no hit: quit here
+	#if ( __VERSION__ > 300 )
+	if ((samplePos.a > len) && ( overlays < 1 )) { //no hit
 		FragColor = colAcc;
-		return;		
+		return;
 	}
+	#else
+	if ((textureSz.x < 1) || ((samplePos.a > len) && ( overlays < 1 ))) { //no hit
+		gl_FragColor = colAcc;
+		return;		
+	}	
+	#endif
 	if (samplePos.a < clipPos.a)
 		samplePos = clipPos;
 	//end fastpass - optional	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
 	
 	if ( overlays < 1 ) { //pass without overlays
 		while (samplePos.a <= len) {
-			colorSample = texture3D(intensityVol,samplePos.xyz);
+			colorSample = texture3Df(intensityVol,samplePos.xyz);
 			//if (colorSample.a > colAcc.a) //ties generate errors for TT_desai_dd_mpm
 			//	colAcc = colorSample;
 			if (colorSample.a > colAcc.a) //ties generate errors for TT_desai_dd_mpm
@@ -45,7 +52,11 @@ void main() {
 		} //while samplePos.a < len
 		//colAcc.a = step(0.001, colAcc.a); //good for templates...
 		colAcc.a *= backAlpha;
+		#if ( __VERSION__ > 300 )
 		FragColor = colAcc;
+		#else
+		gl_FragColor = colAcc;
+		#endif
 		return;
 	}
 	//overlay pass
@@ -53,18 +64,18 @@ void main() {
 	vec4 ocolAcc = vec4(0.0,0.0,0.0,0.0);
 	vec4 prevNorm = ocolAcc;
 	while (samplePos.a <= len) {
-			colorSample = texture3D(intensityVol,samplePos.xyz);
+			colorSample = texture3Df(intensityVol,samplePos.xyz);
 			if (colorSample.a > colAcc.a)
 				colAcc = colorSample+0.00001;
 			//	colAcc = colorSample;
-			gradSample= texture3D(gradientVol,samplePos.xyz);
+			gradSample= texture3Df(gradientVol,samplePos.xyz);
 			if (gradSample.a > gradMax.a)
 				gradMax = gradSample;
 			//overlay:	
-			colorSample.rgba = texture3D(intensityOverlay,samplePos.xyz);
+			colorSample.rgba = texture3Df(intensityOverlay,samplePos.xyz);
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);
 			if (colorSample.a > 0.0) {
-				gradSample = texture3D(gradientOverlay,samplePos.xyz);
+				gradSample = texture3Df(gradientOverlay,samplePos.xyz);
 				gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
 				if (gradSample.a < prevNorm.a)
 					gradSample.rgb = prevNorm.rgb;
@@ -85,5 +96,9 @@ void main() {
 		colAcc.rgb=mix(colAcc.rgb, ocolAcc.rgb,  ocolAcc.a);
 		colAcc.a=max(colAcc.a,ocolAcc.a);
 	}	
+	#if ( __VERSION__ > 300 )
 	FragColor = colAcc;
+	#else
+	gl_FragColor = colAcc;
+	#endif
 }

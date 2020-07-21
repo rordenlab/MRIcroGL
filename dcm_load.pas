@@ -292,7 +292,7 @@ begin
   //PrefForm.Height:= OkBtn.Top + OkBtn.Height+4;
   PrefForm.AutoSize:=true;
    {$IFDEF isGL}
-  {$IFDEF LCLCocoa}GLForm1.SetFormDarkMode(PrefForm); {$ENDIF}
+  {$IFDEF DARKMODE}GLForm1.SetFormDarkMode(PrefForm); {$ENDIF}
   {$ENDIF}
   PrefForm.ShowModal;
   result := dcmStrings[rg.ItemIndex];

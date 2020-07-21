@@ -5,6 +5,10 @@ unit mainunit;
    //{$DEFINE METALAPI} //set in ProjectOptions/CompilerOptions/CustomOptions: -dMETALAPI
    {$modeswitch objectivec1}
    {$DEFINE NewCocoa}
+   //{$DEFINE DARKMODE}
+{$ENDIF}
+{$IFNDEF METALAPI}
+ {$include ../Metal-Demos/common/glopts.inc}
 {$ENDIF}
 {$IFDEF LCLCarbon}
   error: you must compile for the Cocoa widgetset (ProjectOptions/Additions&Overrides)
@@ -14,10 +18,12 @@ unit mainunit;
 {$DEFINE COMPILEYOKE} //use yoking
 {$DEFINE CLRBAR} //provide color bar
 {$DEFINE GRAPH} //timeseries viewer
-{$DEFINE AFNI} //afni statistical maps
+{$DEFINE AFNI} //afni statistical maps                                             \
+
 {$WARN 5024 OFF} //disable warnings about unused parameters
 {$WARN 5043 off : Symbol "$1" is deprecated}
 {$DEFINE MATT1}
+
 interface
 
 uses
@@ -25,7 +31,7 @@ uses
   {$IFDEF COMPILEYOKE} yokesharemem, {$ENDIF}
   {$IFDEF AFNI} nifti_foreign, afni_fdr, {$ENDIF}
   {$IFDEF MYPY}PythonEngine,  {$ENDIF}
-  {$IFDEF LCLCocoa}SysCtl, dos, {$IFDEF NewCocoa} nsappkitext, UserNotification,{$ENDIF} {$ENDIF}
+  {$IFDEF LCLCocoa}SysCtl, dos, {$IFDEF DARKMODE}nsappkitext, {$ENDIF}{$IFDEF NewCocoa} UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
   ctypes, resize, ustat, LazVersion, nifti_tiff, tiff2nifti,
   lcltype, GraphType, Graphics, dcm_load, crop,
@@ -34,7 +40,7 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20200707++'; //+ fixes remove small clusters
+  kVers = '1.2.20200707b'; //+ fixes remove small clusters
 type
 
   { TGLForm1 }
@@ -355,6 +361,7 @@ type
     procedure ClusterViewSelectItem(Sender: TObject; Item: TListItem;
       Selected: Boolean);
     procedure EditPasteMenuClick(Sender: TObject);
+    function DefaultImage():string;
     procedure FormCreate(Sender: TObject);
     procedure GraphPanelResize(Sender: TObject);
     procedure ImportTIFFFolderMenuClick(Sender: TObject);
@@ -482,7 +489,10 @@ type
     procedure CoordEditChange(Sender: TObject);
     procedure CutNearBtnClick(Sender: TObject);
     procedure CutNoneBtnClick(Sender: TObject);
+    {$IFDEF DARKMODE}
     procedure SetFormDarkMode(f: TForm);
+    procedure SetDarkMode();
+    {$ENDIF}
     procedure SetToolPanelMaxWidth();
     function ClusterOpen(fnm: string): boolean;
     procedure DisplayViewMenu(Sender: TObject);
@@ -555,7 +565,6 @@ type
     procedure ViewGPUgKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure ViewGPUgResize(Sender: TObject);
     procedure setShaderSliders;
-    procedure SetDarkMode();
     procedure CutoutChange(Sender: TObject);
     procedure OpenRecentMenuClick(Sender: TObject);
     procedure OpenStandardMenuClick(Sender: TObject);
@@ -597,7 +606,8 @@ const  kExt = '.metal';
 {$ELSE}
 uses
  {$IFDEF GRAPH}glgraph,{$ENDIF}
- {$IFDEF LCLCocoa}glcocoanscontext,{$ENDIF}{$IFDEF CLRBAR}glclrbar, {$ENDIF} retinahelper,  OpenGLContext,  glvolume2, glcorearb, gl_core_utils {$IFNDEF UNIX}, proc_py {$ENDIF};
+ {$IFDEF COREGL}glcorearb,{$ELSE}gl,glext,{$ENDIF}
+ {$IFDEF LCLCocoa}glcocoanscontext,{$ENDIF}{$IFDEF CLRBAR}glclrbar, {$ENDIF} retinahelper,  OpenGLContext,  glvolume2, gl_core_utils {$IFNDEF UNIX}, proc_py {$ENDIF};
 const kExt = '.glsl';
 {$ENDIF}
 const
@@ -859,7 +869,7 @@ begin
   OkBtn.Parent:=PrefForm;
   OkBtn.ModalResult:= mrOK;
   //OK button
-  {$IFDEF LCLCocoa}
+  {$IFDEF DARKMODE}
   if gPrefs.DarkMode then GLForm1.SetFormDarkMode(PrefForm);
   {$ENDIF}
   PrefForm.ShowModal;
@@ -1116,7 +1126,7 @@ begin
 	result := ResourceDir + pathdelim + 'atlas';
 end;
 
-function GetFullPath( Filename: string; changeExt: boolean = true): string;
+function GetFullPathX( Filename: string; changeExt: boolean = true): string;
 // "motor" -> /home/smith/myDir/motor.nii.gz
 var
    i: integer;
@@ -1168,6 +1178,15 @@ begin
      end;
      result := Filename; //failed to find a match!
      writeln('Unable to find image: "', result,'"');
+end;
+
+function GetFullPath( Filename: string; changeExt: boolean = true): string;
+begin
+    result := GetFullPathX(Filename, changeExt);
+    {$IFDEF Darwin}
+    if Fileexists(result) and (not IsReadable(result)) then
+       result := ''; //outside sandbox
+    {$ENDIF}
 end;
 
  {$IFDEF MYPY}
@@ -2943,6 +2962,9 @@ begin
      imgName := gPrefs.PrevFilename[i];
      if (imgName = '') then continue;
      if (not fileexists(imgName)) then continue;
+     {$IFDEF Darwin}
+     if not isReadable(imgName) then continue;
+     {$ENDIF}
      imgName := ChangeFileExt(ExtractFileName(imgName),'');
      if upcase(ExtractFileExt(imgName))= '.NII' then
         imgName := ChangeFileExt(imgName,''); //img.nii.gz -> img
@@ -3408,6 +3430,7 @@ begin
      ToolPanel.Constraints.MaxWidth:= mx+16;
 end;
 
+{$IFDEF DARKMODE}
 procedure TGLForm1.SetFormDarkMode(f: TForm);
 begin
  {$IFDEF LCLCocoa}{$IFDEF NewCocoa}
@@ -3439,6 +3462,7 @@ begin
   end;
   {$ENDIF}{$ENDIF}
 end;
+{$ENDIF}
 
 procedure TGLForm1.CutoutChange(Sender: TObject);
 function  tf(t: TTrackBar): single; //trackbar fraction
@@ -3566,7 +3590,7 @@ var
   openDlg: TOpenDialog;
 begin
   openDlg := TOpenDialog.Create(application);
-  openDlg.Title := 'Select text file with graph data';
+  openDlg.Title := 'Select TIFF image to convert';
   openDlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
   if not Fileexists(openDlg.InitialDir) then
      openDlg.InitialDir := GetCurrentDir;
@@ -3590,7 +3614,7 @@ begin
  //Darwin does not show dialog title
  showmessage('Select a folder with all the 2D TIFFs (e.g. from DigiMorph). They must be the same dimension and slice order matches alphabetical order of names.');
  if PosEx('.app/Contents/Resources', indir) > 0 then
- indir := '';
+    indir := '';
  {$endif}
  if indir = '' then
     indir := GetUserDir;
@@ -4182,7 +4206,7 @@ begin
   OkBtn.Parent:=PrefForm;
   OkBtn.ModalResult:= mrOK;
   //OK button
-  {$IFDEF LCLCocoa}
+  {$IFDEF DARKMODE}
   if gPrefs.DarkMode then GLForm1.SetFormDarkMode(PrefForm);
   {$ENDIF}
   PrefForm.ShowModal;
@@ -4330,7 +4354,7 @@ begin
   Memo.Lines.AddStrings(strs);
   strs.Free;
   Memo.Parent:=PrefForm;
-  {$IFDEF LCLCocoa}
+  {$IFDEF DARKMODE}
   if gPrefs.DarkMode then GLForm1.SetFormDarkMode(PrefForm);
   {$ENDIF}
   PrefForm.ShowModal;
@@ -4442,26 +4466,60 @@ begin
      UpdateTimer.Enabled := true;
 end;
 
+function ChangeFileExtX(fnm, ext: string): string; //treat "brik.gz" and ".nii.gz" as single extension
+var
+   lExt: string;
+begin
+     lExt := uppercase(extractfileext(fnm));
+     result := changefileext(fnm,'');
+     if (lExt = '.GZ') or (lExt = '.BZ2') then
+        result := changefileext(result,'');
+     result := result + ext;
+end;
+
 procedure TGLForm1.ExtractBrainMenuClick(Sender: TObject);
 var
 lFrac: double;
-lFnm: string;
+fnm: string;
+saveDlg : TSaveDialog;
 begin
+ fnm := gPrefs.PrevBackgroundImage;
 lFrac := GetFloat('Brain extraction fraction',0.1,0.45,0.9);
 if (lFrac= kNaN) then exit;
-lFnm := gPrefs.PrevBackgroundImage;
 OpenDialog1.FileName := '';
-if fileexists(lFnm) and isNifti(lFnm) then begin
-   if MessageDlg('Choose image', 'Do you wish extract '+ lFnm+'?', mtConfirmation, [mbYes, mbNo],0) = mrYes then
-      OpenDialog1.FileName := lFnm;
+if fileexists(fnm) and isNifti(fnm) then begin
+   if MessageDlg('Choose image', 'Do you wish extract '+ fnm+'?', mtConfirmation, [mbYes, mbNo],0) = mrYes then
+      OpenDialog1.FileName := fnm;
 end;
 if (OpenDialog1.FileName = '') then
     if not OpenDialog1.Execute then
        exit;
 if not isNifti(OpenDialog1.FileName) then
    showmessage('BET brain extraction requires NIfTI format images.');
-lFnm := FSLbet(OpenDialog1.FileName,lFrac);
-AddBackground(lFnm);
+//we could just rename c:\img.nii to c:\bimg.nii, however MacOS sandboxing will not allow us to save to novel location
+saveDlg := TSaveDialog.Create(application);
+saveDlg.Title := 'Brain Extracted Image';
+saveDlg.InitialDir := extractfiledir(fnm);
+saveDlg.Filename := 'b'+extractfilename(ChangeFileExtX(fnm,''));
+if not Fileexists(saveDlg.InitialDir) then
+   saveDlg.InitialDir := GetCurrentDir;
+{$IFDEF Darwin}
+if PosEx('.app/Contents/Resources', saveDlg.InitialDir) > 0 then begin
+      saveDlg.InitialDir := GetCurrentDir;
+end;
+{$ENDIF}
+//saveDlg.Filter := 'Text file|*.txt';
+//saveDlg.DefaultExt := 'txt';
+//saveDlg.FilterIndex := 1;
+if not saveDlg.Execute then begin
+   saveDlg.Free;
+   exit;
+end;
+fnm :=  saveDlg.filename;
+saveDlg.Free;
+fnm := FSLbet(OpenDialog1.FileName,lFrac,fnm);
+AddBackground(fnm);
+
 end;
 
 procedure TGLForm1.LayerAdditiveMenuClick(Sender: TObject);
@@ -4580,12 +4638,15 @@ var
   PrefForm: TForm;
   bmpEdit, maxVoxEdit: TEdit;
   LoadFewVolumesCheck, LandMarkCheck,
-  {$IFDEF LCLCocoa} DarkModeCheck, RetinaCheck,{$ENDIF}
+   {$IFDEF DARKMODE}DarkModeCheck, {$ENDIF}
+  {$IFDEF LCLCocoa}  RetinaCheck,{$ENDIF}
   ClusterizeAtlasCheck, BitmapAlphaCheck, RadiologicalCheck: TCheckBox;
   OkBtn, AdvancedBtn: TButton;
   bmpLabel, maxVoxLabel: TLabel;
   RenderQCombo, WindowCombo : TComboBox;
-  isAdvancedPrefs  {$IFDEF LCLCocoa}, isDarkModeChanged, isRetinaChanged {$ENDIF}: boolean;
+  {$IFDEF DARKMODE} isDarkModeChanged, {$ENDIF}
+  {$IFDEF LCLCocoa} isRetinaChanged, {$ENDIF}
+  isAdvancedPrefs: boolean;
 begin
   PrefForm:=TForm.Create(GLForm1);
   PrefForm.AutoSize := true;
@@ -4635,7 +4696,8 @@ begin
   //Bitmap Scale
   maxVoxLabel:=TLabel.create(PrefForm);
   maxVoxLabel.Width := PrefForm.Width - 86;
-  maxVoxLabel.Caption := 'Reduce volumes larger than (default '+inttostr(kMaxVoxDefault)+', 2048 for 8Gb graphics cards)';
+  maxVoxLabel.Caption := 'Reduce volumes larger than (default '+inttostr(kMaxVoxDefault)+', 1048 for 8Gb graphics cards)';
+  maxVoxLabel.Hint := 'If using software rather than hardware graphics, consider 256';
   maxVoxLabel.AnchorSide[akTop].Side := asrBottom;
   maxVoxLabel.AnchorSide[akTop].Control := WindowCombo;
   maxVoxLabel.BorderSpacing.Top := 6;
@@ -4759,6 +4821,7 @@ begin
   RetinaCheck.Parent:=PrefForm;
   {$IFDEF METALAPI}RetinaCheck.visible := false;{$ENDIF}
   //DarkMode
+  {$IFDEF DARKMODE}
   DarkModeCheck:=TCheckBox.create(PrefForm);
   DarkModeCheck.visible := isDarkModeSupported;
   DarkModeCheck.Checked := gPrefs.DarkMode;
@@ -4773,13 +4836,15 @@ begin
   DarkModeCheck.Parent:=PrefForm;
   GLForm1.SetFormDarkMode(PrefForm);
   {$ENDIF}
+
+  {$ENDIF}
   //OK button
   OkBtn:=TButton.create(PrefForm);
   OkBtn.Caption:='OK';
   OkBtn.Width:= 100;
   OkBtn.AutoSize := true;
   OkBtn.AnchorSide[akTop].Side := asrBottom;
-  {$IFDEF LCLCocoa}
+  {$IFDEF DARKMODE}
   OkBtn.AnchorSide[akTop].Control := DarkModeCheck;
   {$ELSE}
   OkBtn.AnchorSide[akTop].Control := LandmarkCheck;
@@ -4818,6 +4883,7 @@ begin
   gPrefs.BitmapZoom:= strtointdef(bmpEdit.Text,1);
   gPrefs.maxVox :=  strtointdef(maxVoxEdit.Text, kMaxVoxDefault);
   gPrefs.maxVox := max(80, gPrefs.MaxVox);
+  vols.MaxVox := gPrefs.maxVox;
   gPrefs.LoadFewVolumes := LoadFewVolumesCheck.Checked;
   if (gPrefs.ScreenCaptureTransparentBackground <>  BitmapAlphaCheck.Checked) then begin
      gPrefs.ScreenCaptureTransparentBackground :=  BitmapAlphaCheck.Checked;
@@ -4843,8 +4909,10 @@ begin
   {$IFDEF LCLCocoa}
   isRetinaChanged := gPrefs.RetinaDisplay <> RetinaCheck.Checked;
   gPrefs.RetinaDisplay := RetinaCheck.Checked;
+  {$IFDEF DARKMODE}
   isDarkModeChanged := gPrefs.DarkMode <> DarkModeCheck.Checked;
   gPrefs.DarkMode := DarkModeCheck.Checked;
+  {$ENDIF}
   {$ENDIF}
   FreeAndNil(PrefForm);
   if  isAdvancedPrefs then begin
@@ -4853,8 +4921,10 @@ begin
     exit;
   end;
   {$IFDEF LCLCocoa}
+  {$IFDEF DARKMODE}
   if isDarkModeChanged then
        GLForm1.SetDarkMode();
+  {$ENDIF}
   if isRetinaChanged then begin
      //ViewGPU1.MakeCurrent(false);
 
@@ -6180,7 +6250,7 @@ begin
   OkBtn.Parent:=PrefForm;
   OkBtn.ModalResult:= mrOK;
   //OK button
-  {$IFDEF LCLCocoa}
+  {$IFDEF DARKMODE}
   if gPrefs.DarkMode then GLForm1.SetFormDarkMode(PrefForm);
   {$ENDIF}
   PrefForm.ShowModal;
@@ -6228,6 +6298,76 @@ begin
  {$ENDIF}
 end;
 
+{$DEFINE RESIZE_FROM_DISK}
+{$IFDEF RESIZE_FROM_DISK}
+procedure TGLForm1.ResizeMenuClick(Sender: TObject);
+const
+  kInFilter = 'NIfTI|*.nii;*.nii.gz|Supported image format|*.*';
+  kFilter = 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
+var
+   saveDlg : TSaveDialog;
+   openDlg : TOpenDialog;
+   nii: TNIfTI;
+   fnm: string;
+   isOK, isAllVolumes: boolean;
+   backColor: TRGBA;
+   filter, datatype: integer;
+   scale: TVec3;
+begin
+ openDlg := TOpenDialog.Create(self);
+ openDlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+ openDlg.FileName:= gPrefs.PrevBackgroundImage;
+ {$IFDEF Darwin}
+ showmessage('Select the image you wish to resize');
+  if PosEx('.app/Contents/Resources', gPrefs.PrevBackgroundImage) > 0 then begin
+     openDlg.InitialDir := GetCurrentDir;
+     openDlg.FileName := '';
+  end;
+  {$ENDIF}
+  OpenDlg.Filter := kInFilter;
+  OpenDlg.FilterIndex := 1;
+  OpenDlg.Title := 'Select image to resize';
+  OpenDlg.Options := [ofFileMustExist];
+  if not OpenDlg.Execute then begin
+    openDlg.Free;
+    exit;
+  end;
+  fnm := openDlg.FileName;
+  openDlg.Free;
+  //fnm := '/Users/chris/spmMotor.nii.gz';
+     backColor := setRGBA(0,0,0,0);
+     nii := TNIfTI.Create(fnm, backColor, false, 4096, isOK);
+     //nii.Create(fnm, rgba, false, 4096, ok);
+     if not isOK then
+        exit;
+     //isLabel := (hdr.intent_code = kNIFTI_INTENT_LABEL) or (hdr.regular = char(98));
+     scale := ResizeForm.GetScale(nii.Header, nii.IsLabels, fnm, datatype, Filter, isAllVolumes);
+     if scale.x = 0 then begin
+        nii.Free;
+        exit;
+     end;
+     if (scale.x = 1) and (scale.y = 1) and (scale.z = 1) and (datatype = nii.Header.datatype) then begin
+      nii.Free;
+      showmessage('Nothing to do: no change to volume.' );
+      exit;
+     end;
+     saveDlg := TSaveDialog.Create(self);
+     saveDlg.Filter := kFilter;
+     saveDlg.DefaultExt := '.nii';
+     saveDlg.InitialDir:= extractfiledir(fnm);
+     saveDlg.Filename := 'r'+ChangeFileExtX(extractfilename(fnm),'');
+     //showmessage('r'+ChangeFileExtX(fnm,''));
+     if not saveDlg.Execute then begin
+        nii.Free;
+        saveDlg.Free;
+        exit;
+     end;
+     //outnm := '/Users/chris/tiff/xbango.nii';
+     nii.SaveRescaled(saveDlg.filename, scale.x, scale.y, scale.z, datatype, filter, isAllVolumes);
+     saveDlg.Free;
+     nii.Free;
+end;
+{$ELSE} //not RESIZE_FROM_DISK
 procedure TGLForm1.ResizeMenuClick(Sender: TObject);
 var
    dlg : TSaveDialog;
@@ -6268,7 +6408,8 @@ begin
  if PosEx('.app', dlg.InitialDir) > 0  then
        dlg.InitialDir := HomeDir(false);
  {$ENDIF}
- dlg.FileName:= 'r'+extractfilename(gPrefs.PrevBackgroundImage);
+ //dlg.FileName:= 'r'+extractfilename(gPrefs.PrevBackgroundImage);
+ dlg.Filename := 'r'+ChangeFileExtX(extractfilename(gPrefs.PrevBackgroundImage),'');
  dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
  dlg.DefaultExt := '*.nii';
  dlg.FilterIndex := 0;
@@ -6276,11 +6417,17 @@ begin
  nii.SaveRescaled(dlg.filename, scale.x, scale.y, scale.z, datatype, filter, isAllVolumes);
  dlg.Free;
 end;
+{$ENDIF} //if RESIZE_FROM_DISK else end
 
 procedure TGLForm1.ApplyCrop(crop: TVec6i; cropVols: TPoint);
 var
    dlg : TSaveDialog;
-   nii: TNIfTI;
+   nii, niiBig: TNIfTI;
+   fnm: string;
+   isOK: boolean;
+   backColor: TRGBA;
+   cropBig: TVec6i;
+   scale: single;
 begin
  if crop.xLo < 0 then exit;
  if not vols.Layer(0, nii) then exit;
@@ -6291,13 +6438,34 @@ begin
  if PosEx('.app', dlg.InitialDir) > 0  then
        dlg.InitialDir := HomeDir(false);
  {$ENDIF}
- dlg.FileName:= 'r'+extractfilename(gPrefs.PrevBackgroundImage);
+ dlg.FileName:= 'r'+changeFileExtX(extractfilename(gPrefs.PrevBackgroundImage),'');
  dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
  dlg.DefaultExt := '*.nii';
  dlg.FilterIndex := 0;
  if not dlg.Execute then exit;
- nii.SaveCropped(dlg.filename, crop, cropVols);
+ fnm := dlg.filename;
  dlg.Free;
+ if (not nii.IsShrunken) or (not fileexists(nii.Filename)) then begin
+     nii.SaveCropped(fnm, crop, cropVols);
+     exit;
+ end;
+ backColor := setRGBA(0,0,0,0);
+ niiBig := TNIfTI.Create(nii.Filename, backColor, false, 4096, isOK);
+ if not isOK then begin
+    showmessage('Unable to open large file '+  nii.Filename);
+    exit;
+ end;
+ scale := niiBig.Header.dim[1]/nii.Header.dim[1];
+ cropBig.xHi:= round(crop.xHi * scale);
+ cropBig.xLo:= round(crop.xLo * scale);
+ scale := niiBig.Header.dim[2]/nii.Header.dim[2];
+ cropBig.yHi:= round(crop.yHi * scale);
+ cropBig.yLo:= round(crop.yLo * scale);
+ scale := niiBig.Header.dim[3]/nii.Header.dim[3];
+ cropBig.zHi:= round(crop.zHi * scale);
+ cropBig.zLo:= round(crop.zLo * scale);
+ niiBig.SaveCropped(fnm, cropBig, cropVols);
+ niiBig.Free;
 end;
 
 procedure TGLForm1.CropMenuClick(Sender: TObject);
@@ -7448,7 +7616,7 @@ begin
   Memo.ReadOnly:=true;
   Memo.Lines.AddStrings(strs);
   strs.Free;
-  {$IFDEF LCLCocoa}
+  {$IFDEF DARKMODE}
   if gPrefs.DarkMode then GLForm1.SetFormDarkMode(PrefForm);
   {$ENDIF}
   Memo.Parent:=PrefForm;
@@ -7466,7 +7634,7 @@ begin
   i := LayerList.ItemIndex;
   if (i < 0) or (i >= LayerList.Count) then exit;
   if not vols.Layer(LayerList.ItemIndex,niftiVol) then exit;
-  {$IFDEF LCLCocoa}
+  {$IFDEF DARKMODE}
   setThemeMode(HdrForm, gPrefs.DarkMode);
   {$ENDIF}
   HdrForm.WriteHdrForm(niftiVol.HeaderNoRotation, niftiVol.IsNativeEndian, niftiVol.Filename, niftiVol.Dim, niftiVol.VolumesLoaded);
@@ -7673,7 +7841,14 @@ begin
         if s[1] = '-' then begin //special commands, '-std' '-cm actc'
            if (upcase(s[2]) = 'S') and (upcase(s[3]) = 'T') then//e.g. '-std', '-standard1mm'
               AddImg()
-           else if (upcase(s[2]) = 'C') and (upcase(s[3]) = 'M') and (i <= ParamCount) then begin//e.g. '-cm actc'
+           else if (upcase(s[2]) = 'P') then begin//e.g. '-psn_0_989382' https://stackoverflow.com/questions/10242115/os-x-strange-psn-command-line-parameter-when-launched-from-finder
+                {$IFDEF Darwin}
+                if s.StartsWith('-psn', true) then
+                   script.Add(format('#MacOS process serial number ''%s'')',[s]) );
+                {$ENDIF}
+                s := DefaultImage();
+                AddImg();
+           end else if (upcase(s[2]) = 'C') and (upcase(s[3]) = 'M') and (i <= ParamCount) then begin//e.g. '-cm actc'
               s := ParamStr(i);
               inc(i);
               script.Add(format('gl.colorname (%d,"%s")',[max(layers-1,0), s]) );
@@ -7735,6 +7910,7 @@ begin
        s := ParamStr(ParamCount);
        if (upcase(ExtractFileExt(s)) <> '.PY') and (upcase(ExtractFileExt(s)) <> '.TXT') then begin
           printf('Assuming arguments are images not script (not .py or .txt) "'+s+'"');
+
           ParamStr2Script();// AddBackground(s);
           exit;
        end;
@@ -7831,6 +8007,12 @@ begin
  {$IFDEF LCLWin64}
  w := 'Windows';
  {$ENDIF}
+  {$IFDEF CPUX86_64}
+  w := w + ' x86-64';
+  {$ENDIF}
+  {$IFDEF CPUAARCH64}
+  w := w + ' ARM64';
+  {$ENDIF}
  w := w + chr(13)+chr(10);
  w := w + 'Author: Chris Rorden' +kEOLN;
  w := w + 'License: BSD 2-Clause' +kEOLN;
@@ -7867,6 +8049,7 @@ procedure TGLForm1.AboutMenuClick(Sender: TObject);
 var
    niftiVol: TNIfTI;
    v: string;
+   {$IFNDEF METALAPI}maxVox: integer;{$ENDIF}
    //A, B, C, D: TVec4;
 begin
  (*A := V4(0,0,0,0);//+
@@ -7883,6 +8066,13 @@ begin
  {$ELSE}
  ViewGPU1.MakeCurrent(false);
  v := v + glGetString(GL_VENDOR)+'; OpenGL= '+glGetString(GL_VERSION)+'; Shader='+glGetString(GL_SHADING_LANGUAGE_VERSION);
+ glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, @maxVox);  //For 3D textures, no dimension can be greater than GL_MAX_3D_TEXTURE_SIZ
+ v := v+ kEOLN+ format('Max 3D texture size: %d', [maxVox]);
+ {$IFDEF COREGL}
+ v := v+ kEOLN+ 'Shaders require: OpenGL 3.3 Core';
+ {$ELSE}
+ v := v+ kEOLN+ 'Shaders require: OpenGL 2.1';
+ {$ENDIF}
  ViewGPU1.ReleaseContext;
  {$ENDIF}
  v := v+ kEOLN+ format('Current volume: %d %d %d', [niftiVol.Dim.X, niftiVol.Dim.Y, niftiVol.Dim.Z]);
@@ -8272,8 +8462,13 @@ begin
  {$ELSE}
  ViewGPUg :=  TOpenGLControl.Create(GLForm1);
  //ViewGPUg.DoubleBuffered:= false;
+ {$IFDEF COREGL}
  ViewGPUg.OpenGLMajorVersion:= 3;
  ViewGPUg.OpenGLMinorVersion:= 3;
+ {$ELSE}
+ ViewGPUg.OpenGLMajorVersion:= 2;
+ ViewGPUg.OpenGLMinorVersion:= 1;
+ {$ENDIF}
  ViewGPUg.MultiSampling:=4;
  {$ENDIF}
  //2022
@@ -8282,11 +8477,11 @@ begin
  ViewGPUg.Constraints.MinHeight:=4;
  ViewGPUg.Constraints.MinWidth:=4;
  //2025
- ViewGPUg.OnPaint := @GraphPaint;
+ //ViewGPUg.OnPaint := @GraphPaint;
  ViewGPUg.OnMouseDown := @GraphMouseDown;
  ViewGPUg.OnMouseWheel:= @GraphMouseWheel;
  ViewGPUg.OnKeyDown := @ViewGPUgKeyDown;
- ViewGPUg.OnResize:=@ViewGPUgResize;
+ //ViewGPUg.OnResize:=@ViewGPUgResize;
  {$IFDEF METALAPI}
  ViewGPUg.renderView.setSampleCount(4);
  {$ELSE}
@@ -8294,23 +8489,44 @@ begin
  //ViewGPUg.OnMouseDown := @GraphMouseDown;
  //ViewGPUg.OnMouseWheel:= @GraphMouseWheel;
  //ViewGPUg.OnKeyDown := @ViewGPUgKeyDown;
- //ViewGPUg.OnResize:=@ViewGPUgResize;
+ ViewGPUg.OnResize:=@ViewGPUgResize;
  ViewGPUg.MakeCurrent(false);
  {$IFDEF LCLCocoa}
  ViewGPUg.setRetina(true);
  {$ENDIF}
+ {$IFDEF COREGL}
  if (not  Load_GL_version_3_3_CORE) then begin
+    printf('Unable to load OpenGL 3.3 Core');
     showmessage('Unable to load OpenGL 3.3 Core');
     halt;
  end;
+ {$ELSE}
+ if (not  Load_GL_version_2_1) then begin
+    printf('Unable to load OpenGL 2.1');
+    showmessage('Unable to load OpenGL 2.1');
+    halt;
+ end;
+ (*  //extensions used by rendering, not graphing
+ glext_LoadExtension('GL_version_1_2'); //https://bugs.freepascal.org/view.php?id=37368
+ if not glext_LoadExtension('GL_EXT_framebuffer_object') then begin
+    printf('This software does not support GL_EXT_framebuffer_object used for GPU-based Gradient calculation');
+ end; *)
+ {$ENDIF}
  ViewGPUg.ReleaseContext;
  if GLErrorStr <> '' then begin
+    printf('Error initializing OpenGL');
+    {$IFDEF UNIX}
+    halt;
+    {$ELSE}
     showmessage(GLErrorStr);
+    {$ENDIF}
     GLErrorStr := '';
  end;
  {$ENDIF}
  gGraph := TGPUGraph.Create(ViewGPUg);
+  ViewGPUg.OnPaint := @GraphPaint;
  GraphClearMenuClick(nil);
+
 end;
 {$ELSE}
 procedure TGLForm1.GraphShow();
@@ -8326,7 +8542,35 @@ begin
  {$IFDEF METALAPI}
  ViewGPU1 :=  TMetalControl.Create(CenterPanel);
  Vol1 := TGPUVolume.Create(ViewGPU1);
+ {$ELSE}
+ ViewGPU1 :=  TOpenGLControl.Create(GLForm1);
+ {$IFDEF COREGL}
+ ViewGPU1.OpenGLMajorVersion:= 3;
+ ViewGPU1.OpenGLMinorVersion:= 3;
+ {$ELSE}
+ ViewGPU1.OpenGLMajorVersion:= 2;
+ ViewGPU1.OpenGLMinorVersion:= 1;
  {$ENDIF}
+ ViewGPU1.DepthBits:= 0;
+ Vol1 := TGPUVolume.Create(ViewGPU1);
+ {$ENDIF}
+end;
+
+function TGLForm1.DefaultImage():string;
+var
+ s: string;
+begin
+ s := gPrefs.PrevBackgroundImage;
+ if (not fileexists(s)) then
+    s := gPrefs.PrevFilename[1];
+ if (not fileexists(s)) then
+    s := StandardDir+pathdelim+'mni152.nii.gz';
+ if (not fileexists(s)) and (OpenStandardMenu.count > 0) then begin
+    s := StandardDir+pathdelim+OpenStandardMenu.Items[0].Caption+'.nii';
+    if not fileexists(s) then
+       s := s + '.gz';
+ end;
+ result := s;
 end;
 
 procedure TGLForm1.FormShow(Sender: TObject);
@@ -8336,6 +8580,7 @@ var
  i, MaxVox: integer;
  c: char;
  isForceReset, isOK: boolean;
+ psnSkip: boolean = false;
  s, shaderPath, shaderName: string;
  shaderNames : TStringList;
  newMenu: TMenuItem;
@@ -8359,6 +8604,10 @@ begin
            printf(versionStr)
         else if c='R' then
            isForceReset := true
+        {$IFDEF Darwin}
+        else if c='P' then
+             psnSkip := true //-psn: MacOS process serial number
+        {$ENDIF}
         else if (i < paramcount) and (c='M') then begin
           inc(i);
           MaxVox := strtointdef(ParamStr(i), -1);
@@ -8372,7 +8621,7 @@ begin
     inc(i);
   end; //for each parameter
   //check - on darwin form drop file
-  if (gPrefs.InitScript = '') and (MaxVox < 1) and (ParamCount >= 1) and (not isForceReset) then //and (fileexists(ParamStr(ParamCount))) then
+  if (not psnSkip) and (gPrefs.InitScript = '') and (MaxVox < 1) and (ParamCount >= 1) and (not isForceReset) then //and (fileexists(ParamStr(ParamCount))) then
      gPrefs.InitScript := '-';
   {$IFNDEF MYPY}
   gPrefs.InitScript := '';
@@ -8446,16 +8695,7 @@ begin
   if DirectoryExists(GetFSLdir+pathdelim+ 'data'+pathdelim+'standard') then
      OpenFSLMenu.Visible := true;
   CreateStandardMenus(OpenAFNIMenu);
-  s := gPrefs.PrevBackgroundImage;
-  if (not fileexists(s)) then
-     s := gPrefs.PrevFilename[1];
-  if (not fileexists(s)) then
-     s := StandardDir+pathdelim+'mni152.nii.gz';
-  if (not fileexists(s)) and (OpenStandardMenu.count > 0) then begin
-     s := StandardDir+pathdelim+OpenStandardMenu.Items[0].Caption+'.nii';
-     if not fileexists(s) then
-        s := s + '.gz';
-  end;
+  s := DefaultImage();
   if (length(gPrefs.InitScript) > 0) then
      s := '+'; //load borg for quick load
   {$IFNDEF MYPY}
@@ -8480,11 +8720,10 @@ begin
 
   {$ELSE}
   //ViewGPU1 :=  TOpenGLControl.Create(CenterPanel);
-  ViewGPU1 :=  TOpenGLControl.Create(GLForm1);
-  //ViewGPU1.Parent := CenterPanel;
-  ViewGPU1.OpenGLMajorVersion := 3;
-  ViewGPU1.OpenGLMinorVersion := 3;
-  ViewGPU1.DepthBits:= 0;
+  //x ViewGPU1 :=  TOpenGLControl.Create(GLForm1);
+  //x ViewGPU1.OpenGLMajorVersion := 3;
+  //x ViewGPU1.OpenGLMinorVersion := 3;
+  //x ViewGPU1.DepthBits:= 0;
   //Multisampling influences borders of vertex shader - orientation cube looks MUCH better with multisampling
   // Has no influence on fragment shader away from edges, e.g. no benefit for volume rendering but no cost?
   ViewGPU1.MultiSampling := 4;
@@ -8494,7 +8733,7 @@ begin
     printf('Multisampling disabled: orientation cube might look jagged. Performance benefit unlikely.');
     ViewGPU1.MultiSampling := 1;
   end;
-  Vol1 := TGPUVolume.Create(ViewGPU1);
+  //x Vol1 := TGPUVolume.Create(ViewGPU1);
   {$ENDIF}
   //ViewGPU1.Parent := GLForm1;
   ViewGPU1.Parent := CenterPanel;
@@ -8512,21 +8751,39 @@ begin
   //Vol1.Slices.RadiologicalConvention := gPrefs.FlipLR_Radiological;
   {$IFNDEF METALAPI}
   {$IFDEF LCLCocoa}
-  HelpPrefMenu.Visible:= false;
-  Vol1.SetGradientMode(gPrefs.GradientMode);
   ViewGPU1.setRetina(gPrefs.RetinaDisplay);
   {$ENDIF}
   ViewGPU1.MakeCurrent(false);
+  {$IFDEF COREGL}
   if (not  Load_GL_version_3_3_CORE) then begin
      showmessage('Unable to load OpenGL 3.3 Core');
      halt;
   end;
+  {$ELSE}
+  if (not  Load_GL_version_2_1) then begin
+     printf('Unable to load OpenGL 2.1');
+     showmessage('Unable to load OpenGL 2.1');
+     halt;
+  end;
+  glext_LoadExtension('GL_version_1_2'); //https://bugs.freepascal.org/view.php?id=37368
+  if not glext_LoadExtension('GL_EXT_framebuffer_object') then begin
+     printf('OpenGL Driver does not suppout GL_EXT_framebuffer_object. Gradient Calculations will be slow');
+     gPrefs.GradientMode := kGradientModeCPUSlowest;
+  end;
+  {$ENDIF}//if coregl
+  {$IFNDEF METALAPI}
+  glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, @maxVox);  //For 3D textures, no dimension can be greater than GL_MAX_3D_TEXTURE_SIZ
+  if MaxVox < gPrefs.MaxVox then begin
+     printf('Warning GL_MAX_3D_TEXTURE_SIZE is '+inttostr(maxVox));
+     //gPrefs.MaxVox := MaxVox;
+  end;
+  {$ENDIF}
   //GLForm1.caption := glGetString(GL_VENDOR)+'; OpenGL= '+glGetString(GL_VERSION)+'; Shader='+glGetString(GL_SHADING_LANGUAGE_VERSION);
   ViewGPU1.ReleaseContext;
+  Vol1.SetGradientMode(gPrefs.GradientMode);
   Vol1.Prepare(shaderName);
   setShaderSliders;
-  //ViewGPUPrepare(Sender);
-  {$ENDIF}
+  {$ENDIF} //if OpenGL
   {$IFDEF MATCAP}
   UpdateMatCapDrop(MatCapDrop);
   if (MatCapDrop.Items.Count > 0) then begin
@@ -8580,8 +8837,10 @@ begin
   {$ENDIF}
   {$IFDEF Darwin}
   //LayerList.Style := lbOwnerDrawFixed;//Dark mode bug https://bugs.freepascal.org/view.php?id=34600
+  {$IFDEF DARKMODE}
   SetDarkMode();
-  HelpPrefMenu.Visible := false; //use apple menu
+  {$ENDIF}
+  HelpPrefMenu.Visible:= false;
   HelpAboutMenu.Visible := false; //use apple menu
   FileSepMenu.Visible := false;
   FileExitMenu.Visible := false;
@@ -8612,7 +8871,7 @@ begin
    SetShareFloats3D(Vol1.Azimuth, Vol1.Elevation);
    SetShareFloats3D(Vol1.Azimuth, Vol1.Elevation); //twice so previous is set
    {$ENDIF}
-  //show details for layer
+   //show details for layer
   SetDisplayCheck();
   UpdateLayerBox(true);
   UpdateVisibleBoxes();
@@ -8773,7 +9032,7 @@ begin
   {$IFDEF DBUG} DebugLn('>>Prepare');{$ENDIF}
   ViewGPUg.SetPreferredFrameRate(0);
   //2022
-  //ViewGPUg.InvalidateOnResize := true; //20200606 : no longer works
+  ViewGPUg.InvalidateOnResize := true; //20200606 : no longer works
 
  (*ViewGPUg.OnPaint := @GraphPaint;
 

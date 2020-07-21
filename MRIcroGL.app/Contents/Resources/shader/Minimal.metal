@@ -71,7 +71,7 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 			   const device FragUniforms* fragUniforms    	[[ buffer(1) ]],
                const device CustomFragUniforms* customFragUniforms    	[[ buffer(2) ]]
                ) {
-	constexpr sampler textureSampler (mag_filter::linear,min_filter::linear);
+	constexpr sampler textureSampler (mag_filter::linear,min_filter::linear, address::clamp_to_zero);
 	float2 gl_FragCoord = float2(in.position.xy); //random jitter to reduce wood grain
 	//float3 lightPosition = fragUniforms->lightPos.xyz;
 	float clipThick = fragUniforms->clipThick;

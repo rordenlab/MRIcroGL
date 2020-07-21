@@ -9,13 +9,16 @@ interface
 {$DEFINE MATCAP}
 {$DEFINE CLRBAR}
 {$DEFINE TIMER} //reports GPU gradient time to stdout (Unix only)
+{$include ../Metal-Demos/common/glopts.inc}
 uses
   {$IFDEF MATCAP} GraphType, FPImage, IntfGraphics, LCLType,{$ENDIF}
   {$IFDEF TIMER} DateUtils,{$ENDIF}
  {$IFDEF CUBE} Forms, glcube, {$ENDIF}
   {$IFDEF CLRBAR}glclrbar,  {$ENDIF}
- retinahelper, niftis, SimdUtils, glcorearb, gl_core_utils, VectorMath, Classes, SysUtils, Graphics,
-    math, OpenGLContext, dialogs, nifti {$IFDEF VIEW2D}, drawvolume, colorEditor, slices2D, glfont{$ENDIF};
+  {$IFDEF COREGL} glcorearb, {$ELSE} gl, glext, {$ENDIF}
+  {$IFDEF VIEW2D} colorEditor, slices2D, glfont, {$ENDIF}
+ retinahelper, niftis, SimdUtils,  gl_core_utils, VectorMath, Classes, SysUtils, Graphics,
+    math, OpenGLContext, dialogs, nifti, drawvolume ;
 const
  kDefaultDistance = 2.25;
  kMaxDistance = 40;
@@ -29,7 +32,13 @@ type
   TGPUVolume = class
       private
         {$IFDEF VIEW2D}
-        programLine2D, programTex2D, vaoTex2D, vboTex2D, vaoLine2D, vboLine2D, vboBox3D: GLuint;
+        {$IFDEF COREGL}
+        vao, vaoTex2D, vboTex2D, vaoLine2D, vboLine2D,
+        {$ELSE}
+        textureSzLoc : GLint;
+        dlTex2D, dlLine2D,  dlBox3D, dlColorEditor,
+        {$ENDIF}
+        programLine2D, programTex2D: GLuint;
         slices2D: TSlices2D;
         uniform_drawTex, uniform_drawLUT, uniform_drawAlpha,
         uniform_viewportSizeLine, uniform_viewportSizeTex, uniform_backAlpha, uniform_tex, uniform_overlay, uniform_overlaysLoc: GLint;
@@ -37,6 +46,7 @@ type
         isSmooth2D, colorEditorVisible: boolean;
         txt: TGPUFont;
         {$ENDIF}
+        {$IFDEF COREGL}vboBox3D: GLuint;{$ENDIF}
         shaderPrefs: TShaderPrefs;
         RayCastQuality1to5, maxDim,fAzimuth,fElevation, overlayNum, overlayGradTexWidth: integer;
         fDistance: single;
@@ -50,7 +60,7 @@ type
         backAlphaLoc, sliceSizeLoc, stepSizeLoc, overlaysLoc : GLint;
         overlayGradientTexture3D, overlayIntensityTexture3D,
         drawTexture1D, drawTexture3D,
-        gradientTexture3D, intensityTexture3D, vao, programRaycast, programRaycastBetter: GLuint;
+        gradientTexture3D, intensityTexture3D, programRaycast, programRaycastBetter: GLuint;
         {$IFDEF MATCAP}
         matcap2D: GLuint;
         {$ENDIF}
@@ -65,6 +75,7 @@ type
         procedure CreateDrawTex(Dim: TVec3i; Vals: TUInt8s);
         procedure UpdateDraw(Drawing: TDraw);
         procedure CreateOverlayTextures(Dim: TVec3i; volRGBA: TRGBAs);
+        {$IFNDEF COREGL}procedure UpdateColorEditorDisplayList; {$ENDIF}
       public
         matcapLoc: GLint;
         gradientMode: integer;
@@ -140,7 +151,7 @@ procedure GetErrorAll(p: integer; str: string = '');  //report OpenGL Error
       s := s+'GL_INVALID_VALUE' //out of range https://www.khronos.org/registry/OpenGL-Refpages/es2.0/xhtml/glGetError.xml
    else
        s := s + inttostr(Error);
-   writeln('>>OpenGL Error (reduce MaxVox) '+str+s);
+   printf('>>OpenGL Error (reduce MaxVox) '+str+s);
 end;
 {$ELSE}
 begin
@@ -150,17 +161,19 @@ end;
 
 procedure  TGPUVolume.SetTextContrast(clearclr: TRGBA);
 begin
+
+  {$IFDEF VIEW2D}
   if (clearclr.R + clearclr.G + clearclr.B) > 300 then
      txt.FontColor := Vec4(0,0,0,1)
   else
      txt.FontColor := Vec4(1,1,1,1);
-  {$IFDEF VIEW2D}
   slices2D.SetFontColor(txt.FontColor);
   {$ENDIF}
 end;
 
 {$IFDEF VIEW2D}
 const
+{$IFDEF COREGL}
 kVertTex2D = '#version 330'
 +#10'layout(location = 0) in vec2 point;'
 +#10'layout(location = 4) in vec4 texCoordIn;'
@@ -172,7 +185,6 @@ kVertTex2D = '#version 330'
 +#10'    pixelPosition -= (ViewportSize/2.0);'
 +#10'    gl_Position = vec4((pixelPosition / (ViewportSize/2.0)), 0.0, 1.0);'
 +#10'}';
-//Simple Fragment Shader
 
 kFragTex2D = '#version 330'
 +#10'in vec4 texCoord;'
@@ -221,8 +233,69 @@ kFragLine2D = '#version 330'
 +#10'void main() {'
 +#10'    color = texCoord;'
 +#10'}';
+{$ELSE}
+kVertTex2D = '#version 120'
++#10'//akVertTex2D'
++#10'uniform vec2 ViewportSize;'
++#10'varying vec4 texCoord;'
++#10'void main() {'
++#10'    vec2 pixelPosition = gl_Vertex.xy;'
++#10'    pixelPosition -= (ViewportSize/2.0);'
++#10'    gl_Position = vec4((pixelPosition / (ViewportSize/2.0)), 0.0, 1.0);'
++#10'    texCoord = gl_Color;'
++#10'}';
+ //mango
+kFragTex2D = '#version 120'
++#10'//akFragTex2D'
++#10'varying vec4 texCoord;'
++#10'uniform float backAlpha = 1.0;'
++#10'uniform sampler3D tex, drawTex, overlay;'
++#10'uniform sampler1D drawLUT;'
++#10'uniform float drawAlpha = 0.0;'
++#10'uniform int overlays = 0;'
++#10'void main() {'
++#10'    vec4 color = texture3D(tex,texCoord.xyz);'
++#10'    color.a = smoothstep(0.0, 0.1, color.a);'
++#10'    color.a *= backAlpha;'
++#10'    //if ((overlays == 0) && (drawAlpha == 0.0)) color.r = 1.0; //test case where neither overlay or draw is visible'
++#10'    if ((overlays == 0) && (drawAlpha == 0.0)) {'
++#10'        gl_FragColor = color;'
++#10'        return;'
++#10'    }'
++#10'    //if (color.a > 0.0) color.a = backAlpha;'
++#10'    vec4 ocolor = texture3D(overlay, texCoord.xyz);'
++#10'    color.rgb = mix(color.rgb, ocolor.rgb, ocolor.a);'
++#10'    color.a = max(color.a, ocolor.a);'
++#10'    if (drawAlpha == 0.0) {'
++#10'        gl_FragColor = color;'
++#10'        return;'
++#10'    }'
++#10'    ocolor = texture1D(drawLUT, texture3D(drawTex, texCoord.xyz).r).rgba;'
++#10'    ocolor.a *= drawAlpha;'
++#10'    color.rgb = mix(color.rgb, ocolor.rgb, ocolor.a);'
++#10'    color.a = max(color.a, ocolor.a);'
++#10'    gl_FragColor = color;'
++#10'}';
 
-{$ENDIF}
+kVertLine2D = '#version 120'
++#10'//akVertLine2D'
++#10'uniform vec2 ViewportSize;'
++#10'varying vec4 texCoord;'
++#10'void main() {'
++#10'    texCoord = gl_Color;'
++#10'    vec2 pixelPosition = gl_Vertex.xy;'
++#10'    pixelPosition -= (ViewportSize/2.0);'
++#10'    gl_Position = vec4((pixelPosition / (ViewportSize/2.0)), 0.0, 1.0);'
++#10'}';
+
+kFragLine2D = '#version 120'
++#10'//akFragLine2D'
++#10'varying vec4 texCoord;'
++#10'void main() {'
++#10'    gl_FragColor = texCoord;'
++#10'}';
+{$ENDIF} //IF COREGL else legacy
+{$ENDIF} //If View2D
 //uses vrForm;
 procedure TGPUVolume.SetShaderSlider(idx: integer; newVal: single);
 begin
@@ -247,7 +320,7 @@ begin //creates an empty texture in VRAM without requiring memory copy from RAM
     //https://www.opengl.org/archives/resources/faq/technical/texture.htm
     printf(format('blur proxy test %dx%dx%d',[width, height, depth]));
     if (width < Xsz) then begin
-       {$IFDEF UNIX}writeln('Unable to generate gradient texture. Solution: adjust "MaxVox" or press "Reset" button in preferences.');{$ENDIF}
+       printf('Unable to generate gradient texture. Solution: adjust "MaxVox" or press "Reset" button in preferences.');
        exit(0);
     end;
     glGenTextures(1, @result);
@@ -275,6 +348,7 @@ begin
     glUniform1f(glGetUniformLocation(prog, pAnsiChar(Name)), value) ;
 end;
 
+{$IFDEF COREGL}
 const kBlurSobelVert = '#version 330 core'
 +#10'layout(location = 0) in vec3 vPos;'
 +#10'out vec2 TexCoord;'
@@ -326,7 +400,50 @@ const kSobelFrag = '#version 330 core'
 +#10'  gradientSample.rgb =  (gradientSample.rgb * 0.5)+0.5;'
 +#10'  FragColor = gradientSample;'
 +#10'}';
+{$ELSE}
 
+const kBlurSobelVert = '';
+
+kBlurFrag = '#version 120'
++#10'uniform float coordZ, dX, dY, dZ;'
++#10'uniform sampler3D intensityVol;'
++#10'void main(void) {'
++#10' vec3 vx = vec3(gl_TexCoord[0].xy, coordZ);'
++#10' vec4 samp = texture3D(intensityVol,vx+vec3(+dX,+dY,+dZ));'
++#10' samp += texture3D(intensityVol,vx+vec3(+dX,+dY,-dZ));'
++#10' samp += texture3D(intensityVol,vx+vec3(+dX,-dY,+dZ));'
++#10' samp += texture3D(intensityVol,vx+vec3(+dX,-dY,-dZ));'
++#10' samp += texture3D(intensityVol,vx+vec3(-dX,+dY,+dZ));'
++#10' samp += texture3D(intensityVol,vx+vec3(-dX,+dY,-dZ));'
++#10' samp += texture3D(intensityVol,vx+vec3(-dX,-dY,+dZ));'
++#10' samp += texture3D(intensityVol,vx+vec3(-dX,-dY,-dZ));'
++#10' gl_FragColor = samp*0.125;'
++#10'}';
+
+//this will estimate a Sobel smooth
+const kSobelFrag = '#version 120'
++#10'uniform float coordZ, dX, dY, dZ;'
++#10'uniform sampler3D intensityVol;'
++#10'void main(void) {'
++#10'  vec3 vx = vec3(gl_TexCoord[0].xy, coordZ);'
++#10'  float TAR = texture3D(intensityVol,vx+vec3(+dX,+dY,+dZ)).a;'
++#10'  float TAL = texture3D(intensityVol,vx+vec3(+dX,+dY,-dZ)).a;'
++#10'  float TPR = texture3D(intensityVol,vx+vec3(+dX,-dY,+dZ)).a;'
++#10'  float TPL = texture3D(intensityVol,vx+vec3(+dX,-dY,-dZ)).a;'
++#10'  float BAR = texture3D(intensityVol,vx+vec3(-dX,+dY,+dZ)).a;'
++#10'  float BAL = texture3D(intensityVol,vx+vec3(-dX,+dY,-dZ)).a;'
++#10'  float BPR = texture3D(intensityVol,vx+vec3(-dX,-dY,+dZ)).a;'
++#10'  float BPL = texture3D(intensityVol,vx+vec3(-dX,-dY,-dZ)).a;'
++#10'  vec4 gradientSample = vec4 (0.0, 0.0, 0.0, 0.0);'
++#10'  gradientSample.r =   BAR+BAL+BPR+BPL -TAR-TAL-TPR-TPL;'
++#10'  gradientSample.g =  TPR+TPL+BPR+BPL -TAR-TAL-BAR-BAL;'
++#10'  gradientSample.b =  TAL+TPL+BAL+BPL -TAR-TPR-BAR-BPR;'
++#10'  gradientSample.a = (abs(gradientSample.r)+abs(gradientSample.g)+abs(gradientSample.b))*0.29;'
++#10'  gradientSample.rgb = normalize(gradientSample.rgb);'
++#10'  gradientSample.rgb =  (gradientSample.rgb * 0.5)+0.5;'
++#10'  gl_FragColor = gradientSample;'
++#10'}';
+{$ENDIF}
 procedure TGPUVolume.CreateGradientVolumeGPU(Xsz,Ysz,Zsz: integer; var inTex, grTex: GLuint);
 //given 3D input texture inTex (with dimensions Xsz, Ysz, Zsz) generate 3D gradient texture gradTex
 //http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-14-render-to-texture/
@@ -341,10 +458,15 @@ var
 begin
   glFinish();//force update
   {$IFDEF TIMER}startTime := now;{$ENDIF}
+  {$IFDEF COREGL}
   glBindVertexArray(vao);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboBox3D);
   glGenFramebuffers(1, @fb);
   glBindFramebuffer(GL_FRAMEBUFFER, fb);
+  {$ELSE}
+  glGenFramebuffersEXT(1, @fb);
+  glBindFramebufferEXT(GL_FRAMEBUFFER, fb);
+  {$ENDIF}
   glDisable(GL_CULL_FACE);
   GetErrorAll(96,'CreateGradient');
   //{$IFNDEF COREGL}glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);{$ENDIF}// <- REQUIRED
@@ -354,6 +476,13 @@ begin
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
   GetErrorAll(97,'CreateGradient');
   glViewport(0, 0, XSz, YSz);
+  {$IFNDEF COREGL}
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  glOrtho (0, 1,0, 1, -1, 1);  //gluOrtho2D(0, 1, 0, 1);  https://www.opengl.org/sdk/docs/man2/xhtml/gluOrtho2D.xml
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+  {$ENDIF}
   //glDisable(GL_TEXTURE_2D); //<- generates error!
   glDisable(GL_BLEND);
   tempTex3D := 0;
@@ -369,21 +498,38 @@ begin
     glUniform1fx(programBlur, 'dX', 0.7/XSz); //0.5 for smooth - center contributes
     glUniform1fx(programBlur, 'dY', 0.7/YSz);
     glUniform1fx(programBlur, 'dZ', 0.7/ZSz);
+    {$IFDEF COREGL}
     glBindVertexArray(vao);
+    {$ENDIF}
     for i := 0 to (ZSz-1) do begin
         coordZ := 1/ZSz * (i + 0.5);
         glUniform1fx(programBlur, 'coordZ', coordZ);
         //glFramebufferTexture3D(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, tempTex3D, 0, i);//output texture
         //Ext required: Delphi compile on Winodws 32-bit XP with NVidia 8400M
+        {$IFDEF COREGL}
         glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, tempTex3D, 0, i);//output texture
+        {$ELSE}
+        glFramebufferTexture3DExt(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, tempTex3D, 0, i);//output texture
+        {$ENDIF}
         glClear(GL_DEPTH_BUFFER_BIT);  // clear depth bit (before render every layer)
+        {$IFDEF COREGL}
         {$IFDEF STRIP}
         glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, nil);
         {$ELSE}
         glDrawElements(GL_TRIANGLES, 2*3, GL_UNSIGNED_INT, nil);
         {$ENDIF}
-        //GetErrorAll(i,'dCreateGradient');
-        //xxxxxx glCheckFramebufferStatus
+        {$ELSE}
+        glBegin(GL_QUADS);
+        glTexCoord2f(0, 0);
+        glVertex2f(0, 0);
+        glTexCoord2f(1.0, 0);
+        glVertex2f(1.0, 0.0);
+        glTexCoord2f(1.0, 1.0);
+        glVertex2f(1.0, 1.0);
+        glTexCoord2f(0, 1.0);
+        glVertex2f(0.0, 1.0);
+        glEnd();
+        {$ENDIF}
     end;
     GetErrorAll(101,'CreateGradient');
     glUseProgram(0);
@@ -401,16 +547,35 @@ begin
     glUniform1fx(programSobel, 'dX', 1.2/XSz ); //1.0 for SOBEL - center excluded
     glUniform1fx(programSobel, 'dY', 1.2/YSz);
     glUniform1fx(programSobel, 'dZ', 1.2/ZSz);
+    {$IFDEF COREGL}
     glBindVertexArray(vao);
+    {$ENDIF}
     for i := 0 to (ZSz-1) do begin
         coordZ := 1/ZSz * (i + 0.5);
         glUniform1fx(programSobel, 'coordZ', coordZ);
+        {$IFDEF COREGL}
         glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, grTex, 0, i);//output is background
+        {$ELSE}
+        glFramebufferTexture3DExt(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, grTex, 0, i);//output is background
+        {$ENDIF}
         glClear(GL_DEPTH_BUFFER_BIT);
+        {$IFDEF COREGL}
         {$IFDEF STRIP}
         glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_INT, nil);
         {$ELSE}
         glDrawElements(GL_TRIANGLES, 2*3, GL_UNSIGNED_INT, nil);
+        {$ENDIF}
+        {$ELSE}
+        glBegin(GL_QUADS);
+        glTexCoord2f(0, 0);
+        glVertex2f(0, 0);
+        glTexCoord2f(1.0, 0);
+        glVertex2f(1.0, 0.0);
+        glTexCoord2f(1.0, 1.0);
+        glVertex2f(1.0, 1.0);
+        glTexCoord2f(0, 1.0);
+        glVertex2f(0.0, 1.0);
+        glEnd();
         {$ENDIF}
     end;
     glUseProgram(0);
@@ -419,14 +584,19 @@ begin
      //clean up:
      if isSmoothGrad then
         glDeleteTextures(1,@tempTex3D);
+    {$IFDEF COREGL}
     {$IFDEF LCLgtk3}
     glBindFramebuffer(GL_FRAMEBUFFER, 1);
     {$ELSE}
      glBindFramebuffer(GL_FRAMEBUFFER, 0);
     {$ENDIF}
-    GetErrorAll(103,'CreateGradient');
      glDeleteFramebuffers(1, @fb);
-     glActiveTexture( GL_TEXTURE0 );  //required if we will draw 2d slices next
+    {$ELSE}
+    glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+    glDeleteFramebuffersEXT(1, @fb);
+    {$ENDIF}
+    GetErrorAll(103,'CreateGradient');
+    glActiveTexture( GL_TEXTURE0 );  //required if we will draw 2d slices next
     {$IFDEF TIMER}printf(format('GPU Gradient time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
 end;
 {$ENDIF}
@@ -470,6 +640,7 @@ begin
 end;
 const
  //A common vertex shader for all volume rendering
+{$IFDEF COREGL}
 kVert = '#version 330 core'
 +#10'layout(location = 0) in vec3 vPos;'
 +#10'out vec3 TexCoord1;'
@@ -480,6 +651,18 @@ kVert = '#version 330 core'
 +#10'  gl_Position = ModelViewProjectionMatrix * vec4(vPos, 1.0);'
 +#10'  vPosition = gl_Position;'
 +#10'}';
+{$ELSE}
+kVert = '#version 120'
++#10'varying vec3 TexCoord1;'
++#10'varying vec4 vPosition;'
++#10'uniform mat4 ModelViewProjectionMatrix;'
++#10'void main() {'
++#10'    gl_Position = ModelViewProjectionMatrix * vec4(gl_Vertex.xyz, 1.0);'
++#10'    TexCoord1 = gl_Vertex.rgb;'
++#10'    vPosition = gl_Position;'
++#10'}';
+
+{$ENDIF}
 
 {$IFDEF MATCAP}
 
@@ -581,6 +764,8 @@ end;
 {$ENDIF}
 
 const
+
+{$IFDEF COREGL}
 kFragBase = '#version 330'
 +#10'in vec3 TexCoord1;'
 +#10'out vec4 FragColor;'
@@ -630,19 +815,22 @@ kFragBase = '#version 330'
 +#10'		samplePos = vec4(samplePos.xyz+dir * disBackFace, disBackFace);'
 +#10'	}'
 +#10'	return samplePos;'
++#10'}'
++#10'vec4 texture2D(sampler2D vol, vec2 coord) {'
++#10'	return texture(vol, coord); //trilinear interpolation'
 +#10'}';
 
 // GetBackPosition -> when does ray exit unit cube http://prideout.net/blog/?p=64
 
 kFragFaster = kFragBase
-+#10'vec4 texture3D(sampler3D vol, vec3 coord) {'
++#10'vec4 texture3Df(sampler3D vol, vec3 coord) {'
 +#10'	return texture(vol, coord); //trilinear interpolation'
-+#10'}'
-+#10;
++#10'}';
+
 
 
 kFragBetter = kFragBase
-+#10'vec4 texture3D(sampler3D vol, vec3 coord) {'
++#10'vec4 texture3Df(sampler3D vol, vec3 coord) {'
 +#10'  // shift the coordinate from [0,1] to [-0.5, textureSz-0.5]'
 +#10'  vec3 textureSz = textureSize(vol, 0);'
 +#10'  vec3 coord_grid = coord * textureSz - 0.5;'
@@ -863,7 +1051,100 @@ kFrag = kFragFaster
 +#10'		colAcc.a = max(colAcc.a, overAcc.a);'
 +#10'	FragColor = colAcc;'
 +#10'}';
+{$ELSE}
+kFragBase = '#version 120'
++#10'varying vec3 TexCoord1;'
++#10'varying vec4 vPosition;'
++#10'uniform float stepSize, sliceSize;'
++#10'uniform sampler3D intensityVol, gradientVol;'
++#10'uniform sampler3D intensityOverlay, gradientOverlay;'
++#10'uniform vec3 lightPosition, rayDir;'
++#10'uniform vec4 clipPlane;'
++#10'uniform float clipThick;'
++#10'uniform int overlays = 0;'
++#10'uniform float backAlpha = 0.5;'
++#10'uniform vec3 textureSz = vec3(3.0, 2.0, 1.0);'
++#10'vec3 GetBackPosition (vec3 startPosition) {'
++#10' vec3 invR = 1.0 / rayDir;'
++#10' vec3 tbot = invR * (vec3(0.0)-startPosition);'
++#10' vec3 ttop = invR * (vec3(1.0)-startPosition);'
++#10' vec3 tmax = max(ttop, tbot);'
++#10' vec2 t = min(tmax.xx, tmax.yz);'
++#10' return startPosition + (rayDir * min(t.x, t.y));'
++#10'}'
++#10'void fastPass (float len, vec3 dir, sampler3D vol, inout vec4 samplePos){'
++#10'	vec4 deltaDir = vec4(dir.xyz * max(stepSize, sliceSize * 1.95), max(stepSize, sliceSize * 1.95));'
++#10'	while  (texture3D(vol,samplePos.xyz).a == 0.0) {'
++#10'		samplePos += deltaDir;'
++#10'		if (samplePos.a > len) return; //no hit'
++#10'	}'
++#10'	samplePos -= deltaDir;'
++#10'}'
++#10'vec4 applyClip(vec3 dir, inout vec4 samplePos, inout float len) {'
++#10'	float cdot = dot(dir,clipPlane.xyz);'
++#10'	if  ((clipPlane.a > 1.0) || (cdot == 0.0)) return samplePos;'
++#10'	bool frontface = (cdot > 0.0);'
++#10'	float dis = (-clipPlane.a - dot(clipPlane.xyz, samplePos.xyz-0.5)) / cdot;'
++#10'	float  disBackFace = (-(clipPlane.a-clipThick) - dot(clipPlane.xyz, samplePos.xyz-0.5)) / cdot;'
++#10'	if (((frontface) && (dis >= len)) || ((!frontface) && (dis <= 0.0))) {'
++#10'		samplePos.a = len + 1.0;'
++#10'		return samplePos;'
++#10'	}'
++#10'	if (frontface) {'
++#10'		dis = max(0.0, dis);'
++#10'		samplePos = vec4(samplePos.xyz+dir * dis, dis);'
++#10'		len = min(disBackFace, len);'
++#10'	}'
++#10'	if (!frontface) {'
++#10'		len = min(dis, len);'
++#10'		disBackFace = max(0.0, disBackFace);'
++#10'		samplePos = vec4(samplePos.xyz+dir * disBackFace, disBackFace);'
++#10'	}'
++#10'	return samplePos;'
++#10'}';
 
+kFragFaster = kFragBase
+ +#10'vec4 texture3Df(sampler3D vol, vec3 coord) {'
+ +#10'	return texture3D(vol, coord); //trilinear interpolation'
+ +#10'}';
+
+kFragBetter = kFragBase
++#10'vec4 texture3Df(sampler3D vol, vec3 coord) {'
++#10'  // shift the coordinate from [0,1] to [-0.5, textureSz-0.5]'
++#10'  vec3 coord_grid = coord * textureSz - 0.5;'
++#10'  vec3 index = floor(coord_grid);'
++#10'  vec3 fraction = coord_grid - index;'
++#10'  vec3 one_frac = 1.0 - fraction;'
++#10'  vec3 w0 = 1.0/6.0 * one_frac*one_frac*one_frac;'
++#10'  vec3 w1 = 2.0/3.0 - 0.5 * fraction*fraction*(2.0-fraction);'
++#10'  vec3 w2 = 2.0/3.0 - 0.5 * one_frac*one_frac*(2.0-one_frac);'
++#10'  vec3 w3 = 1.0/6.0 * fraction*fraction*fraction;'
++#10'  vec3 g0 = w0 + w1;'
++#10'  vec3 g1 = w2 + w3;'
++#10'  vec3 mult = 1.0 / textureSz;'
++#10'  vec3 h0 = mult * ((w1 / g0) - 0.5 + index);  //h0 = w1/g0 - 1, move from [-0.5, textureSz-0.5] to [0,1]'
++#10'  vec3 h1 = mult * ((w3 / g1) + 1.5 + index);  //h1 = w3/g1 + 1, move from [-0.5, textureSz-0.5] to [0,1]'
++#10'  // fetch the eight linear interpolations'
++#10'  // weighting and fetching is interleaved for performance and stability reasons'
++#10'  vec4 tex000 =  texture3D(vol,h0);'
++#10'  vec4 tex100 =  texture3D(vol,vec3(h1.x, h0.y, h0.z));'
++#10'  tex000 = mix(tex100, tex000, g0.x);  //weigh along the x-direction'
++#10'  vec4 tex010 =  texture3D(vol,vec3(h0.x, h1.y, h0.z));'
++#10'  vec4 tex110 =  texture3D(vol,vec3(h1.x, h1.y, h0.z));'
++#10'  tex010 = mix(tex110, tex010, g0.x);  //weigh along the x-direction'
++#10'  tex000 = mix(tex010, tex000, g0.y);  //weigh along the y-direction'
++#10'  vec4 tex001 =  texture3D(vol,vec3(h0.x, h0.y, h1.z));'
++#10'  vec4 tex101 =  texture3D(vol,vec3(h1.x, h0.y, h1.z));'
++#10'  tex001 = mix(tex101, tex001, g0.x);  //weigh along the x-direction'
++#10'  vec4 tex011 =  texture3D(vol,vec3(h0.x, h1.y, h1.z));'
++#10'  vec4 tex111 =  texture3D(vol,h1);'
++#10'  tex011 = mix(tex111, tex011, g0.x);  //weigh along the x-direction'
++#10'  tex001 = mix(tex011, tex001, g0.y);  //weigh along the y-direction'
++#10'  return mix(tex001, tex000, g0.z);  //weigh along the z-direction'
++#10'}';
+
+kFrag = kFragFaster;
+{$ENDIF}
 procedure TGPUVolume.SetShader(shaderName: string);
 var
   VertexProgram, FragmentProgram: string;
@@ -876,7 +1157,6 @@ begin
   if VertexProgram = '' then VertexProgram := kVert;
   if FragmentProgram = '' then FragmentProgram := kFrag;
   programRaycastBetter :=  initVertFrag(VertexProgram, FragmentProgram);
-
   if (programRaycast <> 0) then glDeleteProgram(programRaycast);
   loadVertFrag(shaderName, VertexProgram, FragmentProgram, kFragFaster);
   if VertexProgram = '' then VertexProgram := kVert;
@@ -893,6 +1173,9 @@ begin
   normLoc := glGetUniformLocation(programRaycast, pAnsiChar('NormalMatrix'));
   //printf(format('%d %s--->matcap @ %d = %d', [normLoc, shaderName, matcapLoc, matcap2D]));
   {$ENDIF}
+  {$IFNDEF COREGL}
+  textureSzLoc := glGetUniformLocation(programRaycast, pAnsiChar('textureSz'));
+  {$ENDIF}
   //loopsLoc := glGetUniformLocation(programRaycast, pAnsiChar('loops'));
   overlaysLoc := glGetUniformLocation(programRaycast, pAnsiChar('overlays'));
   lightPositionLoc := glGetUniformLocation(programRaycast, pAnsiChar('lightPosition'));
@@ -908,6 +1191,9 @@ begin
          prefLoc[i] := glGetUniformLocation(programRaycast, pAnsiChar(shaderPrefs.Uniform[i].name));
   if GLErrorStr <>  '' then begin
    glControl.ReleaseContext;
+   {$IFDEF UNIX}
+   printf(GLErrorStr);
+   {$ENDIF}
    showmessage(GLErrorStr);
    GLErrorStr := '';
   end;
@@ -946,7 +1232,7 @@ var
 begin
   glControl.MakeCurrent();
   if (shaderName = '') or (not fileexists(shaderName)) then
-     shaderName := ShaderDir+pathdelim+'Default.glsl';
+  shaderName := ShaderDir+pathdelim+'Default.glsl';
   if (not fileexists(shaderName)) then
      shaderName := '';
   SetShader(shaderName);
@@ -961,6 +1247,7 @@ begin
   programLine2D := initVertFrag(kVertLine2D,kFragLine2D);
   glUseProgram(programLine2D);
   uniform_viewportSizeLine := glGetUniformLocation(programLine2D, pAnsiChar('ViewportSize'));
+  {$IFDEF COREGL}
   //setup VAO for Tex
   vboTex2D := 0;
   vaoTex2D := 0;
@@ -968,10 +1255,6 @@ begin
   glGenVertexArrays(1, @vaoTex2D);
   vboTex2D := 0;
   glGenBuffers(1, @vboTex2D);
-  //glBindBuffer(GL_ARRAY_BUFFER, vboTex2D);
-  //glBufferData(GL_ARRAY_BUFFER,slices2D.NumberOfLineVertices*SizeOf(TVertex2D), @slices2D.LineVertices[0], GL_STATIC_DRAW);
-  //glBindBuffer(GL_ARRAY_BUFFER, 0);
-  // Prepare vertrex array object (VAO)
   glBindVertexArray(vaoTex2D);
   glBindBuffer(GL_ARRAY_BUFFER, vboTex2D);
   //Vertices
@@ -982,6 +1265,11 @@ begin
   glEnableVertexAttribArray(4);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glBindVertexArray(0);  //required, even if we will bind it next
+  {$ELSE}
+  dlTex2D := 0; //display list empty
+  dlBox3D := 0;
+  dlColorEditor := 0;
+  {$ENDIF}
   //2D program
   programTex2D := initVertFrag(kVertTex2D,kFragTex2D);
   glUseProgram(programTex2D);
@@ -995,6 +1283,7 @@ begin
   uniform_overlaysLoc := glGetUniformLocation(programTex2D, pAnsiChar('overlays'));
   CreateDrawTex(pti(4,4,4), nil);
   CreateDrawColorTable;
+  {$IFDEF COREGL}
   //setup VAO for lines
   vboLine2D := 0;
   vaoLine2D := 0;
@@ -1014,6 +1303,9 @@ begin
   glEnableVertexAttribArray(4);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glBindVertexArray(0);  //required, even if we will bind it next
+  {$ELSE}
+  dlLine2D := 0;
+  {$ENDIF}
   Txt := TGPUFont.Create(ResourceDir+pathdelim+'Roboto.png',  success, glControl); //<-multi-channel channel fonts glmtext
   slices2D := TSlices2D.Create(Txt);
   //slices2D := TSlices2D.Create();
@@ -1049,17 +1341,29 @@ begin
   glControl := fromView;
   gradientMode := kGradientModeGPUSlow;
   {$IFDEF CLRBAR}clrbar := nil;{$ENDIF}
+  {$IFDEF VIEW2D}
+  slices2D := nil;
+  SelectionRect := Vec4(-1,0,0,0);
+  colorEditorVisible := false;
+  isSmooth2D := true;
+  {$ENDIF}
   fDistance := kDefaultDistance;
   fAzimuth := 110;
   fElevation := 30;
   overlayNum := 0;
   overlayGradTexWidth := 2; //refresh
   RaycastQuality1to5 := 5;
-  SelectionRect := Vec4(-1,0,0,0);
   fLightPos := Vec4(0, 0.707, 0.707, 0);
   ClipThick := 1;
   fClipPlane := Vec4(0, 0, 0, -1);
+  {$IFDEF COREGL}
   vao:= 0;
+  {$ELSE}
+  dlTex2D := 0;
+  dlLine2D := 0;
+  dlBox3D := 0;
+  dlColorEditor := 0;
+  {$ENDIF}
   matcap2D := 0;
   overlayGradientTexture3D := 0;
   overlayIntensityTexture3D := 0;
@@ -1067,8 +1371,6 @@ begin
   drawTexture3D := 0;
   gradientTexture3D := 0;
   intensityTexture3D := 0;
-  colorEditorVisible := false;
-  isSmooth2D := true;
   shaderPrefs.nUniform:= 0;
   programRaycast := 0;
   programRaycastBetter := 0;
@@ -1106,8 +1408,14 @@ var
       0,7,3
       ); //idx = each cube has 6 faces, each composed of two triangles = 12 tri indices
 {$ENDIF}
-    vbo_point: gluint;
+{$IFDEF COREGL}
+vbo_point: gluint;
+{$ELSE}
+i, nface, v: integer;
+v3: TVec3;
+{$ENDIF}
 begin  //vboCube, vaoCube,
+  {$IFDEF COREGL}
   vbo_point := 0;
   vao := 0;
   glGenBuffers(1, @vbo_point);
@@ -1131,6 +1439,29 @@ begin  //vboCube, vaoCube,
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, 36*sizeof(GLuint), @idx[0], GL_STATIC_DRAW); //cube is 6 faces, 2 triangles per face, 3 indices per triangle
   {$ENDIF}
   //do not delete the VBOs! http://stackoverflow.com/questions/25167562/how-to-dispose-vbos-stored-in-a-vao
+  {$ELSE}
+  //Legacy OpenGL:
+  if not dlBox3D <> 0 then
+     glDeleteLists(dlBox3D, 1);
+  dlBox3D := glGenLists(1);
+  glNewList(dlBox3D, GL_COMPILE);
+  {$IFDEF STRIP}
+  glBegin(GL_TRIANGLE_STRIP);
+  nface := 14;
+  {$ELSE}
+  glBegin(GL_TRIANGLES);
+  nface := 36;
+  {$ENDIF}
+  for i := 0 to nface-1 do begin
+      v := idx[i];
+      v3.x := vtx[v*3];
+      v3.y := vtx[(v*3)+1];
+      v3.z := vtx[(v*3)+2];
+      glVertex3f(v3.x, v3.y, v3.z);
+  end;
+  glEnd();
+  glEndList();
+  {$ENDIF}
 end;
 
 procedure TGPUVolume.CreateOverlayTextures(Dim: TVec3i; volRGBA: TRGBAs);
@@ -1238,7 +1569,7 @@ begin
   glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, @d);
   {$IFDEF UNIX}printf(format('gradientTexture3D proxy test %dx%dx%d',[w, h, d]));{$ENDIF}
    if (w < 1) then begin
-      {$IFDEF UNIX}writeln(format('Gradient texture error (%dx%dx%d). Solution: adjust "MaxVox" or press "Reset" button in preferences.', [w, h, d]));{$ENDIF}
+      printf(format('Gradient texture error (%dx%dx%d). Solution: adjust "MaxVox" or press "Reset" button in preferences.', [w, h, d]));
       glControl.ReleaseContext;
       {$IFNDEF LCLCocoa}
       showmessage('Image too large. Try adjusting "MaxVox" or press "Reset" button in preferences.');
@@ -1327,7 +1658,7 @@ begin
  //https://www.opengl.org/archives/resources/faq/technical/texture.htm
  {$IFDEF UNIX}printf(format('gradientTexture3D proxy test %dx%dx%d',[width, height, depth]));{$ENDIF}
  if (width < 1) then begin
-    {$IFDEF UNIX}writeln(format('Gradient texture error (%dx%dx%d). Solution: adjust "MaxVox" or press "Reset" button in preferences.', [Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z]));{$ENDIF}
+    printf(format('Gradient texture error (%dx%dx%d). Solution: adjust "MaxVox" or press "Reset" button in preferences.', [Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z]));
     glControl.ReleaseContext;
     {$IFNDEF LCLCocoa}
     showmessage('Image too large. Try adjusting "MaxVox" or press "Reset" button in preferences.');
@@ -1409,12 +1740,13 @@ end; *)
 {$IFDEF VIEW2D}
 function TGPUVolume.Slice2Dmm(var vol: TNIfTI; out vox: TVec3i): TVec3;
 begin
+   if (slices2D = nil) then exit(Vec3(0.0, 0.0, 0.0));
     result := slices2D.FracMM(vol.Mat, vol.Dim, vox);
 end;
 
 procedure TGPUVolume.SetSlice2DFrac(frac : TVec3);
 begin
-     if (frac.x < 0.0) or (frac.y < 0.0) or (frac.z < 0.0) then exit;
+     if (slices2D = nil) or (frac.x < 0.0) or (frac.y < 0.0) or (frac.z < 0.0) then exit;
      slices2D.sliceFrac := frac;
 end;
 
@@ -1454,10 +1786,14 @@ begin
   else
       lElevation := 0;
   glUseProgram(programRaycastBetter);
+  {$IFDEF COREGL}
   {$IFDEF LCLgtk3}
   glBindFramebuffer(GL_FRAMEBUFFER, 1);
   {$ELSE}
    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  {$ENDIF}
+  {$ELSE}
+  //2020 glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
   {$ENDIF}
   glActiveTexture(GL_TEXTURE2);
   glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
@@ -1509,7 +1845,9 @@ begin
     glUniformMatrix3fv(normLoc, 1, GL_FALSE, @nMtx);
   end;
   {$ENDIF}
-
+  {$IFNDEF COREGL}
+  glUniform3f(textureSzLoc, Vol.Dim.x, Vol.Dim.y, Vol.Dim.z );
+  {$ENDIF}
   //unit model matrix for lighting
   modelMatrix := TMat4.Identity;
   modelMatrix *= TMat4.Translate(0.5, 0.5, -1.0);
@@ -1517,6 +1855,7 @@ begin
   modelMatrix *= TMat4.RotateZ(DegToRad(lAzimuth));
   modelMatrix *= TMat4.Translate(-0.5, -0.5, -0.5); //pivot around 0.5 as cube spans 0..1
   modelLightPos := (modelMatrix.Transpose * fLightPos);
+  modelLightPos := modelLightPos.normalize;
   //model matrix in pixel space
   modelMatrix := TMat4.Identity;
   modelMatrix *= TMat4.Translate(lRender.Left, lRender.Bottom,0);
@@ -1549,14 +1888,21 @@ begin
   glEnable (GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glEnable(GL_CULL_FACE);
+  {$IFDEF STRIP}
+  glCullFace(GL_BACK);
+  {$ELSE}
+  glCullFace(GL_FRONT);
+  {$ENDIF}
+  {$IFDEF COREGL}
   glBindVertexArray(vao);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboBox3D);
   {$IFDEF STRIP}
-  glCullFace(GL_BACK);
   glDrawElements(GL_TRIANGLE_STRIP, 14, GL_UNSIGNED_INT, nil);
   {$ELSE}
-  glCullFace(GL_FRONT);
   glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nil);
+  {$ENDIF}
+  {$ELSE}
+  glCallList(dlBox3D);
   {$ENDIF}
   glDisable(GL_CULL_FACE);
 end;
@@ -1565,20 +1911,31 @@ procedure TGPUVolume.PaintMosaic2D(var vol: TNIfTI; Drawing: TDraw; MosaicString
 var
   i: integer;
   w,h, f: single;
+  {$IFNDEF COREGL}
+  p: TVec2;
+  c: TVec4;
+  {$ENDIF}
 begin
+  {$IFDEF COREGL}
   if vao = 0 then // only once
+  {$ELSE}
+  if dlBox3D = 0 then
+  {$ENDIF}
     LoadCube();
   //if (vol.VolRGBA <> nil) then
      LoadTexture(vol, false);
   if (intensityTexture3D = 0) then
     exit;
   UpdateDraw(Drawing);
+  {$IFDEF COREGL}
       {$IFDEF LCLgtk3}
     glBindFramebuffer(GL_FRAMEBUFFER, 1);
     {$ELSE}
      glBindFramebuffer(GL_FRAMEBUFFER, 0);
     {$ENDIF}
-  glBindFramebuffer(GL_RENDERBUFFER, 0); //draw to screen
+  {$ELSE}
+  //2020  glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+  {$ENDIF}
   w := glControl.clientwidth;
   h := glControl.clientheight;
   //load
@@ -1603,11 +1960,15 @@ begin
   //glViewport(0, 0, glControl.ClientWidth, glControl.ClientHeight); //required for form resize
   glControl.SetViewport();
   glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT);
+  {$IFDEF COREGL}
   {$IFDEF LCLgtk3}
-glBindFramebuffer(GL_FRAMEBUFFER, 1);
-{$ELSE}
- glBindFramebuffer(GL_FRAMEBUFFER, 0);
-{$ENDIF}
+  glBindFramebuffer(GL_FRAMEBUFFER, 1);
+  {$ELSE}
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  {$ENDIF}
+  {$ELSE}
+  //2020 glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+  {$ENDIF}
   glEnable (GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   if (slices2D.NumberOfVertices >= 3) then begin
@@ -1651,10 +2012,21 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
     else
         glUniform1f(uniform_backAlpha, vol.OpacityPercent/100);
     glUniform2f(uniform_viewportSizeTex, w, h);
+    {$IFDEF COREGL}
     glBindBuffer(GL_ARRAY_BUFFER, vboTex2D);
     glBufferData(GL_ARRAY_BUFFER,slices2D.NumberOfVertices*SizeOf(TVertex2D), @slices2D.SliceVertices[0], GL_STATIC_DRAW);
     glBindVertexArray(vaoTex2d);
     glDrawArrays(GL_TRIANGLES, 0, slices2D.NumberOfVertices);
+    {$ELSE}
+    glBegin(GL_TRIANGLES);
+       for i := 0 to (slices2D.NumberOfVertices - 1) do begin
+           c := slices2D.SliceVertices[i].textureCoord;
+           glColor4f(c.r, c.g, c.b, c.a);
+           p := slices2D.SliceVertices[i].position;
+           glVertex2f(p.x, p.y);
+       end;
+    glEnd();
+    {$ENDIF}
     if not isSmooth2D then begin
       glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
       glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -1672,10 +2044,21 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
   if (slices2D.NumberOfLineVertices > 0) then begin //draw 2D lines
     glUseProgram(programLine2D);
     glUniform2f(uniform_viewportSizeLine, w, h);
+    {$IFDEF COREGL}
     glBindBuffer(GL_ARRAY_BUFFER, vboLine2D);
     glBufferData(GL_ARRAY_BUFFER,slices2D.NumberOfLineVertices*SizeOf(TVertex2D), @slices2D.LineVertices[0], GL_STATIC_DRAW);
     glBindVertexArray(vaoLine2D);
     glDrawArrays(GL_TRIANGLES, 0, slices2D.NumberOfLineVertices);
+    {$ELSE}
+    glBegin(GL_TRIANGLES);
+       for i := 0 to (slices2D.NumberOfLineVertices - 1) do begin
+           c := slices2D.LineVertices[i].textureCoord;
+           glColor4f(c.r, c.g, c.b, c.a);
+           p := slices2D.LineVertices[i].position;
+           glVertex2f(p.x, p.y);
+       end;
+    glEnd();
+    {$ENDIF}
   end;
   {$IFDEF CLRBAR}
   if clrbar <> nil then
@@ -1685,19 +2068,52 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
   glControl.SwapBuffers;
 end;
 
+
+{$IFNDEF COREGL}
+procedure TGPUVolume.UpdateColorEditorDisplayList;
+var
+   i: integer;
+   p: TVec2;
+   c: TVec4;
+begin
+ if not colorEditor.HasNewLines then exit;
+ colorEditor.HasNewLines := false;
+ if not dlColorEditor <> 0 then
+    glDeleteLists(dlColorEditor, 1);
+ dlColorEditor := glGenLists(1);
+ glNewList(dlColorEditor, GL_COMPILE);
+ glBegin(GL_TRIANGLES);
+   for i := 0 to (colorEditor.NumberOfLineVertices - 1) do begin
+       c := colorEditor.LineVertices[i].textureCoord;
+       glColor4f(c.r, c.g, c.b, c.a);
+       p := colorEditor.LineVertices[i].position;
+       glVertex2f(p.x, p.y);
+   end;
+ glEnd();
+ glEndList();
+end;
+{$ENDIF}
+
 procedure TGPUVolume.Paint2D(var vol: TNIfTI; Drawing: TDraw; DisplayOrient: integer);
 var
  w,h, scale, rulerPx: single;
+ {$IFNDEF COREGL}
+ i: integer;
+ p: TVec2;
+ c: TVec4;
+ {$ENDIF}
 begin
+  {$IFDEF COREGL}
   if vao = 0 then // only once
+  {$ELSE}
+  if dlBox3D = 0 then
+  {$ENDIF}
     LoadCube();
   if (vol.VolRGBA <> nil) then
      LoadTexture(vol, true);
   if (intensityTexture3D = 0) then
     exit;
   UpdateDraw(Drawing);
-  //if vao = 0 then // only once
-  //  LoadCube(fromView);
   if (vol.VolRGBA <> nil) then
      LoadTexture(vol, true);
   if (intensityTexture3D = 0) then
@@ -1719,21 +2135,17 @@ begin
   if SelectionRect.x > 0 then
      slices2D.DrawOutLine(SelectionRect.X,h-SelectionRect.Y, SelectionRect.Z,h-SelectionRect.W);
   if slices2D.NumberOfVertices < 3 then exit; //nothing to do
-  //select nearest neighbor vs linear interpolation
-  (*if not isSmooth2D then begin
-    glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  end;*)
-  //draw
-  //glViewport(0, 0, glControl.ClientWidth, glControl.ClientHeight); //required for form resize
   glControl.SetViewport();
   glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT);
+  {$IFDEF COREGL}
   {$IFDEF LCLgtk3}
-glBindFramebuffer(GL_FRAMEBUFFER, 1);
-{$ELSE}
- glBindFramebuffer(GL_FRAMEBUFFER, 0);
-{$ENDIF}
+  glBindFramebuffer(GL_FRAMEBUFFER, 1);
+  {$ELSE}
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  {$ENDIF}
+  {$ELSE}
+  //2020 glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+  {$ENDIF}
   glEnable (GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   //draw 2D texture
@@ -1773,17 +2185,39 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
   else
       glUniform1f(uniform_backAlpha, vol.OpacityPercent/100);
   glUniform2f(uniform_viewportSizeTex, w, h);
+  {$IFDEF COREGL}
   glBindBuffer(GL_ARRAY_BUFFER, vboTex2D);
   glBufferData(GL_ARRAY_BUFFER,slices2D.NumberOfVertices*SizeOf(TVertex2D), @slices2D.SliceVertices[0], GL_STATIC_DRAW);
   glBindVertexArray(vaoTex2d);
   glDrawArrays(GL_TRIANGLES, 0, slices2D.NumberOfVertices);
+  {$ELSE}
+  glBegin(GL_TRIANGLES);
+     for i := 0 to (slices2D.NumberOfVertices - 1) do begin
+         c := slices2D.SliceVertices[i].textureCoord;
+         glColor4f(c.r, c.g, c.b, c.a);
+         p := slices2D.SliceVertices[i].position;
+         glVertex2f(p.x, p.y);
+     end;
+  glEnd();
+  {$ENDIF}
   if (slices2D.NumberOfLineVertices > 0) then begin //draw 2D lines
     glUseProgram(programLine2D);
     glUniform2f(uniform_viewportSizeLine, w, h);
+    {$IFDEF COREGL}
     glBindBuffer(GL_ARRAY_BUFFER, vboLine2D);
     glBufferData(GL_ARRAY_BUFFER,slices2D.NumberOfLineVertices*SizeOf(TVertex2D), @slices2D.LineVertices[0], GL_STATIC_DRAW);
     glBindVertexArray(vaoLine2D);
     glDrawArrays(GL_TRIANGLES, 0, slices2D.NumberOfLineVertices);
+    {$ELSE}
+    glBegin(GL_TRIANGLES);
+       for i := 0 to (slices2D.NumberOfLineVertices - 1) do begin
+           c := slices2D.LineVertices[i].textureCoord;
+           glColor4f(c.r, c.g, c.b, c.a);
+           p := slices2D.LineVertices[i].position;
+           glVertex2f(p.x, p.y);
+       end;
+    glEnd();
+    {$ENDIF}
   end;
   //draw color editor
   if colorEditorVisible then begin
@@ -1791,10 +2225,15 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
     if colorEditor.NumberOfLineVertices > 2 then begin
         glUseProgram(programLine2D);
         glUniform2f(uniform_viewportSizeLine, w, h);
+        {$IFDEF COREGL}
         glBindBuffer(GL_ARRAY_BUFFER, vboLine2D);
         glBufferData(GL_ARRAY_BUFFER,colorEditor.NumberOfLineVertices*SizeOf(TVertex2D), @colorEditor.LineVertices[0], GL_STATIC_DRAW);
         glBindVertexArray(vaoLine2D);
         glDrawArrays(GL_TRIANGLES, 0, colorEditor.NumberOfLineVertices);
+        {$ELSE}
+        UpdateColorEditorDisplayList();
+        glCallList(dlColorEditor);
+        {$ENDIF}
     end;
   end;
   txt.DrawText(); //D888
@@ -1819,7 +2258,6 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
 end;
 {$ENDIF}
 
-
 procedure TGPUVolume.Paint(var vol: TNIfTI);
 var
   //modelViewProjectionMatrixInverse,
@@ -1830,7 +2268,11 @@ var
   w,h, whratio, scale: single;
   i: integer;
 begin
+  {$IFDEF COREGL}
   if vao = 0 then // only once
+  {$ELSE}
+  if dlBox3D = 0 then
+  {$ENDIF}
     LoadCube();
   //if (vol.VolRGBA <> nil) then
      LoadTexture(vol, false);
@@ -1840,11 +2282,15 @@ begin
        glUseProgram(programRaycastBetter)
   else
       glUseProgram(programRaycast);
+  {$IFDEF COREGL}
   {$IFDEF LCLgtk3}
-glBindFramebuffer(GL_FRAMEBUFFER, 1);
-{$ELSE}
- glBindFramebuffer(GL_FRAMEBUFFER, 0);
-{$ENDIF}
+  glBindFramebuffer(GL_FRAMEBUFFER, 1);
+  {$ELSE}
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  {$ENDIF}
+  {$ELSE}
+  //2020 glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+  {$ENDIF}
   //bind background intensity (color)
   glActiveTexture(GL_TEXTURE2);
   glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
@@ -1881,6 +2327,7 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
   modelMatrix *= TMat4.RotateZ(DegToRad(fAzimuth));
   modelMatrix *= TMat4.Translate(-vol.Scale.X/2, -vol.Scale.Y/2, -vol.Scale.Z/2);
   modelLightPos := (modelMatrix.Transpose * fLightPos);
+  modelLightPos := modelLightPos.Normalize;
   modelMatrix *= TMat4.Scale(vol.Scale.X, vol.Scale.Y, vol.Scale.Z); //for volumes that are rectangular not square
   if fDistance = 0 then
           scale := 1
@@ -1891,7 +2338,7 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
      projectionMatrix := TMat4.OrthoGL (-scale * whratio, scale * whratio, -scale, scale, fDistance-1, fDistance+1)
   else
       projectionMatrix := TMat4.OrthoGL (-scale, scale, -scale/whratio, scale/whratio, fDistance-1, fDistance+1);
-  glUniform3f(lightPositionLoc,modelLightPos.x, modelLightPos.y, modelLightPos.z);
+  glUniform3f(lightPositionLoc, modelLightPos.x, modelLightPos.y, modelLightPos.z);
   glUniform4f(clipPlaneLoc, fClipPlane.x, fClipPlane.y, fClipPlane.z, fClipPlane.w);
   glUniform1f(clipThickLoc, ClipThick);
   if (shaderPrefs.nUniform > 0) then
@@ -1917,6 +2364,9 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
      glUniformMatrix3fv(normLoc, 1, GL_FALSE, @nMtx);
   end;
   {$ENDIF}
+  {$IFNDEF COREGL}
+  glUniform3f(textureSzLoc, Vol.Dim.x, Vol.Dim.y, Vol.Dim.z );
+  {$ENDIF}
   modelViewProjectionMatrix := ( projectionMatrix * modelMatrix);
   rayDir.x := 0; RayDir.y := 0; rayDir.z := 1; RayDir.w := 0;
   v := rayDir;
@@ -1929,20 +2379,27 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
   //x glUniformMatrix4fv(imvLoc, 1, GL_FALSE, @modelViewProjectionMatrixInverse);
   glUniform3f(rayDirLoc,rayDir.x,rayDir.y,rayDir.z);
   //glViewport(0, 0, glControl.ClientWidth, glControl.ClientHeight); //required for form resize
-
   glControl.SetViewport();
   glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT);
   glEnable (GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glEnable(GL_CULL_FACE);
+  {$IFDEF STRIP}
+  glCullFace(GL_BACK);
+  {$ELSE}
+  glCullFace(GL_FRONT);
+  {$ENDIF}
+  {$IFDEF COREGL}
   glBindVertexArray(vao);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboBox3D);
   {$IFDEF STRIP}
-  glCullFace(GL_BACK);
   glDrawElements(GL_TRIANGLE_STRIP, 14, GL_UNSIGNED_INT, nil);
   {$ELSE}
-  glCullFace(GL_FRONT);
   glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nil);
+  {$ENDIF}
+  {$ELSE}
+  //Legacy OpenGL
+  glCallList(dlBox3D);
   {$ENDIF}
   glDisable(GL_CULL_FACE);
   //draw color editor
@@ -1951,6 +2408,7 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
   if clrbar <> nil then
    clrbar.Draw();
   {$ENDIF}
+  {$IFDEF VIEW2D}
   if colorEditorVisible then begin
      w := glControl.clientwidth;
      h := glControl.clientheight;
@@ -1958,13 +2416,19 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
     if colorEditor.NumberOfLineVertices > 2 then begin
         glUseProgram(programLine2D);
         glUniform2f(uniform_viewportSizeLine, w, h);
+        {$IFDEF COREGL}
         glBindBuffer(GL_ARRAY_BUFFER, vboLine2D);
         glBufferData(GL_ARRAY_BUFFER,colorEditor.NumberOfLineVertices*SizeOf(TVertex2D), @colorEditor.LineVertices[0], GL_STATIC_DRAW);
         glBindVertexArray(vaoLine2D);
         glDrawArrays(GL_TRIANGLES, 0, colorEditor.NumberOfLineVertices);
+        {$ELSE}
+        UpdateColorEditorDisplayList();
+        glCallList(dlColorEditor);
+        {$ENDIF}
     end;
   end;
-  {$IFDEF CUBE}
+  {$ENDIF}
+  {$IFDEF CUBE}{$IFDEF VIEW2D}
   if Slices.LabelOrient then begin
      {$IFNDEF STRIP}
      glCullFace(GL_BACK);
@@ -1974,7 +2438,7 @@ glBindFramebuffer(GL_FRAMEBUFFER, 1);
      gCube.Elevation:=-fElevation;
      gCube.Draw(glControl.ClientWidth, glControl.ClientHeight);
   end;
-  {$ENDIF}
+  {$ENDIF}{$ENDIF}
   glControl.SwapBuffers;
 end;
 

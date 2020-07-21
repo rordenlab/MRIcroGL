@@ -364,7 +364,7 @@ begin
   ShowPrefs;
   UpdateCommand(Sender);
   InputDirDialog.InitialDir := GetUserDir;
-  {$IFDEF LCLCocoa} {$IFDEF isGL} GLForm1.SetFormDarkMode(dcm2niiForm); {$ENDIF}{$ENDIF}
+  {$IFDEF LCLCocoa} {$IFDEF DARKMODE} GLForm1.SetFormDarkMode(dcm2niiForm); {$ENDIF}{$ENDIF}
 end;
 
 procedure Tdcm2niiForm.OutDirDropChange(Sender: TObject);

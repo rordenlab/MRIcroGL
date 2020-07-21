@@ -196,7 +196,9 @@ kNIFTI_INTENT_QUATERNION =1010;
  procedure NII_Clear (out lHdr: TNIFTIHdr);
  procedure NII_SetIdentityMatrix (var lHdr: TNIFTIHdr); //create neutral rotation matrix
 
+
 implementation
+
 
 procedure NII_SetIdentityMatrix (var lHdr: TNIFTIHdr); //create neutral rotation matrix
 var lInc: integer;

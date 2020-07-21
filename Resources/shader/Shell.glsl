@@ -39,14 +39,21 @@ void main() {
 	float ran = fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453);
 	//fast pass - optional
 	fastPass (len, dir, gradientVol, samplePos);
-	if ((samplePos.a > len) && ( overlays < 1 )) { //no hit: quit here
+	#if ( __VERSION__ > 300 )
+	if ((samplePos.a > len) && ( overlays < 1 )) { //no hit
 		FragColor = colAcc;
-		return;		
+		return;
 	}
+	#else
+	if ((textureSz.x < 1) || ((samplePos.a > len) && ( overlays < 1 ))) { //no hit
+		gl_FragColor = colAcc;
+		return;		
+	}	
+	#endif
 	if (samplePos.a < clipPos.a)
 		samplePos = clipPos;
 	//end fastpass - optional
-	gradSample = texture3D(intensityVol,samplePos.xyz); //only to ensure this is used
+	gradSample = texture3Df(intensityVol,samplePos.xyz); //only to ensure this is used
 	samplePos += deltaDir * ran;
 	vec3 lightDirHeadOn = dir;
 	float boundAcc = 0.0;
@@ -62,7 +69,7 @@ void main() {
 	float edgeExp = 0.2;
 		
 	while (samplePos.a <= len) {
-			gradSample = texture3D(gradientVol,samplePos.xyz);
+			gradSample = texture3Df(gradientVol,samplePos.xyz);
 			samplePos += deltaDir;
 			if (gradSample.a < 0.01)
 				continue;
@@ -85,7 +92,7 @@ void main() {
 				colorSample.a = edge;
 				//vec3 n = normalize(normalize(NormalMatrix * gradSample.rgb));
 				//vec2 uv = n.xy * 0.5 + 0.5;
-				//colorSample.rgb = texture(matcap2D,uv.xy).rgb * brighten;
+				//colorSample.rgb = texture2D(matcap2D,uv.xy).rgb * brighten;
 				float lightNormDot = dot(gradSample.rgb, lightPosition); //with respect to light location
 				if (lightNormDot > 0.0) edge +=   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
 				colorSample.rgb = edgeColor.rgb * edge;
@@ -100,7 +107,11 @@ void main() {
 		colAcc.a = max(colAcc.a, boundAcc);
 	}
 	colAcc.a *= backAlpha;
-	FragColor = colAcc;	
+	#if ( __VERSION__ > 300 )
+	FragColor = colAcc;
+	#else
+	gl_FragColor = colAcc;
+	#endif
 	if ( overlays< 1 )	
 		return;
 	
@@ -121,7 +132,7 @@ void main() {
 		vec4 oprevGrad = vec4(0.0,0.0,0.0,0.0);
 		float overFarthest = len;
 		while (samplePos.a <= len) {
-			colorSample = texture(intensityOverlay,samplePos.xyz);
+			colorSample = texture3Df(intensityOverlay,samplePos.xyz);//2020TODO -HQ?
 			samplePos += deltaDir;
 			if (colorSample.a < 0.01)
 				continue;
@@ -133,7 +144,7 @@ void main() {
 			float s =  0;
 			vec3 d = vec3(0.0, 0.0, 0.0);
 			//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
-			gradSample = texture(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
+			gradSample = texture3Df(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
 			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
 			//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
 			if (gradSample.a < oprevGrad.a)
@@ -159,9 +170,9 @@ void main() {
 		}
 		colAcc.rgb = mix(colAcc.rgb, overAcc.rgb, overMix);
 		colAcc.a = max(colAcc.a, overAcc.a);		
-	
-	
-
-
-    FragColor = colAcc;
+		#if ( __VERSION__ > 300 )
+		FragColor = colAcc;
+		#else
+		gl_FragColor = colAcc;
+		#endif
 }

@@ -29,6 +29,8 @@ procedure Add2MRU (var MRU: TMRU; Filename: string);
 
 implementation
 
+{$IFDEF Darwin} uses nifti_foreign; {$ENDIF}
+
 procedure Add2MRU (var MRU: TMRU; Filename: string);
 var
  strs: array [1..knMRU+1] of string;
@@ -43,6 +45,9 @@ begin
      strs[nOK] :=  Filename;
      for i := 1 to knMRU do begin
          if not fileexists(MRU[i]) then continue;
+         {$IFDEF Darwin}
+         if not IsReadable(MRU[i]) then continue;
+         {$ENDIF}
          isNovel := true;
          for k := 1 to nOK do
              if MRU[i] = strs[k] then

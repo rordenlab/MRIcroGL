@@ -13,9 +13,11 @@ type
   private
     nodeSelected : integer;
     numLineVerts: integer;
+    refreshCount: integer;
     lineVerts: TVertex2Ds;
     gridBorderPix: single;
     gridScale: single;
+    screenWH: TVec2;
     gridClr: TVec4;
     viewPixelHeight: single;
     newLines: boolean;
@@ -50,6 +52,7 @@ var
 begin
      result := false;
      if (nodeSelected < 0) or (nodeSelected >= vol.CX.FullColorTable.numnodes) then exit;
+     screenWH := Vec2(0,0);
      colorDlg := TColorDialog.Create(nil);
      rgba := vol.CX.FullColorTable.nodes[nodeSelected].rgba;
      I := vol.CX.FullColorTable.nodes[nodeSelected].intensity;
@@ -90,6 +93,7 @@ var
 begin
   result := false;
   if (vol.CX.FullColorTable.numnodes < 2) then exit;
+  screenWH := Vec2(0,0);
   MousePosition(mouseX, mouseY, X, Y);
   if (X < 0) or (X > kGridHWPixScale1) then exit;
   if (Y < 0) or (Y > kGridHWPixScale1) then exit;
@@ -120,6 +124,7 @@ begin
   if (nodeSelected < 0) then exit(false);
   result := true;
   if (vol.CX.FullColorTable.numnodes < 2) then exit;
+  screenWH := Vec2(0,0);
   MousePosition(mouseX, mouseY, X, Y);
   if (X < 0) or (X > kGridHWPixScale1) then exit;
   if (Y < 0) or (Y > kGridHWPixScale1) then exit;
@@ -127,12 +132,13 @@ begin
   if (Y > 255) then Y := 255;
   if (X > 255) then X := 255;
   vol.CX.ChangeNode(nodeSelected, round(X),rgba.r,rgba.G,rgba.B,round(Y));
-  result := true;
 end;
 
 constructor TColorEditor.Create();
 begin
      numLineVerts := 0;
+     refreshCount := -1;
+     screenWH := Vec2(0,0);
      gridScale := 0;
      gridBorderPix := 4;
      lineVerts := nil;
@@ -201,10 +207,16 @@ begin
    result := Vec2(texL+texW * vol.FullColorTable.nodes[n].intensity/255 , texB + texH * vol.FullColorTable.nodes[n].rgba.a/255);
 end;
 begin
+  if (vol.FullColorTable.numnodes < 2) then begin
+     numLineVerts := 0;
+     exit;
+  end;
+  if (vol.RefreshCount = refreshCount) and (screenWH.x = w) and (screenWH.y = h) then exit;
+  screenWH := Vec2(w,h);
+  refreshCount := vol.RefreshCount;
   viewPixelHeight := h;
   minHW := min(w,h);
   numLineVerts := 0;
-  if (vol.FullColorTable.numnodes < 2) then exit;
   if (minHW < 1) then exit;
   newLines := true;
   gridScale := trunc(minHW / 1024)+1;

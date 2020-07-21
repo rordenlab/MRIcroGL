@@ -27,7 +27,6 @@ uses
   {$IFDEF BZIP2}bzip2stream,{$ENDIF}
   {$IFDEF BMP} Graphics, GraphType,{$ENDIF}
   {$IFDEF PARALLEL}MTProcs,mtprocs,mtpcpu,{$ENDIF}
-
   {$IFDEF TIMER} DateUtils,{$ENDIF}
   {$IFDEF FASTGZ} SynZip, {$ENDIF}
   {$IFDEF OPENFOREIGN} nifti_foreign, {$ENDIF}
@@ -124,6 +123,7 @@ Type
         function mm3toVox(mm3: single) : integer; //e.g. if 3x3x3mm voxels (27mm) and input is 28, return 2
         //procedure robustMinMax(var rMin, rMax: single);
       public
+        RefreshCount: integer;
         fLabels: TStringList;
         fLabelMask: TUInt8s;
         fRawVolBytes: TUInt8s;
@@ -243,7 +243,7 @@ Type
 
 implementation
 
-uses mainunit, nifti_resize;
+uses nifti_resize;
 //uses reorient;
 
 (*procedure TNIfTI.SetLabelMask(Idx: integer; isMasked: boolean);
@@ -3401,11 +3401,7 @@ begin
  result := false;
  {$IFDEF FASTGZ}
  if not fileexists(FileName) then exit;
- FileMode := fmOpenRead;
- Assign (F, FileName);
- Reset (F);
- volBytes := FileSize(F);
- Close (F);
+ volBytes := FSize(fFilename);
  if (volBytes < 104857600) then begin // < 100mb, unlikely to trigger LoadFewVolumes
     //FastGz uncompresses entire volume in one step: much faster
     // disadvantage: for very large files we might not want to decompress entire volume
@@ -4995,6 +4991,7 @@ begin
     fWindowMaxCache8 := fWindowMax;
     fOpacityPctCache8 := fOpacityPct;
     clut.NeedsUpdate := true; //<- 20200606 CRUCIAL CHANGE
+    inc(RefreshCount);
     exit;
   end;
   setlength(fCache8, vx);
@@ -5098,6 +5095,7 @@ begin
   fWindowMaxCache8 := fWindowMax;
   fOpacityPctCache8 := fOpacityPct;
   clut.NeedsUpdate := false;
+  inc(RefreshCount);
   ApplyCutout(); //run twice! also in SetDisplayMinMax
 end;
 
@@ -5779,7 +5777,7 @@ end;
 
 {$IFDEF BZIP2}
 function LoadImgBZ(FileName : AnsiString; swapEndian: boolean; var  rawData: TUInt8s; var lHdr: TNIFTIHdr; gzBytes: integer): boolean;
-//foreign: both image and header compressed
+//foreign: using .bz2 compression, e.g. AFNI
 label
 	123;
 var
@@ -6019,6 +6017,10 @@ begin
    printf('Missing or empty file '+fFilename);
    exit;
  end;
+ {$IFDEF Darwin}
+ if not IsReadable(fFilename) then
+    exit;
+ {$ENDIF}
  fVolumesLoaded := 1;
  fVolumesTotal :=  fVolumesLoaded;
  lExt := extractfileextX (fFilename);
@@ -6091,7 +6093,7 @@ begin
   lV.z := (lXi*lMat[2,0]+lYi*lMat[2,1]+lZi*lMat[2,2]+lMat[2,3]);
 end;
 
-function matrix3D(a,b,c,d, e,f,g,h, i,j,k,l: single): TMat4;
+(*function matrix3D(a,b,c,d, e,f,g,h, i,j,k,l: single): TMat4;
 begin
      result := TMat4.Identity;
      result[0,0] := a;
@@ -6102,12 +6104,28 @@ begin
      result[1,1] := f;
      result[1,2] := g;
      result[1,3] := h;
+     writeln(k);
      result[2,0] := i;
      result[2,1] := j;
      result[2,2] := k;
      result[2,3] := l;
 end;  //matrix3D()
 
+procedure rep9(a,b,c,d, e,f,g,h, i,j,k,l: single);
+begin
+ writeln(format('%g %g %g %g', [a,b,c,d]));
+ writeln(format('%g %g %g %g', [e,f,g,h]));
+ writeln(format('%g %g %g %g', [i,j,k,l]));
+
+end;
+
+procedure ReportMat(m:TMat4);
+begin
+  writeln(format(':>>>>%g %g %g', [m[0,0], m[1,0], m[2,0]]));
+  writeln(format(':>>>>%g %g %g', [m[0,1], m[1,1], m[2,1]]));
+  writeln(format(':>>>>%g %g %g', [m[0,2], m[1,2], m[2,2]]));
+  writeln('');
+end;      *)
 function Voxel2Voxel (lDestMat, lSrcMat: TMat4): TMat4;
 //returns matrix for transforming voxels from one image to the other image
 //results are in VOXELS not mm
@@ -6128,6 +6146,9 @@ begin
      Coord(lVy,lDestMat);
      Coord(lVz,lDestMat);
      lSrcMatInv := lSrcMat.inverse;
+     //ReportMat(lSrcMat);
+     //ReportMat(lSrcMatInv);
+
      //clipboard.AsText := mStr('i2',lSrcMatInv);
      //the vectors should be rows not columns....
      //therefore we transpose the matrix
@@ -6142,9 +6163,27 @@ begin
      lVx := lVx - lV0;
      lVy := lVy - lV0;
      lVz := lVz - lV0;
-     result := Matrix3D(lVx.x,lVy.x,lVz.x,lV0.x,
+     result := TMat4.Identity;
+     result.m[0,0] := lVx.x;
+     result.m[0,1] := lVy.x;
+     result.m[0,2] := lVz.x;
+     result.m[0,3] := lV0.x;
+     result.m[1,0] := lVx.y;
+     result.m[1,1] := lVy.y;
+     result.m[1,2] := lVz.y;
+     result.m[1,3] := lV0.y;
+     result.m[2,0] := lVx.z;
+     result.m[2,1] := lVy.z;
+     result.m[2,2] := lVz.z;
+     result.m[2,3] := lV0.z;
+
+     //rep9(1,2,3,4,5,6,7,8,9,10,11,12);
+     //writeln(format('<< %g %g %g', [lVx.z,lVy.z,lVz.z]));
+     //writeln(lVz.z);
+     (*result := Matrix3D(lVx.x,lVy.x,lVz.x,lV0.x,
       lVx.y,lVy.y,lVz.y,lV0.y,
-      lVx.z,lVy.z,lVz.z,lV0.z);
+      lVx.z,lVy.z,lVz.z,lV0.z);*)
+     //ReportMat(result);
 end;
 
 procedure TNIfTI.VolumeReslice(tarMat: TMat4; tarDim: TVec3i; isLinearReslice: boolean);
@@ -6170,6 +6209,7 @@ begin
         if (tarMat = fMat) and (tarDim.X = fDim.X) and (tarDim.Y = fDim.Y) and (tarDim.Z = fDim.Z) then exit;
      end;
      IsInterpolated := true;
+
      (*if fVolumesLoaded > 1 then begin
         showmessage('Fatal error: overlays can not have multiple volumes [yet]');
         exit;
@@ -6224,6 +6264,14 @@ begin
             if specialsingle(in32f[i]) then
                 in32f[i] := 0;
      end;
+     (*TODO writeln(format('>>>>%g %g %g', [lXx[tarDim.x-1], lXy[tarDim.x-1], lXz[tarDim.x-1]]));
+     writeln(format('>>>>%d %d %d', [tarDim.X, tarDim.Y, tarDim.Z]));
+     writeln(format('>>>>%d %d %d', [lXs, lYs, lZs]));
+     writeln('');
+     writeln(format('>>>>%g %g %g', [m[0,0], m[1,0], m[2,0]]));
+     writeln(format('>>>>%g %g %g', [m[0,1], m[1,1], m[2,1]]));
+     writeln(format('>>>>%g %g %g', [m[0,2], m[1,2], m[2,2]])); *)
+
      lPos := -1;
      if isLinearReslice then begin //trilinear
         for lZi := 0 to (tarDim.Z-1) do begin
@@ -8073,12 +8121,13 @@ begin
   {$IFDEF TIMER}startTime := now;{$ENDIF}
   if (IsLabels) then
      //
-  else if (fHdr.cal_max > fHdr.cal_min) then begin
-     if (fAutoBalMax > fAutoBalMin) and (((fHdr.cal_max - fHdr.cal_min)/(fAutoBalMax - fAutoBalMin)) > 5) then begin
-          {$IFDEF Unix}printf('Ignoring implausible cal_min..cal_max: FSL eddy?');{$ENDIF}
+  else if (fHdr.cal_max > fHdr.cal_min)then begin
+     if (fHdr.dataType > kDT_UNSIGNED_CHAR) and (fAutoBalMax > fAutoBalMin) and (((fHdr.cal_max - fHdr.cal_min)/(fAutoBalMax - fAutoBalMin)) > 5) then begin
+          printf('yIgnoring implausible cal_min..cal_max: FSL eddy?');
      end else begin
-          fAutoBalMin := fHdr.cal_min;
-          fAutoBalMax := fHdr.cal_max;
+        printf(format('cal_min %g cal_max %g', [fHdr.cal_min, fHdr.cal_max]));
+        fAutoBalMin := fHdr.cal_min;
+        fAutoBalMax := fHdr.cal_max;
      end;
   end;
   fWindowMin := fAutoBalMin;
@@ -8120,6 +8169,7 @@ begin
  IsShrunken := false;
  IsInterpolated := false;
  MaxVox := 1024;
+ RefreshCount := Random(maxint);
  {$IFDEF CACHEUINT8}  //release cache, force creation on next refresh
  fWindowMinCache8 := infinity;
  fCache8 := nil;
@@ -8167,6 +8217,7 @@ begin
  LoadFewVolumes := lLoadFewVolumes;
  ZeroIntensityInvisible := false;
  MaxVox := lMaxVox;
+ RefreshCount := Random(MaxInt);
  {$IFDEF CACHEUINT8}  //release cache, force creation on next refresh
  fWindowMinCache8 := infinity;
  fCache8 := nil;

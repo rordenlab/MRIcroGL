@@ -34,10 +34,17 @@ void main() {
 	vec4 samplePos = vec4(start.xyz, 0.0);
 	samplePos += deltaDir * ran;
 	vec4 clipPos = applyClip(dir, samplePos, len);
+	#if ( __VERSION__ > 300 )
 	if ( clipPos.a > len ) {
 		FragColor = colAcc;
 		return;
 	}
+	#else
+	if ((textureSz.x < 1) || ( clipPos.a > len )) {
+		gl_FragColor = colAcc;
+		return;
+	}
+	#endif
 	//	float ran = fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453);
 	
 	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
@@ -48,11 +55,11 @@ void main() {
 	//	samplePos = clipPos;
 		
 	while (samplePos.a <= len) {
-		colorSample = texture3D(intensityVol,samplePos.xyz);
+		colorSample = texture3Df(intensityVol,samplePos.xyz);
 		colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSizeX/sliceSize);
 		if (colorSample.a > 0.0) {
 			if (showGradient > 0.5)
-				colorSample.rgb = abs(texture3D(gradientVol,samplePos.xyz).rgb *2.0 - 1.0);
+				colorSample.rgb = abs(texture3Df(gradientVol,samplePos.xyz).rgb *2.0 - 1.0);
 			bgNearest = min(samplePos.a,bgNearest);
 			colorSample.rgb *= colorSample.a;
 			colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
@@ -74,7 +81,11 @@ void main() {
 		colAcc.a = 1.0;
 	}			
 	if ( overlays < 1 ) {
+		#if ( __VERSION__ > 300 )
 		FragColor = colAcc;
+		#else
+		gl_FragColor = colAcc;
+		#endif
 		return;
 	}
 	//overlay pass
@@ -90,7 +101,7 @@ void main() {
 	//end fastpass - optional
 	float overFarthest = len;
 	while (samplePos.a <= len) {
-		colorSample = texture3D(intensityOverlay,samplePos.xyz);
+		colorSample = texture3Df(intensityOverlay,samplePos.xyz);
 		if (colorSample.a > 0.00) {
 			if (overAcc.a < 0.3)
 				overFarthest = samplePos.a;
@@ -99,7 +110,7 @@ void main() {
 			float s =  0;
 			vec3 d = vec3(0.0, 0.0, 0.0);
 			//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
-			gradSample = texture3D(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
+			gradSample = texture3Df(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
 			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
 			//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
 			if (gradSample.a < prevGrad.a)
@@ -130,5 +141,9 @@ void main() {
 		colAcc.rgb = mix(colAcc.rgb, overAcc.rgb, overMix);
 		colAcc.a = max(colAcc.a, overAcc.a);
 	//}
-    FragColor = colAcc;
+    #if ( __VERSION__ > 300 )
+	FragColor = colAcc;
+	#else
+	gl_FragColor = colAcc;
+	#endif
 }

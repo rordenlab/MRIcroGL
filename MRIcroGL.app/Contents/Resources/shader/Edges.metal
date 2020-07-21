@@ -73,7 +73,7 @@ float3 GetBackPosition (float3 startPosition, float3 rayDir) {
 
 #ifdef CUBIC
 float4 texture(texture3d<float> vol, float3 coord) {
-	constexpr sampler textureSampler (mag_filter::linear,min_filter::linear);
+	constexpr sampler textureSampler (mag_filter::linear,min_filter::linear, address::clamp_to_zero);
 	return (vol.sample(textureSampler, coord));			
 }
 
@@ -153,7 +153,7 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
                const device CustomFragUniforms* customFragUniforms    	[[ buffer(2) ]]
                ) {
 	//return float4(1,0,1,1);
-	constexpr sampler textureSampler (mag_filter::linear,min_filter::linear);
+	constexpr sampler textureSampler (mag_filter::linear,min_filter::linear, address::clamp_to_zero);
 	constexpr sampler matCapSampler (mag_filter::linear,min_filter::linear);
 	float2 gl_FragCoord = float2(in.position.xy); //random jitter to reduce wood grain
 	float3 lightPosition = fragUniforms->lightPos.xyz;

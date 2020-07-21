@@ -10,12 +10,14 @@ interface
 {$DEFINE CUBE}
 {$DEFINE MATCAP}
 {$DEFINE CLRBAR}
+{$DEFINE TIMER} //reports GPU gradient time to stdout (Unix only)
 uses
     CocoaAll, MacOSAll,
     //CFBase, CGImage, CGDataProvider, CGColorSpace, MetalKit, CocoaAll,
     {$IFDEF MATCAP} intfgraphics, graphtype, Graphics,  {$ENDIF}
     {$IFDEF CUBE} Forms, mtlcube, {$ENDIF}
     {$IFDEF CLRBAR} mtlclrbar, {$ENDIF}
+    {$IFDEF TIMER} DateUtils,{$ENDIF}
     mtlfont,  VectorMath, MetalPipeline, MetalControl, Metal, MetalUtils,
     SysUtils, Math, nifti, niftis, SimdUtils, Classes
     {$IFDEF VIEW2D}, drawvolume, slices2D, colorEditor{$ENDIF};
@@ -295,10 +297,10 @@ end;
 
 procedure TGPUVolume.SaveBmp(filename: string; hasAlpha: boolean);
 begin
-  (*if filename = '' then
+  if filename = '' then
      MTLWriteTextureToClipboard(hasAlpha)
   else
-      MTLWriteTextureToFile(pChar(filename), hasAlpha);TODO*)
+      MTLWriteTextureToFile(pChar(filename), hasAlpha);
 end;
 
 procedure TGPUVolume.SetShader(shaderName: string; isUpdatePrefs: boolean = true);
@@ -509,7 +511,9 @@ var
   threadgroupSize: MTLSize;
   threadgroupCount: MTLSize;
   tempTex: MTLTextureProtocol;
+  {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
 begin
+  {$IFDEF TIMER}startTime := now;{$ENDIF}
   grTexDesc := MTLTextureDescriptor.alloc.init.autorelease;
   grTexDesc.setTextureType(MTLTextureType3D);
   grTexDesc.setUsage(MTLTextureUsageShaderWrite or MTLTextureUsageShaderRead);
@@ -541,6 +545,7 @@ begin
   MTLEndCommand(true); //<- syncrhonous: waitUntilCompleted, reduce flicker
   tempTex.release;
   tempTex := nil;
+  {$IFDEF TIMER}writeln(format('GPU Gradient time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
 end;
 {$ELSE}
 begin

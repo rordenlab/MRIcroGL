@@ -33,16 +33,23 @@ void main() {
 	float opacityCorrection = stepSize/sliceSize;
 	//fast pass - optional
 	fastPass (len, dir, intensityVol, samplePos);
-	if ((samplePos.a > len) && ( overlays < 1 )) { //no hit: quit here
+	#if ( __VERSION__ > 300 )
+	if ((samplePos.a > len) && ( overlays < 1 )) { //no hit
 		FragColor = colAcc;
-		return;		
+		return;
 	}
+	#else
+	if ((textureSz.x < 1) || ((samplePos.a > len) && ( overlays < 1 ))) { //no hit
+		gl_FragColor = colAcc;
+		return;		
+	}	
+	#endif
 	if (samplePos.a < clipPos.a) {
 		samplePos = clipPos;
 		bgNearest = clipPos.a;
 		float stepSizeX2 = samplePos.a + (stepSize * 2.0);
 		while (samplePos.a <= stepSizeX2) {
-			colorSample = texture3D(intensityVol,samplePos.xyz);
+			colorSample = texture3Df(intensityVol,samplePos.xyz);
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
 			colorSample.a = clamp(colorSample.a*3.0,0.0, 1.0);
 			colorSample.rgb *= colorSample.a;
@@ -56,18 +63,18 @@ void main() {
 	samplePos += deltaDir * ran;
 	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
 	while (samplePos.a <= len) {
-		colorSample = texture3D(intensityVol,samplePos.xyz);
+		colorSample = texture3Df(intensityVol,samplePos.xyz);
 		if (colorSample.a > 0.0) {
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
 			bgNearest = min(samplePos.a,bgNearest);
-			gradSample= texture3D(gradientVol,samplePos.xyz);
+			gradSample= texture3Df(gradientVol,samplePos.xyz);
 			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
 			//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
 			if (gradSample.a < prevGrad.a)
 				gradSample.rgb = prevGrad.rgb;
 			prevGrad = gradSample;
 			vec3 n = normalize(NormalMatrix * gradSample.rgb);
-			vec3 d = texture(matcap2D, n.xy * 0.5 + 0.5).rgb;
+			vec3 d = texture2D(matcap2D, n.xy * 0.5 + 0.5).rgb;
 			vec3 surf = mix(defaultDiffuse, colorSample.rgb, surfaceColor); //0.67 as default Brighten is 1.5
 			colorSample.rgb = d * surf * brighten * colorSample.a;
 			
@@ -97,7 +104,11 @@ void main() {
 	colAcc.a = colAcc.a/0.95;
 	colAcc.a *= backAlpha;
 	if ( overlays< 1 ) {
+		#if ( __VERSION__ > 300 )
 		FragColor = colAcc;
+		#else
+		gl_FragColor = colAcc;
+		#endif
 		return;
 	}
 	//overlay pass
@@ -122,14 +133,14 @@ void main() {
 	deltaDir = vec4(dir.xyz * stepSize, stepSize);
 	//end fastpass - optional
 	while (samplePos.a <= len) {
-		colorSample = texture3D(intensityOverlay,samplePos.xyz);
+		colorSample = texture3Df(intensityOverlay,samplePos.xyz);
 		if (colorSample.a > 0.00) {
 			if (overAcc.a < 0.3)
 				overFarthest = samplePos.a;
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
 			colorSample.a *=  overlayFuzzy;
 			//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
-			gradSample = texture3D(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
+			gradSample = texture3Df(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
 			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
 			//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
 			if (gradSample.a < prevGrad.a)
@@ -156,5 +167,9 @@ void main() {
 	}
 	colAcc.rgb = mix(colAcc.rgb, overAcc.rgb, overMix);
 	colAcc.a = max(colAcc.a, overAcc.a);
-    FragColor = colAcc;
+	#if ( __VERSION__ > 300 )
+	FragColor = colAcc;
+	#else
+	gl_FragColor = colAcc;
+	#endif
 }

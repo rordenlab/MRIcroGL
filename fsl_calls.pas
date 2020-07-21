@@ -8,7 +8,7 @@ uses
   LResources, Dialogs, Classes, SysUtils,Process;
 
 //procedure FSLcmd (lCmd: string);
-function FSLbet (lFilename: string; lFrac: single): string;
+function FSLbet (lFilename: string; lFrac: single; lOutname: string = ''): string;
 function FSLmcflirt (lFilename4D: string): string;
 function FSLmean(lFilename4D: string): string;
 function FSLflirt (lFilenames: tstrings): string;
@@ -83,7 +83,7 @@ const
    AProcess.Free;
 end;
 
-function FSLbet (lFilename: string; lFrac: single): string;
+function FSLbet (lFilename: string; lFrac: single; lOutname: string = ''): string;
 const
   kExe = 'bet2.exe';
 var
@@ -94,7 +94,9 @@ begin
     msg('Unable to find executable '+kExe);
     exit;
   end;
-  result := ChangeFilePrefix(lFilename,'b');
+  result := lOutname;
+  if lOutname = '' then
+     result := ChangeFilePrefix(lFilename,'b');
   result := ChangeFileExtX( result, '.nii.gz');  //e.g. .nii -> .nii.gz
   lCmd := lExe+' "'+lFilename+'" "'+result +'" -f '+floattostr(lFrac);
   FSLCmd (lCmd);
@@ -170,7 +172,9 @@ const
    PATH:=GetEnvironmentVariable('PATH');
    FSLDIR := GetFSLdir;
    FSLDIRBIN :=  FSLDIR+'/bin' ;
-   if not (fileexists(FSLDIR)) then begin
+   //if not (fileexists(FSLDIR)) then begin
+   if not (directoryexists(FSLDIR)) then begin
+
       msg('Please install FSL, unable to find '+FSLDIR);
       exit;
    end;
@@ -199,11 +203,13 @@ end;
 
 
 
-function FSLbet (lFilename: string; lFrac: single): string;
+function FSLbet (lFilename: string; lFrac: single; lOutname: string = ''): string;
 var
    lCmd: string;
 begin
-    result := ChangeFilePrefix(lFilename,'b');
+    result := lOutname;
+    if lOutname = '' then
+       result := ChangeFilePrefix(lFilename,'b');
     {$IFDEF Darwin}
     if PosEx('.app', result) > 0 then begin
        result := extractfilename(result);

@@ -6,7 +6,7 @@ MRIcroGL is a cross=platform tool for viewing DICOM and NIfTI format images. It 
 
 ## Requirements
 
-MRIcroGL 1.2 requires OpenGL 3.3 (released in 2009) or later. If you only have OpenGL 2.1, you can get [MRIcroGL 1.0](https://github.com/neurolabusc/MRIcroGL/releases) instead. If your computer does not support OpenGL at all, you can try [MRIcron](https://www.nitrc.org/projects/mricron).
+By default, MRIcroGL 1.2 is compiled to require OpenGL 2.1 (from 2006). It can also be compiled to require OpenGL 3.3 Core (released in 2009). From the user perspective, there should be no difference between these choices. If your computer does not support OpenGL 2.1, you can try [MRIcron](https://www.nitrc.org/projects/mricron).
 
 ## Installation
 
@@ -79,7 +79,7 @@ lazbuild  -B --ws=qt5 MRIcroGL.lpi
 ```
 
 One can also make minor adjustments to these command line options. 
- - `--ws=gtk3` will compile for the GTK3 widgetset. Support for GTK3 is experimental and not all features work (e.g. color selection dialog). Unfortunately, GTK3 does not support [OpenGL multi-sampling](https://github.com/aklomp/gtk3-opengl/issues/2) so the results can never match GTK2 or QT5.
+ - `--ws=gtk3` will compile for the GTK3 widgetset. Support for GTK3 is experimental and not all features work (e.g. color selection dialog). GTK3 requires OpenGL 3.3 Core, so you must make sure that the glopts.inc file in the Metal-Demos folder has the line "{$DEFINE COREGL}" uncommented. Unfortunately, GTK3 does not support [OpenGL multi-sampling](https://github.com/aklomp/gtk3-opengl/issues/2) so the results can never match GTK2 or QT5.
  - Compiling `MRIcroGL_NoPython.lpi` will compile without Python scripting support ().
 
 ![Head CT](HeadCT.jpg)
@@ -129,6 +129,7 @@ You can also control MRIcroGL from the command line.
 MRIcroGL uses NIfTI as its native format. However, you can drag-and-drop files of various formats and the software should automatically detect and load these images.
 
  - [AFNI Brik](https://afni.nimh.nih.gov/pub/dist/doc/program_help/README.attributes.html) (.head).
+ - [AIM from Scano Medical µCT or HRpQCT](https://www.researchgate.net/publication/320077296_AIMreader_python_implementation_and_examples)(.AIM;1).
  - [Analyze](http://imaging.mrc-cbu.cam.ac.uk/imaging/FormatAnalyze) (.hdr).
  - [Bio-Rad PIC](https://docs.openmicroscopy.org/bio-formats/5.8.2/formats/bio-rad-pic.html) (.pic).
  - [Blender Voxel data](http://pythology.blogspot.com/2014/08/you-can-do-cool-stuff-with-manual.html) (.bvox).

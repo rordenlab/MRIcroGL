@@ -48,16 +48,23 @@ void main() {
 	float stepSizeX2 = samplePos.a + (stepSize * 2.0);
 	//fast pass - optional
 	fastPass (len, dir, intensityVol, samplePos);
-	if ((samplePos.a > len) && ( overlays < 1 )) { //no hit: quit here
+	#if ( __VERSION__ > 300 )
+	if ((samplePos.a > len) && ( overlays < 1 )) { //no hit
 		FragColor = colAcc;
-		return;		
+		return;
 	}
+	#else
+	if ((textureSz.x < 1) || ((samplePos.a > len) && ( overlays < 1 ))) { //no hit
+		gl_FragColor = colAcc;
+		return;		
+	}	
+	#endif
 	if (samplePos.a < clipPos.a) {
 		samplePos = clipPos;
 		bgNearest = clipPos.a;
 		float stepSizeX2 = samplePos.a + (stepSize * 2.0);
 		while (samplePos.a <= stepSizeX2) {
-			colorSample = texture3D(intensityVol,samplePos.xyz);
+			colorSample = texture3Df(intensityVol,samplePos.xyz);
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
 			colorSample.a = clamp(colorSample.a*3.0,0.0, 1.0);
 			colorSample.rgb *= colorSample.a;
@@ -89,14 +96,15 @@ void main() {
 	if (overlays > 0)
 		alphaTerminate = 2.0; //force exhaustive search
 	colorSample = vec4(0.0,0.0,0.0,0.0);
+	vec3 lightPositionN = normalize(lightPosition);
 	while (samplePos.a <= len) {
 		if ((samplePos.a > clipPos.a) && (samplePos.a <= clipLen)) {
-			colorSample = texture3D(intensityVol,samplePos.xyz);
+			colorSample = texture3Df(intensityVol,samplePos.xyz);
 			if (colorSample.a > 0.0) {
 				colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);
 				bgNearest = min(samplePos.a, bgNearest);
 				
-				gradSample= texture3D(gradientVol,samplePos.xyz);
+				gradSample= texture3Df(gradientVol,samplePos.xyz);
 				gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
 				//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
 				if (gradSample.a < prevGrad.a)
@@ -110,10 +118,10 @@ void main() {
 					colorSample.rgb = mix(colorSample.rgb, vec3(0.0,0.0,0.0), pow((edgeVal-edgeThresh)/(1.0-edgeThresh),4.0));
 
 
-				lightNormDot = dot(gradSample.rgb, lightPosition);
+				lightNormDot = dot(gradSample.rgb, lightPositionN);
 				vec3 a = colorSample.rgb * ambient;
 				vec3 d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;
-				float s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
+				float s =   specular * pow(max(dot(reflect(lightPositionN, gradSample.rgb), dir), 0.0), shininess);
 				//
 				if (gradSample.a > boundThresh) {
 					float lightNormDot = dot(gradSample.rgb, lightDirHeadOn); //with respect to viewer
@@ -126,10 +134,10 @@ void main() {
 			}
 		}
 		if (overlays > 0) {
-			vec4 ocolorSample = texture3D(intensityOverlay,samplePos.xyz);
+			vec4 ocolorSample = texture3Df(intensityOverlay,samplePos.xyz);
 			ocolorSample.a = 1.0-pow((1.0 - ocolorSample.a), opacityCorrection);
 			if (ocolorSample.a > 0.0) {
-				gradSample = texture3D(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
+				gradSample = texture3Df(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
 				gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
 				if (gradSample.a < oprevGrad.a)
 					gradSample.rgb = oprevGrad.rgb;
@@ -141,11 +149,11 @@ void main() {
 				ocolorSample.a = pow(ocolorSample.a, 1.0 -edgeVal);
 				ocolorSample.rgb = mix(ocolorSample.rgb, vec3(0.0,0.0,0.0), edgeVal);
 
-				lightNormDot = dot(gradSample.rgb, lightPosition);
+				lightNormDot = dot(gradSample.rgb, lightPositionN);
 
 				vec3 a = ocolorSample.rgb * ambient;
 				vec3 d = max(lightNormDot, 0.0) * ocolorSample.rgb * diffuse;
-				float s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
+				float s =   specular * pow(max(dot(reflect(lightPositionN, gradSample.rgb), dir), 0.0), shininess);
 				ocolorSample.rgb = a + d + s;
 				
 				if ( ocolorSample.a > 0.2) {
@@ -177,12 +185,20 @@ void main() {
 		colAcc.a = max(colAcc.a, boundAcc);
 	}
 	if ((overlays < 1) || (overAcc.a == 0.0))  {
+		#if ( __VERSION__ > 300 )
 		FragColor = colAcc;
+		#else
+		gl_FragColor = colAcc;
+		#endif
 		return;
 	}
 	if (overNearest <= bgNearest) { //if overlay closer than background
 		colAcc.rgb=mix(colAcc.rgb, overAcc.rgb,  overAcc.a);
+		#if ( __VERSION__ > 300 )
 		FragColor = colAcc;
+		#else
+		gl_FragColor = colAcc;
+		#endif
 		return;
 	}
 	//overlay behind surface
@@ -191,5 +207,9 @@ void main() {
 	depth = min(depth, 1.0);
 	depth = sqrt(depth);
 	colAcc.rgb = mix(overAcc.rgb, colAcc.rgb,  depth);
-    FragColor = colAcc;
+	#if ( __VERSION__ > 300 )
+	FragColor = colAcc;
+	#else
+	gl_FragColor = colAcc;
+	#endif
 }

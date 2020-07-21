@@ -6,6 +6,7 @@ unit sse2;
 interface
 
 uses
+  //math, //TODO
   Classes, SysUtils, SimdUtils;
 
 (*type
@@ -17,7 +18,7 @@ procedure float2byte(flts: TFloat32s; byts: TUInt8s; lMin, lMax: single; skipVx:
 
 implementation
 
-{$IFDEF CPU64}
+{$IFDEF CPUX86_64}
 {$ASMMODE INTEL}
 Type
   ByteRA = array [1..1] of byte;
@@ -163,7 +164,7 @@ const
 var
    inAlign: PtrUint;
 begin
-  {$IFDEF CPU64}
+  {$IFDEF CPUX86_64}
   inAlign := PtrUint(@flts[skipVx]) mod kAlign;
   if inAlign <> 0 then
        SSE := false;
@@ -174,7 +175,7 @@ begin
      float2byteSIMD(flts,byts, lMin,lMax, skipVx)
   else
   {$ENDIF}
-          float2byteSISD(flts,byts, lMin,lMax, skipVx);
+    float2byteSISD(flts,byts, lMin,lMax, skipVx);
 end;
 
 end.

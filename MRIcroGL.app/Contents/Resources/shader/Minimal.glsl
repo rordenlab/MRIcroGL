@@ -25,7 +25,7 @@ void main() {
 	vec4 clipPos = applyClip(dir, samplePos, len);
 	float stepSizeX2 = samplePos.a + (stepSize * 2.0);
 	while (samplePos.a <= len) {
-		colorSample = texture(intensityVol,samplePos.xyz);
+		colorSample = texture3Df(intensityVol,samplePos.xyz);
 		if (colorSample.a > 0.0) {
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);
 			bgNearest = min(samplePos.a,bgNearest);
@@ -40,10 +40,18 @@ void main() {
 	} //while samplePos.a < len
 	colAcc.a = colAcc.a/0.95;
 	colAcc.a *= backAlpha;
+	#if ( __VERSION__ > 300 )
 	if ( overlays < 1 ) {
 		FragColor = colAcc;
 		return;
 	}
+	#else
+	if ((textureSz.x < 1) || ( overlays < 1 )) {
+		gl_FragColor = colAcc;
+		return;
+	}
+	#endif
+	
 	//overlay pass
 	vec4 overAcc = vec4(0.0,0.0,0.0,0.0);
 	if (overlayClip > 0)
@@ -53,7 +61,7 @@ void main() {
 		samplePos = vec4(start.xyz +deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)), 0.0);
 	}
 	while (samplePos.a <= len) {
-		colorSample = texture(intensityOverlay,samplePos.xyz);
+		colorSample = texture3Df(intensityOverlay,samplePos.xyz);
 		if (colorSample.a > 0.00) {
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);
 			colorSample.a *=  overlayFuzzy;
@@ -77,5 +85,9 @@ void main() {
 		colAcc.rgb = mix(colAcc.rgb, overAcc.rgb, overMix);
 		colAcc.a = max(colAcc.a, overAcc.a);
 	//}
-    FragColor = colAcc;
+	#if ( __VERSION__ > 300 )
+	FragColor = colAcc;
+	#else
+	gl_FragColor = colAcc;
+	#endif
 }
