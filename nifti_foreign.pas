@@ -82,9 +82,8 @@ function readAFNIHeader(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int
 function isINTERFILE(var fname: string): boolean;
 function readForeignHeader(var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean; out xDim64: int64): boolean; overload;
 function readForeignHeader(var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean): boolean; overload;
-
+function IsReadable(fnm: string): boolean;
 procedure convertForeignToNifti(var nhdr: TNIFTIhdr);
-{$IFDEF Darwin} function IsReadable(fnm: string): boolean; {$ENDIF} //Used to detect if files in MacOS sandbox
 function FSize (lFName: String): Int64;
 function isTIFF(fnm: string): boolean;
 procedure nifti_mat44_to_quatern( lR :mat44; out qb, qc, qd, qx, qy, qz, dx, dy, dz, qfac : single);
@@ -108,16 +107,19 @@ begin
   {$IFDEF UNIX} writeln(str);{$ENDIF}
 end;
 
-{$IFDEF Darwin}
+
 function IsReadable(fnm: string): boolean;
-label 222;
+//https://wiki.freepascal.org/macOS_Programming_Tips#Determining_if_a_file_is_readable
+{$IFDEF Darwin}
 var
   f: file;
   b: byte;
+{$ENDIF}
 begin
   result := false;
-  if not fileexists(fnm) then goto 222;
-  if FSize(fnm) < 2 then goto 222;
+  if not fileexists(fnm) then exit;
+  if FSize(fnm) < 2 then exit;
+  {$IFDEF Darwin}
   AssignFile(f, fnm);
   {$I+}
   try
@@ -132,11 +134,11 @@ begin
   except
     result := false;
   end;
-  222:
-  if result then exit;
-  printf('Unable to read file (not in sandbox?): '+fnm);
+  {$ELSE}
+  result := true;
+  {$ENDIF}
 end;
-{$ENDIF}
+
 
 {$IFDEF GL10}
 procedure NII_SetIdentityMatrix (var lHdr: TNIFTIHdr); //create neutral rotation matrix

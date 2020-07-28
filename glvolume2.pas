@@ -235,7 +235,6 @@ kFragLine2D = '#version 330'
 +#10'}';
 {$ELSE}
 kVertTex2D = '#version 120'
-+#10'//akVertTex2D'
 +#10'uniform vec2 ViewportSize;'
 +#10'varying vec4 texCoord;'
 +#10'void main() {'
@@ -246,7 +245,6 @@ kVertTex2D = '#version 120'
 +#10'}';
  //mango
 kFragTex2D = '#version 120'
-+#10'//akFragTex2D'
 +#10'varying vec4 texCoord;'
 +#10'uniform float backAlpha = 1.0;'
 +#10'uniform sampler3D tex, drawTex, overlay;'

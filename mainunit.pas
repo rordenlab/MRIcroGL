@@ -31,9 +31,10 @@ uses
   {$IFDEF COMPILEYOKE} yokesharemem, {$ENDIF}
   {$IFDEF AFNI} nifti_foreign, afni_fdr, {$ENDIF}
   {$IFDEF MYPY}PythonEngine,  {$ENDIF}
+  {$IFDEF Darwin} MacOSAll, {$ENDIF}
   {$IFDEF LCLCocoa}SysCtl, dos, {$IFDEF DARKMODE}nsappkitext, {$ENDIF}{$IFDEF NewCocoa} UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
-  ctypes, resize, ustat, LazVersion, nifti_tiff, tiff2nifti,
+  ctypes, resize, ustat, LazVersion,  tiff2nifti,
   lcltype, GraphType, Graphics, dcm_load, crop,
   LCLIntf, slices2D, StdCtrls, SimdUtils, Classes, SysUtils, Forms, Controls,clipbrd,
   Dialogs, Menus, ExtCtrls, CheckLst, ComCtrls, Spin, Types, fileutil, ulandmarks, nifti_types,
@@ -459,7 +460,7 @@ type
     procedure ResizeMenuClick(Sender: TObject);
     procedure SaveMosaicBmp(bmpName: string);
     procedure DrawSaveMenuClick(Sender: TObject);
-    procedure Save2Bmp(fnm: string);
+    function Save2Bmp(fnm: string): boolean;
     procedure DrawOpenMenuClick(Sender: TObject);
     procedure DrawTool1Click(Sender: TObject);
     procedure DrawTransClick(Sender: TObject);
@@ -1040,6 +1041,15 @@ end;
 
 procedure printf(str: string);
 begin
+     {$IFDEF UNIX} writeln(str);
+     {$ELSE}
+     if IsConsole then writeln(str);
+     {$ENDIF}
+end;
+
+procedure pyprintf(str: string);
+begin
+     GLForm1.ScriptOutputMemo.Lines.Add(str);
      {$IFDEF UNIX} writeln(str);
      {$ELSE}
      if IsConsole then writeln(str);
@@ -1814,6 +1824,10 @@ begin
     if Boolean(PyArg_ParseTuple(Args, 's|i:loadgraph', @PtrName, @IsAdd)) then
     begin
       StrName:= string(PtrName);
+      if fileexists(StrName) and (not IsReadable(StrName)) then begin
+         pyprintf('not permitted to read "'+StrName+'"');
+         exit;
+      end;
       ret := GLForm1.GraphOpen(StrName, IsAdd = 1, false);
       //ret := GLForm1.AddBackground(StrName);xxxx
       if not ret then
@@ -1835,6 +1849,10 @@ begin
     if Boolean(PyArg_ParseTuple(Args, 's:loadimage', @PtrName)) then
     begin
       StrName:= string(PtrName);
+      if fileexists(StrName) and (not IsReadable(StrName)) then begin
+         pyprintf('not permitted to read "'+StrName+'"');
+         exit;
+      end;
       ret := GLForm1.AddBackground(StrName);
       if not ret then begin
          GLForm1.ScriptOutputMemo.Lines.Add('unable to load "'+StrName+'"');
@@ -1902,6 +1920,10 @@ begin
     if Boolean(PyArg_ParseTuple(Args, 's:overlayload', @PtrName)) then
     begin
       StrName:= string(PtrName);
+      if fileexists(StrName) and (not IsReadable(StrName)) then begin
+         pyprintf('not permitted to read "'+StrName+'"');
+         exit;
+      end;
       ret := GLForm1.AddLayer(StrName);
       if not ret then begin
          GLForm1.ScriptOutputMemo.Lines.Add('unable to load "'+StrName+'"');
@@ -2286,7 +2308,14 @@ begin
     if Boolean(PyArg_ParseTuple(Args, 's:savebmp', @PtrName)) then
     begin
       StrName:= string(PtrName);
-      GLForm1.Save2Bmp(StrName);
+      if not GLForm1.Save2Bmp(StrName) then begin
+        pyprintf('Unable to write a bitmap named '+StrName);
+        {$IFDEF Darwin}
+        pyprintf(' Warning: MacOS security entitlements can block file writing.');
+        {$ENDIF}
+        Result:= GetPythonEngine.PyBool_FromLong(Ord(False));
+      end;
+      //todo
     end;
 end;
 
@@ -6935,17 +6964,8 @@ begin
   ViewGPU1.align := alNone;
   ViewGPU1.Width := w;
   ViewGPU1.Height := h;
-  {$IFDEF METALAPI}
   ViewGPU1.Invalidate;
   Vol1.SaveBmp(bmpName, gPrefs.ScreenCaptureTransparentBackground);
-  {$ELSE}
-  ViewGPU1.MakeCurrent();
-  ViewGPU1.Width := w;
-  ViewGPU1.Height := h;
-  ViewGPUPaint(self);
-  ViewGPUPaint(self);
-  SaveBmp(bmpName, ViewGPU1);
-  {$ENDIF}
   ViewGPU1.align := alClient;
   ViewGPU1.Invalidate;
 end;
@@ -7676,7 +7696,7 @@ begin
      result := IncludeTrailingPathDelimiter(pth)+fnm;
 end;
 
-procedure TGLForm1.Save2Bmp(fnm: string);
+function TGLForm1.Save2Bmp(fnm: string): boolean;
 var
 {$IFDEF METALAPI}
  q: integer;
@@ -7707,11 +7727,16 @@ begin
  Vol1.Quality1to5 := q;
  {$ELSE}
   bmp := ScreenShotGL(ViewGPU1);
-  if (bmp = nil) then exit;
+  if (bmp = nil) then exit(false);
+  result := true;
   png := TPortableNetworkGraphic.Create;
   try
-   png.Assign(bmp);    //Convert data into png
-   png.SaveToFile(fnm);
+   try
+      png.Assign(bmp);    //Convert data into png
+      png.SaveToFile(fnm);
+   except
+     result := false;
+   end;
   finally
     png.Free;
   end;
