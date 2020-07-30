@@ -12,6 +12,7 @@ interface
 {$include ../Metal-Demos/common/glopts.inc}
 uses
   {$IFDEF MATCAP} GraphType, FPImage, IntfGraphics, LCLType,{$ENDIF}
+  {$IFDEF LINUX} StrUtils, {$ENDIF}
   {$IFDEF TIMER} DateUtils,{$ENDIF}
  {$IFDEF CUBE} Forms, glcube, {$ENDIF}
   {$IFDEF CLRBAR}glclrbar,  {$ENDIF}
@@ -118,6 +119,9 @@ type
 implementation
 
 //uses mainunit;
+{$IFNDEF COREGL}{$IFDEF LINUX}
+  {$DEFINE MESA_HACKS}
+{$ENDIF}{$ENDIF}
 
 procedure printf (lS: AnsiString);
 begin
@@ -243,15 +247,26 @@ kVertTex2D = '#version 120'
 +#10'    gl_Position = vec4((pixelPosition / (ViewportSize/2.0)), 0.0, 1.0);'
 +#10'    texCoord = gl_Color;'
 +#10'}';
- //mango
+ {$IFDEF MESA_HACKS} //required for Mesa running VirtualBox with "Enable 3D Acceleration"
+ kMesaKludge =  #10'    if (texCoord.x > 2.0) {'
+ +#10'      gl_FragColor = vec4(1.0, 0.0, 0.0, 0.5);'
+ +#10'      return;'
+ +#10'    }';
+ kMesaKuldge2 =  #10'    ocolor = texture1D(drawLUT, texture3D(drawTex, texCoord.xyz).a).rgba;';
+ {$ELSE}
+kMesaKludge = '';
+kMesaKuldge2 = #10'    ocolor = texture1D(drawLUT, texture3D(drawTex, texCoord.xyz).r).rgba;';
+{$ENDIF}
+
 kFragTex2D = '#version 120'
 +#10'varying vec4 texCoord;'
 +#10'uniform float backAlpha = 1.0;'
 +#10'uniform sampler3D tex, drawTex, overlay;'
 +#10'uniform sampler1D drawLUT;'
-+#10'uniform float drawAlpha = 0.0;'
++#10'uniform float drawAlpha = 0.5;'
 +#10'uniform int overlays = 0;'
 +#10'void main() {'
++kMesaKludge
 +#10'    vec4 color = texture3D(tex,texCoord.xyz);'
 +#10'    color.a = smoothstep(0.0, 0.1, color.a);'
 +#10'    color.a *= backAlpha;'
@@ -264,11 +279,11 @@ kFragTex2D = '#version 120'
 +#10'    vec4 ocolor = texture3D(overlay, texCoord.xyz);'
 +#10'    color.rgb = mix(color.rgb, ocolor.rgb, ocolor.a);'
 +#10'    color.a = max(color.a, ocolor.a);'
-+#10'    if (drawAlpha == 0.0) {'
++#10'    if (drawAlpha <= 0.0) {'
 +#10'        gl_FragColor = color;'
 +#10'        return;'
 +#10'    }'
-+#10'    ocolor = texture1D(drawLUT, texture3D(drawTex, texCoord.xyz).r).rgba;'
++kMesaKuldge2
 +#10'    ocolor.a *= drawAlpha;'
 +#10'    color.rgb = mix(color.rgb, ocolor.rgb, ocolor.a);'
 +#10'    color.a = max(color.a, ocolor.a);'
@@ -308,7 +323,7 @@ var
 begin //creates an empty texture in VRAM without requiring memory copy from RAM
     //later run glDeleteTextures(1,&oldHandle);
     GetErrorAll(101,'PreBindBlank');
-    if (gradientMode = kGradientModeGPUFast) then
+    if (gradientMode = kGradientModeGPUFast) or (gradientMode = kGradientModeGPUFastest) then
        glTexImage3D(GL_PROXY_TEXTURE_3D, 0, GL_RGBA8, XSz, YSz, ZSz, 0, GL_RGBA, GL_UNSIGNED_BYTE, NIL)
     else
        glTexImage3D(GL_PROXY_TEXTURE_3D, 0, GL_RGBA16, XSz, YSz, ZSz, 0, GL_RGBA, GL_UNSIGNED_BYTE, NIL);
@@ -329,7 +344,7 @@ begin //creates an empty texture in VRAM without requiring memory copy from RAM
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); //, GL_CLAMP_TO_BORDER) will wrap
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    if (gradientMode = kGradientModeGPUFast) then
+    if (gradientMode = kGradientModeGPUFast) or (gradientMode = kGradientModeGPUFastest) then
        glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA8, XSz, YSz, ZSz, 0, GL_RGBA, GL_UNSIGNED_BYTE, nil)
     else
         glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA16, XSz, YSz, ZSz, 0, GL_RGBA, GL_UNSIGNED_BYTE, nil);
@@ -614,7 +629,7 @@ var
    vx,i: int64;
    v: TUInt8s;
 begin
-  GetErrorAll(96,'CreatDrawTex');
+  GetErrorAll(96,'CreateDrawTex');
   //printf(format('Creating draw texture %dx%dx%d %d', [Dim.X, Dim.Y, Dim.Z]));
   if (drawTexture3D <> 0) then glDeleteTextures(1,@drawTexture3D);
   glPixelStorei(GL_UNPACK_ALIGNMENT,1);
@@ -630,11 +645,20 @@ begin
      setlength(v,vx);
      for i := 0 to (vx -1) do
          v[i] := random(3);
+     {$IFDEF MESA_HACKS}
+     glTexImage3D(GL_TEXTURE_3D, 0, GL_INTENSITY, Dim.X, Dim.Y, Dim.Z, 0, GL_RED, GL_UNSIGNED_BYTE,@v[0]);
+     {$ELSE}
      glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, Dim.X, Dim.Y, Dim.Z, 0, GL_RED, GL_UNSIGNED_BYTE,@v[0]);
+     {$ENDIF}
      v := nil;
-  end else
+  end else begin
+      {$IFDEF MESA_HACKS}
+      glTexImage3D(GL_TEXTURE_3D, 0, GL_INTENSITY, Dim.X, Dim.Y, Dim.Z, 0, GL_RED, GL_UNSIGNED_BYTE,@Vals[0]);
+      {$ELSE} //Mesa does not support GL_RED!
       glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, Dim.X, Dim.Y, Dim.Z, 0, GL_RED, GL_UNSIGNED_BYTE,@Vals[0]);
-  GetErrorAll(102,'CreatDrawTex');
+      {$ENDIF}
+  end;
+  GetErrorAll(102,'CreateDrawTex');
 end;
 const
  //A common vertex shader for all volume rendering
@@ -1227,6 +1251,10 @@ end;
 procedure TGPUVolume.Prepare(shaderName: string);
 var
  success: boolean;
+ isMesa: boolean = false;
+ {$IFDEF LINUX}
+ vers: string;
+ {$ENDIF}
 begin
   glControl.MakeCurrent();
   if (shaderName = '') or (not fileexists(shaderName)) then
@@ -1234,16 +1262,29 @@ begin
   if (not fileexists(shaderName)) then
      shaderName := '';
   SetShader(shaderName);
+  {$IFDEF LINUX}
+  vers := glGetString(GL_VERSION);
+  isMesa := AnsiContainsText(vers, 'MESA');
+  if isMesa then begin
+     printf('Mesa detected. Slower gradients will be used and Draw menu functions may not work');
+     {$IFDEF GPUGRADIENTS}
+     programBlur := 0;
+     programSobel := 0;
+     {$ENDIF}
+  end;
+  {$ENDIF}
   {$IFDEF GPUGRADIENTS}
-  programBlur := initVertFrag(kBlurSobelVert,kBlurFrag);
-  programSobel := initVertFrag(kBlurSobelVert,kSobelFrag);
+  if not isMesa then begin
+     programBlur := initVertFrag(kBlurSobelVert,kBlurFrag);
+     programSobel := initVertFrag(kBlurSobelVert,kSobelFrag);
+  end;
   {$ENDIF}
   {$IFDEF VIEW2D}
   colorEditor := TColorEditor.Create();
   //ShowColorEditor := true;
   //line program
   programLine2D := initVertFrag(kVertLine2D,kFragLine2D);
-  glUseProgram(programLine2D);
+  //glUseProgram(programLine2D);
   uniform_viewportSizeLine := glGetUniformLocation(programLine2D, pAnsiChar('ViewportSize'));
   {$IFDEF COREGL}
   //setup VAO for Tex
@@ -1270,7 +1311,7 @@ begin
   {$ENDIF}
   //2D program
   programTex2D := initVertFrag(kVertTex2D,kFragTex2D);
-  glUseProgram(programTex2D);
+  //glUseProgram(programTex2D);
   uniform_tex := glGetUniformLocation(programTex2D, pAnsiChar('tex'));
   uniform_overlay := glGetUniformLocation(programTex2D, pAnsiChar('overlay'));
   uniform_drawTex := glGetUniformLocation(programTex2D, pAnsiChar('drawTex'));
@@ -1498,7 +1539,7 @@ begin
  //startTime := Now;
   if (Dim.X > 1) then begin
     {$IFDEF GPUGRADIENTS}
-    if (gradientMode <> kGradientModeCPUSlowest) then begin
+    if (gradientMode <> kGradientModeCPUSlowest) and (programSobel <> 0) and (programSobel <> 0) then begin
        SetLength (gradData, Dim.X*Dim.Y*Dim.Z);
        glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Dim.X, Dim.Y, Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@gradData[0]);
        gradData := nil;
@@ -1592,7 +1633,7 @@ var
  //i,j: int64;
  width, height, depth: GLint;
  gradData: TRGBAs;
- //startTime : TDateTime;
+ {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
 begin
  result := false;
  glControl.MakeCurrent();
@@ -1632,7 +1673,7 @@ begin
  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
  glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE, @Vol.VolRGBA[0]);
  {$IFDEF GPUGRADIENTS}
- if (gradientMode <> kGradientModeCPUSlowest) then begin
+ if (gradientMode <> kGradientModeCPUSlowest) and (programSobel <> 0) and (programBlur <> 0) then begin
    if not deferGradients then
       GenerateGradient(intensityTexture3D, gradientTexture3D);
    goto 123;
@@ -1675,7 +1716,9 @@ begin
        GetErrorAll(108,'TextureGradient'); //1286
  end else begin
  {$ENDIF}*)
+  {$IFDEF TIMER}startTime := now;{$ENDIF}
    gradData := Vol.GenerateGradientVolume;
+   {$IFDEF TIMER}printf(format('CPU Gradient time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
    //CreateGradientVolume (Vol.VolRGBA, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, gradData);
    glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Vol.Dim.X, Vol.Dim.Y,Vol.Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@gradData[0]);
    gradData := nil;

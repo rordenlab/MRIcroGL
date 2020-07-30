@@ -6742,6 +6742,7 @@ end;
 procedure TGLForm1.ResetDefaultsClick(Sender: TObject);
 var
  ss: TShiftState;
+ ClearColor: TRGBA;
 begin
   //to do
   GLForm1.RenderMenu.Checked := true;
@@ -6755,7 +6756,10 @@ begin
   {$IFDEF CLRBAR}
   gClrbar.SizeFraction := gPrefs.ColorbarSize/1000;
   {$ENDIF}
+  ClearColor := gPrefs.ClearColor;
   SetDefaultPrefs(gPrefs, false);
+  if (ClearColor.R <> gPrefs.ClearColor.R) or (ClearColor.G <> gPrefs.ClearColor.G) or (ClearColor.B <> gPrefs.ClearColor.B) then
+     Vol1.SetTextContrast(gPrefs.ClearColor);
   //gPrefs.colorbar := gClrbar.isVisible;
   VisibleClrbarMenu.Checked := gPrefs.ColorbarVisible;
   Smooth2DCheck.Checked := gPrefs.Smooth2D;
