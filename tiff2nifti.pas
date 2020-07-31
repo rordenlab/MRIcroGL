@@ -166,10 +166,12 @@ begin
 end;
 
 function Save2Nii(fnm: string; nhdr: TNIFTIhdr; img: TUInt8s): string;
+const
+  kMaxBlockWrite = 1073741824;
 var
   f: file;
   outFnm, lExt: string;
-  nImgBytes: integer;
+  nImgBytes, nWritten, nBlock, nOK: int64;
   u0 : uint32;
 begin
   result := '';
@@ -185,20 +187,36 @@ begin
      showmessage('File already exists '+outFnm);
      exit;
   end;
-  nhdr.vox_offset := 352;
-  AssignFile(f, outFnm);
-  FileMode := 2;
-  Rewrite(f, 1);
-  Blockwrite(f,nhdr,sizeof(nhdr));
-  u0 := 0; //348 byte header padded to 352
-  Blockwrite(f,u0,sizeof(u0));
   nImgBytes := (nhdr.bitpix div 8) * nhdr.dim[1] * nhdr.dim[2] * nhdr.dim[3];
   if (nhdr.datatype = kDT_RGB) then nImgBytes := nImgBytes * 3;
   if (nhdr.dim[4] > 1) then nImgBytes := nImgBytes * nhdr.dim[4];
   if (nhdr.dim[5] > 1) then nImgBytes := nImgBytes * nhdr.dim[5];
-  Blockwrite(f,img[0],nImgBytes);
+  if length(img) <> nImgBytes then begin
+     showmessage(format('Unexpected data size: have %d expected %d bytes', [length(img), nImgBytes]));
+     exit;
+  end;
+  nhdr.vox_offset := 352;
+  u0 := 0; //348 byte header padded to 352
+  AssignFile(f, outFnm);
+  FileMode := 2;
+  Rewrite(f, 1);
+  Blockwrite(f,nhdr,sizeof(nhdr));
+  Blockwrite(f,u0,sizeof(u0));
+  nWritten := 0;
+  while (nWritten < nImgBytes) do begin
+     nBlock := min(kMaxBlockWrite, nImgBytes - nWritten);
+     //mStream.Write(img[nWritten], nBlock);
+     Blockwrite(f,img[nWritten],nBlock, nOK);
+     if nOK <> nBlock then
+        break;
+     nWritten += nBlock;
+  end;
   CloseFile(f);
   result := outFnm;
+  if (nImgBytes <> nWritten) then begin
+    showmessage(format('Failed to save all data: wrote %d of %d bytes', [nWritten, nImgBytes]));
+    result := '';
+  end;
 end;
 
 function convertTiffDir(initdir: string): boolean;
@@ -206,7 +224,7 @@ var
   lSearchRec: TSearchRec;
   lS : TStringList;
   fnm, tiffdir, outnm: string;
-  nOK, i, j, k : integer;
+  nOK, i, j, k : int64;
   sliceBytes : int64;
   hdr0, hdr: TNIFTIHdr;
   img0, img: TUInt8s;

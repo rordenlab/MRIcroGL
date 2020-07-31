@@ -690,7 +690,7 @@ begin
         tTag := readIFD;
         //{$DEFINE VERBOSETIF}
         {$IFDEF VERBOSETIF}
-        msgTIFF(format('id %x type %d n %d = %d', [tTag.tagID, tTag.tagType, tTag.count, tTag.offset]));
+        msgTIFF(format('tag %d/%d id %x type %d n %d = %d', [i, nTag, tTag.tagID, tTag.tagType, tTag.count, tTag.offset]));
         {$ENDIF}
         //memo1.lines.Add(format('%x %d %d %d', [IFD.tagID,IFD.tagType, IFD.count, IFD.offset]));
         case tTag.tagID of
@@ -801,11 +801,19 @@ begin
        if not (hdr[i].OK) then continue;
        readTagArray(hdr[i].StripOffsets, lOffsets);
        readTagArray(hdr[i].StripByteCounts, lCounts);
+       {$IFDEF VERBOSETIF}
+        msgTIFF(format('IFD %d/%d id offsets %d counts %d', [i, nIFD, length(lOffsets), length(lCounts)]));
+       {$ENDIF}
+       sliceBytesLeft :=  (hdr[ok1].bpp div 8) * hdr[ok1].ImageHeight * hdr[ok1].ImageWidth;
+       if (length(lOffsets) = 1) and (length(lCounts) = 0) then begin
+          setlength(lCounts,1);
+          lCounts[0] := sliceBytesLeft;
+       end;
        eStr := format('Expected Offsets and Counts to match ',[length(lOffsets), length(lCounts)]);
        if (length(lOffsets) <> length(lCounts)) or (length(lOffsets) < 1) then goto 666;
        //if hdr[ok1].RowsPerStrip < 1 then
        //   hdr[ok1].RowsPerStrip := hdr[ok1].ImageWidth;
-       sliceBytesLeft :=  (hdr[ok1].bpp div 8) * hdr[ok1].ImageHeight * hdr[ok1].ImageWidth;
+
        outCount := (hdr[ok1].bpp div 8) * hdr[ok1].ImageWidth * hdr[ok1].RowsPerStrip;
        if (hdr[ok1].SamplesPerPixel > 1) and (length(lOffsets) = hdr[ok1].SamplesPerPixel) then
           outCount := hdr[ok1].ImageWidth * hdr[ok1].RowsPerStrip;

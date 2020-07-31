@@ -44,7 +44,7 @@ object ResizeForm: TResizeForm
     AnchorSideTop.Side = asrCenter
     Left = 10
     Height = 16
-    Top = 72
+    Top = 93
     Width = 104
     Caption = 'X-Scale Columns'
     Constraints.MinWidth = 80
@@ -56,7 +56,7 @@ object ResizeForm: TResizeForm
     AnchorSideTop.Side = asrCenter
     Left = 10
     Height = 16
-    Top = 97
+    Top = 119
     Width = 82
     Caption = 'Y-Scale Rows'
     Constraints.MinWidth = 80
@@ -68,7 +68,7 @@ object ResizeForm: TResizeForm
     AnchorSideTop.Side = asrCenter
     Left = 10
     Height = 16
-    Top = 122
+    Top = 145
     Width = 87
     Caption = 'Z-Scale Slices'
     Constraints.MinWidth = 80
@@ -80,8 +80,8 @@ object ResizeForm: TResizeForm
     AnchorSideTop.Control = XEdit
     AnchorSideTop.Side = asrBottom
     Left = 120
-    Height = 21
-    Top = 95
+    Height = 22
+    Top = 116
     Width = 128
     BorderSpacing.Left = 6
     BorderSpacing.Top = 4
@@ -96,8 +96,8 @@ object ResizeForm: TResizeForm
     AnchorSideTop.Control = YEdit
     AnchorSideTop.Side = asrBottom
     Left = 120
-    Height = 21
-    Top = 120
+    Height = 22
+    Top = 142
     Width = 128
     BorderSpacing.Left = 6
     BorderSpacing.Top = 4
@@ -113,7 +113,7 @@ object ResizeForm: TResizeForm
     AnchorSideRight.Side = asrBottom
     Left = 421
     Height = 25
-    Top = 215
+    Top = 238
     Width = 80
     Anchors = [akTop, akRight]
     BorderSpacing.Top = 4
@@ -129,7 +129,7 @@ object ResizeForm: TResizeForm
     AnchorSideRight.Control = OKBtn
     Left = 335
     Height = 25
-    Top = 215
+    Top = 238
     Width = 80
     Anchors = [akTop, akRight]
     BorderSpacing.Top = 4
@@ -145,7 +145,7 @@ object ResizeForm: TResizeForm
     AnchorSideRight.Control = CancelBtn
     Left = 194
     Height = 20
-    Top = 217
+    Top = 240
     Width = 117
     Anchors = [akTop, akRight]
     AutoSize = True
@@ -162,7 +162,7 @@ object ResizeForm: TResizeForm
     AnchorSideRight.Control = IsotropicBtn
     Left = 65
     Height = 20
-    Top = 217
+    Top = 240
     Width = 123
     Anchors = [akTop, akRight]
     AutoSize = True
@@ -179,7 +179,7 @@ object ResizeForm: TResizeForm
     AnchorSideTop.Side = asrBottom
     Left = 120
     Height = 20
-    Top = 145
+    Top = 168
     Width = 320
     BorderSpacing.Top = 4
     ItemHeight = 26
@@ -204,7 +204,7 @@ object ResizeForm: TResizeForm
     AnchorSideTop.Side = asrBottom
     Left = 120
     Height = 20
-    Top = 169
+    Top = 192
     Width = 320
     BorderSpacing.Top = 4
     ItemHeight = 26
@@ -225,7 +225,7 @@ object ResizeForm: TResizeForm
     AnchorSideTop.Side = asrCenter
     Left = 10
     Height = 16
-    Top = 147
+    Top = 170
     Width = 80
     Caption = 'Interpolation'
     Constraints.MinWidth = 80
@@ -237,7 +237,7 @@ object ResizeForm: TResizeForm
     AnchorSideTop.Side = asrCenter
     Left = 10
     Height = 16
-    Top = 171
+    Top = 194
     Width = 80
     Caption = 'Data Type'
     Constraints.MinWidth = 80
@@ -259,11 +259,11 @@ object ResizeForm: TResizeForm
   object XEdit: TEdit
     AnchorSideLeft.Control = XLabel
     AnchorSideLeft.Side = asrBottom
-    AnchorSideTop.Control = ChangeLabel
+    AnchorSideTop.Control = TexLabel
     AnchorSideTop.Side = asrBottom
     Left = 120
-    Height = 21
-    Top = 70
+    Height = 22
+    Top = 90
     Width = 128
     BorderSpacing.Left = 6
     BorderSpacing.Top = 4
@@ -278,12 +278,25 @@ object ResizeForm: TResizeForm
     AnchorSideTop.Side = asrBottom
     Left = 10
     Height = 18
-    Top = 193
+    Top = 216
     Width = 88
     BorderSpacing.Top = 4
     Caption = 'All Volumes'
     Checked = True
     State = cbChecked
     TabOrder = 9
+  end
+  object TexLabel: TLabel
+    AnchorSideLeft.Control = InLabel
+    AnchorSideTop.Control = ChangeLabel
+    AnchorSideTop.Side = asrBottom
+    Left = 10
+    Height = 16
+    Top = 70
+    Width = 480
+    BorderSpacing.Top = 4
+    Caption = 'TexLabel'
+    Constraints.MinWidth = 480
+    ParentColor = False
   end
 end

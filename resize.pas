@@ -14,6 +14,7 @@ type
 
   TResizeForm = class(TForm)
     AllVolumesCheck: TCheckBox;
+    TexLabel: TLabel;
     FilterDrop: TComboBox;
     DataTypeDrop: TComboBox;
     IsotropicBtn: TButton;
@@ -67,11 +68,13 @@ begin
 end;
 
 procedure TResizeForm.EditChange(Sender: TObject);
+const
+  bytesPerMb = 1048576;
 var
   Scale, outMM : TVec3;
   outDim: TVec3i;
   bpp: integer;
-  inBytes, outBytes: int64;
+  inBytes, outBytes, texMb: int64;
 
 begin
      Scale := ReadScale;
@@ -101,6 +104,14 @@ begin
          bpp := 32;
      outBytes := outDim.x * outDim.y * outDim.z * (bpp div 8);
      ChangeLabel.Caption := format('Change in uncompressed size: x%.4g', [outBytes/inBytes]);
+     texMb := ceil((outDim.x * outDim.y * outDim.z * 4) / bytesPerMb);  //32-bit RGBA
+     if texMb > 2047 then begin
+        TexLabel.Font.Color := clRed;
+        TexLabel.Caption := format('GPU Texture Size: %d Mb (May exceed GPU limits)', [texMb]);
+     end else begin
+         TexLabel.Font.Color:= clDefault;
+         TexLabel.Caption := format('GPU Texture Size: %d Mb', [texMb]);
+     end;
 end;
 
 procedure TResizeForm.FormShow(Sender: TObject);

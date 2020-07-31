@@ -3641,7 +3641,7 @@ begin
  indir := extractfiledir(gPrefs.PrevBackgroundImage);
  {$ifdef darwin}
  //Darwin does not show dialog title
- showmessage('Select a folder with all the 2D TIFFs (e.g. from DigiMorph). They must be the same dimension and slice order matches alphabetical order of names.');
+ showmessage('Select a folder with all the 2D TIFFs (e.g. from DigiMorph or MorphoSource). They must be the same dimension and slice order matches alphabetical order of names.');
  if PosEx('.app/Contents/Resources', indir) > 0 then
     indir := '';
  {$endif}
