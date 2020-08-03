@@ -12,7 +12,6 @@ interface
 {$include ../Metal-Demos/common/glopts.inc}
 uses
   {$IFDEF MATCAP} GraphType, FPImage, IntfGraphics, LCLType,{$ENDIF}
-  {$IFDEF LINUX} StrUtils, {$ENDIF}
   {$IFDEF TIMER} DateUtils,{$ENDIF}
  {$IFDEF CUBE} Forms, glcube, {$ENDIF}
   {$IFDEF CLRBAR}glclrbar,  {$ENDIF}
@@ -318,12 +317,20 @@ end;
 
 {$IFDEF GPUGRADIENTS}
 function bindBlankGL(Xsz,Ysz,Zsz, gradientMode: integer): GLuint;
+const
+     k2Gb = 2147483648;
 var
   width, height, depth: GLint;
+  isRGBA8: boolean;
+  rgbaBytes: int64;
 begin //creates an empty texture in VRAM without requiring memory copy from RAM
     //later run glDeleteTextures(1,&oldHandle);
     GetErrorAll(101,'PreBindBlank');
-    if (gradientMode = kGradientModeGPUFast) or (gradientMode = kGradientModeGPUFastest) then
+    isRGBA8 := (gradientMode = kGradientModeGPUFast) or (gradientMode = kGradientModeGPUFastest);
+    rgbaBytes :=  XSz * YSz * ZSz * 8; //GL_RGBA16 = is 8 bytes per voxel
+    if (rgbaBytes >= k2Gb) then
+       isRGBA8 := true;
+    if isRGBA8 then
        glTexImage3D(GL_PROXY_TEXTURE_3D, 0, GL_RGBA8, XSz, YSz, ZSz, 0, GL_RGBA, GL_UNSIGNED_BYTE, NIL)
     else
        glTexImage3D(GL_PROXY_TEXTURE_3D, 0, GL_RGBA16, XSz, YSz, ZSz, 0, GL_RGBA, GL_UNSIGNED_BYTE, NIL);
@@ -344,7 +351,7 @@ begin //creates an empty texture in VRAM without requiring memory copy from RAM
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); //, GL_CLAMP_TO_BORDER) will wrap
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    if (gradientMode = kGradientModeGPUFast) or (gradientMode = kGradientModeGPUFastest) then
+    if isRGBA8 then
        glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA8, XSz, YSz, ZSz, 0, GL_RGBA, GL_UNSIGNED_BYTE, nil)
     else
         glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA16, XSz, YSz, ZSz, 0, GL_RGBA, GL_UNSIGNED_BYTE, nil);
@@ -1252,9 +1259,7 @@ procedure TGPUVolume.Prepare(shaderName: string);
 var
  success: boolean;
  isMesa: boolean = false;
- {$IFDEF LINUX}
- vers: string;
- {$ENDIF}
+ max3D: glInt;
 begin
   glControl.MakeCurrent();
   if (shaderName = '') or (not fileexists(shaderName)) then
@@ -1262,17 +1267,15 @@ begin
   if (not fileexists(shaderName)) then
      shaderName := '';
   SetShader(shaderName);
-  {$IFDEF LINUX}
-  vers := glGetString(GL_VERSION);
-  isMesa := AnsiContainsText(vers, 'MESA');
+  glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, @max3D);
+  isMesa := (max3D < 257);
   if isMesa then begin
-     printf('Mesa detected. Slower gradients will be used and Draw menu functions may not work');
+     printf('Compromised GL_MAX_3D_TEXTURE_SIZE detected. Slower gradients will be used and Draw menu functions may not work');
      {$IFDEF GPUGRADIENTS}
      programBlur := 0;
      programSobel := 0;
      {$ENDIF}
   end;
-  {$ENDIF}
   {$IFDEF GPUGRADIENTS}
   if not isMesa then begin
      programBlur := initVertFrag(kBlurSobelVert,kBlurFrag);

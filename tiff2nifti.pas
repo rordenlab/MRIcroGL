@@ -129,6 +129,8 @@ begin
 end;
 
 function Save2NiiGz(niftiFileName: string; fHdr: TNIFTIhdr; img: TUInt8s): string;
+const
+  bytesPerMb = 1048576;
 var
    Stream : TGZFileStream;
    pad: uint32;
@@ -139,6 +141,8 @@ begin
     Showmessage('Unable to overwrite existing file "'+niftiFileName+'".');
     exit;
  end;
+ if (length(img) > (2 * bytesPerMb)) then
+    Showmessage('WarningL GZ can have issues with huge files (consider saving uncompressed and compressing after resizing/cropping).');
  hdr := fHdr;
  hdr.HdrSz:= SizeOf (TNIFTIHdr);
  hdr.vox_offset:= 352;

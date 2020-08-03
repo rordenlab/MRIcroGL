@@ -12,10 +12,10 @@ uses
   Classes, SysUtils, nifti_types, SimdUtils, dialogs;
 
 //function EnlargeIsotropic(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s): boolean;
-function ShrinkLarge(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lMaxDim: integer; isLabels: boolean = false): boolean;
+function ShrinkLargeMb(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lMaxTexMb: integer; isLabels: boolean = false): boolean;
+//function ShrinkLarge(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lMaxDim: integer; isLabels: boolean = false): boolean;
 function ShrinkOrEnlarge(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lFilter: integer; lScale: single): boolean; overload;
 function ShrinkOrEnlarge(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lFilter: integer; lScaleX, lScaleY, lScaleZ: single; outDatatype : integer = -1): boolean; overload;
-
 
 implementation
 
@@ -1054,6 +1054,90 @@ begin
      lHdr.scl_inter:= (32768 * lHdr.scl_slope) + lHdr.scl_inter;
      Resize16(lHdr, lImg8, xScale, yScale, zScale, fwidth, filter);
 end;
+
+function ScaleToMb(var lHdr: TNIFTIhdr; lMaxTexMb: integer): double;
+const
+  kBytesPerMb = 1048576;
+var
+   mb: double;
+   scaleVol, scale: double;
+   i : integer;
+   outdim: array [1..3] of integer;
+begin
+  mb := (lHdr.dim[1] * lHdr.dim[2] * lHdr.dim[3] * 4)/kBytesPerMb; //RGBA8 is 4 bytes per voxel
+  //scale :=  power(scaleVol, 1/3);
+  if (mb <= 0) or (mb < lMaxTexMb) or (lMaxTexMb < 1) then exit(1.0);
+  //{$IFDEF UNIX}writeln(format('%dx%dx%d texture would require %.3g mb', [lHdr.dim[1], lHdr.dim[2], lHdr.dim[3], mb])); {$ENDIF}
+  scaleVol := lMaxTexMb/mb;
+  scale :=  exp(ln(scaleVol) / 3); //power(scaleVol, 1/3);
+  for i := 1 to 3 do begin
+      outdim[i] := round(lHdr.dim[i] * scale);
+      outdim[i] := max(outdim[i],1);
+  end;
+  mb := (outdim[1] * outdim[2] * outdim[3] * 4)/kBytesPerMb; //RGBA8 is 4 bytes per voxel
+  if (mb > lMaxTexMb) then //round down, not up
+     scale := (max(outdim[1],max(outdim[2],outdim[3]))-1)/max(lHdr.dim[1],max(lHdr.dim[2],lHdr.dim[3]));
+  result := scale;
+end;
+
+function ShrinkLargeMb(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lMaxTexMb: integer; isLabels: boolean = false): boolean;
+var
+   scale: double;
+   {$IFDEF UNIX}StartTime: TDateTime;{$ENDIF}
+begin
+  scale := ScaleToMb(lHdr, lMaxTexMb);
+  if scale >= 1.0 then exit(false);
+  {$IFDEF UNIX}
+  writeln(format('Dimensions (%dx%dx%d) exceeds MaxTexMb (%d): resizing x%.3g', [lHdr.dim[1], lHdr.dim[2], lHdr.dim[3], lMaxTexMb, scale]));
+  startTime := now;
+  {$ENDIF}
+  if isLabels then
+     result := ShrinkOrEnlarge(lHdr,lBuffer, 0, scale)
+  else
+      result := ShrinkOrEnlarge(lHdr,lBuffer, -1, scale);
+  {$IFDEF UNIX}
+  writeln(format('Resizing (%dx%dx%d) time %d',[lHdr.dim[1], lHdr.dim[2], lHdr.dim[3], MilliSecondsBetween(Now,startTime)]));
+  {$ENDIF}
+end;
+
+(*function ShrinkLargeMb(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lMaxTexMb: integer; isLabels: boolean = false): boolean;
+const
+  kBytesPerMb = 1048576;
+var
+   mb: double;
+   scaleVol, scale: double;
+   i : integer;
+   outdim: array [1..3] of integer;
+   {$IFDEF UNIX}StartTime: TDateTime;{$ENDIF}
+begin
+  mb := (lHdr.dim[1] * lHdr.dim[2] * lHdr.dim[3] * 4)/kBytesPerMb; //RGBA8 is 4 bytes per voxel
+  //scale :=  power(scaleVol, 1/3);
+  if (mb < lMaxTexMb) or (lMaxTexMb < 1) then exit(false);
+  scaleVol := lMaxTexMb/mb;
+  scale :=  exp(ln(scaleVol) / 3); //power(scaleVol, 1/3);
+  writeln(format('-->> %g mb, max %dmb scaleVox %.2f scale %.2f',[mb, lMaxTexMb, scaleVol, scale]));
+  for i := 1 to 3 do begin
+      outdim[i] := round(lHdr.dim[i] * scale);
+      outdim[i] := max(outdim[i],1);
+  end;
+  mb := (outdim[1] * outdim[2] * outdim[3] * 4)/kBytesPerMb; //RGBA8 is 4 bytes per voxel
+  writeln(format('++>> %g mb',[mb]));
+  if (mb > lMaxTexMb) then begin //round down, not up
+     scale := (max(outdim[1],max(outdim[2],outdim[3]))-1)/max(lHdr.dim[1],max(lHdr.dim[2],lHdr.dim[3]));
+  end;
+  writeln(format('-->> %g mb, max %dmb scaleVox %.2f scale %.2f',[mb, lMaxTexMb, scaleVol, scale]));
+  {$IFDEF UNIX}
+  writeln(format('Dimensions (%dx%dx%d) exceeds MaxTexMb (%d): resizing x%.3g', [lHdr.dim[1], lHdr.dim[2], lHdr.dim[3], lMaxTexMb, scale]));
+  startTime := now;
+  {$ENDIF}
+  if isLabels then
+     result := ShrinkOrEnlarge(lHdr,lBuffer, 0, scale)
+  else
+      result := ShrinkOrEnlarge(lHdr,lBuffer, -1, scale);
+  {$IFDEF UNIX}
+  writeln(format('Resizing (%dx%dx%d) time %d',[lHdr.dim[1], lHdr.dim[2], lHdr.dim[3], MilliSecondsBetween(Now,startTime)]));
+  {$ENDIF}
+end;*)
 
 function ShrinkLarge(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lMaxDim: integer; isLabels: boolean = false): boolean;
 //rescales images with any dimension larger than lMaxDim to have a maximum dimension of maxdim...

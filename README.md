@@ -183,8 +183,11 @@ MRIcroGL uses single-pass raycasting to generate volume renderings.
 There are many terrific free tools for viewing medical imaging data. Since they are free, consider downloading a few and using the best tool for the task at hand. Below are a couple of my personal favorites.
 
  - [MRIcron](https://www.nitrc.org/projects/mricron) is similar and does not require OpenGL, but it is unable to generate interactive renderings.
+ - [DragonFly](https://www.theobjects.com/dragonfly/get-non-commercial-licensing-program.html) is not open source, but it does provide a non-commercial licenses are granted free-of-charge.
  - [Drishti](https://github.com/nci/drishti) has powerful rendering abilities, though support for medical imaging formats is limited.
  - [FSLeyes](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FSLeyes) has many similar features, as well as rich support for [FSL](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/). Variants require either OpenGL 1.4 or OpenGL 2.1.
+ - [InVesalius](https://invesalius.github.io) provides useful segmentation tools.
  - [Mango](http://ric.uthscsa.edu/mango/) is a nice viewer.
  - [Slicer 3D](https://www.slicer.org) is daunting at first, but provides tremendous power and flexibility.
+ - [Seg3D](https://www.sci.utah.edu/cibc-software/seg3d.html) has powerful segmentation routines.
  - For DICOM images (but not other formats), [Horos](https://horosproject.org) is outstanding.

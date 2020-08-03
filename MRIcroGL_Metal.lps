@@ -16,8 +16,8 @@
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
         <IsVisibleTab Value="True"/>
-        <TopLine Value="1311"/>
-        <CursorPos X="40" Y="1328"/>
+        <TopLine Value="8819"/>
+        <CursorPos Y="8839"/>
         <UsageCount Value="226"/>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
@@ -28,11 +28,10 @@
         <ComponentName Value="dcm2niiForm"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
-        <EditorIndex Value="5"/>
+        <EditorIndex Value="-1"/>
         <TopLine Value="346"/>
         <CursorPos X="37" Y="367"/>
         <UsageCount Value="226"/>
-        <Loaded Value="True"/>
       </Unit2>
       <Unit3>
         <Filename Value="drawvolume.pas"/>
@@ -53,12 +52,10 @@
         <ComponentName Value="HdrForm"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
-        <EditorIndex Value="7"/>
+        <EditorIndex Value="-1"/>
         <TopLine Value="259"/>
         <CursorPos X="32" Y="283"/>
         <UsageCount Value="226"/>
-        <Loaded Value="True"/>
-        <LoadedDesigner Value="True"/>
       </Unit5>
       <Unit6>
         <Filename Value="timeddialog.pas"/>
@@ -72,6 +69,9 @@
       <Unit7>
         <Filename Value="nifti_resize.pas"/>
         <IsPartOfProject Value="True"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="1060"/>
+        <CursorPos X="50" Y="1067"/>
         <UsageCount Value="226"/>
       </Unit7>
       <Unit8>
@@ -80,6 +80,9 @@
         <ComponentName Value="ResizeForm"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="41"/>
+        <CursorPos Y="47"/>
         <UsageCount Value="226"/>
       </Unit8>
       <Unit9>
@@ -108,24 +111,22 @@
       </Unit11>
       <Unit12>
         <Filename Value="../Metal-Demos/common/mtlgraph.pas"/>
-        <EditorIndex Value="2"/>
+        <EditorIndex Value="-1"/>
         <TopLine Value="323"/>
         <CursorPos X="26" Y="339"/>
         <UsageCount Value="88"/>
-        <Loaded Value="True"/>
       </Unit12>
       <Unit13>
         <Filename Value="../Metal-Framework/lazarus/package/metalcontrol.pas"/>
         <UnitName Value="MetalControl"/>
-        <EditorIndex Value="4"/>
+        <EditorIndex Value="-1"/>
         <TopLine Value="32"/>
         <CursorPos X="26" Y="36"/>
         <UsageCount Value="97"/>
-        <Loaded Value="True"/>
       </Unit13>
       <Unit14>
         <Filename Value="glvolume2.pas"/>
-        <EditorIndex Value="8"/>
+        <EditorIndex Value="1"/>
         <TopLine Value="574"/>
         <CursorPos Y="600"/>
         <UsageCount Value="106"/>
@@ -133,7 +134,7 @@
       </Unit14>
       <Unit15>
         <Filename Value="mtlvolume2.pas"/>
-        <EditorIndex Value="9"/>
+        <EditorIndex Value="2"/>
         <CursorPos X="10" Y="367"/>
         <UsageCount Value="100"/>
         <Loaded Value="True"/>
@@ -162,7 +163,7 @@
       </Unit18>
       <Unit19>
         <Filename Value="nifti.pas"/>
-        <EditorIndex Value="10"/>
+        <EditorIndex Value="3"/>
         <TopLine Value="5994"/>
         <CursorPos X="4" Y="5996"/>
         <UsageCount Value="100"/>
@@ -170,11 +171,10 @@
       </Unit19>
       <Unit20>
         <Filename Value="../Metal-Framework/lazarus/package/utils/MetalPipeline.pas"/>
-        <EditorIndex Value="3"/>
+        <EditorIndex Value="-1"/>
         <TopLine Value="253"/>
         <CursorPos X="36" Y="281"/>
         <UsageCount Value="45"/>
-        <Loaded Value="True"/>
       </Unit20>
       <Unit21>
         <Filename Value="/usr/local/share/fpcsrc/packages/univint/src/CFBase.pas"/>
@@ -226,11 +226,10 @@
       </Unit27>
       <Unit28>
         <Filename Value="nifti_foreign.pas"/>
-        <EditorIndex Value="1"/>
+        <EditorIndex Value="-1"/>
         <TopLine Value="5648"/>
         <CursorPos X="55" Y="5650"/>
         <UsageCount Value="108"/>
-        <Loaded Value="True"/>
       </Unit28>
       <Unit29>
         <Filename Value="nifti_types.pas"/>
@@ -321,10 +320,9 @@
       </Unit40>
       <Unit41>
         <Filename Value="dcm_load.pas"/>
-        <EditorIndex Value="6"/>
+        <EditorIndex Value="-1"/>
         <CursorPos X="125" Y="31"/>
         <UsageCount Value="14"/>
-        <Loaded Value="True"/>
       </Unit41>
       <Unit42>
         <Filename Value="xnsappkitext.pas"/>
@@ -335,127 +333,123 @@
         <UsageCount Value="10"/>
       </Unit42>
     </Units>
-    <JumpHistory Count="30" HistoryIndex="29">
+    <JumpHistory Count="29" HistoryIndex="28">
       <Position1>
-        <Filename Value="../Metal-Demos/common/mtlgraph.pas"/>
-        <Caret Line="435" Column="27" TopLine="416"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="8894" Column="26" TopLine="8865"/>
       </Position1>
       <Position2>
-        <Filename Value="../Metal-Demos/common/mtlgraph.pas"/>
-        <Caret Line="344" Column="5" TopLine="322"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="8439" Column="4" TopLine="8422"/>
       </Position2>
       <Position3>
-        <Filename Value="../Metal-Demos/common/mtlgraph.pas"/>
-        <Caret Line="10" Column="34"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="8893" Column="26" TopLine="8877"/>
       </Position3>
       <Position4>
-        <Filename Value="../Metal-Demos/common/mtlgraph.pas"/>
-        <Caret Line="106" Column="68" TopLine="92"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="8893" Column="20" TopLine="8878"/>
       </Position4>
       <Position5>
-        <Filename Value="../Metal-Framework/lazarus/package/utils/MetalPipeline.pas"/>
-        <Caret Line="132" Column="11" TopLine="115"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="8891" Column="23" TopLine="8878"/>
       </Position5>
       <Position6>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="8422" Column="14" TopLine="8418"/>
+        <Caret Line="34" Column="18" TopLine="31"/>
       </Position6>
       <Position7>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="8894" Column="26" TopLine="8865"/>
+        <Caret Line="1187" Column="46" TopLine="1159"/>
       </Position7>
       <Position8>
-        <Filename Value="../Metal-Demos/common/mtlgraph.pas"/>
-        <Caret Line="340" Column="5" TopLine="323"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="2966" Column="23" TopLine="2938"/>
       </Position8>
       <Position9>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="8439" Column="4" TopLine="8422"/>
+        <Caret Line="1188" Column="20" TopLine="1170"/>
       </Position9>
       <Position10>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="8893" Column="26" TopLine="8877"/>
+        <Caret Line="2966" Column="23" TopLine="2938"/>
       </Position10>
       <Position11>
-        <Filename Value="../Metal-Framework/lazarus/package/metalcontrol.pas"/>
-        <Caret Line="43" Column="35" TopLine="26"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="118" Column="36" TopLine="111"/>
       </Position11>
       <Position12>
-        <Filename Value="../Metal-Framework/lazarus/package/metalcontrol.pas"/>
-        <Caret Line="160" Column="28" TopLine="141"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="1187" Column="46" TopLine="1170"/>
       </Position12>
       <Position13>
-        <Filename Value="../Metal-Framework/lazarus/package/metalcontrol.pas"/>
-        <Caret Line="162" Column="50" TopLine="141"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="1328" Column="177" TopLine="1300"/>
       </Position13>
       <Position14>
-        <Filename Value="../Metal-Framework/lazarus/package/metalcontrol.pas"/>
-        <Caret Line="164" Column="31" TopLine="141"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="8011" Column="18" TopLine="7982"/>
       </Position14>
       <Position15>
-        <Filename Value="../Metal-Framework/lazarus/package/metalcontrol.pas"/>
-        <Caret Line="36" Column="3" TopLine="26"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="1321" Column="29" TopLine="1311"/>
       </Position15>
       <Position16>
-        <Filename Value="../Metal-Framework/lazarus/package/metalcontrol.pas"/>
-        <Caret Line="44" Column="14" TopLine="27"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="3257" Column="76" TopLine="3240"/>
       </Position16>
       <Position17>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="8893" Column="20" TopLine="8878"/>
+        <Caret Line="3263" Column="82" TopLine="3246"/>
       </Position17>
       <Position18>
-        <Filename Value="../Metal-Framework/lazarus/package/metalcontrol.pas"/>
-        <Caret Line="44" Column="25" TopLine="26"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="3338" Column="74" TopLine="3320"/>
       </Position18>
       <Position19>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="8891" Column="23" TopLine="8878"/>
+        <Caret Line="3354" Column="74" TopLine="3337"/>
       </Position19>
       <Position20>
-        <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="1149" TopLine="70"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="4753" Column="108" TopLine="4736"/>
       </Position20>
       <Position21>
-        <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="5388" Column="39" TopLine="5360"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="4767" Column="46" TopLine="4750"/>
       </Position21>
       <Position22>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="34" Column="18" TopLine="31"/>
+        <Caret Line="4938" Column="61" TopLine="4921"/>
       </Position22>
       <Position23>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="1187" Column="46" TopLine="1159"/>
+        <Caret Line="4939" Column="44" TopLine="4922"/>
       </Position23>
       <Position24>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="2966" Column="23" TopLine="2938"/>
+        <Caret Line="4940" Column="33" TopLine="4923"/>
       </Position24>
       <Position25>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="1188" Column="20" TopLine="1170"/>
+        <Caret Line="8636" Column="12" TopLine="8618"/>
       </Position25>
       <Position26>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="2966" Column="23" TopLine="2938"/>
+        <Caret Line="8639" Column="13" TopLine="8621"/>
       </Position26>
       <Position27>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="118" Column="36" TopLine="111"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="8654" Column="10" TopLine="8637"/>
       </Position27>
       <Position28>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="1187" Column="46" TopLine="1170"/>
+        <Caret Line="8672" Column="19" TopLine="8655"/>
       </Position28>
       <Position29>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="1328" Column="177" TopLine="1300"/>
+        <Caret Line="8673" Column="73" TopLine="8656"/>
       </Position29>
-      <Position30>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="8011" Column="18" TopLine="7982"/>
-      </Position30>
     </JumpHistory>
     <RunParams>
       <FormatVersion Value="2"/>

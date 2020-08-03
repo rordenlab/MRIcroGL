@@ -7,13 +7,14 @@ interface
 uses Process, {$IFDEF Darwin}CocoaAll, {$ENDIF} IniFiles,SysUtils,Dialogs,Classes, SimdUtils, Math, slices2D;
 const
   knMRU = 10;
-  kMaxVoxDefault = 560;
+  //kMaxVoxDefault = 560;
+  kMaxTexMb = 512; //64^3=1mb, 256^3=64mb, 512^3=512mb, 812^3=2042mb, 1024^2=4096mb
 type
   TMRU =  array [1..knMRU] of string;
   TPrefs = record
          GradientMode, AnimationIntervalMsec, LineWidth, StartupWindowMode,DisplayOrient,
          StartupDisplayOrient, ColorbarSize,ColorbarPosition, Quality1to5, BitmapZoom,
-         MaxVox, MultiSample124, ClusterNeighborMethod: integer;
+         MaxTexMb, MultiSample124, ClusterNeighborMethod: integer;
          ScreenCaptureTransparentBackground, LandmarkPanel, LoadFewVolumes,
          DebugMode, LoadSmooth, LabelOrient, RulerVisible, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay,
          FlipYZ, FlipLR_Radiological, SkipPrefWriting, AutoClusterizeAtlases: boolean;
@@ -116,7 +117,7 @@ begin
             FlipLR_Radiological := true;
             AutoClusterizeAtlases := true;
             ColorbarSize := 50;
-            MaxVox := kMaxVoxDefault; //560;
+            MaxTexMb := kMaxTexMb; //560;
             Smooth2D := true;
             LoadSmooth := true;
             DebugMode := false;
@@ -262,7 +263,7 @@ begin
   IniInt(lRead,lIniFile, 'BitmapZoom', lPrefs.BitmapZoom);
   //IniInt(lRead,lIniFile, 'DisplayOrient', lPrefs.DisplayOrient);
   IniInt(lRead,lIniFile, 'StartupDisplayOrient', lPrefs.StartupDisplayOrient);
-  IniInt(lRead,lIniFile, 'MaxVox', lPrefs.MaxVox);
+  IniInt(lRead,lIniFile, 'MaxTexMb', lPrefs.MaxTexMb);
   IniInt(lRead,lIniFile, 'LineWidth', lPrefs.LineWidth);
   IniInt(lRead,lIniFile, 'StartupWindowMode', lPrefs.StartupWindowMode);
   IniInt(lRead,lIniFile, 'AnimationIntervalMsec', lPrefs.AnimationIntervalMsec);

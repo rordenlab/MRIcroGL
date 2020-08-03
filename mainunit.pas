@@ -41,7 +41,7 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20200707b'; //+ fixes remove small clusters
+  kVers = '1.2.20200707c'; //+ save image
 type
 
   { TGLForm1 }
@@ -2319,6 +2319,30 @@ begin
     end;
 end;
 
+function PySAVEIMG(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  PtrName: PChar;
+  fnm, ext: string;
+  niftiVol: TNIfTI;
+  ok: boolean;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(False));
+  if not vols.Layer(0,niftiVol) then exit;
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, 's:saveimg', @PtrName)) then begin
+      fnm := string(PtrName);
+      ext := upcase(ExtractFileExt(fnm));
+      if (ext = '.OSP') then
+         ok := niftiVol.SaveOsp(fnm)
+      else if (ext = '.BVOX') then
+         ok := niftiVol.SaveBVox(fnm)
+      else
+          ok := niftiVol.Save(fnm);
+      Result:= GetPythonEngine.PyBool_FromLong(Ord(ok));
+    end; //OK
+end;
+
 function pyBMPTRANSPARENT(Self, Args : PPyObject): PPyObject; cdecl;
 var
   transparent: integer;
@@ -2785,6 +2809,7 @@ begin
     AddMethod('removesmallclusters', @pyREMOVESMALLCLUSTERS, ' removesmallclusters(layer, thresh, mm, neighbors) -> only keep clusters where intensity exceeds thresh and size exceed mm. Clusters based on neighbors that share faces (1), faces+edges (2) or faces+edges+corners (3)');
     AddMethod('resetdefaults', @PyRESETDEFAULTS, ' resetdefaults() -> Revert settings to sensible values.');
     AddMethod('savebmp', @PySAVEBMP, ' savebmp(pngName) -> Save screen display as bitmap. For example "savebmp(''test.png'')"');
+    AddMethod('saveimg', @PySAVEIMG, ' saveimg(filename) -> Save background image (layer 0) to disk. For example "saveimg(''test.nii'')", extension defines type (.nii=NIfTI, .osp=ospray, .bvox=blender)');
     AddMethod('scriptformvisible', @PySCRIPTFORMVISIBLE, ' scriptformvisible (visible) -> Show (1) or hide (0) the scripting window.');
     AddMethod('toolformvisible', @PyTOOLFORMVISIBLE, ' toolformvisible(visible) -> Show (1) or hide (0) the tool panel.');
     AddMethod('shaderadjust', @PySHADERADJUST, ' shaderadjust(sliderName, sliderValue) -> Set level of shader property. Example "gl.shaderadjust(''edgethresh'', 0.6)"');
@@ -3229,13 +3254,13 @@ begin
     sum16 := nil;
     newI := nil;
     niiI := TNIfTI.Create();
-    nii1 := TNIfTI.Create(fnms[0], gPrefs.ClearColor, true, gPrefs.MaxVox, isOK);
+    nii1 := TNIfTI.Create(fnms[0], gPrefs.ClearColor, true, gPrefs.MaxTexMb, isOK);
     if not isOK then goto 124;
     vox := nii1.Header.dim[1] * nii1.Header.dim[2] * nii1.Header.dim[3];
     if (vox < 1) then goto 124;
     sum16 := nii1.NotZero();
     for i := 2 to fnms.count do begin
-        niiI := TNIfTI.Create(fnms[i-1], gPrefs.ClearColor, true, gPrefs.MaxVox, isOK);
+        niiI := TNIfTI.Create(fnms[i-1], gPrefs.ClearColor, true, gPrefs.MaxTexMb, isOK);
         if not isOK then goto 124;
         newI := niiI.NotZero();
         for j := 0 to (vox-1) do
@@ -3310,7 +3335,7 @@ begin
     //showmessage('Select positive image (made with "Create Overlap Image")');
     {$ENDIF}
     fnm := OpenDialogExecute1(OpenDialog1.Filter, 'Select positive image (made with "Create Overlap Image")');
-    niiPos := TNIfTI.Create(fnm, gPrefs.ClearColor, true, gPrefs.MaxVox, isOK);
+    niiPos := TNIfTI.Create(fnm, gPrefs.ClearColor, true, gPrefs.MaxTexMb, isOK);
     if not isOK then
        nPos := -1
     else
@@ -3326,7 +3351,7 @@ begin
     //showmessage('Select negative image (made with "Create Overlap Image")');
     {$ENDIF}
     fnm := OpenDialogExecute1(OpenDialog1.Filter, 'Select negative image (made with "Create Overlap Image")');
-    niiNeg := TNIfTI.Create(fnm, gPrefs.ClearColor, true, gPrefs.MaxVox, isOK);
+    niiNeg := TNIfTI.Create(fnm, gPrefs.ClearColor, true, gPrefs.MaxTexMb, isOK);
     if not isOK then
        nNeg := -1
     else
@@ -4725,7 +4750,7 @@ begin
   //Bitmap Scale
   maxVoxLabel:=TLabel.create(PrefForm);
   maxVoxLabel.Width := PrefForm.Width - 86;
-  maxVoxLabel.Caption := 'Reduce volumes larger than (default '+inttostr(kMaxVoxDefault)+', 1048 for 8Gb graphics cards)';
+  maxVoxLabel.Caption := 'Maximum Texture Size (mb, 64 for software rendering, default '+inttostr(kMaxTexMb)+', 2047 for 8Gb graphics cards)';
   maxVoxLabel.Hint := 'If using software rather than hardware graphics, consider 256';
   maxVoxLabel.AnchorSide[akTop].Side := asrBottom;
   maxVoxLabel.AnchorSide[akTop].Control := WindowCombo;
@@ -4739,7 +4764,7 @@ begin
   maxVoxEdit := TEdit.Create(PrefForm);
   maxVoxEdit.Width := 60;
   maxVoxEdit.AutoSize := true;
-  maxVoxEdit.Text := inttostr(gPrefs.MaxVox);
+  maxVoxEdit.Text := inttostr(gPrefs.MaxTexMb);
   maxVoxEdit.AnchorSide[akTop].Side := asrCenter;
   maxVoxEdit.AnchorSide[akTop].Control := maxVoxLabel;
   maxVoxEdit.BorderSpacing.Top := 6;
@@ -4910,9 +4935,9 @@ begin
   gPrefs.AutoClusterizeAtlases := ClusterizeAtlasCheck.Checked;
   Vol1.Slices.RadiologicalConvention := gPrefs.FlipLR_Radiological;
   gPrefs.BitmapZoom:= strtointdef(bmpEdit.Text,1);
-  gPrefs.maxVox :=  strtointdef(maxVoxEdit.Text, kMaxVoxDefault);
-  gPrefs.maxVox := max(80, gPrefs.MaxVox);
-  vols.MaxVox := gPrefs.maxVox;
+  gPrefs.MaxTexMb :=  strtointdef(maxVoxEdit.Text, kMaxTexMb);
+  gPrefs.MaxTexMb := max(1, gPrefs.MaxTexMb);
+  vols.MaxVox := gPrefs.MaxTexMb;
   gPrefs.LoadFewVolumes := LoadFewVolumesCheck.Checked;
   if (gPrefs.ScreenCaptureTransparentBackground <>  BitmapAlphaCheck.Checked) then begin
      gPrefs.ScreenCaptureTransparentBackground :=  BitmapAlphaCheck.Checked;
@@ -8096,15 +8121,15 @@ begin
  ViewGPU1.MakeCurrent(false);
  v := v + glGetString(GL_VENDOR)+'; OpenGL= '+glGetString(GL_VERSION)+'; Shader='+glGetString(GL_SHADING_LANGUAGE_VERSION);
  glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, @maxVox);  //For 3D textures, no dimension can be greater than GL_MAX_3D_TEXTURE_SIZ
- v := v+ kEOLN+ format('Max 3D texture size: %d', [maxVox]);
  {$IFDEF COREGL}
- v := v+ kEOLN+ 'Shaders require: OpenGL 3.3 Core';
+ v := v+ kEOLN+ '3.3 Core ';
  {$ELSE}
- v := v+ kEOLN+ 'Shaders require: OpenGL 2.1';
+ v := v+ kEOLN+ '2.1 ' ;
  {$ENDIF}
+ v := v+ format('Max 3D texture: %d', [maxVox]);
  ViewGPU1.ReleaseContext;
  {$ENDIF}
- v := v+ kEOLN+ format('Current volume: %d %d %d', [niftiVol.Dim.X, niftiVol.Dim.Y, niftiVol.Dim.Z]);
+ v := v+ kEOLN+ format('Current: %d %d %d', [niftiVol.Dim.X, niftiVol.Dim.Y, niftiVol.Dim.Z]);
  {$IFDEF NewCocoa}
  ShowAlertSheet(GLForm1.Handle,'MRIcroGL', v);
  //MessageBox(Handle, pChar(v), 'MRIcroGL', MB_OK)
@@ -8606,7 +8631,12 @@ procedure TGLForm1.FormShow(Sender: TObject);
 //const
 //  kImgFilter = 'Volumes|*.nii;*.nii.gz;*.HEAD;*.hdr;*.nrrd;*.nhdr;*.mgh;*.mgz;*.mhd;*.mha|NIfTI|*.nii|Compressed NIfTI|*.nii.gz|All|*.*';
 var
- i, MaxVox: integer;
+ {$IFNDEF METALAPI}
+ glMaxTex: glint;
+ glMaxTexMb: integer;
+ glMaxTexf: double;
+ {$ENDIF}
+ i, MaxTexMb: integer;
  c: char;
  isForceReset, isOK: boolean;
  psnSkip: boolean = false;
@@ -8621,7 +8651,7 @@ begin
  //OpenDialog1.Filter := kImgFilter;
  isForceReset := false;
  gPrefs.InitScript := '';
- MaxVox := -1;
+ MaxTexMb := -1;
  //gPrefs.InitScript := '/Users/rorden/MRIcroGL12/MRIcroGL.app/Contents/Resources/script/basic.py';
  i := 1;
  //{$IFDEF UNIX}writeln('>>>Setting MaxVox to '+inttostr(MaxVox));{$ENDIF}
@@ -8639,8 +8669,8 @@ begin
         {$ENDIF}
         else if (i < paramcount) and (c='M') then begin
           inc(i);
-          MaxVox := strtointdef(ParamStr(i), -1);
-           {$IFDEF UNIX}writeln('Setting MaxVox to '+inttostr(MaxVox));{$ENDIF}
+          MaxTexMb := strtointdef(ParamStr(i), -1);
+           {$IFDEF UNIX}writeln('Setting MaxTexMb to '+inttostr(MaxTexMb));{$ENDIF}
         end else if (i < paramcount) and (c='S') then begin
           inc(i);
           //if (upcase(ExtractFileExt(ParamStr(i))) = '.PY') or (upcase(ExtractFileExt(ParamStr(i))) = '.TXT') then
@@ -8650,7 +8680,7 @@ begin
     inc(i);
   end; //for each parameter
   //check - on darwin form drop file
-  if (not psnSkip) and (gPrefs.InitScript = '') and (MaxVox < 1) and (ParamCount >= 1) and (not isForceReset) then //and (fileexists(ParamStr(ParamCount))) then
+  if (not psnSkip) and (gPrefs.InitScript = '') and (MaxTexMb < 1) and (ParamCount >= 1) and (not isForceReset) then //and (fileexists(ParamStr(ParamCount))) then
      gPrefs.InitScript := '-';
   {$IFNDEF MYPY}
   gPrefs.InitScript := '';
@@ -8680,8 +8710,8 @@ begin
    SysInitStdIO;      // in System unit
   end;
   {$endif}
-  if MaxVox > 0 then
-     gPrefs.MaxVox := MaxVox;
+  if MaxTexMb > 0 then
+     gPrefs.MaxTexMb := MaxTexMb;
   AnimateTimer.Interval:= gPrefs.AnimationIntervalMsec;
   if gPrefs.StartupWindowMode = 1 then begin
      GLForm1.BoundsRect := Screen.MonitorFromWindow(Handle).BoundsRect;
@@ -8734,10 +8764,6 @@ begin
   end;
   {$ENDIF}
   //TODO: house keeping with new volumes: autoload cluster AutoClusterizeAtlases
-  vols := TNIfTIs.Create(s,  gPrefs.ClearColor, gPrefs.LoadFewVolumes, gPrefs.MaxVox, isOK); //to do: warning regarding multi-volume files?
-  //niftiVol := TNIfTI.Create('/Users/rorden/metal_demos/tar.nii');
-  //niftiVol := TNIfTI.Create('/Users/rorden/metal_demos/rmotor.nii.gz', niftiVol.Mat, niftiVol.Dim);
-  GraphShow();
   {$IFDEF METALAPI}
   //must be done at FormCreate, not FormShow!: ViewGPU1 :=  TMetalControl.Create(CenterPanel);
   //ViewGPU1.OnPrepare := @ViewGPUPrepare;
@@ -8768,14 +8794,6 @@ begin
   ViewGPU1.Parent := CenterPanel;
   {$IFDEF METALAPI}ViewGPU1.renderView.setSampleCount(4);{$ENDIF}
   ViewGPU1.Align:= alClient;
-  ViewGPU1.OnKeyPress:=@ViewGPUKeyPress;
-  ViewGPU1.OnKeyDown := @ViewGPUKeyDown;
-  ViewGPU1.OnDblClick :=  @ViewGPUDblClick;
-  ViewGPU1.OnMouseDown := @ViewGPUMouseDown;
-  ViewGPU1.OnMouseMove := @ViewGPUMouseMove;
-  ViewGPU1.OnMouseUp := @ViewGPUMouseUp;
-  ViewGPU1.OnMouseWheel := @ViewGPUMouseWheel;
-  ViewGPU1.OnPaint := @ViewGPUPaint;
   //for Metal, Must be done at FormCreate, not FormShow! Vol1 := TGPUVolume.Create(ViewGPU1);
   //Vol1.Slices.RadiologicalConvention := gPrefs.FlipLR_Radiological;
   {$IFNDEF METALAPI}
@@ -8800,19 +8818,31 @@ begin
      gPrefs.GradientMode := kGradientModeCPUSlowest;
   end;
   {$ENDIF}//if coregl
-  {$IFNDEF METALAPI}
-  glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, @maxVox);  //For 3D textures, no dimension can be greater than GL_MAX_3D_TEXTURE_SIZ
-  if MaxVox < gPrefs.MaxVox then begin
-     printf('Warning GL_MAX_3D_TEXTURE_SIZE is '+inttostr(maxVox));
-     //gPrefs.MaxVox := MaxVox;
+  glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, @glMaxTex);  //For 3D textures, no dimension can be greater than GL_MAX_3D_TEXTURE_SIZ
+  glMaxTex := max(glMaxTex,64);
+  glMaxTexf := glMaxTex;
+  glMaxTexMb := ceil((glMaxTexf * glMaxTexf * glMaxTexf * 4.0)/1048576.0);
+  if glMaxTexMb < gPrefs.MaxTexMb then begin
+     gPrefs.MaxTexMb := floor((glMaxTexf * glMaxTexf * glMaxTexf * 4)/1048576);
+     printf('Warning GL_MAX_3D_TEXTURE_SIZE is '+inttostr(glMaxTex)+' setting MaxTexMb to '+inttostr(gPrefs.MaxTexMb));
   end;
-  {$ENDIF}
   //GLForm1.caption := glGetString(GL_VENDOR)+'; OpenGL= '+glGetString(GL_VERSION)+'; Shader='+glGetString(GL_SHADING_LANGUAGE_VERSION);
   ViewGPU1.ReleaseContext;
   Vol1.SetGradientMode(gPrefs.GradientMode);
   Vol1.Prepare(shaderName);
   setShaderSliders;
   {$ENDIF} //if OpenGL
+  vols := TNIfTIs.Create(s,  gPrefs.ClearColor, gPrefs.LoadFewVolumes, gPrefs.MaxTexMb, isOK); //to do: warning regarding multi-volume files?
+  GraphShow();
+  ViewGPU1.OnKeyPress:=@ViewGPUKeyPress;
+  ViewGPU1.OnKeyDown := @ViewGPUKeyDown;
+  ViewGPU1.OnDblClick :=  @ViewGPUDblClick;
+  ViewGPU1.OnMouseDown := @ViewGPUMouseDown;
+  ViewGPU1.OnMouseMove := @ViewGPUMouseMove;
+  ViewGPU1.OnMouseUp := @ViewGPUMouseUp;
+  ViewGPU1.OnMouseWheel := @ViewGPUMouseWheel;
+  ViewGPU1.OnPaint := @ViewGPUPaint;
+
   {$IFDEF MATCAP}
   UpdateMatCapDrop(MatCapDrop);
   if (MatCapDrop.Items.Count > 0) then begin

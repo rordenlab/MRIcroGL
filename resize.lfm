@@ -1,14 +1,15 @@
 object ResizeForm: TResizeForm
+  Tag = 512
   AnchorSideTop.Side = asrBottom
-  Left = 522
-  Height = 264
-  Top = 281
-  Width = 511
+  Left = 479
+  Height = 329
+  Top = 72
+  Width = 529
   AutoSize = True
   BorderWidth = 4
   Caption = 'Resize Volume'
-  ClientHeight = 264
-  ClientWidth = 511
+  ClientHeight = 329
+  ClientWidth = 529
   OnShow = FormShow
   Position = poScreenCenter
   LCLVersion = '2.1.0.0'
@@ -107,16 +108,16 @@ object ResizeForm: TResizeForm
     Text = '1'
   end
   object OKBtn: TButton
-    AnchorSideTop.Control = AllVolumesCheck
+    AnchorSideTop.Control = IsotropicShrinkBtn
     AnchorSideTop.Side = asrBottom
     AnchorSideRight.Control = Owner
     AnchorSideRight.Side = asrBottom
-    Left = 421
+    Left = 439
     Height = 25
-    Top = 238
+    Top = 266
     Width = 80
     Anchors = [akTop, akRight]
-    BorderSpacing.Top = 4
+    BorderSpacing.Top = 8
     BorderSpacing.Right = 6
     Caption = 'OK'
     Constraints.MinWidth = 80
@@ -127,9 +128,9 @@ object ResizeForm: TResizeForm
     AnchorSideTop.Control = OKBtn
     AnchorSideTop.Side = asrCenter
     AnchorSideRight.Control = OKBtn
-    Left = 335
+    Left = 353
     Height = 25
-    Top = 238
+    Top = 266
     Width = 80
     Anchors = [akTop, akRight]
     BorderSpacing.Top = 4
@@ -140,31 +141,31 @@ object ResizeForm: TResizeForm
     TabOrder = 6
   end
   object IsotropicBtn: TButton
-    AnchorSideTop.Control = OKBtn
+    AnchorSideLeft.Control = IsotropicShrinkBtn
+    AnchorSideLeft.Side = asrBottom
+    AnchorSideTop.Control = IsotropicShrinkBtn
     AnchorSideTop.Side = asrCenter
-    AnchorSideRight.Control = CancelBtn
-    Left = 194
+    Left = 133
     Height = 20
-    Top = 240
-    Width = 117
-    Anchors = [akTop, akRight]
+    Top = 238
+    Width = 111
     AutoSize = True
+    BorderSpacing.Left = 4
     BorderSpacing.Top = 4
-    BorderSpacing.Right = 24
     Caption = 'Isotropic Grow'
     Constraints.MinWidth = 80
     OnClick = IsotropicBtnClick
     TabOrder = 4
   end
   object IsotropicShrinkBtn: TButton
-    AnchorSideTop.Control = OKBtn
-    AnchorSideTop.Side = asrCenter
+    AnchorSideLeft.Control = InLabel
+    AnchorSideTop.Control = AllVolumesCheck
+    AnchorSideTop.Side = asrBottom
     AnchorSideRight.Control = IsotropicBtn
-    Left = 65
+    Left = 10
     Height = 20
-    Top = 240
-    Width = 123
-    Anchors = [akTop, akRight]
+    Top = 238
+    Width = 117
     AutoSize = True
     BorderSpacing.Top = 4
     BorderSpacing.Right = 6
@@ -298,5 +299,41 @@ object ResizeForm: TResizeForm
     Caption = 'TexLabel'
     Constraints.MinWidth = 480
     ParentColor = False
+  end
+  object ScaleTo512MbBtn: TButton
+    Tag = 512
+    AnchorSideLeft.Control = IsotropicBtn
+    AnchorSideLeft.Side = asrBottom
+    AnchorSideTop.Control = IsotropicShrinkBtn
+    AnchorSideTop.Side = asrCenter
+    Left = 248
+    Height = 20
+    Top = 238
+    Width = 112
+    AutoSize = True
+    BorderSpacing.Left = 4
+    BorderSpacing.Top = 4
+    Caption = '512mb Texture'
+    Constraints.MinWidth = 80
+    OnClick = ScaleToMbBtnClick
+    TabOrder = 10
+  end
+  object ScaleTo2048MbBtn: TButton
+    Tag = 2048
+    AnchorSideLeft.Control = ScaleTo512MbBtn
+    AnchorSideLeft.Side = asrBottom
+    AnchorSideTop.Control = IsotropicShrinkBtn
+    AnchorSideTop.Side = asrCenter
+    Left = 364
+    Height = 20
+    Top = 238
+    Width = 122
+    AutoSize = True
+    BorderSpacing.Left = 4
+    BorderSpacing.Top = 4
+    Caption = '2048mb Texture'
+    Constraints.MinWidth = 80
+    OnClick = ScaleToMbBtnClick
+    TabOrder = 11
   end
 end

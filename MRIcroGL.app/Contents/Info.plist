@@ -4,14 +4,12 @@
 <dict>
   <key>CFBundleDevelopmentRegion</key>
   <string>English</string>
-  <key>CFBundleIconFile</key>
-  <string>mricrogl.icns</string>
   <key>CFBundleExecutable</key>
   <string>MRIcroGL</string>
   <key>CFBundleName</key>
   <string>MRIcroGL</string>
   <key>CFBundleIdentifier</key>
-  <string>com.mricro.MRIcroGL</string>
+  <string>com.company.MRIcroGL</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundlePackageType</key>
@@ -19,96 +17,27 @@
   <key>CFBundleSignature</key>
   <string>MRIc</string>
   <key>CFBundleShortVersionString</key>
-  <string>1.2.20190720</string>
+  <string>0.1</string>
   <key>CFBundleVersion</key>
   <string>1</string>
   <key>CSResourcesFileMapped</key>
   <true/>
   <key>CFBundleDocumentTypes</key>
   <array>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
-			<key>CFBundleTypeExtensions</key>
-			<array>
-				<string>nii</string>
-				<string>hdr</string>
-				<string>nii.gz</string>
-				<string>gz</string>
-				<string>voi</string>
-			</array>
-			<key>CFBundleTypeName</key>
-			<string>NIfTI image</string>
-			<key>CFBundleTypeIconFile</key>
-			<string>mricrogl_doc.icns</string>
-		</dict>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
-			<key>CFBundleTypeExtensions</key>
-			<array>
-				<string>nrrd</string>
-				<string>nhdr</string>
-			</array>
-			<key>CFBundleTypeName</key>
-			<string>NRRD image</string>
-			<key>CFBundleTypeIconFile</key>
-			<string>mricrogl_doc.icns</string>
-		</dict>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
-			<key>CFBundleTypeExtensions</key>
-			<array>
-				<string>head</string>
-				<string>brik</string>
-			</array>
-			<key>CFBundleTypeName</key>
-			<string>AFNI image</string>
-			<key>CFBundleTypeIconFile</key>
-			<string>mricrogl_doc.icns</string>
-		</dict>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
-			<key>CFBundleTypeExtensions</key>
-			<array>
-				<string>mgh</string>
-				<string>mgz</string>
-			</array>
-			<key>CFBundleTypeName</key>
-			<string>MGH image</string>
-			<key>CFBundleTypeIconFile</key>
-			<string>mricrogl_doc.icns</string>
-		</dict>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
-			<key>CFBundleTypeExtensions</key>
-			<array>
-				<string>vmr</string>
-			</array>
-			<key>CFBundleTypeIconFile</key>
-			<string>mricrogl_doc.icns</string>
-			<key>CFBundleTypeName</key>
-			<string>BrainVoyager image</string>
-			<key>CFBundleTypeIconFile</key>
-			<string>mricrogl_doc.icns</string>
-		</dict>
-		<dict>
-		  <key>CFBundleTypeRole</key>
-		  <string>Viewer</string>
-		  <key>CFBundleTypeExtensions</key>
-		  <array>
-			<string>*</string>
-		  </array>
-		  <key>CFBundleTypeOSTypes</key>
-		  <array>
-			<string>fold</string>
-			<string>disk</string>
-			<string>****</string>
-		  </array>
-		</dict>
+    <dict>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>*</string>
+      </array>
+      <key>CFBundleTypeOSTypes</key>
+      <array>
+        <string>fold</string>
+        <string>disk</string>
+        <string>****</string>
+      </array>
+    </dict>
   </array>
   <key>NSHighResolutionCapable</key>
   <true/>

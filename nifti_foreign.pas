@@ -1260,6 +1260,7 @@ begin
        exit;
   end;
   convertForeignToNifti(nhdr);
+  SetSForm(nhdr);
   nhdr.descrip := 'XVF'+kIVers;
   result := true;
 end; //readXVF
@@ -1410,6 +1411,7 @@ begin
     exit;
   end;
   nhdr.vox_offset := sizeof(Tbv_header);
+  SetSForm(nhdr);
   convertForeignToNifti(nhdr);
   nhdr.descrip := 'XRaw'+kIVers;
   result := true;
@@ -2175,6 +2177,7 @@ begin
 	nhdr.dim[2]:=hdr.height;
 	nhdr.dim[3]:=hdr.depth;
 	nhdr.vox_offset := hdr.hdrSz;
+        SetSForm(nhdr);
 	convertForeignToNifti(nhdr);
 	nhdr.descrip := 'VOL'+kIVers;
 	result := true;
@@ -2322,6 +2325,7 @@ begin
 	readKeyAim('Scaled by factor', str, x,y,z);
 	readKeyAim('scale (el_size factor)', str, xp,yp,zp);
 	//writeln(format('%g %dx%dx%d', [nhdr.vox_offset, nhdr.dim[1], nhdr.dim[2], nhdr.dim[3]]));
+        SetSForm(nhdr);
 	convertForeignToNifti(nhdr);
 	nhdr.descrip := 'AIM'+kIVers;
 	if x <> kNANsingle then
@@ -2330,6 +2334,117 @@ begin
 		nhdr.db_name := format('Factor %g', [xp]);
 	result := true;
 end; //readAIM()
+
+function readMRCHeader (var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
+//https://mrcfile.readthedocs.io/en/latest/usage_guide.html
+//https://bio3d.colorado.edu/imod/doc/mrc_format.txt
+//https://www.ccpem.ac.uk/mrc_format/mrc2014.php
+Type
+  Tmrc = packed record //Next: MGH Format Header structure
+   nx,ny,nz,mode, nxstart, nystart, nzstart, mx,my,mz : int32;
+   xlen,ylen,zlen, alpha, beta, gamma: single;
+   mapc, mapr, maps: int32;
+   amin, amax,amean: single;
+   ispg, next: int32;
+   creatid, extra0, extra1, extra2: int16;
+   extType: array [1..4] of char;
+   nversion: int32;
+   extraData: array [1..16] of char;
+   nint, nreal: int16;
+   extraData2: array [1..20] of char;
+   imodStamp, imodFlags: int32;
+   idtype, lens, nd1, nd2, vd1, vd2: int16;
+   tiltangles: array [1..6] of single;
+   xorg, yorg, zorg: single;
+   cmap: array [1..4] of char;
+   stamp: array [1..4] of uint8;
+   rms: single;
+   nlabs: int32;
+   labels: array [1..800] of char;
+  end;
+var
+  h: Tmrc;
+  lHdrFile: file;
+  lExt: string;
+  isModern: boolean = false;
+  lBuff: Bytep;
+begin
+	result := false;
+	FileMode := fmOpenRead;
+	lExt := UpCaseExt(fname);
+	if (lExt = '.GZ') then begin
+		lBuff := @h;
+		UnGZip(fname,lBuff,0,sizeof(Tmrc)); //1388
+		gzBytes := K_gzBytes_headerAndImageCompressed;
+	end else begin //if MGZ, else assume uncompressed MGH
+		gzBytes := 0;
+		{$I-}
+		AssignFile(lHdrFile, fname);
+		FileMode := 0;  //Set file access to read only
+		Reset(lHdrFile, 1);
+		{$I+}
+		if ioresult <> 0 then begin
+			NSLog('Error in reading MRC header.'+inttostr(IOResult));
+			FileMode := 2;
+			exit;
+		end;
+		BlockRead(lHdrFile, h, sizeof(Tmrc));
+		CloseFile(lHdrFile);
+	end;
+	isModern := (h.cmap[1] = 'M') and (h.cmap[2] = 'A') and (h.cmap[3] = 'P');
+	swapEndian := false;
+	if ((h.stamp[1] = 68) or (h.stamp[1] = 65)) and ((h.stamp[2] = 68) or (h.stamp[2] = 65)) then begin
+		{$IFDEF ENDIAN_BIG}
+		swapEndian := true; //data is little-endian
+		{$ENDIF}
+	end else if (h.stamp[1] = 17) and (h.stamp[2] = 17) then begin
+		{$IFDEF ENDIAN_LITTLE}
+		swapEndian := true; //data is big-endian
+		{$ENDIF}
+	end else begin //endian not specified, e.g. demo iMOD file
+		printf('MRC header machine stamp not specified.');
+		if (h.mode > 101) or (h.nx > 16777215) or (h.ny > 16777215) or (h.nz > 16777215) then
+			swapEndian := true;
+	end;
+	if swapEndian then begin
+		swap4(h.nx);
+		swap4(h.ny);
+		swap4(h.nz);
+		swap4(h.mode);
+		Xswap4r(h.xlen);
+		Xswap4r(h.ylen);
+		Xswap4r(h.zlen);
+	end;
+	if (h.mode = 0) then
+		nhdr.datatype := kDT_INT8
+	else if (h.mode = 1)  then
+		nhdr.datatype := kDT_INT16
+	else if (h.mode = 2)  then
+		nhdr.datatype := kDT_FLOAT32
+	else if (h.mode = 6)  then
+		nhdr.datatype := kDT_INT16
+	else begin
+		  NSLog('Unsupported MRC mode: '+inttostr(h.mode));
+		  exit;
+	end;
+	//NSLog(format('%d %d %d %d %d',[h.nx, h.ny, h.nz, h.mode, h.imodStamp]));
+	if (h.nx < 1) or (h.ny < 1) or (h.nz < 1) then begin
+		NSLog(format('MRC file does not make sense %dx%dx%d mode: %d', [h.nx, h.ny,h.nz, h.mode]));
+		exit;
+	end;
+	nhdr.dim[1]:=h.nx;
+	nhdr.dim[2]:=h.ny;
+	nhdr.dim[3]:=h.nz;
+	nhdr.pixdim[1] := h.xlen/h.nx;
+	nhdr.pixdim[2] := h.ylen/h.ny;
+	nhdr.pixdim[3] := h.zlen/h.nz;
+	if h.zlen = 0 then nhdr.pixdim[3] := max(nhdr.pixdim[1], nhdr.pixdim[2]);
+	nhdr.vox_offset := 1024;
+        SetSForm(nhdr);
+	convertForeignToNifti(nhdr);
+	nhdr.descrip := 'MGH'+kIVers;
+	result := true;
+end; //readMRCHeader()
 
 function readMGH(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean; out xDim64: int64): boolean;
 Type
@@ -2438,7 +2553,7 @@ begin
   nhdr.srow_x[0]:=m[0,0]; nhdr.srow_x[1]:=m[0,1]; nhdr.srow_x[2]:=m[0,2]; nhdr.srow_x[3]:=mgh.cr - PxyzOffset[0];
 	nhdr.srow_y[0]:=m[1,0]; nhdr.srow_y[1]:=m[1,1]; nhdr.srow_y[2]:=m[1,2]; nhdr.srow_y[3]:=mgh.ca - PxyzOffset[1];
 	nhdr.srow_z[0]:=m[2,0]; nhdr.srow_z[1]:=m[2,1]; nhdr.srow_z[2]:=m[2,2]; nhdr.srow_z[3]:=mgh.cs - PxyzOffset[2];
-	convertForeignToNifti(nhdr);
+  convertForeignToNifti(nhdr);
   nhdr.descrip := 'MGH'+kIVers;
   result := true;
 end;
@@ -3560,6 +3675,7 @@ begin
 	end;
 	nhdr.vox_offset := fileposBytes;
 	result := true;
+        SetSForm(nhdr);
 	convertForeignToNifti(nhdr);
 	nhdr.descrip := 'VTI'+kIVers;
 666:
@@ -5483,7 +5599,8 @@ begin
 	nhdr.dim[2]:=hdr.height;
 	nhdr.dim[3]:=hdr.depth;
 	nhdr.vox_offset := sizeof(Tvol);
-	convertForeignToNifti(nhdr);
+	SetSForm(nhdr);
+        convertForeignToNifti(nhdr);
 	nhdr.descrip := 'DrishtiRAW'+kIVers;
 	result := true;
 end;
@@ -5715,6 +5832,8 @@ begin
     result := readMHA(lFilename, lHdr, gzBytes, swapEndian)
   else if (lExt = '.ICS') then
     result := readICS(lFilename, lHdr, gzBytes, swapEndian)
+  else if (lExt = '.MRC') or (lExt = '.MAP') or (lExt2GZ = '.MRC') or (lExt2GZ = '.MAP')  then
+    result := readMRCHeader(lFilename, lHdr, gzBytes, swapEndian)
   else if ((lExt2GZ = '.MIF') or (lExt = '.MIF') or (lExt = '.MIH')) then
        result := readMIF(lFilename, lHdr, gzBytes, swapEndian)
   else if (lExt = '.NRRD') or (lExt = '.NHDR') then

@@ -3744,11 +3744,9 @@ begin
               Stream.ReadBuffer (fRawVolBytes[copied], kChunkBytes)
            else
                Stream.ReadBuffer (fRawVolBytes[copied], volBytes-copied);
-
            copied := copied + kChunkBytes;
            //printf(format('> copied %d', [copied]));
      end;
-
   end;
   if not isNativeEndian then
    SwapImg(fRawVolBytes, fHdr.bitpix);
@@ -6713,7 +6711,7 @@ begin
   //showmessage(format('%d', [prod(tarDim)]));
   //IsLabels := true;
   if (prod(tarDim) = 0) and (fHdr.dim[3] > 1) then //reduce size of huge background images
-     if ShrinkLarge(fHdr,fRawVolBytes, MaxVox, true) then begin
+     if ShrinkLargeMb(fHdr,fRawVolBytes, MaxVox, true) then begin
         fVolumesLoaded := 1;
         IsShrunken := true;
      end;
@@ -8035,7 +8033,7 @@ begin
   ConvertUint16Int16();
   fHdrNoRotation := fHdr; //raw header without reslicing or orthogonal rotation
   if (prod(tarDim) = 0) and (fHdr.dim[3] > 1) then //reduce size of huge background images
-  if ShrinkLarge(fHdr,fRawVolBytes, MaxVox, IsLabels) then begin
+  if ShrinkLargeMb(fHdr,fRawVolBytes, MaxVox, IsLabels) then begin
         fVolumesLoaded := 1;
         IsShrunken := true;
   end;

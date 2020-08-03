@@ -14,6 +14,8 @@ type
 
   TResizeForm = class(TForm)
     AllVolumesCheck: TCheckBox;
+    ScaleTo512MbBtn: TButton;
+    ScaleTo2048MbBtn: TButton;
     TexLabel: TLabel;
     FilterDrop: TComboBox;
     DataTypeDrop: TComboBox;
@@ -36,12 +38,13 @@ type
     procedure FormShow(Sender: TObject);
     procedure IsotropicBtnClick(Sender: TObject);
     procedure IsotropicShrinkBtnClick(Sender: TObject);
+    procedure OKBtnClick(Sender: TObject);
     function ReadScale(): TVec3;
+    procedure ScaleToMbBtnClick(Sender: TObject);
   private
 
   public
     function GetScale(hdr: TNIFTIhdr; isLabel: boolean; filename: string; out datatype: integer;  out Filter: integer; out isAllVolumes: boolean): TVec3;
-
     //function GetScale(hdr: TNIFTIhdr; filename: string; out datatype: integer;  out Filter: integer): TVec3;
     //function GetScale(const Dim: TVec3i; const mm: TVec3; filename: string; var datatype: integer;  out Filter: integer): TVec3;
   end;
@@ -105,7 +108,7 @@ begin
      outBytes := outDim.x * outDim.y * outDim.z * (bpp div 8);
      ChangeLabel.Caption := format('Change in uncompressed size: x%.4g', [outBytes/inBytes]);
      texMb := ceil((outDim.x * outDim.y * outDim.z * 4) / bytesPerMb);  //32-bit RGBA
-     if texMb > 2047 then begin
+     if texMb > 2048 then begin
         TexLabel.Font.Color := clRed;
         TexLabel.Caption := format('GPU Texture Size: %d Mb (May exceed GPU limits)', [texMb]);
      end else begin
@@ -131,6 +134,32 @@ begin
       zEdit.Text :=  floattostr(gMM.z/ mmMn);
 end;
 
+procedure TResizeForm.ScaleToMbBtnClick(Sender: TObject);
+const
+  kBytesPerMb = 1048576;
+var
+   mb: double;
+   scaleVol, scale: double;
+   i, lMaxTexMb : integer;
+   outdim: TVec3i;
+begin
+       lMaxTexMb := (Sender as TButton).Tag;
+       mb := (gDim.x * gDim.y * gDim.z * 4)/kBytesPerMb; //RGBA8 is 4 bytes per voxel
+       //if (mb <= 0) or (mb < lMaxTexMb) or (lMaxTexMb < 1) then exit();
+       scaleVol := lMaxTexMb/mb;
+       scale :=  exp(ln(scaleVol) / 3); //power(scaleVol, 1/3);
+       for i := 0 to 2 do begin
+           outdim.v[i] := round(gDim.v[i] * scale);
+           outdim.v[i] := max(outdim.v[i],1);
+       end;
+       mb := (outdim.v[0] * outdim.v[1] * outdim.v[2] * 4)/kBytesPerMb; //RGBA8 is 4 bytes per voxel
+       if (mb > lMaxTexMb) then //round down, not up
+          scale := (max(outdim.v[0],max(outdim.v[1],outdim.v[2]))-1)/max(gDim.v[0],max(gDim.v[1],gDim.v[2]));
+       XEdit.Text :=  floattostr(scale);
+       yEdit.Text :=  floattostr(scale);
+       zEdit.Text :=  floattostr(scale);
+end;
+
 procedure TResizeForm.IsotropicShrinkBtnClick(Sender: TObject);
 var
   mmMx, mmMn: single;
@@ -142,6 +171,8 @@ begin
       yEdit.Text :=  floattostr(gMM.y/ mmMx);
       zEdit.Text :=  floattostr(gMM.z/ mmMx);
 end;
+
+
 
 //function TResizeForm.GetScale(const Dim: TVec3i; const mm: TVec3; filename: string; var datatype: integer; out Filter: integer): TVec3;
 function TResizeForm.GetScale(hdr: TNIFTIhdr; isLabel: boolean; filename: string; out datatype: integer;  out Filter: integer; out isAllVolumes: boolean): TVec3;
