@@ -4750,7 +4750,7 @@ begin
   //Bitmap Scale
   maxVoxLabel:=TLabel.create(PrefForm);
   maxVoxLabel.Width := PrefForm.Width - 86;
-  maxVoxLabel.Caption := 'Maximum Texture Size (mb, 64 for software rendering, default '+inttostr(kMaxTexMb)+', 2047 for 8Gb graphics cards)';
+  maxVoxLabel.Caption := 'Maximum Texture Size (mb, 64 for software rendering, default '+inttostr(kMaxTexMb)+', 2048 for 8Gb graphics cards)';
   maxVoxLabel.Hint := 'If using software rather than hardware graphics, consider 256';
   maxVoxLabel.AnchorSide[akTop].Side := asrBottom;
   maxVoxLabel.AnchorSide[akTop].Control := WindowCombo;

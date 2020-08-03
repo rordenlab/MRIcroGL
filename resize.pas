@@ -38,7 +38,6 @@ type
     procedure FormShow(Sender: TObject);
     procedure IsotropicBtnClick(Sender: TObject);
     procedure IsotropicShrinkBtnClick(Sender: TObject);
-    procedure OKBtnClick(Sender: TObject);
     function ReadScale(): TVec3;
     procedure ScaleToMbBtnClick(Sender: TObject);
   private
