@@ -1067,7 +1067,7 @@ begin
   mb := (lHdr.dim[1] * lHdr.dim[2] * lHdr.dim[3] * 4)/kBytesPerMb; //RGBA8 is 4 bytes per voxel
   //scale :=  power(scaleVol, 1/3);
   if (mb <= 0) or (mb < lMaxTexMb) or (lMaxTexMb < 1) then exit(1.0);
-  //{$IFDEF UNIX}writeln(format('%dx%dx%d texture would require %.3g mb', [lHdr.dim[1], lHdr.dim[2], lHdr.dim[3], mb])); {$ENDIF}
+  {$IFDEF UNIX}writeln(format('%dx%dx%d texture would require %5.3f mb', [lHdr.dim[1], lHdr.dim[2], lHdr.dim[3], mb])); {$ENDIF}
   scaleVol := lMaxTexMb/mb;
   scale :=  exp(ln(scaleVol) / 3); //power(scaleVol, 1/3);
   for i := 1 to 3 do begin

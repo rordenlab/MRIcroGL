@@ -6390,7 +6390,7 @@ begin
   openDlg.Free;
   //fnm := '/Users/chris/spmMotor.nii.gz';
      backColor := setRGBA(0,0,0,0);
-     nii := TNIfTI.Create(fnm, backColor, false, 4096, isOK);
+     nii := TNIfTI.Create(fnm, backColor, false, 32768, isOK);
      //nii.Create(fnm, rgba, false, 4096, ok);
      if not isOK then
         exit;
