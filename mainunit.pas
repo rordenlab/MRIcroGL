@@ -2780,10 +2780,10 @@ begin
     AddMethod('clipazimuthelevation', @PyCLIPAZIMUTHELEVATION, ' clipazimuthelevation(depth, azi, elev) -> Set a view-point independent clip plane.');
     AddMethod('clipthick', @PyCLIPTHICK, ' clipthick(thick) -> Set size of clip plane slab (0..1).');
     AddMethod('cutout', @PyCUTOUT, ' cutout(L,A,S,R,P,I) -> Remove sector from volume.');
-    AddMethod('extract', @PyEXTRACT, ' extract(|b,s,t) -> Remove haze from background image. Blur edges (b: 0=no, 1=yes, default), single object (s: 0=no, 1=yes, default), threshold (t: 1..5=high threshold, 5 is default, higher values yield larger objects)');
+    AddMethod('extract', @PyEXTRACT, ' extract(b,s,t) -> Remove haze from background image. Blur edges (b: 0=no, 1=yes, default), single object (s: 0=no, 1=yes, default), threshold (t: 1..5=high threshold, 5 is default, higher values yield larger objects)');
     ////isSmoothEdges: boolean = true; isSingleObject: boolean = true; OtsuLevels : integer = 5
     AddMethod('fullscreen', @PyFULLSCREEN, ' fullscreen(max) -> Form expands to size of screen (1) or size is maximized (0).');
-    AddMethod('generateclusters', @PyGENERATECLUSTERS, ' generateclusters(layer |,thresh, minClusterMM3, method, bimodal) -> create list of distinct regions. Optionally provide cluster intensity, minimum cluster size, neighbor method(1=faces,2=faces+edges,3=faces+edges+corners). If bimodal = 1, both dark and bright clusters are detected.');
+    AddMethod('generateclusters', @PyGENERATECLUSTERS, ' generateclusters(layer, thresh, minClusterMM3, method, bimodal) -> create list of distinct regions. Optionally provide cluster intensity, minimum cluster size, neighbor method(1=faces,2=faces+edges,3=faces+edges+corners). If bimodal = 1, both dark and bright clusters are detected.');
     AddMethod('gui_input', @PyGUI_INPUT, 'gui_input(caption, prompt, default) -> allow user to type value into a dialog box.');
     AddMethod('graphscaling', @PyGRAPHSCALING, ' graphscaling(type) -> Vertical axis of graph is raw (0), demeaned (1) normalized -1..1 (2) normalized 0..1 (3) or percent (4).');
     AddMethod('hiddenbycutout', @PyHIDDENBYCUTOUT, ' hiddenbycutout(layer, isHidden) -> Will cutout hide (1) or show (0) this layer?');
@@ -4901,6 +4901,11 @@ begin
   {$IFDEF DARKMODE}
   OkBtn.AnchorSide[akTop].Control := DarkModeCheck;
   {$ELSE}
+  {$IFDEF LCLCocoa}
+  if RetinaCheck.visible then
+     OkBtn.AnchorSide[akTop].Control := RetinaCheck
+  else
+  {$ENDIF}
   OkBtn.AnchorSide[akTop].Control := LandmarkCheck;
   {$ENDIF}
   OkBtn.BorderSpacing.Top := 6;
@@ -6390,7 +6395,8 @@ begin
   openDlg.Free;
   //fnm := '/Users/chris/spmMotor.nii.gz';
      backColor := setRGBA(0,0,0,0);
-     nii := TNIfTI.Create(fnm, backColor, false, 32768, isOK);
+     //nii := TNIfTI.Create(fnm, backColor, false, 32768, isOK);
+     nii := TNIfTI.Create(fnm, backColor, false, -1, isOK);
      //nii.Create(fnm, rgba, false, 4096, ok);
      if not isOK then
         exit;

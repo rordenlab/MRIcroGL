@@ -134,7 +134,7 @@ Type
         IsFightInterpolationBleeding: boolean;
         IsInterpolated : boolean;
         ZeroIntensityInvisible: boolean;
-        MaxVox: integer; //maximum number of voxels in any dimension
+        MaxTexMb: integer; //maximum number of voxels in any dimension
         MaxMM: single; //maximum mm in any dimension
         {$IFDEF AFNI}
         afnis: TAFNIs;
@@ -230,8 +230,8 @@ Type
         {$ENDIF}
         constructor Create(); overload; //empty volume
         constructor Create(niftiFileName: string; backColor: TRGBA;  tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s); overload;
-        constructor Create(niftiFileName: string; backColor: TRGBA; lLoadFewVolumes: boolean; lMaxVox: integer; out isOK: boolean); overload; //background
-        constructor Create(niftiFileName: string; backColor: TRGBA; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; out isOK: boolean; lLoadFewVolumes: boolean = true; lMaxVox: integer = 640); overload; //overlay
+        constructor Create(niftiFileName: string; backColor: TRGBA; lLoadFewVolumes: boolean; lMaxTexMb: integer; out isOK: boolean); overload; //background
+        constructor Create(niftiFileName: string; backColor: TRGBA; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; out isOK: boolean; lLoadFewVolumes: boolean = true; lMaxTexMb: integer = 640); overload; //overlay
         constructor Create(tarMat: TMat4; tarDim: TVec3i); overload; //blank drawing
         procedure SetIsLabels(b: boolean);
         function IsLabels: boolean; //e.g. template map: should be drawn nearest neighbor (border of area 19 and 17 is NOT 18)
@@ -6710,8 +6710,8 @@ begin
   fVolumesTotal :=  fVolumesLoaded;
   //showmessage(format('%d', [prod(tarDim)]));
   //IsLabels := true;
-  if (prod(tarDim) = 0) and (fHdr.dim[3] > 1) then //reduce size of huge background images
-     if ShrinkLargeMb(fHdr,fRawVolBytes, MaxVox, true) then begin
+  if (prod(tarDim) = 0) and (fHdr.dim[3] > 1) and (MaxTexMb > 0) then //reduce size of huge background images
+     if ShrinkLargeMb(fHdr,fRawVolBytes, MaxTexMb, true) then begin
         fVolumesLoaded := 1;
         IsShrunken := true;
      end;
@@ -8031,9 +8031,20 @@ begin
   end;
   fixBogusHeaders(fHdr);
   ConvertUint16Int16();
+  if (MaxTexMb <= 0) then begin
+    printf('Loading image for conversion not visualization');
+    fScale := Vec3(1,1,1);
+    fDim.x := fHdr.Dim[1];
+    fDim.y := fHdr.Dim[2];
+    fDim.z := fHdr.Dim[3];
+    fPermInOrient := pti(1,2,3);
+    fMat := SForm2Mat(fHdr);
+    fMatInOrient := fMat;
+    exit;
+  end;
   fHdrNoRotation := fHdr; //raw header without reslicing or orthogonal rotation
-  if (prod(tarDim) = 0) and (fHdr.dim[3] > 1) then //reduce size of huge background images
-  if ShrinkLargeMb(fHdr,fRawVolBytes, MaxVox, IsLabels) then begin
+  if (prod(tarDim) = 0) and (fHdr.dim[3] > 1) and (MaxTexMb > 0) then //reduce size of huge background images
+  if ShrinkLargeMb(fHdr,fRawVolBytes, MaxTexMb, IsLabels) then begin
         fVolumesLoaded := 1;
         IsShrunken := true;
   end;
@@ -8166,7 +8177,7 @@ begin
  IsFightInterpolationBleeding := false;
  IsShrunken := false;
  IsInterpolated := false;
- MaxVox := 1024;
+ MaxTexMb := 1024;
  RefreshCount := Random(maxint);
  {$IFDEF CACHEUINT8}  //release cache, force creation on next refresh
  fWindowMinCache8 := infinity;
@@ -8203,7 +8214,7 @@ begin
   Load(niftiFileName, tarMat, tarDim, isInterpolate, hdr, img);
 end;
 
-constructor TNIfTI.Create(niftiFileName: string;  backColor: TRGBA; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; out isOK: boolean; lLoadFewVolumes: boolean = true; lMaxVox: integer = 640); overload;
+constructor TNIfTI.Create(niftiFileName: string;  backColor: TRGBA; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; out isOK: boolean; lLoadFewVolumes: boolean = true; lMaxTexMb: integer = 640); overload;
 {$IFNDEF CUSTOMCOLORS}
 var
    i: integer;
@@ -8214,7 +8225,7 @@ begin
  SortClustersBySize := false;
  LoadFewVolumes := lLoadFewVolumes;
  ZeroIntensityInvisible := false;
- MaxVox := lMaxVox;
+ MaxTexMb := lMaxTexMb;
  RefreshCount := Random(MaxInt);
  {$IFDEF CACHEUINT8}  //release cache, force creation on next refresh
  fWindowMinCache8 := infinity;
@@ -8250,14 +8261,14 @@ begin
   isOK := Load(niftiFileName, tarMat, tarDim, isInterpolate);
 end;
 
-constructor TNIfTI.Create(niftiFileName: string;  backColor: TRGBA; lLoadFewVolumes: boolean; lMaxVox: integer; out isOK: boolean); overload;
+constructor TNIfTI.Create(niftiFileName: string;  backColor: TRGBA; lLoadFewVolumes: boolean; lMaxTexMb: integer; out isOK: boolean); overload;
 var
    tarMat: TMat4;
    tarDim: TVec3i;
 begin
   tarMat := TMat4.Identity;
   tarDim := pti(0,0,0); //not an overlay: use source dimensions
-  Create(niftiFileName, backColor, tarMat, tarDim, false, isOK, lLoadFewVolumes, lMaxVox);
+  Create(niftiFileName, backColor, tarMat, tarDim, false, isOK, lLoadFewVolumes, lMaxTexMb);
 end;
 
 constructor TNIfTI.Create(tarMat: TMat4; tarDim: TVec3i); overload; //blank drawing

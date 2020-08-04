@@ -171,10 +171,12 @@ begin
       zEdit.Text :=  floattostr(gMM.z/ mmMx);
 end;
 
-
-
 //function TResizeForm.GetScale(const Dim: TVec3i; const mm: TVec3; filename: string; var datatype: integer; out Filter: integer): TVec3;
 function TResizeForm.GetScale(hdr: TNIFTIhdr; isLabel: boolean; filename: string; out datatype: integer;  out Filter: integer; out isAllVolumes: boolean): TVec3;
+const
+  bytesPerMb = 1048576;
+var
+  texMb: integer;
 begin
      gMM.x := hdr.pixdim[1];
      gMM.y := hdr.pixdim[2];
@@ -202,6 +204,9 @@ begin
          FilterDrop.ItemIndex := 7; //Automatic Mitchell
      IsotropicBtn.Enabled := (gMM.x <> gMM.y) or (gMM.x <> gMM.z);
      IsotropicShrinkBtn.Enabled := IsotropicBtn.Enabled;
+     texMb := ceil((gDim.x * gDim.y * gDim.z * 4) / bytesPerMb);
+     ScaleTo512MbBtn.Enabled := texMb > 512;
+     ScaleTo2048MbBtn.Enabled := texMb > 2048;
      Caption := 'Resize '+filename;
      InLabel.Caption:= format('Input: %dx%dx%d voxels %.4gx%.4gx%.4g mm', [gDim.x, gDim.y, gDim.z, gMM.x, gMM.y, gMM.z]);
      Self.showmodal;
