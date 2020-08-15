@@ -12,7 +12,7 @@ uses
   {$ifdef windows}Windows, {$endif}
   Interfaces, // this includes the LCL widgetset
   Forms, mainunit, TimedDialog, dcm2nii, drawVolume, autoroi,
-  nifti_hdr_view, nifti_resize, resize, crop, tiff2nifti;
+  nifti_hdr_view, nifti_resize, resize, crop, tiff2nifti, drawIntensityFilter;
 
 {$R *.res}
 begin
@@ -26,6 +26,7 @@ begin
   Application.CreateForm(THdrForm, HdrForm);
   Application.CreateForm(TResizeForm, ResizeForm);
   Application.CreateForm(TCropForm, CropForm);
+  Application.CreateForm(TDrawIntensityFilterForm, DrawIntensityFilterForm);
   //{$ifdef windows} SetDarkTheme; {$endif}
   //{$IFDEF LCLGtk2}ConstrainTrackBars();{$ENDIF}  //if unpatched, see https://bugs.freepascal.org/view.php?id=35861
   Application.Run;

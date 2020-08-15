@@ -39,7 +39,7 @@
         <PackageName Value="LCL"/>
       </Item3>
     </RequiredPackages>
-    <Units Count="11">
+    <Units Count="12">
       <Unit0>
         <Filename Value="MRIcroGL.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -106,6 +106,14 @@
         <Filename Value="afni_fdr.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit10>
+      <Unit11>
+        <Filename Value="drawintensityfilter.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="DrawIntensityFilterForm"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+        <UnitName Value="drawIntensityFilter"/>
+      </Unit11>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -118,10 +126,22 @@
       <OtherUnitFiles Value="../Metal-Demos/common;../static/x86_64-win64"/>
       <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
+    <Parsing>
+      <SyntaxOptions>
+        <IncludeAssertionCode Value="True"/>
+      </SyntaxOptions>
+    </Parsing>
     <CodeGeneration>
       <SmartLinkUnit Value="True"/>
+      <Checks>
+        <IOChecks Value="True"/>
+        <RangeChecks Value="True"/>
+        <OverflowChecks Value="True"/>
+        <StackChecks Value="True"/>
+      </Checks>
+      <VerifyObjMethodCallValidity Value="True"/>
       <Optimizations>
-        <OptimizationLevel Value="3"/>
+        <OptimizationLevel Value="0"/>
       </Optimizations>
     </CodeGeneration>
     <Linking>

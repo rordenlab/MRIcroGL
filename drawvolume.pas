@@ -1,7 +1,8 @@
 unit drawvolume;
 
-{$mode objfpc}{$H+} {$M+}
-
+{$mode Delphi}
+{$H+} {$M+}
+{$DEFINE DILATE}
 interface
 
 uses
@@ -11,6 +12,11 @@ const
  kDrawModeAppend = 0;
  kDrawModeDelete = 1;
  kDrawModeConstrain = 2;
+ kDrawModeDeleteDark = 3;
+ kDrawModeAddDark = 4;
+ kDrawModeDeleteBright = 5;
+ kDrawModeAddBright = 6;
+
 Type
  TSlice2D = array of single;
 
@@ -87,6 +93,8 @@ TDraw = Class //(TNIfTI)  // This is an actual class definition :
     procedure voiSmoothIntensity();
     procedure voiDefaultLUT;
     procedure voiMorphologyFill(intenVol: TUInt8s; Color: int64; Xmm, Ymm, Zmm, Xfrac, Yfrac, Zfrac:  single; dxOrigin, radiusMM: int64; drawMode: int64);
+    procedure voiIntensityFilter(intenVol: TUInt8s; Color: int64; threshold: UInt8; drawMode: int64);
+    procedure voiDilate(dilationInVoxels: single);
     function voiGetVolume: TUInt8s;
     procedure voiChangeAlpha (a: byte);
     procedure morphFill(volImg, volVoi: TUInt8s; Color: int64; Xmm,Ymm,Zmm: single; xOri, yOri, zOri, dxOrigin,  radiusMM : int64; drawMode: int64);
@@ -96,6 +104,337 @@ TDraw = Class //(TNIfTI)  // This is an actual class definition :
 end;
 
 implementation
+
+//uses mainunit;
+{$IFDEF DILATE}
+uses math;
+{$ENDIF}
+
+const
+  kOrientSagRL = 8;
+  kOrientSagLR = 4;
+  kOrientCoro = 2;
+  kOrientAx = 1;
+  kOrient3D = 0;
+  kFillNewColor = 255;//255;
+  kIgnoreColor = 253;//253;
+  kFillOldColor = 0;
+
+{$IFDEF DILATE}
+type
+    FloatRA = array [0..32767] of single;
+    FloatRAp = ^FloatRA;
+procedure edt(var f: FloatRAp; var d,z: TFloat32s; var v: TInt32s; n: integer); inline;
+function vx(p, q: integer): single; inline;
+begin
+	try
+		result := ((f[q] + q*q) - (f[p] + p*p)) / (2.0*q - 2.0*p);
+	except
+		result := infinity;
+	end;
+        if isnan(result) then result := infinity;
+end;
+var
+	p, k, q: integer;
+	s, dx: single;
+begin
+    (*# Find the lower envelope of a sequence of parabolas.
+    #   f...source data (returns the Y of the parabola vertex at X)
+    #   d...destination data (final distance values are written here)
+    #   z...temporary used to store X coords of parabola intersections
+    #   v...temporary used to store X coords of parabola vertices
+    #   i...resulting X coords of parabola vertices
+    #   n...number of pixels in "f" to process
+    # Always add the first pixel to the enveloping set since it is
+    # obviously lower than all parabolas processed so far.*)
+    k := 0;
+    v[0] := 0;
+    z[0] := -infinity;
+    z[1] := infinity;
+    for q := 1 to n-1 do begin
+        (*# If the new parabola is lower than the right-most parabola in
+        # the envelope, remove it from the envelope. To make this
+        # determination, find the X coordinate of the intersection (s)
+        # between the parabolas with vertices at (q,f[q]) and (p,f[p]).
+        *)
+        p := v[k];
+        s := vx(p,q);
+        while (s <= z[k]) and (k > 0) do begin
+            k := k - 1;
+            p := v[k];
+            s := vx(p,q);
+        end;
+        //# Add the new parabola to the envelope.
+        k := k + 1;
+        v[k] := q;
+        z[k] := s;
+        z[k + 1] := infinity;
+    end;
+    (*# Go back through the parabolas in the envelope and evaluate them
+    # in order to populate the distance values at each X coordinate.*)
+    k := 0;
+    for q := 0 to n-1 do begin
+        while z[k + 1] < q do
+            k := k + 1;
+        dx := (q - v[k]);
+        d[q] := dx * dx + f[v[k]];
+        //i[q] = v[k];
+    end;
+    for q := 0 to n-1 do
+    	f[q] := d[q];
+end;
+procedure edt1(var df: FloatRAp; n: integer); inline;
+
+var
+	q, prevX : integer;
+	prevY, v : single;
+begin
+	prevX := 0;
+	prevY := infinity;
+	//forward
+	for q := 0 to (n-1) do begin
+		if (df[q] = 0) then begin
+			prevX := q;
+			prevY := 0;
+		end else
+			df[q] := sqr(q-prevX)+prevY;
+	end;
+	//reverse
+	prevX := n;
+	prevY := infinity;
+	for q := (n-1) downto 0 do begin
+		v := sqr(q-prevX)+prevY;
+		if (df[q] < v) then begin
+        	prevX := q;
+        	prevY := df[q];
+    	end else
+        	df[q] := v;
+    end
+end;
+
+procedure distanceFieldLR(var dim: TVec3i; var img: TFloat32s);
+//filter data in the X dimension (Left/Right)
+var
+	s, r, cols: int64;
+	f: FloatRAp;
+begin
+	cols := dim.x;
+	s := dim.y * max(dim.z, 1);
+	for r := 0 to (s-1) do begin
+		f := @img[r*cols];
+                edt1(f,cols);
+	end;
+end;
+
+(*function hasZeros(var df: FloatRAp; n: integer): boolean;
+var
+   q: integer;
+begin
+     result := false;
+     for q := 0 to (n-1) do
+         if df[q] = 0 then
+            exit(true);
+end;
+
+procedure report(var df: FloatRAp; n: integer);
+var
+   q: integer;
+begin
+     writeln(format('n=%d', [n]));
+     writeln('m=[');
+     for q := 0 to (n-1) do
+         write(format('%g, ',[df[q]]));
+     writeln('];');
+end; *)
+
+
+procedure distanceFieldAP(var dim: TVec3i; var img: TFloat32s);
+//filter data in the Y dimension (Anterior/Posterior)
+(*const
+  	kn = 255;
+	c: array [0..kn] of single =(Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, 144, 0, 0, 0, 0, 144, 144, 1, 1, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity);
+*)
+var
+  //j : integer;
+  slices: int64;
+  x,y, k, s, r, rows, cols: int64;
+  f: FloatRAp;
+  d,z, img2D : TFloat32s;
+  v: TInt32s;
+  zeros: boolean;
+
+begin
+	cols := dim.y;
+	rows := dim.x;
+	setlength(z, cols+1);
+	setlength(d, cols+1);
+	setlength(v, cols+1);
+	setlength(img2D, rows*cols);
+	slices := 1;
+	slices := slices * max(dim.z, 1);
+	for s := 0 to (slices-1) do begin
+		//transpose
+		k := s * (rows * cols); //slice offset
+		for x := 0 to (cols-1) do begin
+			for y := 0 to (rows-1) do begin
+				img2D[x+(y*cols)] := img[k];
+				k := k + 1;
+			end;
+		end;
+		for r := 0 to (rows-1) do begin
+                    //for j := 0 to kn do
+                    //    img2D[j] := c[j];
+                    f := @img2D[r*cols];
+                    (*zeros := hasZeros(f, cols);
+                    if zeros then
+                       report(f,cols); *)
+		    edt(f, d, z, v, cols);
+                    (*if zeros then begin
+                       report(f,cols);
+                       exit;
+                    end;*)
+                end;
+		//transpose
+		k := s * (rows * cols); //slice offset
+		for x := 0 to (cols-1) do begin
+			for y := 0 to (rows-1) do begin
+				img[k] := img2D[x+(y*cols)];
+				k := k + 1;
+			end;
+		end;
+	end;
+end;
+
+procedure distanceFieldHF(var dim: TVec3i; var img: TFloat32s);
+//filter data in the Z dimension (Head/Foot)
+//by far the most computationally expensive pass
+// unlike LR and AP, we must process 3rd (Z) and 4th (volume number) dimension separately
+var
+	sx, sxy, x,y,k, s, r, rows, cols: int64;
+	f: FloatRAp;
+	d,z, img2D : TFloat32s;
+	v: TInt32s;
+begin
+	if (dim.z < 2) then exit; //2D images have height and width but not depth
+	//we could transpose [3,2,1] or [3,1,2] - latter improves cache?
+	cols := dim.z;
+	rows := dim.x;
+	sxy := dim.x * dim.y;
+	setlength(z, cols+1);
+	setlength(d, cols+1);
+        setlength(v, cols+1);
+	setlength(img2D, rows*cols);
+	for s := 0 to (dim.y-1) do begin
+		//transpose
+		sx := (s * rows);
+		k := 0; //slice offset along Y axis
+		for x := 0 to (rows-1) do begin
+			for y := 0 to (cols-1) do begin
+				img2D[k] := img[x + sx + (y*sxy)];
+				k := k + 1;
+			end;
+		end;
+		for r := 0 to (rows-1) do begin
+			f := @img2D[r*cols];
+			edt(f, d, z, v, cols);
+		end;
+		//transpose
+		k := 0; //slice offset along Y axis
+		for x := 0 to (rows-1) do begin
+			for y := 0 to (cols-1) do begin
+				img[x + sx + (y*sxy)] := img2D[k];
+				k := k + 1;
+			end;
+		end;
+	end; //slice
+end; //distanceFieldHF()
+
+function distanceFieldVolume3D(var dim: TVec3i; var img32: TFloat32s): boolean;
+var
+   i, vx: int64;
+begin
+	result := false;
+        if (dim.x < 1) or (dim.y < 1) or (dim.z < 1) then exit;
+	vx := dim.x * dim.y * dim.z;
+	distanceFieldLR(dim, img32);
+	distanceFieldAP(dim, img32);
+	distanceFieldHF(dim, img32);
+	for i := 0 to (vx-1) do
+	    img32[i] := sqrt(img32[i]) ;
+	result := true;
+end;
+
+procedure TDraw.voiDilate(dilationInVoxels: single);
+var
+  nPix,  i : int64;
+  dim: TVec3i;
+  color :  byte;
+  img32: TFloat32s;
+  //f    : File;
+begin
+        color := min(max(1, penColor), 255);
+        if (view3d = nil) and (Color = 0)  then exit; //nothing to erase
+        if (dim3d[1] < 1) or (dim3d[2] < 1) or (dim3d[3] < 1) then exit;
+        dim := pti(dim3d[1], dim3d[2], dim3d[3]);
+        nPix := dim3d[1] * dim3d[2] * dim3d[3];
+        //GLForm1.SliceBox.Caption := inttostr(Color)+'b'+ inttostr(nPix);
+        voiCloseSlice;
+        dim2d[0] := kOrient3D; //dim[0] = slice orientation 0 = 3d volume
+        setlength(view2d, nPix);
+        setlength(undo2d, nPix);
+        Move(view3d[0], undo2d[0],nPix);//source/dest
+        Move(undo2d[0],view2d[0],nPix);//source/dest
+        setlength(img32, nPix);
+        if (dilationInVoxels < 0) then begin
+          dilationInVoxels := abs(dilationInVoxels);
+          for i := 0 to (nPix -1) do begin
+              if view2d[i] > 0 then
+       		  img32[i] := infinity
+       	      else
+       		  img32[i] := 0;
+          end;
+          distanceFieldVolume3D(dim, img32);
+          for i := 0 to (nPix -1) do begin
+              if img32[i] > dilationInVoxels then
+       		  view2d[i] := color
+       	      else
+       		  view2d[i] := 0;
+          end;
+        end else begin
+            for i := 0 to (nPix -1) do begin
+                if view2d[i] > 0 then
+         		  img32[i] := 0
+         	      else
+         		  img32[i] := infinity;
+            end;
+            distanceFieldVolume3D(dim, img32);
+            (*AssignFile(f, '/Users/chris/dx.img');
+            ReWrite(f, 1);
+            BlockWrite(f, img32[0], nPix * 4);   // Write 2 'records' of 4 bytes
+            CloseFile(f); *)
+            for i := 0 to (nPix -1) do begin
+                //if img32[i] < dilationInVoxels then
+         	if img32[i] < dilationInVoxels then
+         		  view2d[i] := 1
+         	      else
+         		  view2d[i] := 0;
+            end;
+        end;
+        img32 := nil;
+        //       if (intenVol[i] > threshold) then view2d[i] := Color;
+        doRedraw := true;
+        UpdateView3d;
+        isModified := true;
+        isModifiedSinceSave := true;
+
+end;
+
+{$ELSE}
+procedure TDraw.voiDilate(dilationInVoxels: single);
+begin
+     printf('voiDilate not supported');
+end;
+{$ENDIF}
 
 function TDraw.Dim: TVec3i;
 begin
@@ -120,16 +459,6 @@ begin
   isModified := true; // <- update on GPU
   voiCloseSlice;
 end;
-
-const
-  kOrientSagRL = 8;
-  kOrientSagLR = 4;
-  kOrientCoro = 2;
-  kOrientAx = 1;
-  kOrient3D = 0;
-  kFillNewColor = 255;//255;
-  kIgnoreColor = 253;//253;
-  kFillOldColor = 0;
 
 function TDraw.voiActiveOrient: integer;
 begin
@@ -1317,6 +1646,41 @@ begin
             view2d[xPix] := color;
      //freemem(vol);
      //GLForm1.Caption := floattostr(Xmm)+'x'+floattostr(Ymm)+'x'+floattostr(Zmm);
+end;
+
+procedure TDraw.voiIntensityFilter(intenVol: TUInt8s; Color: int64; threshold: UInt8; drawMode: int64);
+var
+  nPix,  i : int64;
+begin
+     if (Color < 0) then exit;
+     if (intenVol = nil) then exit;
+     if (view3d = nil) and (Color = 0)  then exit; //nothing to erase
+     if (dim3d[1] < 1) or (dim3d[2] < 1) or (dim3d[3] < 1) then exit;
+     nPix := dim3d[1] * dim3d[2] * dim3d[3];
+     //GLForm1.SliceBox.Caption := inttostr(Color)+'b'+ inttostr(nPix);
+     voiCloseSlice;
+     dim2d[0] := kOrient3D; //dim[0] = slice orientation 0 = 3d volume
+     setlength(view2d, nPix);
+     setlength(undo2d, nPix);
+     Move(view3d[0], undo2d[0],nPix);//source/dest
+     Move(undo2d[0],view2d[0],nPix);//source/dest
+     if (drawMode = kDrawModeDeleteDark)  then begin
+        for i := 0 to (nPix - 1) do
+            if (intenVol[i] < threshold) then view2d[i] := 0;
+     end else if (drawMode = kDrawModeAddDark)  then begin
+        for i := 0 to (nPix - 1) do
+            if (intenVol[i] < threshold) then view2d[i] := Color;
+     end else if (drawMode = kDrawModeDeleteBright)  then begin
+        for i := 0 to (nPix - 1) do
+            if (intenVol[i] > threshold) then view2d[i] := 0;
+     end else if (drawMode = kDrawModeAddBright)  then begin
+        for i := 0 to (nPix - 1) do
+            if (intenVol[i] > threshold) then view2d[i] := Color;
+     end;
+     doRedraw := true;
+     UpdateView3d;
+     isModified := true;
+     isModifiedSinceSave := true;
 end;
 
 procedure TDraw.voiMorphologyFill(intenVol: TUInt8s; Color: int64; Xmm, Ymm, Zmm, Xfrac, Yfrac, Zfrac:  single; dxOrigin, radiusMM: int64; drawMode: int64);

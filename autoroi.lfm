@@ -6,6 +6,7 @@ object AutoROIForm: TAutoROIForm
   HorzScrollBar.Page = 264
   VertScrollBar.Page = 354
   ActiveControl = VarianceEdit
+  AutoSize = True
   BorderStyle = bsDialog
   BorderWidth = 6
   Caption = 'Create ROI'
@@ -21,62 +22,90 @@ object AutoROIForm: TAutoROIForm
   Position = poScreenCenter
   LCLVersion = '2.1.0.0'
   object OriginLabel: TLabel
-    Left = 6
+    AnchorSideLeft.Control = OriginBtn
+    AnchorSideTop.Control = OriginBtn
+    AnchorSideTop.Side = asrBottom
+    Left = 10
     Height = 16
-    Top = 38
+    Top = 34
     Width = 44
+    BorderSpacing.Top = 4
     Caption = 'Origin: '
     ParentColor = False
   end
   object DiffLabel: TLabel
-    Left = 12
+    AnchorSideLeft.Control = OriginBtn
+    AnchorSideTop.Control = VarianceEdit
+    AnchorSideTop.Side = asrCenter
+    Left = 10
     Height = 16
-    Top = 98
+    Top = 76
     Width = 132
     Caption = 'Difference from origin'
     ParentColor = False
   end
   object Label2: TLabel
-    Left = 12
+    AnchorSideLeft.Control = OriginBtn
+    AnchorSideTop.Control = RadiusEdit
+    AnchorSideTop.Side = asrCenter
+    Left = 10
     Height = 16
-    Top = 128
+    Top = 101
     Width = 77
     Caption = 'Radius (mm)'
     ParentColor = False
   end
   object Label4: TLabel
-    Left = 4
+    AnchorSideLeft.Control = OriginBtn
+    AnchorSideTop.Control = OriginLabel
+    AnchorSideTop.Side = asrBottom
+    Left = 10
     Height = 16
-    Top = 68
+    Top = 54
     Width = 70
+    BorderSpacing.Top = 4
     Caption = 'Constraints'
     ParentColor = False
   end
   object VarianceEdit: TSpinEdit
-    Left = 173
+    AnchorSideLeft.Control = DiffLabel
+    AnchorSideLeft.Side = asrBottom
+    AnchorSideTop.Control = Label4
+    AnchorSideTop.Side = asrBottom
+    Left = 150
     Height = 21
-    Top = 98
+    Top = 74
     Width = 72
+    BorderSpacing.Left = 8
+    BorderSpacing.Top = 4
     MaxValue = 255
     OnChange = AutoROIchange
     TabOrder = 1
     Value = 16
   end
   object RadiusEdit: TSpinEdit
-    Left = 173
+    AnchorSideLeft.Control = VarianceEdit
+    AnchorSideTop.Control = VarianceEdit
+    AnchorSideTop.Side = asrBottom
+    Left = 150
     Height = 21
-    Top = 128
+    Top = 99
     Width = 72
+    BorderSpacing.Top = 4
     MaxValue = 9999
     OnChange = AutoROIchange
     TabOrder = 2
     Value = 32
   end
   object ROIconstraint: TComboBox
-    Left = 12
+    AnchorSideLeft.Control = OriginBtn
+    AnchorSideTop.Control = RadiusEdit
+    AnchorSideTop.Side = asrBottom
+    Left = 10
     Height = 20
-    Top = 162
+    Top = 124
     Width = 226
+    BorderSpacing.Top = 4
     ItemHeight = 26
     ItemIndex = 0
     Items.Strings = (
@@ -90,29 +119,51 @@ object AutoROIForm: TAutoROIForm
     Text = 'Append to current VOI'
   end
   object OriginBtn: TButton
-    Left = 4
-    Height = 25
-    Top = 9
-    Width = 114
+    AnchorSideLeft.Control = Owner
+    AnchorSideTop.Control = Owner
+    Left = 10
+    Height = 20
+    Top = 10
+    Width = 100
+    AutoSize = True
+    BorderSpacing.Left = 4
+    BorderSpacing.Top = 4
     Caption = 'Reset origin'
+    Constraints.MaxWidth = 114
     OnClick = OriginBtnClick
     TabOrder = 0
   end
   object AutoROIBtn: TButton
-    Left = 12
-    Height = 25
-    Top = 208
+    AnchorSideTop.Control = ROIconstraint
+    AnchorSideTop.Side = asrBottom
+    AnchorSideRight.Control = Owner
+    AnchorSideRight.Side = asrBottom
+    Left = 132
+    Height = 20
+    Top = 152
     Width = 114
+    Anchors = [akTop, akRight]
+    AutoSize = True
+    BorderSpacing.Top = 8
     Caption = 'Apply'
+    Constraints.MinWidth = 114
     OnClick = AutoROIBtnClick
     TabOrder = 4
   end
   object CancelBtn: TButton
-    Left = 127
-    Height = 25
-    Top = 208
+    AnchorSideLeft.Control = AutoROIBtn
+    AnchorSideTop.Control = AutoROIBtn
+    AnchorSideTop.Side = asrCenter
+    AnchorSideRight.Control = AutoROIBtn
+    Left = 14
+    Height = 20
+    Top = 152
     Width = 114
+    Anchors = [akTop, akRight]
+    AutoSize = True
+    BorderSpacing.Right = 4
     Caption = 'Cancel'
+    Constraints.MinWidth = 114
     OnClick = CancelBtnClick
     TabOrder = 5
   end
@@ -120,7 +171,7 @@ object AutoROIForm: TAutoROIForm
     Enabled = False
     Interval = 400
     OnTimer = TimerROITimer
-    left = 160
-    top = 32
+    Left = 160
+    Top = 32
   end
 end

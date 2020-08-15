@@ -1,9 +1,9 @@
 object ResizeForm: TResizeForm
   Tag = 512
   AnchorSideTop.Side = asrBottom
-  Left = 479
+  Left = 642
   Height = 329
-  Top = 72
+  Top = 98
   Width = 529
   AutoSize = True
   BorderWidth = 4

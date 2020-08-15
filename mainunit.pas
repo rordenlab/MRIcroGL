@@ -35,13 +35,13 @@ uses
   {$IFDEF LCLCocoa}SysCtl, dos, {$IFDEF DARKMODE}nsappkitext, {$ENDIF}{$IFDEF NewCocoa} UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
   ctypes, resize, ustat, LazVersion,  tiff2nifti,
-  lcltype, GraphType, Graphics, dcm_load, crop,
+  lcltype, GraphType, Graphics, dcm_load, crop, drawIntensityFilter,
   LCLIntf, slices2D, StdCtrls, SimdUtils, Classes, SysUtils, Forms, Controls,clipbrd,
   Dialogs, Menus, ExtCtrls, CheckLst, ComCtrls, Spin, Types, fileutil, ulandmarks, nifti_types,
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20200707c'; //+ save image
+  kVers = '1.2.20200707d'; //+ save image
 type
 
   { TGLForm1 }
@@ -92,6 +92,9 @@ type
     GraphOpenAddMenu: TMenuItem;
     LayerClusterOptsMenu: TMenuItem;
     ImportTIFFFolderMenu: TMenuItem;
+    LayerClusterSumMenu: TMenuItem;
+    DrawIntensityFilterMenu: TMenuItem;
+    MenuItem3: TMenuItem;
     ScriptHaltMenu: TMenuItem;
     NimlMenu: TMenuItem;
     OpenAFNIMenu: TMenuItem;
@@ -347,7 +350,7 @@ type
     ZTrackBar: TTrackBar;
     procedure AfniPMenuClick(Sender: TObject);
     procedure AfniQMenuClick(Sender: TObject);
-    procedure CenterPanelClick(Sender: TObject);
+    function HasLabelLayer: boolean;
     procedure ClusterSaveClick(Sender: TObject);
     procedure ClusterViewColumnClick(Sender: TObject; Column: TListColumn);
     procedure ClusterViewCompare(Sender: TObject; Item1, Item2: TListItem;
@@ -376,6 +379,8 @@ type
     procedure LayerFindPeakMenuClick(Sender: TObject);
     procedure LayerIsLabelMenuClick(Sender: TObject);
     procedure LayerSmoothMenuClick(Sender: TObject);
+    procedure DrawIntensityFilterMenuClick(Sender: TObject);
+    procedure DrawDilateMenuClick(Sender: TObject);
     procedure MenuItem3Click(Sender: TObject);
     procedure NimlMenuClick(Sender: TObject);
     procedure RemoveSmallClusterMenuClick(Sender: TObject);
@@ -586,6 +591,7 @@ type
     procedure YokeTimerTimer(Sender: TObject);
     procedure voiUndo(isRefresh: boolean = false);
     procedure MorphologyFill(Origin: TVec3; dxOrigin, radiusMM: int64; drawMode: int64);
+    procedure DrawIntensityFilter(threshold: byte; drawMode: int64);
     procedure ForceOverlayUpdate();
     procedure ZoomBtnClick(Sender: TObject);
   private
@@ -965,10 +971,6 @@ begin
   LayerChange(LayerList.ItemIndex, -1, -1, thresh, thresh);
 end;
 
-procedure TGLForm1.CenterPanelClick(Sender: TObject);
-begin
-
-end;
 
 {$ELSE}
 begin
@@ -1054,6 +1056,28 @@ begin
      {$ELSE}
      if IsConsole then writeln(str);
      {$ENDIF}
+end;
+
+procedure TGLForm1.DrawIntensityFilter(threshold: byte; drawMode: int64);
+var
+ niftiVol: TNIfTI;
+ clr: integer;
+ vol8:TUInt8s;
+begin
+  EnsureOpenVoi();
+  clr := Vols.Drawing.ActivePenColor;
+  if  (clr <= 0) then clr := 1;
+  if (gPrefs.DisplayOrient = kRenderOrient) or (gPrefs.DisplayOrient = kMosaicOrient) then exit;
+  if not vols.Layer(0,niftiVol) then exit;
+  EnsureOpenVoi();
+  if niftiVol.Header.datatype = kDT_RGB then begin
+      vol8 := niftiVol.DisplayRGBGreen;
+      Vols.Drawing.voiIntensityFilter(vol8, clr, threshold, drawMode);
+      vol8 := nil; //free
+  end else
+      Vols.Drawing.voiIntensityFilter(niftiVol.DisplayMinMax2Uint8, clr, threshold, drawMode);
+  //LayerBox.caption := format('%d %d', [threshold, drawMode]);
+  ViewGPU1.Invalidate;
 end;
 
 procedure TGLForm1.MorphologyFill(Origin: TVec3; dxOrigin, radiusMM: int64; drawMode: int64);
@@ -1909,6 +1933,34 @@ begin
     ViewGPU1.Invalidate;
 end;
 
+function PyDrawLOAD(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  PtrName: PChar;
+  StrName: string;
+  Ret: boolean;
+begin
+  Result:= GetPythonEngine.PyInt_FromLong(-1);
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, 's:drawload', @PtrName)) then
+    begin
+      StrName:= string(PtrName);
+      if fileexists(StrName) and (not IsReadable(StrName)) then begin
+         pyprintf('not permitted to read "'+StrName+'"');
+         exit;
+      end;
+      if (vols.Drawing.IsOpen) then
+         vols.Drawing.voiClose;
+      ret := Vols.OpenDrawing(StrName);
+      ViewGPU1.Invalidate;
+      if not ret then begin
+         GLForm1.ScriptOutputMemo.Lines.Add('unable to load "'+StrName+'"');
+         printf('unable to load "'+StrName+'"');
+      end;
+      Result:= GetPythonEngine.PyBool_FromLong(Ord(ret));
+    end;
+end;
+
+
 function PyOVERLAYLOAD(Self, Args : PPyObject): PPyObject; cdecl;
 var
   PtrName: PChar;
@@ -2463,7 +2515,6 @@ begin
       end;
       while (isBusy) or (GLForm1.Updatetimer.enabled) do
             Application.ProcessMessages;
-
        GenerateClustersCore(v, thresh, mm,method, bimodal = 1);
        //GenerateClustersCore(v, thresh, mm,method, true);
        GLForm1.UpdateLayerBox(true);// show cluster panel
@@ -2780,6 +2831,7 @@ begin
     AddMethod('clipazimuthelevation', @PyCLIPAZIMUTHELEVATION, ' clipazimuthelevation(depth, azi, elev) -> Set a view-point independent clip plane.');
     AddMethod('clipthick', @PyCLIPTHICK, ' clipthick(thick) -> Set size of clip plane slab (0..1).');
     AddMethod('cutout', @PyCUTOUT, ' cutout(L,A,S,R,P,I) -> Remove sector from volume.');
+    AddMethod('drawload', @PyDRAWLOAD, ' drawload(filename) -> Load an image as a drawing (region of interest).');
     AddMethod('extract', @PyEXTRACT, ' extract(b,s,t) -> Remove haze from background image. Blur edges (b: 0=no, 1=yes, default), single object (s: 0=no, 1=yes, default), threshold (t: 1..5=high threshold, 5 is default, higher values yield larger objects)');
     ////isSmoothEdges: boolean = true; isSingleObject: boolean = true; OtsuLevels : integer = 5
     AddMethod('fullscreen', @PyFULLSCREEN, ' fullscreen(max) -> Form expands to size of screen (1) or size is maximized (0).');
@@ -3760,24 +3812,45 @@ procedure TGLForm1.MakeList(var c: TClusters);
 var
    i, n: integer;
    itm: TListItem;
-   isPeak, isLabels: boolean;
+   isPeak, isLabels, isVolume: boolean;
 begin
      ClusterView.Clear;
      n := length(c);
      if n < 1 then exit;
      isLabels := c[0].PeakStructure = '-';
-     isPeak := not isLabels;
-     //isPeak := c[0].Peak <> 0;
-     ClusterView.Column[2].Visible:= isPeak;
+     isVolume := c[0].PeakStructure = '~';
+     isPeak := (not isLabels) and (not isVolume);
+     if isVolume  then
+        ClusterView.Column[1].Caption:= 'Sum'
+     else
+        ClusterView.Column[1].Caption:= 'Volume';
+     if isLabels or isVolume then
+        ClusterView.Column[2].Caption:= 'Index'
+     else
+         ClusterView.Column[2].Caption:= 'Peak';
+     //Column 0: index
+     //Column 1: Volume
+     //Column 2: Peak
+     //Column 3: PeakXYZ
+     //Column 4: PeakStructure
+     //Column 5: XYZ
+     //Column 6: Structure
+     ClusterView.Column[2].Visible:= true;//not isLabels;
      ClusterView.Column[3].Visible:= isPeak;
-     ClusterView.Column[4].Visible:= not isLabels;
+     ClusterView.Column[4].Visible:= isPeak;
      for i := 0 to (n-1) do begin
          itm := ClusterView.Items.Add;
          itm.Caption := format('%d', [i]);
          //volume
-         itm.SubItems.Add(format('%d', [round(c[i].SzMM3)]));
+         if isVolume then
+            itm.SubItems.Add(format('%.3f', [c[i].SzMM3]))
+         else
+             itm.SubItems.Add(format('%d', [round(c[i].SzMM3)]));
          //PeakMax
-         itm.SubItems.Add(format('%.1f', [c[i].Peak]));
+         if isLabels or isVolume then
+             itm.SubItems.Add(format('%d', [round(c[i].Peak)]))
+         else
+             itm.SubItems.Add(format('%.1f', [c[i].Peak]));
          //PeakXYZ
          itm.SubItems.Add(XYZstr(c[i].PeakXYZ));
          //itm.SubItems.Add(format(' %.1f!%.1f×%.1f', [c[i].PeakXYZ.x, c[i].PeakXYZ.y, c[i].PeakXYZ.z]));
@@ -4609,6 +4682,11 @@ begin
   LayerInvertColorMapMenu.Checked := niftiVol.CX.InvertColorMap;
   LayerPrevVolumeMenu.Enabled := (niftiVol.VolumesTotal > 1);
   LayerNextVolumeMenu.Enabled := LayerPrevVolumeMenu.Enabled;
+  LayerClusterMenu.Enabled := not niftiVol.IsLabels;
+  LayerClusterOptsMenu.Enabled := not niftiVol.IsLabels;
+  LayerClusterSumMenu.Enabled := (not niftiVol.IsLabels) and (HasLabelLayer());
+  if LayerList.Count < 2 then
+     LayerClusterSumMenu.Enabled := false; // requires selected continuous layer as well as an ATLAS
   LayerShowBidsMenu.Enabled := (niftiVol.BidsName <> '');
   if (i = 0) then
      exit;
@@ -5288,7 +5366,11 @@ begin
         SetShareFloats2D(sliceMM.X,sliceMM.Y,sliceMM.Z);
      end;
      {$ENDIF}
-     str := str + format('%3.6g %3.6g %3.6g = ', [sliceMM.x, sliceMM.y, sliceMM.z]);
+     //AJAX
+     if (niftiVol.Header.xyzt_units and kNIFTI_UNITS_MM) = kNIFTI_UNITS_MM then
+        str := str + format('%0.6g×%0.6g×%0.6gmm (%d×%d×%d) = ', [sliceMM.x, sliceMM.y, sliceMM.z, vox.x, vox.y, vox.z])
+     else
+         str := str + format('%0.6g×%0.6g×%0.6g = ', [sliceMM.x, sliceMM.y, sliceMM.z]);
      str := str + niftiVol.VoxIntensityString(vox);//format('%3.6g', [niftiVol.VoxIntensity(vox)]);
      if vols.NumLayers > 1 then
         for i := 1 to (vols.NumLayers-1) do begin
@@ -5874,7 +5956,8 @@ end;
        end;
        if (GLForm1.ShaderBox.Controls[i] is TTrackBar) then begin
           (GLForm1.ShaderBox.Controls[i] as TTrackBar).visible := t <= Vol1.ShaderSliders.nUniform;
-          (GLForm1.ShaderBox.Controls[i] as TTrackBar).position := Val2Percent(Vol1.ShaderSliders.Uniform[t].min, Vol1.ShaderSliders.Uniform[t].DefaultV, Vol1.ShaderSliders.Uniform[t].max);
+          if (GLForm1.ShaderBox.Controls[i] as TTrackBar).visible then
+             (GLForm1.ShaderBox.Controls[i] as TTrackBar).position := Val2Percent(Vol1.ShaderSliders.Uniform[t].min, Vol1.ShaderSliders.Uniform[t].DefaultV, Vol1.ShaderSliders.Uniform[t].max);
        end;
    end;
 end;
@@ -6024,6 +6107,32 @@ end;
 procedure TGLForm1.LayerSmoothMenuClick(Sender: TObject);
 begin
   Vols.InterpolateOverlays := GLForm1.LayerSmoothMenu.Checked;
+end;
+
+procedure TGLForm1.DrawIntensityFilterMenuClick(Sender: TObject);
+begin
+     DrawIntensityFilterForm.Show;
+end;
+
+procedure TGLForm1.DrawDilateMenuClick(Sender: TObject);
+var
+ niftiVol: TNIfTI;
+ clr: integer;
+ p: single;
+begin
+  if not vols.Drawing.IsOpen then begin
+     showmessage('First open the drawing you wish to dilate or erode');
+     exit;
+  end;
+  p := GetFloat('Set voxels to dilate (positive) or erode (negative) ', -100,5,100);
+  if p = 0 then exit;
+  clr := Vols.Drawing.ActivePenColor;
+  if  (clr <= 0) then clr := 1;
+  if (gPrefs.DisplayOrient = kRenderOrient) or (gPrefs.DisplayOrient = kMosaicOrient) then exit;
+  if not vols.Layer(0,niftiVol) then exit;
+  Vols.Drawing.voiDilate(p);
+  //LayerBox.caption := format('%d %d', [threshold, drawMode]);
+  ViewGPU1.Invalidate;
 end;
 
 procedure TGLForm1.MenuItem3Click(Sender: TObject);
@@ -9032,6 +9141,23 @@ begin
  //LayerBox.Caption := inttostr(random(888))+' '+inttostr(i);
 end;
 
+function TGLForm1.HasLabelLayer: boolean;
+var
+   v: TNIfTI;
+   i: integer;
+begin
+  v := nil;
+  i := 0;
+  while (i < GLForm1.LayerList.Count) do begin
+        if not vols.Layer(i,v) then exit;
+        if v.IsLabels then
+           break;
+        i := i + 1;
+  end;
+  result := (v <> nil) and (v.IsLabels);
+end;
+
+
 procedure TGLForm1.LayerClusterMenuClick(Sender: TObject);
 var
    v: TNIfTI;
@@ -9066,16 +9192,24 @@ begin
      //showmessage('Skipping clusters');
      exit;
   end;
-  generateClustersCore(v, thresh, smallestClusterMM3, NeighborMethod, isDarkAndBright);
+  if ((Sender as TMenuItem).tag = 2)  then begin
+     if (v.IsLabels) then begin
+        showmessage('Make sure a non-atlas image is selected in the "Layer" panel.');
+        exit;
+     end;
+      if not HasLabelLayer() then begin
+         showmessage('Load an atlas before running this function.');
+         exit;
+      end;
+     generateClustersCore(v, kNaNsingle, kNaNsingle, NeighborMethod, isDarkAndBright)
+  end else
+      generateClustersCore(v, thresh, smallestClusterMM3, NeighborMethod, isDarkAndBright);
   UpdateLayerBox(false);
   if gPrefs.DisplayOrient > kAxCorSagOrient then
      MPRMenu.Click;
   GLForm1.UpdateLayerBox(false, true);
   if (length(v.clusters) < 1) then
      showmessage('No clusters survive');
-  //LayerBox.Caption := format('TUE %d',[length(v.clusters)]);
-  //if BottomPanel.Height < 20 then
-  //   BottomPanel.Height := round(GLForm1.Height * 0.25);
 end;
 
 procedure TGLForm1.BetterRenderTimerTimer(Sender: TObject);

@@ -1,7 +1,7 @@
 object GLForm1: TGLForm1
   Left = 497
   Height = 570
-  Top = 85
+  Top = 187
   Width = 881
   AllowDropFiles = True
   Caption = 'MRIcroGL'
@@ -1709,7 +1709,6 @@ object GLForm1: TGLForm1
       Align = alClient
       ParentFont = False
       TabOrder = 4
-      OnClick = CenterPanelClick
     end
   end
   object TBSplitter: TSplitter
@@ -1785,21 +1784,22 @@ object GLForm1: TGLForm1
           item
             Caption = 'Volume'
             MaxWidth = 120
-            MinWidth = 50
+            MinWidth = 80
             Tag = 1
+            Width = 80
           end        
           item
             Caption = 'Peak'
             Tag = 1
-            Width = 42
+            Width = 80
           end        
           item
             Alignment = taCenter
             Caption = 'PeakXYZ'
-            MaxWidth = 120
+            MaxWidth = 180
             MinWidth = 20
             Tag = 2
-            Width = 80
+            Width = 120
           end        
           item
             Caption = 'Peak Structure'
@@ -1811,9 +1811,9 @@ object GLForm1: TGLForm1
           item
             Alignment = taCenter
             Caption = 'XYZ'
-            MaxWidth = 120
+            MaxWidth = 180
             MinWidth = 20
-            Width = 80
+            Width = 120
           end        
           item
             Caption = 'Structure'
@@ -2085,8 +2085,16 @@ object GLForm1: TGLForm1
           OnClick = DrawCloneMenuClick
         end
         object DrawSmoothMenu: TMenuItem
-          Caption = 'Smooth and refine drawing'
+          Caption = 'Smooth and Refine Drawing'
           OnClick = DrawSmoothMenuClick
+        end
+        object DrawIntensityFilterMenu: TMenuItem
+          Caption = 'Delete or Append Bright or Dark voxels'
+          OnClick = DrawIntensityFilterMenuClick
+        end
+        object MenuItem3: TMenuItem
+          Caption = 'Dilate or Erode'
+          OnClick = DrawDilateMenuClick
         end
         object DrawAutomaticMenu: TMenuItem
           Caption = 'Automatic VOI'
@@ -2626,6 +2634,11 @@ object GLForm1: TGLForm1
     object LayerClusterOptsMenu: TMenuItem
       Tag = 1
       Caption = 'Generate Cluster Table with Options'
+      OnClick = LayerClusterMenuClick
+    end
+    object LayerClusterSumMenu: TMenuItem
+      Tag = 2
+      Caption = 'Generate Sum Table'
       OnClick = LayerClusterMenuClick
     end
     object RemoveSmallClusterMenu: TMenuItem

@@ -6583,7 +6583,7 @@ var
   ptr: bytep;
 begin
  lExt := uppercase(extractfileext(lFileName));
- if (lExt = '.GZ') or (lExt = '.VOI') then begin  //open gz compressed
+  if (lExt = '.GZ') or (lExt = '.VOI') then begin  //open gz compressed
     if (lLength < 1) then exit;
     SetLength(s, lLength);
     ptr :=  @s[1];
@@ -6759,7 +6759,6 @@ begin
           fAutoBalMax := fHdr.cal_max;
      end;
   end;
-
   {$IFDEF TIMER}printf(format('Init time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
   {$IFDEF TIMER}startTime := now;{$ENDIF}
   fWindowMin := fAutoBalMin;
@@ -6777,58 +6776,6 @@ begin
   SetDisplayMinMax();
   //{$IFDEF TIMER}printf(format('Set Min/Max time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
 end;
-
-(*function TNIfTI.CenterOfMass(idx: integer; out sizeMM3: single): TVec3;
-var
-   nVox: int64;
-   x,y,z,i: integer;
-   vol16 : TInt16s;
-begin
-  result := Vec3(0,0,0);
-  sizeMM3 := 0;
-  nVox := 0;
-  if min(min(dim.x,dim.y),dim.z) < 2 then exit;
-  i := 0;
-  if fHdr.datatype = kDT_UINT8 then begin
-    for z := 0 to (dim.z-1) do
-      for y := 0 to (dim.y-1) do
-        for x := 0 to (dim.x-1) do begin
-          if (fRawVolBytes[i] = idx) then begin
-            nVox := nVox + 1;
-            result.x := result.x + x;
-            result.y := result.y + y;
-            result.z := result.z + z;
-          end;
-          i := i + 1;
-        end;
-  end; //uint8
-  if fHdr.datatype = kDT_INT16 then begin
-     vol16 := TInt16s(fRawVolBytes);
-     for z := 0 to (dim.z-1) do
-       for y := 0 to (dim.y-1) do
-         for x := 0 to (dim.x-1) do begin
-           if (vol16[i] = idx) then begin
-             nVox := nVox + 1;
-             result.x := result.x + x;
-             result.y := result.y + y;
-             result.z := result.z + z;
-           end;
-           i := i + 1;
-         end;
-  end;
-  if nVox = 0 then exit;
-  //result in voxels 0..Dim-1
-  result.x := result.x / nVox;
-  result.y := result.y / nVox;
-  result.z := result.z / nVox;
-  //result in frac
-  result.x := result.x / (dim.x-1);
-  result.y := result.y / (dim.y-1);
-  result.z := result.z / (dim.z-1);
-  result := FracMM(result);
-  //sizeCC := nVox * VoxMM3()/1000.0;
-  sizeMM3 := nVox * VoxMM3();
-end; *)
 
 function Clusterize(var lImg: TUInt8s; Xi,Yi,Zi: integer; out clusterNumber: integer; out img32: TInt32s; NeighborMethod: integer; smallestClusterVox: integer = 0): boolean;
 label
@@ -6982,7 +6929,7 @@ procedure TNIfTI.GenerateClusters(LabelMap: TNIfTI; thresh, smallestClusterMM3: 
 label
     100,123;
 var
-  zeroPad, i,o,v, nVox, idx, x,y,z, vx, skipVx, PeakVx : int64;
+  zeroPad, i,o,n, v, nVox, idx, x,y,z, vx, skipVx, PeakVx : int64;
   isDarkClusters: boolean = false;
   isPass2: boolean = false;
   clust: TCluster;
@@ -6991,7 +6938,7 @@ var
   in32, v32: TFloat32s;
   clusterImg: TInt32s;
   clusterNumber, smallestClusterVox: integer;
-  mm3PerVox: double;
+  mm3PerVox, total: double;
   inten: single;
   {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
 function Peak2Label(): string;
@@ -7062,8 +7009,8 @@ begin
 end;//nested voxInten()
 
 begin
-    if IsLabels then begin
-       GenerateAtlasClusters();
+     if IsLabels then begin
+       GenerateAtlasClusters;
        exit;
     end;
     {$IFDEF TIMER}startTime := now;{$ENDIF}
@@ -7091,6 +7038,46 @@ begin
     end;
     for i := 0 to (vx-1) do
         v32[i] := (v32[i]* fHdr.scl_slope) + fHdr.scl_inter;
+    if specialsingle( smallestClusterMM3) then begin
+       if (LabelMap = nil) or (not LabelMap.IsLabels) then begin
+          printf('Expected an Atlas map');
+          exit;
+       end;
+       //GenerateAtlasClusters(v32);  //xxxxxxxx
+       if LabelMap.clusters = nil then
+          LabelMap.GenerateAtlasClusters;
+       if length(LabelMap.clusters) < 1 then begin
+          v32 := nil;
+          exit;
+       end;
+       label8 := LabelMap.fRawVolBytes;
+       label16 := TInt16s(label8);
+       n := length(LabelMap.clusters);
+       setlength(clusters, n);
+       //clusters := copy(LabelMap.clusters, 0, n);
+       for i := 0 to (n-1) do begin
+           clusters[i] := LabelMap.clusters[i];
+           o := round(clusters[i].Peak);
+           //clusters[i].Structure := LabelMap.clusters[i].Structure +' ('+inttostr(o)+')';
+           //clusters[i].Structure :=  format('%d (%g %g)',[vx, fHdr.scl_slope, fHdr.scl_inter]);
+           total := 0.0;
+           if (LabelMap.fHdr.bitpix = 16) then begin
+             for v := 0 to (vx-1) do begin
+                 if label16[v] = o then
+                    total += v32[v];
+             end;
+           end else begin
+             for v := 0 to (vx-1) do begin
+                 if label8[v] = o then
+                    total += v32[v];
+             end;
+           end;
+           clusters[i].SzMM3 := total;
+           clusters[i].PeakStructure := '~';
+       end;
+       v32 := nil;
+       exit;
+    end;
     setlength(mask8,vx);
     if specialSingle(thresh) then begin
        if (DisplayMax < 0) and (DisplayMin < 0) then
@@ -7112,14 +7099,6 @@ begin
     end else
         for i := 0 to (vx-1) do
             if v32[i] >= thresh then mask8[i] := 255;
-    (*j := 0;
-    for i := 0 to (vx-1) do
-        if mask8[i] = 255 then
-           j := j + 1;
-    if (j <= 0) then begin
-       printf(format('Cluster is empty, no voxels survive threshold=%g', [thresh]));
-       goto 123;
-    end; *)
     Clusterize(mask8, fHdr.dim[1], fHdr.dim[2], fHdr.dim[3], clusterNumber, clusterImg, NeighborMethod, smallestClusterVox);
     if clusterNumber < 1 then goto 123;
     zeroPad := trunc(log10(clusterNumber))+1;
@@ -7352,7 +7331,7 @@ end;//nested voxInten()
 
 begin
     if IsLabels then begin
-       GenerateAtlasClusters();
+       GenerateAtlasClusters(nil);
        exit;
     end;
     {$IFDEF TIMER}startTime := now;{$ENDIF}
@@ -7555,6 +7534,8 @@ end;
 {$IFDEF FASTCLUSTERS}
 {$DEFINE CLUSTERX}
 {$IFDEF CLUSTERX}
+
+
 procedure TNIfTI.GenerateAtlasClusters();
 function vx2xyz(vx:integer): TVec3; inline;
 var
@@ -7677,6 +7658,7 @@ begin
     for i := 1 to maxIdx do
         if c[i].SzMM3 > 0 then begin
           c[i].Structure := fLabels[i];
+          //c[i].Structure := '>>>>>>'+inttostr(length(fLabels[i]));
           c[i].PeakStructure := '-';
           //result in voxels 0..Dim-1
           c[i].CogXYZ.x := c[i].CogXYZ.x / c[i].SzMM3;
@@ -7707,6 +7689,7 @@ begin
     SortClusters(); //optional: sort by size or cluster index
     {$IFDEF TIMER}printf(format('Clusterize Atlas time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
 end;
+
 {$ELSE}
  procedure TNIfTI.GenerateAtlasClusters();
 function VoxelNearestCog(CogXYZ:TVec3; i: integer):TVec3;
@@ -8011,8 +7994,10 @@ begin
   if (IsLabels) then begin
      if (fHdr.bitpix <= 32) and(fLabels.Count < 1)   then begin
         LoadLabelsTxt(fFilename, fLabels);
-        if (fLabels.Count < 1) and (( fHdr.vox_offset- fHdr.HdrSz) > 128) then
-           LoadLabels(fFilename, fLabels, fHdr.HdrSz, round( fHdr.vox_offset));
+        if (fLabels.Count < 1) and (fHdr.HdrSz = 348) and (( fHdr.vox_offset- fHdr.HdrSz) > 128) then
+           LoadLabels(fFilename, fLabels, fHdr.HdrSz+4, round( fHdr.vox_offset)-fHdr.HdrSz-4)
+        else if (fLabels.Count < 1) and (( fHdr.vox_offset- fHdr.HdrSz) > 128) then
+           LoadLabels(fFilename, fLabels, fHdr.HdrSz, round( fHdr.vox_offset)-fHdr.HdrSz);
         if (fLabels.Count < 1) then begin
            for i := 0 to max(rawAtlasMax, 1) do
                fLabels.Add(format('roi%d',[i]));
