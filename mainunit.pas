@@ -35,13 +35,13 @@ uses
   {$IFDEF LCLCocoa}SysCtl, dos, {$IFDEF DARKMODE}nsappkitext, {$ENDIF}{$IFDEF NewCocoa} UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
   ctypes, resize, ustat, LazVersion,  tiff2nifti,
-  lcltype, GraphType, Graphics, dcm_load, crop, drawIntensityFilter,
+  lcltype, GraphType, Graphics, dcm_load, crop, drawIntensityFilter, intensityfilter,
   LCLIntf, slices2D, StdCtrls, SimdUtils, Classes, SysUtils, Forms, Controls,clipbrd,
   Dialogs, Menus, ExtCtrls, CheckLst, ComCtrls, Spin, Types, fileutil, ulandmarks, nifti_types,
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20200707d'; //+ save image
+  kVers = '1.2.20200707e'; //+ save image
 type
 
   { TGLForm1 }
@@ -94,7 +94,8 @@ type
     ImportTIFFFolderMenu: TMenuItem;
     LayerClusterSumMenu: TMenuItem;
     DrawIntensityFilterMenu: TMenuItem;
-    MenuItem3: TMenuItem;
+    DrawIntensityFilterrMenu: TMenuItem;
+    DrawDilateMenu: TMenuItem;
     ScriptHaltMenu: TMenuItem;
     NimlMenu: TMenuItem;
     OpenAFNIMenu: TMenuItem;
@@ -350,6 +351,7 @@ type
     ZTrackBar: TTrackBar;
     procedure AfniPMenuClick(Sender: TObject);
     procedure AfniQMenuClick(Sender: TObject);
+    procedure DrawIntensityFilterrMenuClick(Sender: TObject);
     function HasLabelLayer: boolean;
     procedure ClusterSaveClick(Sender: TObject);
     procedure ClusterViewColumnClick(Sender: TObject; Column: TListColumn);
@@ -592,6 +594,7 @@ type
     procedure voiUndo(isRefresh: boolean = false);
     procedure MorphologyFill(Origin: TVec3; dxOrigin, radiusMM: int64; drawMode: int64);
     procedure DrawIntensityFilter(threshold: byte; drawMode: int64);
+    procedure DrawIntensityFilterr(rampAbove, rampBelow, drawMode: integer);
     procedure ForceOverlayUpdate();
     procedure ZoomBtnClick(Sender: TObject);
   private
@@ -971,6 +974,11 @@ begin
   LayerChange(LayerList.ItemIndex, -1, -1, thresh, thresh);
 end;
 
+procedure TGLForm1.DrawIntensityFilterrMenuClick(Sender: TObject);
+begin
+  IntensityFilterForm.Show;
+end;
+
 
 {$ELSE}
 begin
@@ -1056,6 +1064,27 @@ begin
      {$ELSE}
      if IsConsole then writeln(str);
      {$ENDIF}
+end;
+procedure TGLForm1.DrawIntensityFilterr(rampAbove, rampBelow, drawMode: integer);
+var
+ niftiVol: TNIfTI;
+ clr: integer;
+ vol8:TUInt8s;
+begin
+  EnsureOpenVoi();
+  clr := Vols.Drawing.ActivePenColor;
+  if  (clr <= 0) then clr := 1;
+  if (gPrefs.DisplayOrient = kRenderOrient) or (gPrefs.DisplayOrient = kMosaicOrient) then exit;
+  if not vols.Layer(0,niftiVol) then exit;
+  EnsureOpenVoi();
+  if niftiVol.Header.datatype = kDT_RGB then begin
+      vol8 := niftiVol.DisplayRGBGreen;
+      Vols.Drawing.voiIntensityFilterr(vol8, clr, rampAbove, rampBelow, drawMode);
+      vol8 := nil; //free
+  end else
+      Vols.Drawing.voiIntensityFilterr(niftiVol.DisplayMinMax2Uint8, clr, rampAbove, rampBelow, drawMode);
+  //LayerBox.caption := format('%d %d', [threshold, drawMode]);
+  ViewGPU1.Invalidate;
 end;
 
 procedure TGLForm1.DrawIntensityFilter(threshold: byte; drawMode: int64);

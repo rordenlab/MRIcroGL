@@ -11,8 +11,9 @@ uses
   //{$ifdef windows},udark, {$endif}
   {$ifdef windows}Windows, {$endif}
   Interfaces, // this includes the LCL widgetset
-  Forms, mainunit, TimedDialog, dcm2nii, drawVolume, autoroi,
-  nifti_hdr_view, nifti_resize, resize, crop, tiff2nifti, drawIntensityFilter;
+  Forms, mainunit, TimedDialog, dcm2nii, drawVolume, autoroi, nifti_hdr_view,
+  nifti_resize, resize, crop, tiff2nifti, drawIntensityFilter, 
+intensityfilter;
 
 {$R *.res}
 begin
@@ -27,6 +28,7 @@ begin
   Application.CreateForm(TResizeForm, ResizeForm);
   Application.CreateForm(TCropForm, CropForm);
   Application.CreateForm(TDrawIntensityFilterForm, DrawIntensityFilterForm);
+  Application.CreateForm(TIntensityFilterForm, IntensityFilterForm);
   //{$ifdef windows} SetDarkTheme; {$endif}
   //{$IFDEF LCLGtk2}ConstrainTrackBars();{$ENDIF}  //if unpatched, see https://bugs.freepascal.org/view.php?id=35861
   Application.Run;

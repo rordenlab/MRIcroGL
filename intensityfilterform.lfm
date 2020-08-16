@@ -1,0 +1,130 @@
+object IntensityFilterForm: TIntensityFilterForm
+  Left = 389
+  Height = 240
+  Top = 206
+  Width = 320
+  AutoSize = True
+  BorderWidth = 8
+  Caption = 'Drawing Intensity Filter'
+  ClientHeight = 240
+  ClientWidth = 320
+  LCLVersion = '2.1.0.0'
+  object RampAbove: TTrackBar
+    AnchorSideLeft.Control = Owner
+    AnchorSideTop.Control = Owner
+    Left = 8
+    Height = 25
+    Top = 8
+    Width = 256
+    Max = 255
+    OnChange = RampAboveChange
+    Position = 128
+    TickStyle = tsNone
+    Constraints.MinWidth = 256
+    TabOrder = 0
+  end
+  object ActionDrop: TComboBox
+    AnchorSideLeft.Control = RampAbove
+    AnchorSideTop.Control = Panel1
+    AnchorSideTop.Side = asrBottom
+    Left = 8
+    Height = 20
+    Top = 102
+    Width = 256
+    BorderSpacing.Top = 4
+    Constraints.MinWidth = 256
+    ItemHeight = 26
+    ItemIndex = 1
+    Items.Strings = (
+      'Action: Delete Dark'
+      'Action: Add Dark'
+      'Action: Delete Bright'
+      'Action: Add Bright'
+    )
+    Style = csDropDownList
+    TabOrder = 1
+    Text = 'Action: Add Dark'
+  end
+  object CancelBtn: TButton
+    Tag = 1
+    AnchorSideTop.Control = OKBtn
+    AnchorSideRight.Control = OKBtn
+    Left = 32
+    Height = 20
+    Top = 130
+    Width = 114
+    Anchors = [akTop, akRight]
+    AutoSize = True
+    BorderSpacing.Right = 4
+    Caption = 'Cancel'
+    Constraints.MinWidth = 114
+    ModalResult = 2
+    TabOrder = 2
+  end
+  object OKBtn: TButton
+    AnchorSideTop.Control = ActionDrop
+    AnchorSideTop.Side = asrBottom
+    AnchorSideRight.Control = RampAbove
+    AnchorSideRight.Side = asrBottom
+    Left = 150
+    Height = 20
+    Top = 130
+    Width = 114
+    Anchors = [akTop, akRight]
+    AutoSize = True
+    BorderSpacing.Top = 8
+    Caption = 'Apply'
+    Constraints.MinWidth = 114
+    ModalResult = 1
+    TabOrder = 3
+  end
+  object RampBelow: TTrackBar
+    AnchorSideLeft.Control = Owner
+    AnchorSideTop.Control = RampAbove
+    AnchorSideTop.Side = asrBottom
+    Left = 8
+    Height = 25
+    Top = 37
+    Width = 256
+    Max = 255
+    Position = 128
+    TickStyle = tsNone
+    BorderSpacing.Top = 4
+    Constraints.MinWidth = 256
+    TabOrder = 4
+  end
+  object Panel1: TPanel
+    AnchorSideLeft.Control = RampAbove
+    AnchorSideTop.Control = RampBelow
+    AnchorSideTop.Side = asrBottom
+    AnchorSideRight.Control = RampAbove
+    AnchorSideRight.Side = asrBottom
+    Left = 8
+    Height = 32
+    Top = 66
+    Width = 256
+    Anchors = [akTop, akLeft, akRight]
+    BorderSpacing.Top = 4
+    ClientHeight = 32
+    ClientWidth = 256
+    Constraints.MinHeight = 32
+    TabOrder = 5
+    object BackShape: TShape
+      Left = 1
+      Height = 30
+      Top = 1
+      Width = 254
+      Align = alClient
+      Brush.Color = clRed
+      Pen.Style = psClear
+      Pen.Width = 0
+    end
+    object FrontShape: TShape
+      Left = 64
+      Height = 30
+      Top = 1
+      Width = 65
+      Pen.Style = psClear
+    end
+  end
+end

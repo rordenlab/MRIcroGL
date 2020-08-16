@@ -2090,9 +2090,14 @@ object GLForm1: TGLForm1
         end
         object DrawIntensityFilterMenu: TMenuItem
           Caption = 'Delete or Append Bright or Dark voxels'
+          Visible = False
           OnClick = DrawIntensityFilterMenuClick
         end
-        object MenuItem3: TMenuItem
+        object DrawIntensityFilterrMenu: TMenuItem
+          Caption = 'Intensity Filter'
+          OnClick = DrawIntensityFilterrMenuClick
+        end
+        object DrawDilateMenu: TMenuItem
           Caption = 'Dilate or Erode'
           OnClick = DrawDilateMenuClick
         end
