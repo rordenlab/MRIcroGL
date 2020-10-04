@@ -179,6 +179,71 @@ var
 implementation
 
 {$R *.lfm}
+function DropIndex2IntentCode(index: integer; isIndex2Intent: boolean): integer;
+const
+  kMaxIndex = 46;
+  kDrop2IntentCode : array[0..kMaxIndex] of integer = (
+  0, //Not statistics
+  2, //Correlation coefficient
+  3, //T-testation coefficient
+  4, //F-test
+  5, //Z-score
+  6, //Chi-squared
+  7, //Beta distribution
+  8, //Binomial distribution
+  9, //Gamma distribution
+  10, //Poisson distribution
+  11, //Normal distribution
+  12, //Noncentral F statistic
+  13, //Noncentral chi-squared
+  14, //Logistic distributiond statistic
+  15, //Laplace distribution
+  16, //Uniform distribution
+  17, //Noncentral t statistic
+  18, //Weibull distribution
+  19, //Chi distribution
+  20, //Inverse Gaussian
+  21, //Extreme value type I
+  22, //p-value value type I
+  23, //ln(p-value)
+  24, //log10(p-value)
+  1001, //Estimate
+  1002, //Labels
+  1003, //NeuroN
+  1004, //Generic M
+  1005, //Symmetric Matrix
+  1006, //Displacement Field/Vector
+  1007, //Vectorcement Field/Vector
+  1008, //Points
+  1009, //Triangle (mesh)
+  1010, //Quaternion
+  1011, //Dimensionless
+  2001, //Time series
+  2002, //Node index
+  2003, //RGB Vector
+  2004, //RGBA Vector
+  2005, //Shape
+  2006, //Displacement Field
+  2007, //Cubic Spline Coefficients
+  2008, //DCT Coefficients
+  2009, //Quadratic Spline Coefficients
+  2016, //TOPUP Cubic Spline Coefficients
+  2017, //TOPUP Quadratic Spline Coefficients
+  2018); //TOPUP Field
+var
+  i: integer;
+begin
+     result := 0;
+     if (isIndex2Intent) then begin
+     	if (index >= 0) and (index <=  kMaxIndex) then
+           result := kDrop2IntentCode[index];
+        exit;
+     end;
+     //given intent code, report drop down index
+     for i := 0 to kMaxIndex do
+     	 if  kDrop2IntentCode[i] = index  then
+         	 exit(i);
+end;
 
 function DropItem2DataType(lItemIndex: integer): integer; //returns NIfTI datatype number
 begin
@@ -338,22 +403,14 @@ begin
           aux.text := aux_file;
           intent_nameEdit.text := intent_name;
 	  ext.value := extents;
-	lInc := intent_code;
-          if (intent_code > 1) and (intent_code <= kNIFTI_LAST_STATCODE) then
-             lInc := lInc - 1 //intent_codes start from 2 not 1
-          else if intent_code >= kNIFTI_FIRST_NONSTATCODE then //remove gap in numbers that follow final statcode
-             lInc := (intent_code - kNIFTI_FIRST_NONSTATCODE)+kNIFTI_LAST_STATCODE
-		  else begin
-			  lInc := 0; //unknown
-		  end;
+    IntentCodeDrop.ItemIndex:=DropIndex2IntentCode(intent_code, false);
+
       {$IFNDEF FPC}
-		  IntentCodeDrop .SetItemIndex(lInc);
-          SliceCodeDrop.SetItemIndex(slice_code);
+		  SliceCodeDrop.SetItemIndex(slice_code);
           FreqDimDrop.SetItemIndex(dim_info and 3);
           PhaseDimDrop.SetItemIndex((dim_info shr 2) and 3);
           SliceDimDrop.SetItemIndex((dim_info shr 4) and 3);
   {$ELSE}
-    IntentCodeDrop.ItemIndex:=lInc;
           SliceCodeDrop.ItemIndex:=(slice_code);
           FreqDimDrop.ItemIndex:=(dim_info and 3);
           PhaseDimDrop.ItemIndex:=((dim_info shr 2) and 3);
@@ -527,14 +584,8 @@ begin
 
           xyzt_units := xyzt_sizeDrop.ItemIndex;
           xyzt_units := xyzt_units+ (DropItem2time_units(xyzt_timeDrop.ItemIndex));
-	  i := IntentCodeDrop.ItemIndex;
-	  if (i > 0) and (i < kNIFTI_LAST_STATCODE) then
-		 i := i + 1 //intent_codes start from 2 not 1
-	  else if (i >= kNIFTI_LAST_STATCODE)  then //add gap in numbers between last stat code and misc codes
-		 i := (i - kNIFTI_LAST_STATCODE)+kNIFTI_FIRST_NONSTATCODE
-	  else
-		  i := 0; //unknown
-	  intent_code := i;
+      intent_code := DropIndex2IntentCode(IntentCodeDrop.ItemIndex, true);
+
 	  intent_p1 := intent_p1Edit.value;
           intent_p2 := intent_p2Edit.value;
           intent_p3 := intent_p3Edit.value;

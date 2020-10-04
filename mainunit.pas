@@ -29,13 +29,14 @@ interface
 uses
   {$IFDEF MATT1}umat, {$ENDIF}
   {$IFDEF COMPILEYOKE} yokesharemem, {$ENDIF}
+  {$IFDEF Linux} LazFileUtils, {$ENDIF}
   {$IFDEF AFNI} nifti_foreign, afni_fdr, {$ENDIF}
   {$IFDEF MYPY}PythonEngine,  {$ENDIF}
   {$IFDEF Darwin} MacOSAll, {$ENDIF}
   {$IFDEF LCLCocoa}SysCtl, dos, {$IFDEF DARKMODE}nsappkitext, {$ENDIF}{$IFDEF NewCocoa} UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
-  ctypes, resize, ustat, LazVersion,  tiff2nifti,
-  lcltype, GraphType, Graphics, dcm_load, crop, drawIntensityFilter, intensityfilter,
+  ctypes, resize, ustat, LazVersion,  tiff2nifti, //LCLMessageGlue,
+  lcltype, GraphType, Graphics, dcm_load, crop, intensityfilter,
   LCLIntf, slices2D, StdCtrls, SimdUtils, Classes, SysUtils, Forms, Controls,clipbrd,
   Dialogs, Menus, ExtCtrls, CheckLst, ComCtrls, Spin, Types, fileutil, ulandmarks, nifti_types,
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
@@ -92,10 +93,10 @@ type
     GraphOpenAddMenu: TMenuItem;
     LayerClusterOptsMenu: TMenuItem;
     ImportTIFFFolderMenu: TMenuItem;
-    LayerClusterSumMenu: TMenuItem;
+    LayerClusterMeansMenu: TMenuItem;
     DrawIntensityFilterMenu: TMenuItem;
-    DrawIntensityFilterrMenu: TMenuItem;
     DrawDilateMenu: TMenuItem;
+    LayerExport8BitMenu: TMenuItem;
     ScriptHaltMenu: TMenuItem;
     NimlMenu: TMenuItem;
     OpenAFNIMenu: TMenuItem;
@@ -351,7 +352,8 @@ type
     ZTrackBar: TTrackBar;
     procedure AfniPMenuClick(Sender: TObject);
     procedure AfniQMenuClick(Sender: TObject);
-    procedure DrawIntensityFilterrMenuClick(Sender: TObject);
+    procedure CenterPanelClick(Sender: TObject);
+    procedure DrawIntensityFilterMenuClick(Sender: TObject);
     function HasLabelLayer: boolean;
     procedure ClusterSaveClick(Sender: TObject);
     procedure ClusterViewColumnClick(Sender: TObject; Column: TListColumn);
@@ -373,15 +375,14 @@ type
     procedure ImportTIFFFolderMenuClick(Sender: TObject);
     procedure InvalidateTImerTimer(Sender: TObject);
     procedure LayerAfniBtnClick(Sender: TObject);
-    procedure LayerAfniDropChange(Sender: TObject);
     procedure LayerAfniDropClick(Sender: TObject);
     procedure LayerClusterMenuClick(Sender: TObject);
     procedure LayerContrastChange(Sender: TObject);
     procedure GraphDrawingMenuClick(Sender: TObject);
+    procedure LayerExport8BitMenuClick(Sender: TObject);
     procedure LayerFindPeakMenuClick(Sender: TObject);
     procedure LayerIsLabelMenuClick(Sender: TObject);
     procedure LayerSmoothMenuClick(Sender: TObject);
-    procedure DrawIntensityFilterMenuClick(Sender: TObject);
     procedure DrawDilateMenuClick(Sender: TObject);
     procedure MenuItem3Click(Sender: TObject);
     procedure NimlMenuClick(Sender: TObject);
@@ -480,7 +481,9 @@ type
     procedure LayerResetBrightnessMenuClick(Sender: TObject);
     procedure LayerUpDownClick(Sender: TObject);
     procedure NewWindowMenuClick(Sender: TObject);
+    function NiftiSaveDialogFilename(isVOI: boolean = false): string;
     procedure SaveNIfTIMenuClick(Sender: TObject);
+    procedure ClipIntensity(Lo, Hi: single);
     procedure ScriptingPyVersionClick(Sender: TObject);
     procedure ScriptMemoKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure ScriptPanelDblClick(Sender: TObject);
@@ -593,8 +596,7 @@ type
     procedure YokeTimerTimer(Sender: TObject);
     procedure voiUndo(isRefresh: boolean = false);
     procedure MorphologyFill(Origin: TVec3; dxOrigin, radiusMM: int64; drawMode: int64);
-    procedure DrawIntensityFilter(threshold: byte; drawMode: int64);
-    procedure DrawIntensityFilterr(rampAbove, rampBelow, drawMode: integer);
+    procedure DrawIntensityFilter(rampAbove, rampBelow, drawMode: integer);
     procedure ForceOverlayUpdate();
     procedure ZoomBtnClick(Sender: TObject);
   private
@@ -974,7 +976,12 @@ begin
   LayerChange(LayerList.ItemIndex, -1, -1, thresh, thresh);
 end;
 
-procedure TGLForm1.DrawIntensityFilterrMenuClick(Sender: TObject);
+procedure TGLForm1.CenterPanelClick(Sender: TObject);
+begin
+
+end;
+
+procedure TGLForm1.DrawIntensityFilterMenuClick(Sender: TObject);
 begin
   IntensityFilterForm.Show;
 end;
@@ -1065,10 +1072,10 @@ begin
      if IsConsole then writeln(str);
      {$ENDIF}
 end;
-procedure TGLForm1.DrawIntensityFilterr(rampAbove, rampBelow, drawMode: integer);
+procedure TGLForm1.DrawIntensityFilter(rampAbove, rampBelow, drawMode: integer);
 var
  niftiVol: TNIfTI;
- clr: integer;
+ swp, clr: integer;
  vol8:TUInt8s;
 begin
   EnsureOpenVoi();
@@ -1077,34 +1084,20 @@ begin
   if (gPrefs.DisplayOrient = kRenderOrient) or (gPrefs.DisplayOrient = kMosaicOrient) then exit;
   if not vols.Layer(0,niftiVol) then exit;
   EnsureOpenVoi();
+  if drawMode = kDrawModeConstrain then begin
+  	 if rampAbove > rampBelow then begin
+     	swp := rampAbove;
+        rampAbove := rampBelow;
+        rampBelow := swp;
+     end;
+     drawMode := kDrawModeAppend; //Clip Image Intensity Range
+  end;
   if niftiVol.Header.datatype = kDT_RGB then begin
       vol8 := niftiVol.DisplayRGBGreen;
-      Vols.Drawing.voiIntensityFilterr(vol8, clr, rampAbove, rampBelow, drawMode);
+      Vols.Drawing.voiIntensityFilter(vol8, clr, rampAbove, rampBelow, drawMode);
       vol8 := nil; //free
   end else
-      Vols.Drawing.voiIntensityFilterr(niftiVol.DisplayMinMax2Uint8, clr, rampAbove, rampBelow, drawMode);
-  //LayerBox.caption := format('%d %d', [threshold, drawMode]);
-  ViewGPU1.Invalidate;
-end;
-
-procedure TGLForm1.DrawIntensityFilter(threshold: byte; drawMode: int64);
-var
- niftiVol: TNIfTI;
- clr: integer;
- vol8:TUInt8s;
-begin
-  EnsureOpenVoi();
-  clr := Vols.Drawing.ActivePenColor;
-  if  (clr <= 0) then clr := 1;
-  if (gPrefs.DisplayOrient = kRenderOrient) or (gPrefs.DisplayOrient = kMosaicOrient) then exit;
-  if not vols.Layer(0,niftiVol) then exit;
-  EnsureOpenVoi();
-  if niftiVol.Header.datatype = kDT_RGB then begin
-      vol8 := niftiVol.DisplayRGBGreen;
-      Vols.Drawing.voiIntensityFilter(vol8, clr, threshold, drawMode);
-      vol8 := nil; //free
-  end else
-      Vols.Drawing.voiIntensityFilter(niftiVol.DisplayMinMax2Uint8, clr, threshold, drawMode);
+      Vols.Drawing.voiIntensityFilter(niftiVol.DisplayMinMax2Uint8, clr, rampAbove, rampBelow, drawMode);
   //LayerBox.caption := format('%d %d', [threshold, drawMode]);
   ViewGPU1.Invalidate;
 end;
@@ -1346,26 +1339,40 @@ end;*)
 {$ENDIF}
 
 {$IFDEF LINUX}
-function findLinuxLibPython3(pthroot: string = '/usr/lib/'): string;
-label
-  121;
+function findFirstRecursive(const SearchPath: String; SearchMask: String): string;
+//example findFirstRecursive('/usr/lib/', 'libpython3*so')
+//uses LazFileUtils
 var
-  pths: TStringList;
-  i: integer;
+  ret: string;
+procedure find1(Dir: string);
+var
+   SR: TSearchRec;
 begin
-  result := '';
-  if not DirectoryExists(pthroot) then exit;
-  pths := TStringList.Create;
-  FindAllFiles(pths, pthroot, 'libpython3*so', true); //find e.g. all pascal sourcefiles
-  if pths.Count < 1 then goto 121;
-  for i := pths.Count -1 downto 0 do
-      if AnsiContainsText(pths[i],'loader') then
-         pths.Delete(i);
-  if pths.Count < 1 then goto 121;
-  result := pths[0];
-  //printf(pths);
-  121:
-  pths.Free;
+     if (ret <> '') or (FileIsSymlink(Dir)) then exit;
+     if FindFirst(IncludeTrailingBackslash(Dir) + SearchMask, faAnyFile or faDirectory, SR) = 0 then begin
+         ret := IncludeTrailingBackslash(Dir) +SR.Name;
+         FindClose(SR);
+         exit;
+      end;
+      if FindFirst(IncludeTrailingBackslash(Dir) + '*.*', faAnyFile or faDirectory, SR) = 0 then
+         try
+           repeat
+             if ((SR.Attr and faDirectory) <> 0) and (SR.Name <> '.') and (SR.Name <> '..') then
+               find1(IncludeTrailingBackslash(Dir) + SR.Name);  // recursive call!
+           until FindNext(Sr) <> 0;
+         finally
+           FindClose(SR);
+         end;
+end;
+begin
+ ret := '';
+ find1(SearchPath);
+ result := ret;
+end;
+
+function findLinuxLibPython3(pthroot: string = '/usr/lib/'): string;
+begin
+     result := findFirstRecursive(pthroot, 'libpython3*so');
 end;
 {$ENDIF}
 
@@ -2403,7 +2410,7 @@ end;
 function PySAVEIMG(Self, Args : PPyObject): PPyObject; cdecl;
 var
   PtrName: PChar;
-  fnm, ext: string;
+  fnm: string;
   niftiVol: TNIfTI;
   ok: boolean;
 begin
@@ -2413,13 +2420,14 @@ begin
   with GetPythonEngine do
     if Boolean(PyArg_ParseTuple(Args, 's:saveimg', @PtrName)) then begin
       fnm := string(PtrName);
-      ext := upcase(ExtractFileExt(fnm));
+      ok := niftiVol.SaveFormatBasedOnExt(fnm);
+      (*ext := upcase(ExtractFileExt(fnm));
       if (ext = '.OSP') then
          ok := niftiVol.SaveOsp(fnm)
       else if (ext = '.BVOX') then
          ok := niftiVol.SaveBVox(fnm)
       else
-          ok := niftiVol.Save(fnm);
+          ok := niftiVol.Save(fnm); *)
       Result:= GetPythonEngine.PyBool_FromLong(Ord(ok));
     end; //OK
 end;
@@ -3849,12 +3857,14 @@ begin
      isLabels := c[0].PeakStructure = '-';
      isVolume := c[0].PeakStructure = '~';
      isPeak := (not isLabels) and (not isVolume);
-     if isVolume  then
-        ClusterView.Column[1].Caption:= 'Sum'
-     else
-        ClusterView.Column[1].Caption:= 'Volume';
-     if isLabels or isVolume then
+	 //if isVolume  then
+     //  ClusterView.Column[1].Caption:= 'Mean'
+     //else
+     ClusterView.Column[1].Caption:= 'Volume';
+     if isLabels then
         ClusterView.Column[2].Caption:= 'Index'
+     else if isVolume then
+        ClusterView.Column[2].Caption:= 'Mean'
      else
          ClusterView.Column[2].Caption:= 'Peak';
      //Column 0: index
@@ -3871,13 +3881,15 @@ begin
          itm := ClusterView.Items.Add;
          itm.Caption := format('%d', [i]);
          //volume
-         if isVolume then
-            itm.SubItems.Add(format('%.3f', [c[i].SzMM3]))
-         else
+         //if isVolume then
+         //   itm.SubItems.Add(format('%.3f', [c[i].SzMM3]))
+         //else
              itm.SubItems.Add(format('%d', [round(c[i].SzMM3)]));
          //PeakMax
-         if isLabels or isVolume then
+         if isLabels then
              itm.SubItems.Add(format('%d', [round(c[i].Peak)]))
+         else if isVolume then
+         	  itm.SubItems.Add(format('%.3f', [c[i].Peak]))
          else
              itm.SubItems.Add(format('%.1f', [c[i].Peak]));
          //PeakXYZ
@@ -3997,6 +4009,12 @@ begin
         ClusterView.tag := LayerList.ItemIndex;
 
      end;
+     (*LayerDtiDrop.Visible := v.fDTImode > kDTIno;
+     if (v.fDTImode > kDTIno) then begin
+	 	LayerDtiDrop.ItemIndex := v.fDTImode;
+        if (v.fDTImode > kDTIscalar) then
+           LayerColorDrop.enabled := false;
+     end; *)
      {$IFDEF AFNI}
      isAFNI := length(v.afnis) > 0;
      if (isAFNI) and (v.VolumeDisplayed >=  length(v.afnis)) then
@@ -4552,14 +4570,14 @@ procedure TGLForm1.DrawSaveMenuClick(Sender: TObject);
 var
    niftiVol: TNIfTI;
    fnm: string;
-   dlg : TSaveDialog;
+   //dlg : TSaveDialog;
 begin
  if not vols.Layer(0,niftiVol) then exit;
  if (not vols.Drawing.IsOpen)  or (vols.Drawing.voiIsEmpty) then begin
      showmessage('No drawing is open. Nothing to save.');
      exit;
   end;
-  dlg := TSaveDialog.Create(self);
+  (*dlg := TSaveDialog.Create(self);
   dlg.Title := 'Save drawing';
   dlg.InitialDir := ExtractFileDir(niftiVol.Filename);//GetUserDir;
   {$IFDEF Darwin}
@@ -4574,8 +4592,9 @@ begin
      exit;
   end;
   fnm := dlg.FileName;
-  dlg.Free;
-
+  dlg.Free;*)
+  fnm := NiftiSaveDialogFilename(true);
+  if fnm = '' then exit;
   niftiVol.SaveAsSourceOrient(fnm, vols.Drawing.VolRawBytes);
   vols.Drawing.NeedsSave := false;
 end;
@@ -4709,13 +4728,14 @@ begin
   LayerIsLabelMenu.Checked := niftiVol.IsLabels;
   LayerSmoothMenu.Checked := Vols.InterpolateOverlays;
   LayerInvertColorMapMenu.Checked := niftiVol.CX.InvertColorMap;
+  LayerExport8BitMenu.Enabled := (niftiVol.Header.datatype = kDT_INT16) or (niftiVol.Header.datatype = kDT_FLOAT);
   LayerPrevVolumeMenu.Enabled := (niftiVol.VolumesTotal > 1);
   LayerNextVolumeMenu.Enabled := LayerPrevVolumeMenu.Enabled;
   LayerClusterMenu.Enabled := not niftiVol.IsLabels;
   LayerClusterOptsMenu.Enabled := not niftiVol.IsLabels;
-  LayerClusterSumMenu.Enabled := (not niftiVol.IsLabels) and (HasLabelLayer());
+  LayerClusterMeansMenu.Enabled := (not niftiVol.IsLabels) and (HasLabelLayer());
   if LayerList.Count < 2 then
-     LayerClusterSumMenu.Enabled := false; // requires selected continuous layer as well as an ATLAS
+     LayerClusterMeansMenu.Enabled := false; // requires selected continuous layer as well as an ATLAS
   LayerShowBidsMenu.Enabled := (niftiVol.BidsName <> '');
   if (i = 0) then
      exit;
@@ -5179,11 +5199,73 @@ end;
 
 {$ENDIF}
 
+function TGLForm1.NiftiSaveDialogFilename(isVOI: boolean = false): string;
+const
+     kOutFilter = 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz|Volume of interest|*.voi|Blender Volume|*.bvox|OSPRay Volume|*.osp|TIF|*.tif|NRRD|*.nrrd|Compressed NRRD|*.nhdr';
+     kMaxExt = 8;
+     kExt : array [1..kMaxExt] of string = ('*.nii', '*.nii.gz', '*.voi', '*.bvox', '*.osp', '*.tif', '*.nrrd', '*.nhdr');
+var
+   dlg : TSaveDialog;
+begin
+  result := '';
+  dlg := TSaveDialog.Create(self);
+  dlg.Title := 'Save NIfTI volume';
+  dlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+  {$IFDEF Darwin}
+  if PosEx('.app', dlg.InitialDir) > 0  then
+       dlg.InitialDir := HomeDir(false);
+  {$ENDIF}
+  dlg.Filter := kOutFilter;
+  if isVoi then begin
+     if (gPrefs.VoiSaveFormat < 1) or (gPrefs.VoiSaveFormat > kMaxExt) then
+        gPrefs.VoiSaveFormat := 1;
+     dlg.DefaultExt := kExt[gPrefs.VoiSaveFormat];
+     dlg.FilterIndex:= gPrefs.VoiSaveFormat;
+     //dlg.FileName:= inttostr(gPrefs.VoiSaveFormat);
+  end else begin
+    if (gPrefs.VolumeSaveFormat < 1) or (gPrefs.VolumeSaveFormat > kMaxExt) then
+       gPrefs.VolumeSaveFormat := 1;
+    dlg.DefaultExt := kExt[gPrefs.VolumeSaveFormat];
+    dlg.FilterIndex:= gPrefs.VolumeSaveFormat;
+  end;
+  //niftiVol.SaveBVox('/Users/rorden/tmp/v.bvox'); exit;
+  if dlg.Execute then begin
+    result := dlg.FileName;
+    if isVoi then
+	   gPrefs.VoiSaveFormat :=  dlg.FilterIndex
+    else
+    	gPrefs.VolumeSaveFormat :=  dlg.FilterIndex;
+  end;
+  dlg.Free;
+end;
+
+procedure TGLForm1.ClipIntensity(Lo, Hi: single);
+var
+   niftiVol: TNIfTI;
+   fnm : string;
+begin
+ if not vols.Layer(0,niftiVol) then exit;
+ fnm := NiftiSaveDialogFilename();
+ if fnm = '' then exit;
+ niftiVol.SaveAs8Bit(fnm, Lo, Hi); exit;
+end;
+
 procedure TGLForm1.SaveNIfTIMenuClick(Sender: TObject);
+var
+   niftiVol: TNIfTI;
+   fnm : string;
+begin
+ if not vols.Layer(0,niftiVol) then exit;
+ fnm := NiftiSaveDialogFilename();
+ if fnm = '' then exit;
+ niftiVol.SaveFormatBasedOnExt(fnm);
+end;
+
+
+(*procedure TGLForm1.SaveNIfTIMenuClick(Sender: TObject);
 var
 niftiVol: TNIfTI;
 dlg : TSaveDialog;
-ext: string;
 begin
 
  if not vols.Layer(0,niftiVol) then exit;
@@ -5195,20 +5277,24 @@ begin
        dlg.InitialDir := HomeDir(false);
  {$ENDIF}
  dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz|Blender Volume|*.bvox|OSPRay Volume|*.osp';
- dlg.DefaultExt := '*.nii';
- dlg.FilterIndex := 0;
+ if gPrefs.VolumeSaveFormat = 1 then
+    dlg.DefaultExt := '*.nii.gz'
+ else if gPrefs.VolumeSaveFormat = 2 then
+    dlg.DefaultExt := '*.bvox'
+ else if gPrefs.VolumeSaveFormat = 3 then
+    dlg.DefaultExt := '*.osp'
+ else begin
+    dlg.DefaultExt := '*.nii';
+    gPrefs.VolumeSaveFormat := 0;
+ end;
+ dlg.FilterIndex := gPrefs.VolumeSaveFormat;
  //niftiVol.SaveBVox('/Users/rorden/tmp/v.bvox'); exit;
  if dlg.Execute then begin
-    ext := upcase(ExtractFileExt(dlg.FileName));
-    if (ext = '.OSP') then
-       niftiVol.SaveOsp(dlg.FileName)
-    else if (ext = '.BVOX') then
-       niftiVol.SaveBVox(dlg.FileName)
-    else
-        niftiVol.Save(dlg.FileName);
+     niftiVol.SaveFormatBasedOnExt(dlg.FileName);
+    gPrefs.VolumeSaveFormat :=  dlg.FilterIndex;
  end;
  dlg.Free;
-end;
+end; *)
 
 procedure TGLForm1.ScriptingPyVersionClick(Sender: TObject);
 (*const
@@ -6065,6 +6151,11 @@ begin
   {$ENDIF}
 end;
 
+procedure TGLForm1.LayerExport8BitMenuClick(Sender: TObject);
+begin
+  GLForm1.ClipIntensity(0, 1.0);//0.0..1.0: full display range
+end;
+
 procedure TGLForm1.LayerFindPeakMenuClick(Sender: TObject);
 var
   i, nearestIdx: integer;
@@ -6136,11 +6227,6 @@ end;
 procedure TGLForm1.LayerSmoothMenuClick(Sender: TObject);
 begin
   Vols.InterpolateOverlays := GLForm1.LayerSmoothMenu.Checked;
-end;
-
-procedure TGLForm1.DrawIntensityFilterMenuClick(Sender: TObject);
-begin
-     DrawIntensityFilterForm.Show;
 end;
 
 procedure TGLForm1.DrawDilateMenuClick(Sender: TObject);
@@ -6497,7 +6583,7 @@ end;
 
 {$DEFINE RESIZE_FROM_DISK}
 {$IFDEF RESIZE_FROM_DISK}
-procedure TGLForm1.ResizeMenuClick(Sender: TObject);
+(*procedure TGLForm1.ResizeMenuClick(Sender: TObject);
 const
   kInFilter = 'NIfTI|*.nii;*.nii.gz|Supported image format|*.*';
   kFilter = 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
@@ -6554,7 +6640,6 @@ begin
      saveDlg.DefaultExt := '.nii';
      saveDlg.InitialDir:= extractfiledir(fnm);
      saveDlg.Filename := 'r'+ChangeFileExtX(extractfilename(fnm),'');
-     //showmessage('r'+ChangeFileExtX(fnm,''));
      if not saveDlg.Execute then begin
         nii.Free;
         saveDlg.Free;
@@ -6563,6 +6648,65 @@ begin
      //outnm := '/Users/chris/tiff/xbango.nii';
      nii.SaveRescaled(saveDlg.filename, scale.x, scale.y, scale.z, datatype, filter, isAllVolumes);
      saveDlg.Free;
+     nii.Free;
+end; *)
+procedure TGLForm1.ResizeMenuClick(Sender: TObject);
+const
+  kInFilter = 'NIfTI|*.nii;*.nii.gz|Supported image format|*.*';
+  //kFilter = 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
+var
+   openDlg : TOpenDialog;
+   nii: TNIfTI;
+   fnm: string;
+   isOK, isAllVolumes: boolean;
+   backColor: TRGBA;
+   filter, datatype: integer;
+   scale: TVec3;
+begin
+ openDlg := TOpenDialog.Create(self);
+ openDlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+ openDlg.FileName:= gPrefs.PrevBackgroundImage;
+ {$IFDEF Darwin}
+ showmessage('Select the image you wish to resize');
+  if PosEx('.app/Contents/Resources', gPrefs.PrevBackgroundImage) > 0 then begin
+     openDlg.InitialDir := GetCurrentDir;
+     openDlg.FileName := '';
+  end;
+  {$ENDIF}
+  OpenDlg.Filter := kInFilter;
+  OpenDlg.FilterIndex := 1;
+  OpenDlg.Title := 'Select image to resize';
+  OpenDlg.Options := [ofFileMustExist];
+  if not OpenDlg.Execute then begin
+    openDlg.Free;
+    exit;
+  end;
+  fnm := openDlg.FileName;
+  openDlg.Free;
+  //fnm := '/Users/chris/spmMotor.nii.gz';
+     backColor := setRGBA(0,0,0,0);
+     //nii := TNIfTI.Create(fnm, backColor, false, 32768, isOK);
+     nii := TNIfTI.Create(fnm, backColor, false, -1, isOK);
+     //nii.Create(fnm, rgba, false, 4096, ok);
+     if not isOK then
+        exit;
+     //isLabel := (hdr.intent_code = kNIFTI_INTENT_LABEL) or (hdr.regular = char(98));
+     scale := ResizeForm.GetScale(nii.Header, nii.IsLabels, fnm, datatype, Filter, isAllVolumes);
+     if scale.x = 0 then begin
+        nii.Free;
+        exit;
+     end;
+     if (scale.x = 1) and (scale.y = 1) and (scale.z = 1) and (datatype = nii.Header.datatype) then begin
+      nii.Free;
+      showmessage('Nothing to do: no change to volume.' );
+      exit;
+     end;
+     fnm := NiftiSaveDialogFilename();
+     if fnm = '' then exit;
+     //SaveFormatBasedOnExt
+     //outnm := '/Users/chris/tiff/xbango.nii';
+     nii.SaveRescaled(fnm, scale.x, scale.y, scale.z, datatype, filter, isAllVolumes);
+     //saveDlg.Free;
      nii.Free;
 end;
 {$ELSE} //not RESIZE_FROM_DISK
@@ -6619,7 +6763,6 @@ end;
 
 procedure TGLForm1.ApplyCrop(crop: TVec6i; cropVols: TPoint);
 var
-   dlg : TSaveDialog;
    nii, niiBig: TNIfTI;
    fnm: string;
    isOK: boolean;
@@ -6629,20 +6772,8 @@ var
 begin
  if crop.xLo < 0 then exit;
  if not vols.Layer(0, nii) then exit;
- dlg := TSaveDialog.Create(self);
- dlg.Title := 'Save NIfTI volume';
- dlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
- {$IFDEF Darwin}
- if PosEx('.app', dlg.InitialDir) > 0  then
-       dlg.InitialDir := HomeDir(false);
- {$ENDIF}
- dlg.FileName:= 'r'+changeFileExtX(extractfilename(gPrefs.PrevBackgroundImage),'');
- dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
- dlg.DefaultExt := '*.nii';
- dlg.FilterIndex := 0;
- if not dlg.Execute then exit;
- fnm := dlg.filename;
- dlg.Free;
+ fnm := NiftiSaveDialogFilename();
+ if fnm = '' then exit;
  if (not nii.IsShrunken) or (not fileexists(nii.Filename)) then begin
      nii.SaveCropped(fnm, crop, cropVols);
      exit;
@@ -6705,7 +6836,8 @@ procedure TGLForm1.ReorientMenuClick(Sender: TObject);
 label
   245;
 var
-  dlg : TSaveDialog;
+  //dlg : TSaveDialog;
+  fnm : string;
   niftiVol: TNIfTI;
   perm: TVec3i;
   btn : array  [1..6] of string = ('red','green','blue','purple','orange','yellow');
@@ -6767,21 +6899,9 @@ begin
  if odd(btnS) then perm.z := -perm.z;
  //showmessage(format('%d %d %d', [perm.x, perm.y, perm.z]));
  if not vols.Layer(0, niftiVol) then exit;
- dlg := TSaveDialog.Create(self);
- dlg.Title := 'Save NIfTI volume';
- dlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
- {$IFDEF Darwin}
- if PosEx('.app', dlg.InitialDir) > 0  then
-       dlg.InitialDir := HomeDir(false);
- {$ENDIF}
- dlg.FileName:= 'r'+extractfilename(gPrefs.PrevBackgroundImage);
- dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
- dlg.DefaultExt := '*.nii';
- dlg.FilterIndex := 0;
- if not dlg.Execute then exit;
- //showmessage(format('%d %d %d', [perm.x, perm.y, perm.z]));
- niftiVol.SaveRotated(dlg.filename, perm);
- dlg.Free;
+ fnm := NiftiSaveDialogFilename();
+ if fnm = '' then exit;
+ niftiVol.SaveRotated(fnm, perm);
  245:
  Vol1.Slices.isOrientationTriangles := false;
 end;
@@ -7425,12 +7545,29 @@ end;
 
 
 procedure TGLForm1.EditPasteMenuClick(Sender: TObject);
+var
+  TActive: TWinControl;
 begin
+ (*if (HdrForm.Visible) and (Screen.ActiveForm = HdrForm) then begin
+    inherited;
+    exit;
+ end; *)
+ (*caption := inttostr(random(888));
  if Clipboard.HasFormat(PredefinedClipboardFormat(pcfText)) and (ScriptMemo.Width > 20) and (ScriptMemo.Focused) then begin
     ScriptMemo.PasteFromClipboard;
     exit;
- end;
- showmessage('Use paste to insert text from clipboard into scripts');
+ end; *)
+ TActive := Screen.ActiveControl;
+ //LCLSendPasteFromClipboardMsg(TActive);
+ if (TActive is TEdit) then
+      (TActive as TEdit).PasteFromClipboard
+   else if (TActive is TSpinEdit) then
+      (TActive as TSpinEdit).PasteFromClipboard
+   else if (TActive is TFloatSpinEdit) then
+      (TActive as TFloatSpinEdit).PasteFromClipboard
+   else if (TActive is TMemo) then
+      (TActive as TMemo).PasteFromClipboard;
+ //inherited;//showmessage('Use paste to insert text from clipboard into scripts');
 end;
 
 procedure TGLForm1.GraphPanelResize(Sender: TObject);
@@ -7446,6 +7583,8 @@ procedure TGLForm1.EditCopyMenuClick(Sender: TObject);
 var
   bmp: TBitmap;
 {$ENDIF}
+var
+  TActive: TWinControl;
 begin
   if (ClusterView.Focused) then begin
      ClusterCopyMenu.Click;
@@ -7463,6 +7602,22 @@ begin
     ScriptMemo.CopyToClipboard;
     exit;
  end;
+ TActive := Screen.ActiveControl;
+ if (TActive is TEdit) then begin
+    (TActive as TEdit).CopyToClipboard;
+    exit;
+ end else if (TActive is TFloatSpinEdit) then begin
+    (TActive as TFloatSpinEdit).CopyToClipboard;
+    exit;
+ end else if (TActive is TSpinEdit) then begin
+    (TActive as TSpinEdit).CopyToClipboard;
+    exit;
+ end else if (TActive is TMemo) then begin
+    (TActive as TMemo).CopyToClipboard;
+    exit;
+ end;
+
+
  {$IFNDEF METALAPI}
  bmp := ScreenShotGL(ViewGPU1);
  if (bmp = nil) then exit;
@@ -7824,6 +7979,10 @@ var
   i: integer;
   niftiVol: TNIfTI;
 begin
+  if HdrForm.Visible then begin
+     HdrForm.BringToFront;
+     exit;
+  end;
   i := LayerList.ItemIndex;
   if (i < 0) or (i >= LayerList.Count) then exit;
   if not vols.Layer(LayerList.ItemIndex,niftiVol) then exit;
@@ -8273,7 +8432,7 @@ begin
  v := v+ format('Max 3D texture: %d', [maxVox]);
  ViewGPU1.ReleaseContext;
  {$ENDIF}
- v := v+ kEOLN+ format('Current: %d %d %d', [niftiVol.Dim.X, niftiVol.Dim.Y, niftiVol.Dim.Z]);
+ v := v+ kEOLN+ format('Current texture: %d×%d×%d %dmb', [niftiVol.Dim.X, niftiVol.Dim.Y, niftiVol.Dim.Z, round((niftiVol.Dim.X * niftiVol.Dim.Y * niftiVol.Dim.Z * 4.0)/1048576.0)]);
  {$IFDEF NewCocoa}
  ShowAlertSheet(GLForm1.Handle,'MRIcroGL', v);
  //MessageBox(Handle, pChar(v), 'MRIcroGL', MB_OK)
@@ -8895,8 +9054,10 @@ begin
   gLandmark := TLandmark.Create();
   CreateStandardMenus(OpenStandardMenu);
   CreateStandardMenus(OpenAltasMenu);
-  if DirectoryExists(GetFSLdir+pathdelim+ 'data'+pathdelim+'standard') then
-     OpenFSLMenu.Visible := true;
+  if not DirectoryExists(GetFSLdir+pathdelim+ 'data'+pathdelim+'standard') then
+     OpenFSLMenu.Visible := false;
+  //if DirectoryExists(GetFSLdir+pathdelim+ 'data'+pathdelim+'standard') then
+  //   OpenFSLMenu.Visible := true;
   CreateStandardMenus(OpenAFNIMenu);
   s := DefaultImage();
   if (length(gPrefs.InitScript) > 0) then
@@ -9149,11 +9310,6 @@ end;
 procedure TGLForm1.LayerAfniBtnClick(Sender: TObject);
 begin
      AfniPopup.PopUp;
-end;
-
-procedure TGLForm1.LayerAfniDropChange(Sender: TObject);
-begin
- //LayerBox.Caption := inttostr(LayerAfniDrop.ItemIndex); exit;
 end;
 
 procedure TGLForm1.LayerAfniDropClick(Sender: TObject);

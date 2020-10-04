@@ -1,7 +1,7 @@
 object IntensityFilterForm: TIntensityFilterForm
-  Left = 493
+  Left = 410
   Height = 240
-  Top = 112
+  Top = 134
   Width = 320
   AutoSize = True
   BorderWidth = 8

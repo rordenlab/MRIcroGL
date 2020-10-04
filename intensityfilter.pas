@@ -47,7 +47,7 @@ procedure TIntensityFilterForm.IntensityFilter(isUndo: boolean = true);
 begin
  if (isUndo) then
     GLForm1.voiUndo();
- GLForm1.DrawIntensityFilterr(RampAbove.position, RampBelow.position, ActionDrop.itemIndex);
+ GLForm1.DrawIntensityFilter(RampAbove.position, RampBelow.position, ActionDrop.itemIndex);
 end;
 
 { TIntensityFilterForm }
@@ -91,9 +91,17 @@ begin
 end;
 
 procedure TIntensityFilterForm.OKBtnClick(Sender: TObject);
+var
+  Lo, Hi: single;
 begin
+  Lo := min(RampAbove.Position, RampBelow.Position)/RampAbove.Max;
+  Hi := max(RampAbove.Position, RampBelow.Position)/RampAbove.Max;
   Self.ModalResult := mrOK;
   Self.close;
+  if ActionDrop.ItemIndex = 2 then begin
+  	 GLForm1.voiUndo(true);
+     GLForm1.ClipIntensity(Lo, Hi);
+  end;
 end;
 
 procedure TIntensityFilterForm.CancelBtnClick(Sender: TObject);

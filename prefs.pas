@@ -14,7 +14,7 @@ type
   TPrefs = record
          GradientMode, AnimationIntervalMsec, LineWidth, StartupWindowMode,DisplayOrient,
          StartupDisplayOrient, ColorbarSize,ColorbarPosition, Quality1to5, BitmapZoom,
-         MaxTexMb, MultiSample124, ClusterNeighborMethod: integer;
+         MaxTexMb, MultiSample124, ClusterNeighborMethod, VolumeSaveFormat, VoiSaveFormat: integer;
          ScreenCaptureTransparentBackground, LandmarkPanel, LoadFewVolumes,
          DebugMode, LoadSmooth, LabelOrient, RulerVisible, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay,
          FlipYZ, FlipLR_Radiological, SkipPrefWriting, AutoClusterizeAtlases: boolean;
@@ -100,6 +100,8 @@ begin
             RetinaDisplay := true;
             //MultiSample := true;
             MultiSample124 := 4;
+            VolumeSaveFormat := 1;
+            VoiSaveFormat := 3;
             DisplayOrient:= kAxCorSagOrient; //kRenderOrient;
             //DisplayOrient:= kRenderOrient;
             StartupDisplayOrient := DisplayOrient;
@@ -257,7 +259,6 @@ begin
   IniInt(lRead,lIniFile, 'Quality1to5', lPrefs.Quality1to5);
   lPrefs.Quality1to5 := max(0, lPrefs.Quality1to5);
   lPrefs.Quality1to5 := min(5, lPrefs.Quality1to5);
-
   IniInt(lRead,lIniFile, 'ColorbarPosition',lPrefs.ColorBarPosition);
   IniInt(lRead,lIniFile, 'ColorbarSize', lPrefs.ColorbarSize);
   IniInt(lRead,lIniFile, 'BitmapZoom', lPrefs.BitmapZoom);
@@ -269,6 +270,8 @@ begin
   IniInt(lRead,lIniFile, 'AnimationIntervalMsec', lPrefs.AnimationIntervalMsec);
   IniInt(lRead,lIniFile, 'GradientMode_Fast0_Slow3',lPrefs.GradientMode);
   IniInt(lRead,lIniFile, 'MultiSample124',lPrefs.MultiSample124);
+  IniInt(lRead,lIniFile, 'VolumeSaveFormat',lPrefs.VolumeSaveFormat);
+  IniInt(lRead,lIniFile, 'VoiSaveFormat',lPrefs.VoiSaveFormat);
   {$IFDEF LCLCocoa}
         IniBool(lRead,lIniFile, 'RetinaDisplay',lPrefs.RetinaDisplay);
         IniBool(lRead,lIniFile, 'DarkMode',lPrefs.DarkMode);

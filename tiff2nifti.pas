@@ -5,13 +5,15 @@ unit tiff2nifti;
 interface
 
 uses
-  Classes, SysUtils, StdCtrls, Controls, Dialogs, Forms, nifti_types, SimdUtils,
-  nifti_foreign, nifti_tiff, Math, zstream;
+  nifti_save, Classes, SysUtils, StdCtrls, Controls, Dialogs, Forms, nifti_types, SimdUtils,
+  nifti_foreign, nifti_tiff, Math; //, zstream;
 
   function convertTiffDir(initdir: string): boolean;
   function convertTiff2NIfTI(fnm: string): boolean;
 
 implementation
+
+uses mainunit;
 
 function GetPixDim(prompt: string; var Xmm, Ymm, Zmm: single): boolean;
 var
@@ -112,7 +114,7 @@ begin
 end; //()
 
 
-function SaveDialogNIfTI(initdir: string): string;
+(*function SaveDialogNIfTI(initdir: string): string;
 var
    dlg: TSaveDialog;
 begin
@@ -126,9 +128,9 @@ begin
   if dlg.Execute then
      result := dlg.FileName;
   dlg.Free;
-end;
+end; *)
 
-function Save2NiiGz(niftiFileName: string; fHdr: TNIFTIhdr; img: TUInt8s): string;
+(*function Save2NiiGz(niftiFileName: string; fHdr: TNIFTIhdr; img: TUInt8s): string;
 const
   bytesPerMb = 1048576;
 var
@@ -221,7 +223,7 @@ begin
     showmessage(format('Failed to save all data: wrote %d of %d bytes', [nWritten, nImgBytes]));
     result := '';
   end;
-end;
+end; *)
 
 function convertTiffDir(initdir: string): boolean;
 var
@@ -288,11 +290,13 @@ begin
      end;
      if not GetPixDim(format('Confirm spatial resolution (in mm) for width, height and slices (voxels %dx%dx%d).',[hdr0.dim[1],hdr0.dim[2],hdr0.dim[3]]), hdr0.pixdim[1], hdr0.pixdim[2], hdr0.pixdim[3]) then
             goto 666;
-     outnm := SaveDialogNIfTI(tiffdir);
+     outnm := GLForm1.NiftiSaveDialogFilename();
+     //outnm := SaveDialogNIfTI(tiffdir);
      if outnm = '' then
         goto 666;
-     if Save2Nii(outnm, hdr0, img0) <> '' then
-        result := true;
+     result := SaveVolumeFormatBasedOnExt(outnm, hdr0, img0);
+     //if Save2Nii(outnm, hdr0, img0) <> '' then
+     //   result := true;
      666: //report error and clean up
      Freeandnil(lS);
      img0 := nil;
@@ -317,11 +321,13 @@ begin
         exit;
      if not GetPixDim(format('Confirm spatial resolution (in mm) for width, height and slices (voxels %dx%dx%d).',[hdr.dim[1],hdr.dim[2],hdr.dim[3]]), hdr.pixdim[1], hdr.pixdim[2], hdr.pixdim[3]) then
         goto 666;
-     outnm := SaveDialogNIfTI(changefileext(fnm,''));
+     //outnm := SaveDialogNIfTI(changefileext(fnm,''));
+     outnm := GLForm1.NiftiSaveDialogFilename();
      if outnm = '' then
         goto 666;
-     if Save2Nii(outnm, hdr, img) <> '' then
-        result := true;
+     result := SaveVolumeFormatBasedOnExt(outnm, hdr, img);
+     //if Save2Nii(outnm, hdr, img) <> '' then
+     //   result := true;
      666: //report error and clean up
      img := nil;
      if not result then

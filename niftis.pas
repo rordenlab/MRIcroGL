@@ -1,5 +1,5 @@
 unit niftis; //manage a collection of nifti images
-{$IFDEF FPC}{$mode objfpc}{$H+}{$ENDIF}
+{$IFDEF FPC}{$mode delphi}{$H+}{$ENDIF}
 interface
 //manages multiple overlays
 uses
@@ -163,6 +163,55 @@ begin
            nOK := nOK + 1;
            if (vol.OpacityPercent = 0) then continue;
            nUsed := nUsed + 1;
+           if (vol.Header.datatype =  kDT_RGB) or (vol.Header.datatype =  kDT_RGBA32) then begin
+           	   pct255 := round(255 * (vol.OpacityPercent/100));
+               vol.DisplayRGB();
+               if vol.VolRGBA = nil then continue;
+               (*for j := 0 to (vx  -1) do begin
+               	   result[j] := vol.VolRGBA[j];
+                   if result[j].a > 0 then
+                   	  result[j].a := pct255;
+               end;*)
+               if (fMaskWithBackground) and (vol8bg <> nil) then begin //fMaskWithBackground then begin
+                             if fAdditiveOverlayBlending then begin
+                                for j := 0 to (vx  -1) do begin
+                                    if vol8bg[j] = 0 then continue;
+                                    rgba := vol.VolRGBA[j];
+                                    if rgba.a > 0 then
+                                    	rgba.a := pct255;
+                                    result[j] := addRGB(result[j], rgba);
+                                end;
+                             end else begin
+                               for j := 0 to (vx  -1) do begin
+                                   //if (vol24[j].A = 0) then continue;
+                                   if vol8bg[j] = 0 then continue;
+                                    rgba := vol.VolRGBA[j];
+                                    if rgba.a > 0 then
+                                    	rgba.a := pct255;
+                                   result[j] := mixRGB(result[j], rgba);
+                               end;
+                             end; //if additive else end
+                          end else begin
+                            if fAdditiveOverlayBlending then begin
+                               for j := 0 to (vx  -1) do begin
+                                    rgba := vol.VolRGBA[j];
+                                    if rgba.a > 0 then
+                                    	rgba.a := pct255;
+                                   result[j] := addRGB(result[j], rgba);
+                               end;
+                            end else begin
+                              for j := 0 to (vx  -1) do begin
+                                    rgba := vol.VolRGBA[j];
+                                    if rgba.a > 0 then
+                                    	rgba.a := pct255;
+                                  result[j] := mixRGB(result[j], rgba);
+                              end;
+                            end; //if additive else end
+                          end;
+               vol.GPULoadDone();
+               continue;
+               //
+           end;
            vol8 := vol.DisplayMinMax2Uint8;
            lut := vol.GetColorTable;
            lut[0] := setRGBA(lut[1].r, lut[1].g, lut[1].b, 0); //<- better for render
@@ -287,18 +336,24 @@ end;
 procedure TNIfTIs.SkippedVolumesWarning();
 var
   isSkipped : boolean = false;
-  str: string;
+  str, str2: string;
 begin
   if (fNumLayers = 0) and (niis[fNumLayers].VolumesLoaded > 0) and (niis[fNumLayers].VolumesLoaded < niis[fNumLayers].Header.dim[4]) then
   isSkipped := true;
   if (not isSkipped) and (not niis[fNumLayers].IsShrunken) then exit;
   str := '';
-  if (niis[fNumLayers].IsShrunken) then
+  str2 := '';
+  if (niis[fNumLayers].IsShrunken) then begin
      str := 'Large image downsampled. ';
-  if isSkipped then
+     str2 := ' to load large textures.';
+  end;
+  if isSkipped then begin
      str := str + format('Loaded %d of %d volumes.', [niis[fNumLayers].VolumesLoaded, niis[fNumLayers].Header.dim[4]]);
+     str2 := ' to load all volumes.';
+  end;
   {$IFDEF LCLCocoa}
-  DeliverUserNotification(str, 'Adjust preferences to load all volumes.','','');
+
+  DeliverUserNotification(str, 'Adjust preferences'+str2,'','');
   {$ELSE}
   TimedDialogForm.ShowTimedDialog('MRIcroGL Warning', str, 3000, GLForm1.Left+20, GLForm1.Top+20);
   {$ENDIF}

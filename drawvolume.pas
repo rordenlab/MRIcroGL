@@ -93,8 +93,7 @@ TDraw = Class //(TNIfTI)  // This is an actual class definition :
     procedure voiSmoothIntensity();
     procedure voiDefaultLUT;
     procedure voiMorphologyFill(intenVol: TUInt8s; Color: int64; Xmm, Ymm, Zmm, Xfrac, Yfrac, Zfrac:  single; dxOrigin, radiusMM: int64; drawMode: int64);
-    procedure voiIntensityFilter(intenVol: TUInt8s; Color: int64; threshold: UInt8; drawMode: int64);
-    procedure voiIntensityFilterr(intenVol: TUInt8s; Color: int64; rampAbove, rampBelow, drawMode: integer);
+    procedure voiIntensityFilter(intenVol: TUInt8s; Color: int64; rampAbove, rampBelow, drawMode: integer);
     procedure voiDilate(dilationInVoxels: single);
     function voiGetVolume: TUInt8s;
     procedure voiChangeAlpha (a: byte);
@@ -1649,7 +1648,7 @@ begin
      //GLForm1.Caption := floattostr(Xmm)+'x'+floattostr(Ymm)+'x'+floattostr(Zmm);
 end;
 
-procedure TDraw.voiIntensityFilterr(intenVol: TUInt8s; Color: int64; rampAbove, rampBelow, drawMode: integer);
+procedure TDraw.voiIntensityFilter(intenVol: TUInt8s; Color: int64; rampAbove, rampBelow, drawMode: integer);
 var
   nPix,  i : int64;
 begin
@@ -1705,42 +1704,6 @@ begin
         for i := 0 to (nPix - 1) do
             if (intenVol[i] > threshold) then view2d[i] := Color;
      end;  *)
-     doRedraw := true;
-     UpdateView3d;
-     isModified := true;
-     isModifiedSinceSave := true;
-end;
-
-
-procedure TDraw.voiIntensityFilter(intenVol: TUInt8s; Color: int64; threshold: UInt8; drawMode: int64);
-var
-  nPix,  i : int64;
-begin
-     if (Color < 0) then exit;
-     if (intenVol = nil) then exit;
-     if (view3d = nil) and (Color = 0)  then exit; //nothing to erase
-     if (dim3d[1] < 1) or (dim3d[2] < 1) or (dim3d[3] < 1) then exit;
-     nPix := dim3d[1] * dim3d[2] * dim3d[3];
-     //GLForm1.SliceBox.Caption := inttostr(Color)+'b'+ inttostr(nPix);
-     voiCloseSlice;
-     dim2d[0] := kOrient3D; //dim[0] = slice orientation 0 = 3d volume
-     setlength(view2d, nPix);
-     setlength(undo2d, nPix);
-     Move(view3d[0], undo2d[0],nPix);//source/dest
-     Move(undo2d[0],view2d[0],nPix);//source/dest
-     if (drawMode = kDrawModeDeleteDark)  then begin
-        for i := 0 to (nPix - 1) do
-            if (intenVol[i] < threshold) then view2d[i] := 0;
-     end else if (drawMode = kDrawModeAddDark)  then begin
-        for i := 0 to (nPix - 1) do
-            if (intenVol[i] < threshold) then view2d[i] := Color;
-     end else if (drawMode = kDrawModeDeleteBright)  then begin
-        for i := 0 to (nPix - 1) do
-            if (intenVol[i] > threshold) then view2d[i] := 0;
-     end else if (drawMode = kDrawModeAddBright)  then begin
-        for i := 0 to (nPix - 1) do
-            if (intenVol[i] > threshold) then view2d[i] := Color;
-     end;
      doRedraw := true;
      UpdateView3d;
      isModified := true;

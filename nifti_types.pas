@@ -80,6 +80,8 @@ end;//TAnalyzeHdrSection Structure
    K_gzBytes_headerAndImageCompressed = -2;
  K_gzBytes_onlyImageCompressed= -1;
  K_gzBytes_headerAndImageUncompressed= 0;
+//
+kNIFTI_INTENT_RGB_VECTOR = 2003;
 //DataTypes
 kDT_BINARY                 =1;     // binary (1 bit/voxel)
 kDT_UNSIGNED_CHAR          =2;     // unsigned char (8 bits/voxel)

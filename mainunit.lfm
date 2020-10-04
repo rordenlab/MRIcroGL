@@ -1,12 +1,12 @@
 object GLForm1: TGLForm1
-  Left = 497
-  Height = 570
-  Top = 187
-  Width = 881
+  Left = 526
+  Height = 691
+  Top = 104
+  Width = 914
   AllowDropFiles = True
   Caption = 'MRIcroGL'
-  ClientHeight = 570
-  ClientWidth = 881
+  ClientHeight = 691
+  ClientWidth = 914
   Constraints.MinHeight = 20
   Constraints.MinWidth = 20
   Menu = MainMenu
@@ -20,25 +20,25 @@ object GLForm1: TGLForm1
   LCLVersion = '2.1.0.0'
   object TopPanel: TPanel
     Left = 0
-    Height = 484
+    Height = 605
     Top = 0
-    Width = 881
+    Width = 914
     Align = alClient
-    ClientHeight = 484
-    ClientWidth = 881
+    ClientHeight = 605
+    ClientWidth = 914
     ParentFont = False
     TabOrder = 0
     object ToolPanel: TScrollBox
       Left = 1
-      Height = 482
+      Height = 603
       Top = 1
       Width = 268
       HorzScrollBar.Page = 1
       HorzScrollBar.Visible = False
-      VertScrollBar.Page = 482
+      VertScrollBar.Page = 603
       Align = alLeft
       BorderStyle = bsNone
-      ClientHeight = 482
+      ClientHeight = 603
       ClientWidth = 253
       ParentFont = False
       TabOrder = 0
@@ -237,7 +237,6 @@ object GLForm1: TGLForm1
             'N'
             'I'
           )
-          OnChange = LayerAfniDropChange
           OnClick = LayerAfniDropClick
           ParentFont = False
           Style = csDropDownList
@@ -1090,6 +1089,7 @@ object GLForm1: TGLForm1
           Width = 76
           BorderSpacing.Left = 2
           BorderSpacing.Top = 2
+          NumbersOnly = True
           OnChange = CoordEditChange
           ParentFont = False
           TabOrder = 6
@@ -1119,6 +1119,7 @@ object GLForm1: TGLForm1
           Top = 74
           Width = 76
           BorderSpacing.Left = 2
+          NumbersOnly = True
           OnChange = CoordEditChange
           ParentFont = False
           TabOrder = 7
@@ -1134,6 +1135,7 @@ object GLForm1: TGLForm1
           Top = 74
           Width = 76
           BorderSpacing.Left = 2
+          NumbersOnly = True
           OnChange = CoordEditChange
           ParentFont = False
           TabOrder = 8
@@ -1612,13 +1614,13 @@ object GLForm1: TGLForm1
       end
     end
     object ScriptPanel: TPanel
-      Left = 878
-      Height = 482
+      Left = 911
+      Height = 603
       Top = 1
       Width = 2
       Align = alRight
       BevelOuter = bvNone
-      ClientHeight = 482
+      ClientHeight = 603
       ClientWidth = 2
       Constraints.MinWidth = 2
       ParentFont = False
@@ -1626,12 +1628,12 @@ object GLForm1: TGLForm1
       OnDblClick = ScriptPanelDblClick
       object ScriptBox: TGroupBox
         Left = -8
-        Height = 482
+        Height = 603
         Top = 0
         Width = 10
         Align = alClient
         Caption = 'Scripting'
-        ClientHeight = 463
+        ClientHeight = 584
         ClientWidth = 0
         Constraints.MinWidth = 10
         ParentFont = False
@@ -1639,7 +1641,7 @@ object GLForm1: TGLForm1
         OnDblClick = ScriptPanelDblClick
         object ScriptMemo: TMemo
           Left = 0
-          Height = 257
+          Height = 378
           Top = 0
           Width = 0
           Align = alClient
@@ -1663,7 +1665,7 @@ object GLForm1: TGLForm1
         object ScriptOutputMemo: TMemo
           Left = 0
           Height = 200
-          Top = 263
+          Top = 384
           Width = 0
           Align = alBottom
           BorderStyle = bsNone
@@ -1680,7 +1682,7 @@ object GLForm1: TGLForm1
           Cursor = crVSplit
           Left = 0
           Height = 6
-          Top = 257
+          Top = 378
           Width = 0
           Align = alBottom
           ResizeAnchor = akBottom
@@ -1689,13 +1691,13 @@ object GLForm1: TGLForm1
     end
     object LeftSplitter: TSplitter
       Left = 269
-      Height = 482
+      Height = 603
       Top = 1
       Width = 6
     end
     object RightSplitter: TSplitter
-      Left = 872
-      Height = 482
+      Left = 905
+      Height = 603
       Top = 1
       Width = 6
       Align = alRight
@@ -1703,20 +1705,21 @@ object GLForm1: TGLForm1
     end
     object CenterPanel: TPanel
       Left = 275
-      Height = 482
+      Height = 603
       Top = 1
-      Width = 597
+      Width = 630
       Align = alClient
       ParentFont = False
       TabOrder = 4
+      OnClick = CenterPanelClick
     end
   end
   object TBSplitter: TSplitter
     Cursor = crVSplit
     Left = 0
     Height = 6
-    Top = 484
-    Width = 881
+    Top = 605
+    Width = 914
     Align = alBottom
     MinSize = 4
     ResizeAnchor = akBottom
@@ -1724,15 +1727,15 @@ object GLForm1: TGLForm1
   object BottomPanel: TPanel
     Left = 0
     Height = 80
-    Top = 490
-    Width = 881
+    Top = 611
+    Width = 914
     Align = alBottom
     ClientHeight = 80
-    ClientWidth = 881
+    ClientWidth = 914
     ParentFont = False
     TabOrder = 2
     object ClusterGraphSplitter: TSplitter
-      Left = 795
+      Left = 828
       Height = 78
       Top = 1
       Width = 5
@@ -1741,7 +1744,7 @@ object GLForm1: TGLForm1
       ResizeAnchor = akRight
     end
     object GraphPanel: TPanel
-      Left = 800
+      Left = 833
       Height = 78
       Top = 1
       Width = 80
@@ -1757,18 +1760,18 @@ object GLForm1: TGLForm1
       Left = 1
       Height = 78
       Top = 1
-      Width = 794
+      Width = 827
       Align = alClient
       Caption = 'Layer does not have clusters'
       ClientHeight = 78
-      ClientWidth = 794
+      ClientWidth = 827
       ParentFont = False
       TabOrder = 2
       object ClusterView: TListView
         Left = 1
         Height = 76
         Top = 1
-        Width = 792
+        Width = 825
         Align = alClient
         AutoSort = False
         AutoWidthLastColumn = True
@@ -1817,7 +1820,7 @@ object GLForm1: TGLForm1
           end        
           item
             Caption = 'Structure'
-            Width = 420
+            Width = 305
           end>
         Constraints.MinWidth = 2
         GridLines = True
@@ -1878,7 +1881,6 @@ object GLForm1: TGLForm1
       end
       object OpenFSLMenu: TMenuItem
         Caption = 'Open FSL'
-        Visible = False
         OnClick = OpenFSLMenuClick
       end
       object OpenAltasMenu: TMenuItem
@@ -1900,7 +1902,7 @@ object GLForm1: TGLForm1
         OnClick = SaveMenuClick
       end
       object SaveNIfTIMenu: TMenuItem
-        Caption = 'Save NIfTI'
+        Caption = 'Save Volume'
         OnClick = SaveNIfTIMenuClick
       end
       object FileSepMenu: TMenuItem
@@ -2089,20 +2091,15 @@ object GLForm1: TGLForm1
           OnClick = DrawSmoothMenuClick
         end
         object DrawIntensityFilterMenu: TMenuItem
-          Caption = 'Delete or Append Bright or Dark voxels'
-          Visible = False
-          OnClick = DrawIntensityFilterMenuClick
-        end
-        object DrawIntensityFilterrMenu: TMenuItem
           Caption = 'Intensity Filter'
-          OnClick = DrawIntensityFilterrMenuClick
+          OnClick = DrawIntensityFilterMenuClick
         end
         object DrawDilateMenu: TMenuItem
           Caption = 'Dilate or Erode'
           OnClick = DrawDilateMenuClick
         end
         object DrawAutomaticMenu: TMenuItem
-          Caption = 'Automatic VOI'
+          Caption = 'Automatic Drawing'
           OnClick = DrawAutomaticMenuClick
         end
         object DrawBinarizeMenu: TMenuItem
@@ -2641,9 +2638,9 @@ object GLForm1: TGLForm1
       Caption = 'Generate Cluster Table with Options'
       OnClick = LayerClusterMenuClick
     end
-    object LayerClusterSumMenu: TMenuItem
+    object LayerClusterMeansMenu: TMenuItem
       Tag = 2
-      Caption = 'Generate Sum Table'
+      Caption = 'Generate Table of Means'
       OnClick = LayerClusterMenuClick
     end
     object RemoveSmallClusterMenu: TMenuItem
@@ -2668,6 +2665,10 @@ object GLForm1: TGLForm1
       AutoCheck = True
       Caption = 'Mask with background'
       OnClick = LayerMaskWithBackgroundMenuClick
+    end
+    object LayerExport8BitMenu: TMenuItem
+      Caption = 'Export as 8-bit'
+      OnClick = LayerExport8BitMenuClick
     end
     object LayerSmoothMenu: TMenuItem
       AutoCheck = True

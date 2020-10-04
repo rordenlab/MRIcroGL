@@ -2,6 +2,7 @@ unit glvolume2;
 {$mode objfpc}
 {$H+}
 interface
+{$include opts.inc} //for  DEFINE FASTGZ
 {$DEFINE STRIP} //we can define cube as either a triangle or triangle strip - no implications on performance
 {$DEFINE GPUGRADIENTS} //Computing volume gradients on the GPU is much faster than using the CPU
 {$DEFINE VIEW2D}
@@ -41,7 +42,7 @@ type
         programLine2D, programTex2D: GLuint;
         slices2D: TSlices2D;
         uniform_drawTex, uniform_drawLUT, uniform_drawAlpha,
-        uniform_viewportSizeLine, uniform_viewportSizeTex, uniform_backAlpha, uniform_tex, uniform_overlay, uniform_overlaysLoc: GLint;
+        uniform_texVox, uniform_viewportSizeLine, uniform_viewportSizeTex, uniform_backAlpha, uniform_tex, uniform_overlay, uniform_overlaysLoc: GLint;
         colorEditor: TColorEditor;
         isSmooth2D, colorEditorVisible: boolean;
         txt: TGPUFont;
@@ -199,7 +200,8 @@ kFragTex2D = '#version 330'
 +#10'uniform int overlays = 0;'
 +#10'void main() {'
 +#10'    color = texture(tex,texCoord.xyz);'
-+#10'    color.a = smoothstep(0.0, 0.1, color.a);'
++#10'    color.a = smoothstep(0.0, 0.01, color.a);'
++#10'    //color.a = smoothstep(0.0, 0.1, color.a);'
 +#10'    //color.a = smoothstep(0.0, 0.00001, color.a);'
 +#10'    color.a *= backAlpha;'
 +#10'    //if ((overlays == 0) && (drawAlpha == 0.0)) color.r = 1.0; //test case where neither overlay or draw is visible'
@@ -267,7 +269,8 @@ kFragTex2D = '#version 120'
 +#10'void main() {'
 +kMesaKludge
 +#10'    vec4 color = texture3D(tex,texCoord.xyz);'
-+#10'    color.a = smoothstep(0.0, 0.1, color.a);'
++#10'    color.a = smoothstep(0.0, 0.01, color.a);'
++#10'    //color.a = smoothstep(0.0, 0.1, color.a);'
 +#10'    color.a *= backAlpha;'
 +#10'    //if ((overlays == 0) && (drawAlpha == 0.0)) color.r = 1.0; //test case where neither overlay or draw is visible'
 +#10'    if ((overlays == 0) && (drawAlpha == 0.0)) {'
@@ -1255,11 +1258,15 @@ begin
   glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, @colorLut[0]);
 end;
 
+//{$DEFINE FX}
 procedure TGPUVolume.Prepare(shaderName: string);
 var
  success: boolean;
  isMesa: boolean = false;
  max3D: glInt;
+{$IFDEF FX}
+fnm, VertexProgram, FragmentProgram: string;
+{$ENDIF}
 begin
   glControl.MakeCurrent();
   if (shaderName = '') or (not fileexists(shaderName)) then
@@ -1313,7 +1320,15 @@ begin
   dlColorEditor := 0;
   {$ENDIF}
   //2D program
-  programTex2D := initVertFrag(kVertTex2D,kFragTex2D);
+  {$IFDEF FX}
+  fnm := '/Users/chris/fx.glsl';
+  if fileexists(fnm) then begin
+    loadVertFrag(fnm, VertexProgram, FragmentProgram);
+    writeln('>>>>>>>>');
+    programTex2D := initVertFrag(VertexProgram,FragmentProgram);
+  end else
+  {$ENDIF}
+  		  programTex2D := initVertFrag(kVertTex2D,kFragTex2D);
   //glUseProgram(programTex2D);
   uniform_tex := glGetUniformLocation(programTex2D, pAnsiChar('tex'));
   uniform_overlay := glGetUniformLocation(programTex2D, pAnsiChar('overlay'));
@@ -1322,6 +1337,7 @@ begin
   uniform_drawAlpha := glGetUniformLocation(programTex2D, pAnsiChar('drawAlpha'));
   uniform_backAlpha := glGetUniformLocation(programTex2D, pAnsiChar('backAlpha'));
   uniform_viewportSizeTex := glGetUniformLocation(programTex2D, pAnsiChar('ViewportSize'));
+  uniform_texVox := glGetUniformLocation(programTex2D, pAnsiChar('texSize'));
   uniform_overlaysLoc := glGetUniformLocation(programTex2D, pAnsiChar('overlays'));
   CreateDrawTex(pti(4,4,4), nil);
   CreateDrawColorTable;
@@ -1508,7 +1524,11 @@ end;
 
 procedure TGPUVolume.CreateOverlayTextures(Dim: TVec3i; volRGBA: TRGBAs);
 var
-   gradData: TRGBAs;
+{$IFDEF DYNRGBA}
+gradData: TRGBAs;
+{$ELSE}
+gradData: TRGBAp = nil;
+{$ENDIF}
 begin
   //GLForm1.LayerBox.Caption := ':>>'+inttostr(random(888));
   if (overlayIntensityTexture3D <> 0) then glDeleteTextures(1,@overlayIntensityTexture3D);
@@ -1543,7 +1563,11 @@ begin
   if (Dim.X > 1) then begin
     {$IFDEF GPUGRADIENTS}
     if (gradientMode <> kGradientModeCPUSlowest) and (programSobel <> 0) and (programSobel <> 0) then begin
-       SetLength (gradData, Dim.X*Dim.Y*Dim.Z);
+       {$IFDEF DYNRGBA}
+	   SetLength (gradData, Dim.X*Dim.Y*Dim.Z);
+       {$ELSE}
+	   SetLengthP (gradData, Dim.X*Dim.Y*Dim.Z);
+       {$ENDIF}
        glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Dim.X, Dim.Y, Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@gradData[0]);
        gradData := nil;
        CreateGradientVolumeGPU (Dim.X, Dim.Y, Dim.Z, overlayIntensityTexture3D, overlayGradientTexture3D);
@@ -1635,7 +1659,11 @@ label
 var
  //i,j: int64;
  width, height, depth: GLint;
+ {$IFDEF DYNRGBA}
  gradData: TRGBAs;
+ {$ELSE}
+  gradData: TRGBAp = nil;
+  {$ENDIF}
  {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
 begin
  result := false;
@@ -1735,7 +1763,7 @@ begin
  Vol.GPULoadDone;
  if (overlayIntensityTexture3D = 0) then CreateOverlayTextures(Vol.Dim, nil); //load blank overlay
  result := true;
-end;
+end;       //deferGradients
 
 procedure addFuzz (var v: TVec4); //avoid shader divide by zero error
 const
@@ -2229,6 +2257,9 @@ begin
   else
       glUniform1f(uniform_backAlpha, vol.OpacityPercent/100);
   glUniform2f(uniform_viewportSizeTex, w, h);
+  {$IFDEF FX}
+  glUniform3f(uniform_texVox, vol.Dim.x, vol.Dim.y, vol.Dim.z);
+  {$ENDIF}
   {$IFDEF COREGL}
   glBindBuffer(GL_ARRAY_BUFFER, vboTex2D);
   glBufferData(GL_ARRAY_BUFFER,slices2D.NumberOfVertices*SizeOf(TVertex2D), @slices2D.SliceVertices[0], GL_STATIC_DRAW);

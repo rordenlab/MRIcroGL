@@ -122,6 +122,7 @@ object ResizeForm: TResizeForm
     Caption = 'OK'
     Constraints.MinWidth = 80
     ModalResult = 1
+    OnClick = OKBtnClick
     TabOrder = 7
   end
   object CancelBtn: TButton

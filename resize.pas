@@ -38,6 +38,7 @@ type
     procedure FormShow(Sender: TObject);
     procedure IsotropicBtnClick(Sender: TObject);
     procedure IsotropicShrinkBtnClick(Sender: TObject);
+    procedure OKBtnClick(Sender: TObject);
     function ReadScale(): TVec3;
     procedure ScaleToMbBtnClick(Sender: TObject);
   private
@@ -169,6 +170,11 @@ begin
       XEdit.Text :=  floattostr(gMM.x/ mmMx);
       yEdit.Text :=  floattostr(gMM.y/ mmMx);
       zEdit.Text :=  floattostr(gMM.z/ mmMx);
+end;
+
+procedure TResizeForm.OKBtnClick(Sender: TObject);
+begin
+
 end;
 
 //function TResizeForm.GetScale(const Dim: TVec3i; const mm: TVec3; filename: string; var datatype: integer; out Filter: integer): TVec3;

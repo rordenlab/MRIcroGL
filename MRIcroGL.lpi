@@ -107,19 +107,15 @@
         <IsPartOfProject Value="True"/>
       </Unit10>
       <Unit11>
-        <Filename Value="drawintensityfilter.pas"/>
-        <IsPartOfProject Value="True"/>
-        <ComponentName Value="DrawIntensityFilterForm"/>
-        <HasResources Value="True"/>
-        <ResourceBaseClass Value="Form"/>
-        <UnitName Value="drawIntensityFilter"/>
-      </Unit11>
-      <Unit12>
         <Filename Value="intensityfilter.pas"/>
         <IsPartOfProject Value="True"/>
         <ComponentName Value="IntensityFilterForm"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
+      </Unit11>
+      <Unit12>
+        <Filename Value="nifti_save.pas"/>
+        <IsPartOfProject Value="True"/>
       </Unit12>
     </Units>
   </ProjectOptions>

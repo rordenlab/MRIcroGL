@@ -4,7 +4,7 @@ unit nifti_tiff;
 interface
 
 uses
-   SimdUtils, nifti_types, dialogs, nifti_foreign, sysutils, classes, clipbrd;
+   SimdUtils, nifti_types, dialogs, nifti_foreign, sysutils, classes, clipbrd, math;
    //function SaveTIFFAsNifti(fnm: string): string;
    function LoadTIFFAsNifti(fnm: string; var  rawData: TUInt8s; var nhdr: TNIFTIHdr): boolean;
 
@@ -188,7 +188,7 @@ begin
   result := true;
 end;
 
-function swizzleDims(var nhdr: TNIFTIhdr; img: ByteP0; oZ, oT, oC: integer): boolean;
+(*function swizzleDims(var nhdr: TNIFTIhdr; img: ByteP0; oZ, oT, oC: integer): boolean;
 //NIfTI requires that 3rd dim is space (oZ), 4th dim is time (oT), so 5th must be Channels (oC)
 var
   ztc, xyBytes, xyzBytes, xyztBytes, Z,T,C, o, iZ, iT, iC,i, p: integer;
@@ -257,7 +257,76 @@ begin
     if (C >= nhdr.dim[5]) then C := 0;
   end;
   freemem(imgIn);
-end;
+end;*)
+ function swizzleDims(var nhdr: TNIFTIhdr; img: ByteP0; oZ, oT, oC: integer): boolean;
+//NIfTI requires that 3rd dim is space (oZ), 4th dim is time (oT), so 5th must be Channels (oC)
+var
+  ztc, xyBytes, Z, T, C, o, iZ, iT, iC, i: int64;
+  imgIn: byteP0;
+begin
+  result := true;
+  if (oZ = 3) and (oT = 4) and (oC = 5) then exit;
+  nhdr.dim[3] := max(nhdr.dim[3], 1);
+  nhdr.dim[4] := max(nhdr.dim[4], 1);
+  nhdr.dim[5] := max(nhdr.dim[5], 1);
+  if ((nhdr.dim[3] < 2) and (nhdr.dim[4] < 2)) or ((nhdr.dim[3] < 2) and (nhdr.dim[5] < 2))
+     or ((nhdr.dim[4] < 2) and (nhdr.dim[5] < 2)) then
+        exit; //do not swizzle if volumes only in one dimension
+  msgTIFF(format('swizzle XYZorder %d %d %d XYZdim %d %d %d',[oZ, oT, oC, nhdr.dim[3], nhdr.dim[4], nhdr.dim[5]]));
+  if oZ = 3 then begin  //must be ZCT, as ZTC exited since it is our desired solution
+     iZ := 1;
+     iC := (nhdr.dim[3]); //Z
+     iT := (nhdr.dim[3] * nhdr.dim[5]); //Z*C
+  end else if oC = 3 then begin
+     iC := 1;
+     if oZ = 4 then begin //CZT
+        iZ := nhdr.dim[5]; //C
+        iT := nhdr.dim[3] * nhdr.dim[5]; //Z *C
+     end else begin //CTZ
+         iT := nhdr.dim[5]; //C
+         iZ := nhdr.dim[4] * nhdr.dim[5]; //C*T
+     end;
+  end else   if oT = 3 then begin
+     iT := 1;
+     if oZ = 4 then begin //TZC
+        iZ := nhdr.dim[4]; //T
+        iC := nhdr.dim[3] * nhdr.dim[4]; //Z *T
+     end else begin //TCZ
+         iC := nhdr.dim[4]; //T
+         iZ := nhdr.dim[4] * nhdr.dim[5]; //C*T
+     end;
+  end else begin
+      msgTIFF('OME order misspecified', true);
+      exit;
+  end;
+  xyBytes := 4; //FLOAT
+  if (nhdr.datatype = kDT_UINT8) or (nhdr.datatype = kDT_INT8) then
+     xyBytes := 1
+  else if  (nhdr.datatype = kDT_UINT16) or (nhdr.datatype = kDT_INT16) then
+       xyBytes := 2
+  else if nhdr.datatype = kDT_RGB then
+       xyBytes := 3
+  else if nhdr.datatype <> kDT_FLOAT then begin
+       msgTIFF('OME unknown datatype', true);
+       exit;
+  end;
+  xyBytes := nhdr.dim[1] * nhdr.dim[2] * xyBytes; //slices per 2D slice
+  ztc := nhdr.dim[3] * nhdr.dim[4] * nhdr.dim[5];
+  getmem(imgIn, xyBytes * ztc);
+  move(img^[0],imgIn^[0], xyBytes * ztc);
+  o := 0;
+  for c := 0 to (nhdr.dim[5]-1) do
+      for t := 0 to (nhdr.dim[4]-1) do
+          for z := 0 to (nhdr.dim[3]-1) do begin
+              i := ((z * iZ)+ (t * iT) + (c * iC));
+              if (o >= ztc) or (i >= ztc) then
+                   msgTIFF('OME order error.', true)
+              else
+                  move(imgIn^[i*xyBytes], img^[o*xyBytes], xyBytes); // src, dest, sz
+              o += 1;
+          end;
+  freemem(imgIn);
+end; //swizzleDims()
 
 function RGB2planar8(var img: ByteP0; SamplesPerPixel, nX, nY, nZ: integer ): boolean;
 var

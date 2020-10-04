@@ -12,7 +12,7 @@ uses
   Classes, SysUtils, nifti_types, SimdUtils, dialogs;
 
 //function EnlargeIsotropic(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s): boolean;
-function ShrinkLargeMb(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lMaxTexMb: integer; isLabels: boolean = false): boolean;
+function ShrinkLargeMb(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lMaxTexMb: integer; isAntiAlias, isLabels: boolean): boolean;
 //function ShrinkLarge(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lMaxDim: integer; isLabels: boolean = false): boolean;
 function ShrinkOrEnlarge(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lFilter: integer; lScale: single): boolean; overload;
 function ShrinkOrEnlarge(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lFilter: integer; lScaleX, lScaleY, lScaleZ: single; outDatatype : integer = -1): boolean; overload;
@@ -1080,7 +1080,481 @@ begin
   result := scale;
 end;
 
-function ShrinkLargeMb(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lMaxTexMb: integer; isLabels: boolean = false): boolean;
+procedure ShrinkFastLinear16(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lScale: single);
+var
+   out8: TUInt8s;
+   out16, in16: TInt16s;
+   //out24, in24: TRGBs;
+   //out32, in32: TInt32s;
+   x,y,z,v, nx,ny,nz, nv, inx, iny, inz, inxy: integer;
+   xlo,ylo,zlo,xhi,yhi,zhi, vo: array of integer;
+   xfl,yfl,zfl,xfh,yfh,zfh: array of single;
+   i: int64;
+   fv, f: single;
+begin
+     inx := lHdr.dim[1];
+     iny := lHdr.dim[2];
+     inz := lHdr.dim[3];
+     inxy := inx * iny;
+     Zoom(lHdr,lScale, lScale, lScale);
+     nx := max(lHdr.dim[1], 1);
+     ny := max(lHdr.dim[2], 1);
+     nz := max(lHdr.dim[3], 1);
+     nv := max(lHdr.dim[4], 1) * max(lHdr.dim[5], 1) * max(lHdr.dim[6], 1) * max(lHdr.dim[7], 1);
+     setlength(out8, nx*ny*nz*nv*(lHdr.bitpix div 8));
+     //set scaled x
+     setlength(xlo, nx);
+     setlength(xhi, nx);
+     setlength(xfl, nx);
+     setlength(xfh, nx);
+     f := inx/lHdr.dim[1];
+     for i := 0 to (nx-1) do begin
+     	 fv := max(((i+0.5)*f)-0.5, 0); //fv := f * i;
+     	 xlo[i] := trunc(fv);
+         xhi[i] := min(ceil(fv),inx-1);
+         xfh[i] := frac(fv);
+         xfl[i] := 1.0 - xfh[i];
+     end;
+     //set scaled y
+     setlength(ylo, ny);
+     setlength(yhi, ny);
+     setlength(yfl, ny);
+     setlength(yfh, ny);
+     f := iny/lHdr.dim[2];
+     for i := 0 to (ny-1) do begin
+     	 fv := max(((i+0.5)*f)-0.5, 0); //fv := f * i;
+     	 ylo[i] := trunc(fv) * inx;
+         yhi[i] := min(ceil(fv),iny-1) * inx;
+         yfh[i] := frac(fv);
+         yfl[i] := 1.0 - yfh[i];
+     end;
+     //set scaled z
+     setlength(zlo, nz);
+     setlength(zhi, nz);
+     setlength(zfl, nz);
+     setlength(zfh, nz);
+     f := inz/lHdr.dim[3];
+     for i := 0 to (nz-1) do begin
+     	 fv := max(((i+0.5)*f)-0.5, 0); //fv := f * i;
+     	 zlo[i] := trunc(fv) * inxy;
+         zhi[i] := min(ceil(fv),inz-1) * inxy ;
+         zfh[i] := frac(fv);
+         zfl[i] := 1.0 - zfh[i];
+     end;
+     //4th dimension (volume) is not scaled
+     setlength(vo, nv);
+     for i := 0 to (nv-1) do
+     	 vo[i] := i * inx * iny * inz;
+     //fill output
+     i := 0;
+  	 //if (lHdr.bitpix = 16) then begin
+     	in16 := TInt16s(lBuffer);
+        out16 := TInt16s(out8);
+        for v := 0 to (nv-1) do
+            for z := 0 to (nz-1) do
+                for y := 0 to (ny-1) do begin
+                    for x := 0 to (nx-1) do begin
+                  	   out16[i] := round(
+                                 (xfl[x]*yfl[y]*zfl[z]*in16[xlo[x]+ylo[y]+zlo[z]+vo[v]]){---}
+                                +(xfl[x]*yfl[y]*zfh[z]*in16[xlo[x]+ylo[y]+zhi[z]+vo[v]]){--+}
+                                +(xfl[x]*yfh[y]*zfl[z]*in16[xlo[x]+yhi[y]+zlo[z]+vo[v]]){-+-}
+                                +(xfl[x]*yfh[y]*zfh[z]*in16[xlo[x]+yhi[y]+zhi[z]+vo[v]]){-++}
+                      			+(xfh[x]*yfl[y]*zfl[z]*in16[xhi[x]+ylo[y]+zlo[z]+vo[v]]){+--}
+                                +(xfh[x]*yfl[y]*zfh[z]*in16[xhi[x]+ylo[y]+zhi[z]+vo[v]]){+-+}
+                                +(xfh[x]*yfh[y]*zfl[z]*in16[xhi[x]+yhi[y]+zlo[z]+vo[v]]){++-}
+                                +(xfh[x]*yfh[y]*zfh[z]*in16[xhi[x]+yhi[y]+zhi[z]+vo[v]]){+++}
+                       );
+                        i += 1;
+                    end;
+                end;
+     //end;
+     setlength( lBuffer, 0);
+     lBuffer := out8;
+end;
+
+procedure ShrinkFastLinearU16(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lScale: single);
+var
+   out8: TUInt8s;
+   out16, in16: TUInt16s;
+   //out24, in24: TRGBs;
+   //out32, in32: TInt32s;
+   x,y,z,v, nx,ny,nz, nv, inx, iny, inz, inxy: integer;
+   xlo,ylo,zlo,xhi,yhi,zhi, vo: array of integer;
+   xfl,yfl,zfl,xfh,yfh,zfh: array of single;
+   i: int64;
+   fv, f: single;
+begin
+     inx := lHdr.dim[1];
+     iny := lHdr.dim[2];
+     inz := lHdr.dim[3];
+     inxy := inx * iny;
+     Zoom(lHdr,lScale, lScale, lScale);
+     nx := max(lHdr.dim[1], 1);
+     ny := max(lHdr.dim[2], 1);
+     nz := max(lHdr.dim[3], 1);
+     nv := max(lHdr.dim[4], 1) * max(lHdr.dim[5], 1) * max(lHdr.dim[6], 1) * max(lHdr.dim[7], 1);
+     setlength(out8, nx*ny*nz*nv*(lHdr.bitpix div 8));
+     //set scaled x
+     setlength(xlo, nx);
+     setlength(xhi, nx);
+     setlength(xfl, nx);
+     setlength(xfh, nx);
+     f := inx/lHdr.dim[1];
+     for i := 0 to (nx-1) do begin
+     	 fv := max(((i+0.5)*f)-0.5, 0); //fv := f * i;
+     	 xlo[i] := trunc(fv);
+         xhi[i] := min(ceil(fv),inx-1);
+         xfh[i] := frac(fv);
+         xfl[i] := 1.0 - xfh[i];
+     end;
+     //set scaled y
+     setlength(ylo, ny);
+     setlength(yhi, ny);
+     setlength(yfl, ny);
+     setlength(yfh, ny);
+     f := iny/lHdr.dim[2];
+     for i := 0 to (ny-1) do begin
+     	 fv := max(((i+0.5)*f)-0.5, 0); //fv := f * i;
+     	 ylo[i] := trunc(fv) * inx;
+         yhi[i] := min(ceil(fv),iny-1) * inx;
+         yfh[i] := frac(fv);
+         yfl[i] := 1.0 - yfh[i];
+     end;
+     //set scaled z
+     setlength(zlo, nz);
+     setlength(zhi, nz);
+     setlength(zfl, nz);
+     setlength(zfh, nz);
+     f := inz/lHdr.dim[3];
+     for i := 0 to (nz-1) do begin
+     	 fv := max(((i+0.5)*f)-0.5, 0); //fv := f * i;
+     	 zlo[i] := trunc(fv) * inxy;
+         zhi[i] := min(ceil(fv),inz-1) * inxy ;
+         zfh[i] := frac(fv);
+         zfl[i] := 1.0 - zfh[i];
+     end;
+     //4th dimension (volume) is not scaled
+     setlength(vo, nv);
+     for i := 0 to (nv-1) do
+     	 vo[i] := i * inx * iny * inz;
+     //fill output
+     i := 0;
+  	 //if (lHdr.bitpix = 16) then begin
+     	in16 := TUInt16s(lBuffer);
+        out16 := TUInt16s(out8);
+        for v := 0 to (nv-1) do
+            for z := 0 to (nz-1) do
+                for y := 0 to (ny-1) do begin
+                    for x := 0 to (nx-1) do begin
+                  	   out16[i] := round(
+                                 (xfl[x]*yfl[y]*zfl[z]*in16[xlo[x]+ylo[y]+zlo[z]+vo[v]]){---}
+                                +(xfl[x]*yfl[y]*zfh[z]*in16[xlo[x]+ylo[y]+zhi[z]+vo[v]]){--+}
+                                +(xfl[x]*yfh[y]*zfl[z]*in16[xlo[x]+yhi[y]+zlo[z]+vo[v]]){-+-}
+                                +(xfl[x]*yfh[y]*zfh[z]*in16[xlo[x]+yhi[y]+zhi[z]+vo[v]]){-++}
+                      			+(xfh[x]*yfl[y]*zfl[z]*in16[xhi[x]+ylo[y]+zlo[z]+vo[v]]){+--}
+                                +(xfh[x]*yfl[y]*zfh[z]*in16[xhi[x]+ylo[y]+zhi[z]+vo[v]]){+-+}
+                                +(xfh[x]*yfh[y]*zfl[z]*in16[xhi[x]+yhi[y]+zlo[z]+vo[v]]){++-}
+                                +(xfh[x]*yfh[y]*zfh[z]*in16[xhi[x]+yhi[y]+zhi[z]+vo[v]]){+++}
+                       );
+                        i += 1;
+                    end;
+                end;
+     //end;
+     setlength( lBuffer, 0);
+     lBuffer := out8;
+end;
+
+procedure ShrinkFastLinearU8(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lScale: single);
+var
+   in8, out8: TUInt8s;
+   x,y,z,v, nx,ny,nz, nv, inx, iny, inz, inxy: integer;
+   xlo,ylo,zlo,xhi,yhi,zhi, vo: array of integer;
+   xfl,yfl,zfl,xfh,yfh,zfh: array of single;
+   i: int64;
+   fv, f: single;
+begin
+     inx := lHdr.dim[1];
+     iny := lHdr.dim[2];
+     inz := lHdr.dim[3];
+     inxy := inx * iny;
+     Zoom(lHdr,lScale, lScale, lScale);
+     nx := max(lHdr.dim[1], 1);
+     ny := max(lHdr.dim[2], 1);
+     nz := max(lHdr.dim[3], 1);
+     nv := max(lHdr.dim[4], 1) * max(lHdr.dim[5], 1) * max(lHdr.dim[6], 1) * max(lHdr.dim[7], 1);
+     setlength(out8, nx*ny*nz*nv*(lHdr.bitpix div 8));
+     //set scaled x
+     setlength(xlo, nx);
+     setlength(xhi, nx);
+     setlength(xfl, nx);
+     setlength(xfh, nx);
+     f := inx/lHdr.dim[1];
+     for i := 0 to (nx-1) do begin
+     	 fv := max(((i+0.5)*f)-0.5, 0); //fv := f * i;
+     	 xlo[i] := trunc(fv);
+         xhi[i] := min(ceil(fv),inx-1);
+         xfh[i] := frac(fv);
+         xfl[i] := 1.0 - xfh[i];
+     end;
+     //set scaled y
+     setlength(ylo, ny);
+     setlength(yhi, ny);
+     setlength(yfl, ny);
+     setlength(yfh, ny);
+     f := iny/lHdr.dim[2];
+     for i := 0 to (ny-1) do begin
+     	 fv := max(((i+0.5)*f)-0.5, 0); //fv := f * i;
+     	 ylo[i] := trunc(fv) * inx;
+         yhi[i] := min(ceil(fv),iny-1) * inx;
+         yfh[i] := frac(fv);
+         yfl[i] := 1.0 - yfh[i];
+     end;
+     //set scaled z
+     setlength(zlo, nz);
+     setlength(zhi, nz);
+     setlength(zfl, nz);
+     setlength(zfh, nz);
+     f := inz/lHdr.dim[3];
+     for i := 0 to (nz-1) do begin
+     	 fv := max(((i+0.5)*f)-0.5, 0); //fv := f * i;
+     	 zlo[i] := trunc(fv) * inxy;
+         zhi[i] := min(ceil(fv),inz-1) * inxy ;
+         zfh[i] := frac(fv);
+         zfl[i] := 1.0 - zfh[i];
+     end;
+     //4th dimension (volume) is not scaled
+     setlength(vo, nv);
+     for i := 0 to (nv-1) do
+     	 vo[i] := i * inx * iny * inz;
+     //fill output
+     i := 0;
+    in8 := TUInt8s(lBuffer);
+    for v := 0 to (nv-1) do
+        for z := 0 to (nz-1) do
+            for y := 0 to (ny-1) do begin
+                for x := 0 to (nx-1) do begin
+                   out8[i] := round(
+                             (xfl[x]*yfl[y]*zfl[z]*in8[xlo[x]+ylo[y]+zlo[z]+vo[v]]){---}
+                            +(xfl[x]*yfl[y]*zfh[z]*in8[xlo[x]+ylo[y]+zhi[z]+vo[v]]){--+}
+                            +(xfl[x]*yfh[y]*zfl[z]*in8[xlo[x]+yhi[y]+zlo[z]+vo[v]]){-+-}
+                            +(xfl[x]*yfh[y]*zfh[z]*in8[xlo[x]+yhi[y]+zhi[z]+vo[v]]){-++}
+                      		+(xfh[x]*yfl[y]*zfl[z]*in8[xhi[x]+ylo[y]+zlo[z]+vo[v]]){+--}
+                            +(xfh[x]*yfl[y]*zfh[z]*in8[xhi[x]+ylo[y]+zhi[z]+vo[v]]){+-+}
+                            +(xfh[x]*yfh[y]*zfl[z]*in8[xhi[x]+yhi[y]+zlo[z]+vo[v]]){++-}
+                            +(xfh[x]*yfh[y]*zfh[z]*in8[xhi[x]+yhi[y]+zhi[z]+vo[v]]){+++}
+                   );
+                    i += 1;
+                end;
+            end;
+     //for i := 0 to ((nx * ny * nz)-1) do out8[i] := random(123);
+     setlength( lBuffer, 0);
+     lBuffer := out8;
+end; //U8
+
+procedure ShrinkFastLinearF32(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lScale: single);
+var
+   out8: TUInt8s;
+   out32, in32: TFloat32s;
+   x,y,z,v, nx,ny,nz, nv, inx, iny, inz, inxy: integer;
+   xlo,ylo,zlo,xhi,yhi,zhi, vo: array of integer;
+   xfl,yfl,zfl,xfh,yfh,zfh: array of single;
+   i: int64;
+   fv, f: single;
+begin
+     inx := lHdr.dim[1];
+     iny := lHdr.dim[2];
+     inz := lHdr.dim[3];
+     inxy := inx * iny;
+     Zoom(lHdr,lScale, lScale, lScale);
+     nx := max(lHdr.dim[1], 1);
+     ny := max(lHdr.dim[2], 1);
+     nz := max(lHdr.dim[3], 1);
+     nv := max(lHdr.dim[4], 1) * max(lHdr.dim[5], 1) * max(lHdr.dim[6], 1) * max(lHdr.dim[7], 1);
+     setlength(out8, nx*ny*nz*nv*(lHdr.bitpix div 8));
+     //set scaled x
+     setlength(xlo, nx);
+     setlength(xhi, nx);
+     setlength(xfl, nx);
+     setlength(xfh, nx);
+     f := inx/lHdr.dim[1];
+     for i := 0 to (nx-1) do begin
+     	 fv := max(((i+0.5)*f)-0.5, 0); //fv := f * i;
+     	 xlo[i] := trunc(fv);
+         xhi[i] := min(ceil(fv),inx-1);
+         xfh[i] := frac(fv);
+         xfl[i] := 1.0 - xfh[i];
+     end;
+     //set scaled y
+     setlength(ylo, ny);
+     setlength(yhi, ny);
+     setlength(yfl, ny);
+     setlength(yfh, ny);
+     f := iny/lHdr.dim[2];
+     for i := 0 to (ny-1) do begin
+     	 fv := max(((i+0.5)*f)-0.5, 0); //fv := f * i;
+     	 ylo[i] := trunc(fv) * inx;
+         yhi[i] := min(ceil(fv),iny-1) * inx;
+         yfh[i] := frac(fv);
+         yfl[i] := 1.0 - yfh[i];
+     end;
+     //set scaled z
+     setlength(zlo, nz);
+     setlength(zhi, nz);
+     setlength(zfl, nz);
+     setlength(zfh, nz);
+     f := inz/lHdr.dim[3];
+     for i := 0 to (nz-1) do begin
+     	 fv := max(((i+0.5)*f)-0.5, 0); //fv := f * i;
+     	 zlo[i] := trunc(fv) * inxy;
+         zhi[i] := min(ceil(fv),inz-1) * inxy ;
+         zfh[i] := frac(fv);
+         zfl[i] := 1.0 - zfh[i];
+     end;
+     //4th dimension (volume) is not scaled
+     setlength(vo, nv);
+     for i := 0 to (nv-1) do
+     	 vo[i] := i * inx * iny * inz;
+     //fill output
+     i := 0;
+  	 //if (lHdr.bitpix = 16) then begin
+     	in32 := TFloat32s(lBuffer);
+        out32 := TFloat32s(out8);
+        for v := 0 to (nv-1) do
+            for z := 0 to (nz-1) do
+                for y := 0 to (ny-1) do begin
+                    for x := 0 to (nx-1) do begin
+                  	   out32[i] :=
+                                 (xfl[x]*yfl[y]*zfl[z]*in32[xlo[x]+ylo[y]+zlo[z]+vo[v]]){---}
+                                +(xfl[x]*yfl[y]*zfh[z]*in32[xlo[x]+ylo[y]+zhi[z]+vo[v]]){--+}
+                                +(xfl[x]*yfh[y]*zfl[z]*in32[xlo[x]+yhi[y]+zlo[z]+vo[v]]){-+-}
+                                +(xfl[x]*yfh[y]*zfh[z]*in32[xlo[x]+yhi[y]+zhi[z]+vo[v]]){-++}
+                      			+(xfh[x]*yfl[y]*zfl[z]*in32[xhi[x]+ylo[y]+zlo[z]+vo[v]]){+--}
+                                +(xfh[x]*yfl[y]*zfh[z]*in32[xhi[x]+ylo[y]+zhi[z]+vo[v]]){+-+}
+                                +(xfh[x]*yfh[y]*zfl[z]*in32[xhi[x]+yhi[y]+zlo[z]+vo[v]]){++-}
+                                +(xfh[x]*yfh[y]*zfh[z]*in32[xhi[x]+yhi[y]+zhi[z]+vo[v]]){+++}
+                       ;
+                        i += 1;
+                    end;
+                end;
+     //end;
+     setlength( lBuffer, 0);
+     lBuffer := out8;
+end;
+
+procedure ShrinkFastLinear(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lScale: single);
+begin
+	 if lHdr.datatype = kDT_UINT8 then
+     	ShrinkFastLinearU8(lHdr, lBuffer, lScale)
+	 else if lHdr.datatype = kDT_UINT16 then
+     	ShrinkFastLinearU16(lHdr, lBuffer, lScale)
+     else if lHdr.datatype = kDT_INT16 then
+     	ShrinkFastLinear16(lHdr, lBuffer, lScale)
+     else if lHdr.datatype = kDT_FLOAT then
+     	ShrinkFastLinearF32(lHdr, lBuffer, lScale)
+     else //e.g. kDT_RGB use slow method
+     	 ShrinkOrEnlarge(lHdr,lBuffer, 1, lScale);
+end;
+
+procedure ShrinkFastNearest(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lScale: single);
+var
+   out8: TUInt8s;
+   out16, in16: TInt16s;
+   out24, in24: TRGBs;
+   out32, in32: TInt32s;
+   x,y,z,v, nx,ny,nz, nv, inx, iny, inz, sl: integer;
+   xo,yo,zo, vo: array of integer;
+   i: int64;
+   f: double;
+begin
+	 if (lHdr.datatype <> kDT_UINT8) and (lHdr.datatype <> kDT_INT8)
+        and (lHdr.datatype <> kDT_UINT16) and (lHdr.datatype <> kDT_INT16)
+        and (lHdr.datatype <> kDT_UINT32) and (lHdr.datatype <> kDT_INT32)
+        and (lHdr.datatype <> kDT_FLOAT) and (lHdr.datatype <> kDT_RGB) then begin
+        	ShrinkOrEnlarge(lHdr,lBuffer, 0, lScale);
+        	exit;
+     end;
+     inx := lHdr.dim[1];
+     iny := lHdr.dim[2];
+     inz := lHdr.dim[3];
+     Zoom(lHdr,lScale, lScale, lScale);
+     nx := max(lHdr.dim[1], 1);
+     ny := max(lHdr.dim[2], 1);
+     nz := max(lHdr.dim[3], 1);
+     nv := max(lHdr.dim[4], 1) * max(lHdr.dim[5], 1) * max(lHdr.dim[6], 1) * max(lHdr.dim[7], 1);
+     setlength(out8, nx*ny*nz*nv*(lHdr.bitpix div 8));
+     //set scaled x
+     setlength(xo, nx);
+     f := inx/lHdr.dim[1];
+     for i := 0 to (nx-1) do
+     	 xo[i] := round(f * i);
+     //set scaled y
+     setlength(yo, ny);
+     f := iny/lHdr.dim[2];
+     for i := 0 to (ny-1) do
+     	 yo[i] := round(f * i) * inx;
+     //set scaled z
+     setlength(zo, nz);
+     f := inz/lHdr.dim[3];
+     for i := 0 to (nz-1) do
+     	 zo[i] := round(f * i) * inx * iny;
+     //4th dimension (volume) is not scaled
+     setlength(vo, nv);
+     for i := 0 to (nv-1) do
+     	 vo[i] := i * inx * iny * inz;
+     //fill output
+     i := 0;
+  	 if (lHdr.bitpix = 32) then begin
+        in32 := TInt32s(lBuffer);
+        out32 := TInt32s(out8);
+        for v := 0 to (nv-1) do
+           for z := 0 to (nz-1) do
+               for y := 0 to (ny-1) do begin
+                     sl := yo[y]+zo[z]+vo[v];
+                   for x := 0 to (nx-1) do begin
+                     out32[i] := in32[xo[x]+sl];
+                       i += 1;
+                   end;
+               end;
+      end else if (lHdr.bitpix = 24) then begin
+     	in24 := TRGBs(lBuffer);
+        out24 := TRGBs(out8);
+        for v := 0 to (nv-1) do
+            for z := 0 to (nz-1) do
+                for y := 0 to (ny-1) do begin
+                	   sl := yo[y]+zo[z]+vo[v];
+                    for x := 0 to (nx-1) do begin
+                  	   out24[i] := in24[xo[x]+sl];
+                        i += 1;
+                    end;
+                end;
+       end else if (lHdr.bitpix = 16) then begin
+     	in16 := TInt16s(lBuffer);
+        out16 := TInt16s(out8);
+        for v := 0 to (nv-1) do
+            for z := 0 to (nz-1) do
+                for y := 0 to (ny-1) do begin
+                	   sl := yo[y]+zo[z]+vo[v];
+                    for x := 0 to (nx-1) do begin
+                  	   out16[i] := in16[xo[x]+sl];
+                        i += 1;
+                    end;
+                end;
+     end else begin
+       for v := 0 to (nv-1) do
+           for z := 0 to (nz-1) do
+               for y := 0 to (ny-1) do begin
+               	   sl := yo[y]+zo[z]+vo[v];
+                   for x := 0 to (nx-1) do begin
+                 	   out8[i] := lBuffer[xo[x]+sl];
+                       i += 1;
+                   end;
+               end;
+     end;
+     setlength( lBuffer, 0);
+     lBuffer := out8;
+end;
+
+function ShrinkLargeMb(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lMaxTexMb: integer; isAntiAlias, isLabels: boolean): boolean;
 var
    scale: double;
    {$IFDEF UNIX}StartTime: TDateTime;{$ENDIF}
@@ -1091,13 +1565,23 @@ begin
   writeln(format('Dimensions (%dx%dx%d) exceeds MaxTexMb (%d): resizing x%.3g', [lHdr.dim[1], lHdr.dim[2], lHdr.dim[3], lMaxTexMb, scale]));
   startTime := now;
   {$ENDIF}
+  if isAntiAlias then begin
+     if isLabels then
+        result := ShrinkOrEnlarge(lHdr,lBuffer, 0, scale)
+     else
+     	 result := ShrinkOrEnlarge(lHdr,lBuffer, -1, scale);
+     exit;
+  end;
   if isLabels then
-     result := ShrinkOrEnlarge(lHdr,lBuffer, 0, scale)
+     //result := ShrinkOrEnlarge(lHdr,lBuffer, 0, scale)
+  	 ShrinkFastNearest(lHdr,lBuffer, scale)
   else
-      result := ShrinkOrEnlarge(lHdr,lBuffer, -1, scale);
+      //result := ShrinkOrEnlarge(lHdr,lBuffer, -1, scale);
+      ShrinkFastLinear(lHdr,lBuffer, scale);
   {$IFDEF UNIX}
   writeln(format('Resizing (%dx%dx%d) time %d',[lHdr.dim[1], lHdr.dim[2], lHdr.dim[3], MilliSecondsBetween(Now,startTime)]));
   {$ENDIF}
+  result := true;
 end;
 
 (*function ShrinkLargeMb(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lMaxTexMb: integer; isLabels: boolean = false): boolean;

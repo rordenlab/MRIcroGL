@@ -20,13 +20,11 @@ type
     CancelBtn: TButton;
     OriginBtn: TButton;
     ROIconstraint: TComboBox;
-    OriginLabel: TLabel;
     //RadiusEdit: TSpinEdit;
     //VarianceEdit: TSpinEdit;
     DiffLabel: TLabel;
     Label2: TLabel;
     TimerROI: TTimer;
-    Label4: TLabel;
     VarianceEdit: TSpinEdit;
     RadiusEdit: TSpinEdit;
         procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);

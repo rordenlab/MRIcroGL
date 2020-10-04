@@ -1,5 +1,7 @@
 unit nifti;
 {$IFDEF FPC}{$mode objfpc}{$H+}{$ENDIF}
+//{$IFDEF FPC}{$mode delphi} {$H+}{$ENDIF}
+
 {$DEFINE CUSTOMCOLORS}
 interface
 {$include opts.inc} //for  DEFINE FASTGZ
@@ -26,13 +28,18 @@ uses
   {$IFDEF AFNI}afni_fdr,{$ENDIF}
   {$IFDEF BZIP2}bzip2stream,{$ENDIF}
   {$IFDEF BMP} Graphics, GraphType,{$ENDIF}
-  {$IFDEF PARALLEL}MTProcs,mtprocs,mtpcpu,{$ENDIF}
+  {$IFDEF PARALLEL}mtprocs,mtpcpu,{$ENDIF}
   {$IFDEF TIMER} DateUtils,{$ENDIF}
   {$IFDEF FASTGZ} SynZip, {$ENDIF}
   {$IFDEF OPENFOREIGN} nifti_foreign, {$ENDIF}
   {$IFDEF CUSTOMCOLORS} colorTable,  {$ENDIF}
   {$IFDEF GZIP}zstream, umat, GZIPUtils, {$ENDIF} //Freepascal includes the handy zstream function for decompressing GZip files
-  {$IFDEF TIF} nifti_tiff, {$ENDIF} {$IFDEF SSE} sse2, {$ENDIF}
+  {$IFDEF TIF} nifti_tiff, {$ENDIF}
+  {$IFDEF SSE}
+  		  //sse2, ssei16,
+  		  sse,
+  {$ENDIF}
+  nifti_save,
   sortu, strutils, dialogs, clipbrd, SimdUtils, sysutils,Classes, nifti_types, Math, VectorMath, otsuml;
 //Written by Chris Rorden, released under BSD license
 //This is the header NIfTI format http://nifti.nimh.nih.gov/nifti-1/
@@ -46,7 +53,11 @@ uses
 //Note raw image daya begins vox_offset bytes into the image data file
 //  For example, in a typical NII file, the header is the first 348 bytes,
 //  but the image data begins at byte 352 (as this is evenly divisible by 8)
-
+(*const
+	 kDTIno = -1; //this is NOT a DTI V1 image
+     kDTIscalar = 0; //this might be a DTI V1 image, but display as typical image
+     kDTIrgb = 1; //display as RGB V1 image
+     kDTIlines = 2; //display as lines  *)
 Type
   TCluster = record
 		CogXYZ, PeakXYZ: TVec3; //Center of Gravity, Peak
@@ -54,6 +65,10 @@ Type
 		PeakStructure, Structure: string[248];
   end;
   TClusters = array of TCluster;
+  {$IFNDEF DYNRGBA}
+  TRGBA0 = array [0..MAXINT] of TRGBA;
+  TRGBAp = ^TRGBA0; //pointer to RGBA array
+  {$ENDIF}
 
   TNIfTI = Class(TObject)  // This is an actual class definition :
       // Internal class field definitions - only accessible in this unit
@@ -66,7 +81,11 @@ Type
         fHdr, fHdrNoRotation : TNIFTIhdr;
         fKnownOrientation, fIsNativeEndian: boolean;
         fFileName,fShortName, fBidsName: string;
+        {$IFDEF DYNRGBA}
         fVolRGBA: TRGBAs;
+        {$ELSE}
+        fVolRGBA: TRGBAp;
+        {$ENDIF}
         //fLabels: TStringList;
         fhistogram: TLUT;
         fisLinearReslice, fIsOverlay, fIsDrawing: boolean; //booleans do not generate 32-bit RGBA images
@@ -84,16 +103,18 @@ Type
         procedure InitUInt8();
         procedure InitInt16();
         procedure InitFloat32();
+        procedure DetectV1();
         //display functions apply windo min/max to generate image with desired brightness/contrast
         procedure SetDisplayMinMaxRGB24();
+        //procedure SetDisplayMinMaxRGBV1();
+        procedure LoadRGBVector();
         procedure DisplayLabel2Uint8();
         //procedure SetDisplayMinMaxFloat32();
         //procedure SetDisplayMinMaxInt16();
         //procedure SetDisplayMinMaxUint8();
         {$IFDEF PARALLEL}
-        procedure SetDisplayMinMaxParallel(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
+        //procedure SetDisplayMinMaxParallel(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
         {$ENDIF}
-        procedure SetDisplayMinMax(isForceRefresh: boolean = false); overload;
         procedure ConvertUint16Int16();
         procedure Convert2Float();
         procedure Convert2RGB(); //convert RGBA -> RGB
@@ -107,8 +128,13 @@ Type
         procedure ApplyCutout();
         function loadForeign(FileName : AnsiString; var  rawData: TUInt8s; var lHdr: TNIFTIHdr): boolean;// Load 3D data
         function LoadRaw(FileName : AnsiString; out isNativeEndian: boolean): boolean;
+        //function SaveBVox(bVoxFileName: string; var hdr: TNIFTIhdr; var img8: TUInt8s): boolean;
+        //function SaveOsp(OspFileName: string; var hdr: TNIFTIhdr; var img8: TUInt8s): boolean;
+        //function SaveNii(niftiFileName: string): boolean; overload;
+        //function SaveFormatBasedOnExt(fnm: string; var hdr: TNIFTIhdr; var img8: TUInt8s): boolean; overload;
+        //function SaveNii(fnm: string; var hdr: TNIFTIhdr; var img8: TUInt8s): boolean; overload;
         {$IFDEF GZIP}
-        function SaveGz(niftiFileName: string): boolean;
+        //function SaveGz(niftiFileName: string; var hdr: TNIFTIhdr; var img8: TUInt8s): boolean;
         {$IFDEF FASTGZ}function LoadFastGz(FileName : AnsiString; out isNativeEndian: boolean): boolean;{$ENDIF}
         function LoadGz(FileName : AnsiString; out isNativeEndian: boolean): boolean;
         {$ENDIF}
@@ -130,11 +156,13 @@ Type
         LoadFewVolumes: boolean;
         SortClustersBySize : boolean;
         HiddenByCutout: boolean;
+        //fDTImode: integer; //kDTIno, kDTIscalar,kDTIrgb,kDTIlines
         IsShrunken : boolean;
         IsFightInterpolationBleeding: boolean;
         IsInterpolated : boolean;
         ZeroIntensityInvisible: boolean;
         MaxTexMb: integer; //maximum number of voxels in any dimension
+        isAntiAliasHugeTexMb: boolean;
         MaxMM: single; //maximum mm in any dimension
         {$IFDEF AFNI}
         afnis: TAFNIs;
@@ -164,6 +192,7 @@ Type
         procedure SaveRotated(fnm: string; perm: TVec3i);
         function RemoveSmallClusters(thresh, mm: double; NeighborMethod: integer = 1): single; //returns surviving mm3
         function SaveCropped(fnm: string; crop: TVec6i; cropVols: TPoint): boolean;
+        function SaveAs8Bit(fnm: string; Lo,Hi: single): boolean;
         function SaveRescaled(fnm: string; xFrac, yFrac, zFrac: single; OutDataType, Filter: integer; isAllVolumes: boolean): boolean;
         procedure SaveAsSourceOrient(NiftiOutName: string; rawVolBytes: TUInt8s);  overload;
         procedure SaveAsSourceOrient(NiftiOutName, HdrDescrip, IntentName: string; rawVolBytes: TUInt8s; dataType: integer; intentCode: integer = 0; mn: single = 0; mx: single = 0);
@@ -197,7 +226,19 @@ Type
         property Mat: TMat4 read fMat;
         property InvMat: TMat4 read fInvMat;
         property Dim: TVec3i read fDim;
+        {$IFDEF DYNRGBA}
         property VolRGBA: TRGBAs read fVolRGBA;
+        {$IFDEF CPUGRADIENTS}
+        procedure CreateGradientVolume (rData: TRGBAs; Xsz,Ysz,Zsz: integer; out Vol : TRGBAs);
+        function GenerateGradientVolume: TRGBAs; overload;
+        {$ENDIF}
+        {$ELSE}
+        property VolRGBA: TRGBAp read fVolRGBA;
+        {$IFDEF CPUGRADIENTS}
+        procedure CreateGradientVolume (rData: TRGBAp; Xsz,Ysz,Zsz: integer; out Vol : TRGBAp);
+        function GenerateGradientVolume: TRGBAp; overload;
+        {$ENDIF}
+        {$ENDIF}
         property VolRawBytes: TUInt8s read fRawVolBytes;
         property Filename: String read fFileName;
         property BidsName: String read fBidsName;
@@ -206,28 +247,24 @@ Type
         procedure Mask(MaskingVolume: TUInt8s; isPreserveMask: boolean);
         procedure RemoveHaze(isSmoothEdges: boolean = true; isSingleObject: boolean = true; OtsuLevels : integer = 5);
         procedure GPULoadDone();
-        function Save(niftiFileName: string): boolean;
-        function SaveBVox(bVoxFileName: string): boolean;
-        function SaveOsp(OspFileName: string): boolean;
+        function SaveFormatBasedOnExt(fnm: string): boolean; overload; //filename determines format.nii, .tif, .bvox, .nrrd, .nhdr etc...
         function Load(niftiFileName: string): boolean; overload;
         function Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s): boolean; overload;
         function Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; volumeNumber: integer = 0; isKeepContrast: boolean = false): boolean; overload;
         procedure SetDisplayMinMax(newMin, newMax: single); overload;
+        procedure SetDisplayMinMax(isForceRefresh: boolean = false); overload;
         procedure SetDisplayMinMaxNoUpdate(newMin, newMax: single); overload;
         procedure SetCutoutNoUpdate(CutoutLow, CutoutHigh: TVec3);
         procedure GenerateClusters(thresh, smallestClusterMM3: single; NeighborMethod: integer = 1; isDarkAndBright: boolean = false); overload;
         //thresh, mm: double; NeighborMethod: integer
         procedure GenerateClusters(LabelMap: TNIfTI; thresh, smallestClusterMM3: single; NeighborMethod: integer = 1; isDarkAndBright: boolean = false); overload;
         function DisplayRGBGreen(): TUInt8s;
+        procedure DisplayRGB();
         procedure SetDisplayColorScheme(clutFileName: string; cTag: integer);
         procedure SetDisplayVolume(newDisplayVolume: integer);
         //procedure SetLabelMask(Idx: integer; isMasked: boolean);
         procedure ForceUpdate;
         procedure SetClusters(c: TClusters; notes: string);
-        {$IFDEF CPUGRADIENTS}
-        procedure CreateGradientVolume (rData: TRGBAs; Xsz,Ysz,Zsz: integer; out Vol : TRGBAs);
-        function GenerateGradientVolume: TRGBAs; overload;
-        {$ENDIF}
         constructor Create(); overload; //empty volume
         constructor Create(niftiFileName: string; backColor: TRGBA;  tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s); overload;
         constructor Create(niftiFileName: string; backColor: TRGBA; lLoadFewVolumes: boolean; lMaxTexMb: integer; out isOK: boolean); overload; //background
@@ -238,8 +275,14 @@ Type
         destructor Destroy; override;
   end;
   {$IFDEF CPUGRADIENTS}
+  {$IFDEF DYNRGBA}
   procedure CreateGradientVolumeX (rData: TUInt8s; Xsz,Ysz,Zsz, isRGBA: integer; out VolRGBA : TRGBAs);
+  {$ELSE}
+  procedure CreateGradientVolumeX (rData: TUInt8s; Xsz,Ysz,Zsz, isRGBA: integer; out VolRGBA : TRGBAp);
+  procedure SetLengthP(var S: TRGBAp; Len: SizeInt);
   {$ENDIF}
+  {$ENDIF}
+
 
 implementation
 
@@ -1409,7 +1452,18 @@ begin
   lSmoothImg := nil;
 end;
 
+{$IFNDEF DYNRGBA}
+procedure SetLengthP(var S: TRGBAp; Len: SizeInt); inline;
+begin
+	ReAllocMem(S, Len *sizeof(TRGBA));
+end;
+{$ENDIF}
+
+{$IFDEF DYNRGBA}
 procedure CreateGradientVolumeX (rData: TUInt8s; Xsz,Ysz,Zsz, isRGBA: integer; out VolRGBA : TRGBAs);
+{$ELSE}
+procedure CreateGradientVolumeX (rData: TUInt8s; Xsz,Ysz,Zsz, isRGBA: integer; out VolRGBA : TRGBAp);
+{$ENDIF}
 //compute gradients for each voxel... Output texture in form RGBA
 //  RGB will represent as normalized X,Y,Z gradient vector:  Alpha will store gradient magnitude
 const
@@ -1417,7 +1471,11 @@ const
 var
   X, Y,Z,Index,XYsz : int64;
   VolData: TUInt8s;
+  {$IFDEF DYNRGBA}
   tRGBA: TRGBAs;
+  {$ELSE}
+  tRGBA: TRGBAp = nil;
+  {$ENDIF}
   GradMagS: TFloat32s;
 Begin
   tRGBA := nil;
@@ -1426,43 +1484,76 @@ Begin
   XYsz :=  Xsz*Ysz;
   Setlength (VolData,XYsz*Zsz);
   if isRGBA = 1 then begin
+     {$IFDEF DYNRGBA}
      tRGBA := TRGBAs(rData );
+     {$ELSE}
+     tRGBA := TRGBAp(rData );
+     {$ENDIF}
      for Index := 0 to ((XYsz*Zsz)-1) do
-      VolData[Index] := tRGBA[Index].a;
+     {$IFDEF DYNRGBA}
+     VolData[Index] := tRGBA[Index].a;
+     {$ELSE}
+     VolData[Index] := tRGBA^[Index].a;
+     {$ENDIF}
   end else
     for Index := 0 to ((XYsz*Zsz)-1) do
       VolData[Index] := rData[Index];
   //next line: blur the data
   SmoothVol (VolData, Xsz,Ysz,Zsz);
+  {$IFDEF DYNRGBA}
   SetLength (VolRGBA, XYsz*Zsz);
+  {$ELSE}
+  SetLengthP (VolRGBA, XYsz*Zsz);
+  {$ENDIF}
   SetLength (GradMagS,XYsz*Zsz);
   for Index := 0 to ((XYsz*Zsz)-1) do //we can not compute gradients for image edges, so initialize volume so all voxels are transparent
-    VolRGBA[Index] := kRGBAclear;
+  	  {$IFDEF DYNRGBA}
+      VolRGBA[Index] := kRGBAclear;
+	  {$ELSE}
+      VolRGBA^[Index] := kRGBAclear;
+	  {$ENDIF}
   for Z := 1 To Zsz - 2 do  //for X,Y,Z dimensions indexed from zero, so := 1 gives 1 voxel border
     for Y := 1 To Ysz - 2 do
       for X := 1 To Xsz - 2 do begin
         Index := (Z * XYsz) + (Y * Xsz) + X;
         //Next line computes gradients using Sobel filter
+        {$IFDEF DYNRGBA}
         VolRGBA[Index] := Sobel (VolData, Xsz,Ysz, Index,GradMagS[Index]);
+        {$ELSE}
+        VolRGBA^[Index] := Sobel (VolData, Xsz,Ysz, Index,GradMagS[Index]);
+        {$ENDIF}
       end;//X
   VolData := nil;
   //next: generate normalized gradient magnitude values
   NormVol (GradMagS);
   for Index := 0 to ((XYsz*Zsz)-1) do
-    VolRGBA[Index].A := round(GradMagS[Index]*kEdgeSharpness);
+   {$IFDEF DYNRGBA}
+   VolRGBA[Index].A := round(GradMagS[Index]*kEdgeSharpness);
+    {$ELSE}
+    VolRGBA^[Index].A := round(GradMagS[Index]*kEdgeSharpness);
+    {$ENDIF}
   GradMagS := nil;
 end;
 
+{$IFDEF DYNRGBA}
 procedure TNIfTI.CreateGradientVolume (rData: TRGBAs; Xsz,Ysz,Zsz: integer; out Vol : TRGBAs);
+{$ELSE}
+procedure TNIfTI.CreateGradientVolume (rData: TRGBAp; Xsz,Ysz,Zsz: integer; out Vol : TRGBAp);
+{$ENDIF}
 begin
      CreateGradientVolumeX (TUInt8s(rData), Xsz,Ysz,Zsz, 1, Vol);
 end;
 
+{$IFDEF DYNRGBA}
 function TNIfTI.GenerateGradientVolume: TRGBAs;
 var
   GradRGBA : TRGBAs;
+{$ELSE}
+function TNIfTI.GenerateGradientVolume: TRGBAp;
+var
+  GradRGBA : TRGBAp = nil;
+{$ENDIF}
 begin
- //CreateGradientVolume (fVolRGBA, fDim.X, fDim.Y, fDim.Z, GradRGBA);
  CreateGradientVolumeX (TUInt8s(fVolRGBA), fDim.X, fDim.Y, fDim.Z, 1, GradRGBA);
  result := GradRGBA;
 end;
@@ -1578,7 +1669,26 @@ var
     inperm: TVec3i;
     xOffset, yOffset, zOffset: array of int64;
     voxOffset, byteOffset, volBytes,vol, volumesLoaded,  x,y,z, i: int64;
-    //xy, p8, p16: int64;
+(*procedure flipLR(); inline;
+var
+   halfx, x, y, nx, xend, nyzt: int64;
+   tmp8: uint8;
+begin
+ nyzt := max(1, fDim.y) * max(1, fDim.z) * max(1, volumesLoaded);
+ nx := fDim.x;
+ if nx < 2 then exit;
+ halfx := nx div 2;
+ i := 0;
+ for y :=  0 to (nyzt-1) do begin //for each row
+  xend := i + nx - 1;
+  for x := 0 to (halfx) do begin
+  	  tmp8 := rawVolBytes[i+x];
+      rawVolBytes[i+x] := rawVolBytes[xend-x];
+      rawVolBytes[xend-x] := tmp8;
+  end;
+  i := i + nx;
+ end;
+end; //flipLR  *)
 begin
   if (perm.x = 1) and (perm.y = 2) and (perm.z = 3) then begin
      Mat2SForm(outR, fHdr); //could skip: no change!
@@ -1595,6 +1705,7 @@ begin
      Mat2SForm(outR, fHdr); //could skip: bogus
     exit;
   end;
+
   inDim := fDim;
  inStride.x := 1;
  inStride.y := inDim.x;
@@ -2229,441 +2340,12 @@ begin
 end;
 *)
 
-procedure TNIfTI.SaveRotated(fnm: string; perm: TVec3i);
-//perm[1,2,3) means unchanged, perm[-1,2,3] flips X
-{$DEFINE RESLICE}
-var
-  oHdr  : TNIFTIhdr;
-  oMat: TMat4;
-  mStream : TMemoryStream;
-  zStream: TGZFileStream;
-  NiftiOutName, lExt: string;
-  oPad32: Uint32; //nifti header is 348 bytes padded with 4
-  {$IFDEF RESLICE}
-  orawVolBytes: TUInt8s;
-  iMat: TMat4;
-  //oPerm: TVec3i;
-  oDim: TVec3i;
-  oScale : TVec3;
-  {$ENDIF}
-begin
- //showmessage('Memory exhausted ' + inttostr(length(fRawVolBytes))); exit; xxx
- if length(fRawVolBytes) < 1 then begin
-    showmessage(format('Load image to rotate %d %d %d',[fDim.x, fDim.y, fDim.z ] ));
-    exit;
- end;
- oHdr := fHdr;
- oMat := EstimateResidual(fMat, perm);
- Mat2SForm(oMat, oHdr);
- Mat2QForm(oMat, oHdr);
- {$IFDEF RESLICE}
- try
- setlength(orawVolBytes, length(fRawVolBytes));
- except
-   showmessage(format('Memory exhausted (%d bytes) ',[length(fRawVolBytes)]));
-   exit;
- end;
- orawVolBytes := copy(fRawVolBytes, low(fRawVolBytes), length(fRawVolBytes));
- //orawVolBytes := copy(fRawVolBytes, 0, maxint);
- oDim := fDim;
- oScale := fScale;
- iMat := oMat;
- //showmessage( mStr('i!', fMat)+chr(10)+mStr('o', oMat));
- //showmessage(format('%d %d %d', [Perm.x, perm.y, perm.z]));
- if not EstimateReorient(oDim, iMat, oMat, Perm)  then exit;
- //showmessage(format('%d %d %d', [Perm.x, perm.y, perm.z]));
- //showmessage( mStr('i?', fMat)+chr(10)+mStr('o', oMat));
- //showmessage( mStr('i', fMat)+chr(10)+mStr('o', oMat));
- ApplyVolumeReorient(Perm, oMat, oDim, oScale, oHdr, orawVolBytes);
- //Clipboard.AsText := mStr('i', iMat)+chr(10)+mStr('o', oMat);
- {$ENDIF}
- mStream := TMemoryStream.Create;
- oHdr.vox_offset :=  sizeof(oHdr) + 4;
- oHdr.dim[0] := 3;
- if fVolumesLoaded > 1 then oHdr.dim[0] := 4;
- oHdr.dim[4] := fVolumesLoaded;
- oHdr.dim[5] := 1;
- oHdr.dim[6] := 1;
- oHdr.dim[7] := 1;
- mStream.Write(oHdr,sizeof(oHdr));
- oPad32 := 4;
- mStream.Write(oPad32, 4);
- {$IFDEF RESLICE}
- mStream.Write(oRawVolBytes[0], length(fRawVolBytes));
- oRawVolBytes := nil;
- {$ELSE}
- mStream.Write(fRawVolBytes[0], length(fRawVolBytes));
- {$ENDIF}
- mStream.Position := 0;
- FileMode := fmOpenWrite;
- NiftiOutName := fnm;
- lExt := uppercase(extractfileext(NiftiOutName));
- if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
-    if (lExt = '.GZ') then
-       NiftiOutName := ChangeFileExtX(NiftiOutName,'.nii.gz'); //img.gz -> img.nii.gz
-    zStream := TGZFileStream.Create(NiftiOutName, gzopenwrite);
-    zStream.CopyFrom(mStream, mStream.Size);
-    zStream.Free;
- end else begin
-     if (lExt <> '.NII') then
-        NiftiOutName := NiftiOutName + '.nii';
-     mStream.SaveToFile(NiftiOutName); //save uncompressed
- end;
- mStream.Free;
- FileMode := fmOpenRead;
-end;
-
 function NIFTIhdr_SlicesToCoord (var lHdr: TNIFTIhdr; lXslice,lYslice,lZslice: integer): TVec3;
 //ignores origin offset
 begin
     result.x := (lHdr.srow_x[0]*lXslice)+ (lHdr.srow_x[1]*lYslice)+(lHdr.srow_x[2]*lzslice);
     result.y := (lHdr.srow_y[0]*lXslice)+ (lHdr.srow_y[1]*lYslice)+(lHdr.srow_y[2]*lzslice);
     result.z := (lHdr.srow_z[0]*lXslice)+ (lHdr.srow_z[1]*lYslice)+(lHdr.srow_z[2]*lzslice);
-end;
-
-function TNIfTI.SaveCropped(fnm: string; crop: TVec6i; cropVols: TPoint): boolean;
-var
-  oHdr  : TNIFTIhdr;
-  mStream : TMemoryStream;
-  zStream: TGZFileStream;
-  NiftiOutName, lExt: string;
-  isV, isZ, isY: boolean;
-  offsetMM: TVec3;
-  lBPP, ovox, ivox, v,x,y,z: int64;
-  oPad32: Uint32; //nifti header is 348 bytes padded with 4
-  orawVolBytes: TUInt8s;
-  o16s, i16s: TInt16s;
-  o32s, i32s: TInt32s;
-  oMat: TMat4;
-begin
- //xLo goes from 0 (no slices cropped) to (dim[1]-1) all but one slice cropped
- //xHi goes from dim[1] (no slices cropped) to 1 (all but first slice)
- if (crop.xLo < 0) or (crop.yLo < 0) or (crop.zLo < 0) then
-    exit(false);
- if (crop.xHi > fHdr.dim[1]) or (crop.yHi > fHdr.dim[2]) or (crop.zHi > fHdr.dim[3]) then
-    exit(false);
- if (crop.xLo >= crop.xHi) or (crop.yLo >= crop.yHi) or (crop.zLo >= crop.zHi) then
-    exit(false);
- if (cropVols.x >= cropVols.y) or (cropVols.y >  fVolumesLoaded) then
-    exit(false);
- oHdr := fHdr;
- oHdr.dim[0] := 3;
- oHdr.dim[1] := crop.xHi- crop.xLo;
- oHdr.dim[2] := crop.yHi- crop.yLo;
- oHdr.dim[3] := crop.zHi- crop.zLo;
- oHdr.dim[4] := cropVols.y - cropVols.x;
- oHdr.dim[5] := 1;
- oHdr.dim[6] := 1;
- oHdr.dim[7] := 1;
- if (oHdr.dim[4] > 1) then oHdr.dim[1] := 4;
- offsetMM := NIFTIhdr_SlicesToCoord (oHdr,crop.xLo,crop.yLo,crop.zLo);
- oHdr.srow_x[3] := oHdr.srow_x[3] + offsetMM.x;
- oHdr.srow_y[3] := oHdr.srow_y[3] + offsetMM.y;
- oHdr.srow_z[3] := oHdr.srow_z[3] + offsetMM.z;
- oMat := SForm2Mat(oHdr);
- Mat2QForm(oMat, oHdr);
- lBPP := 4;
- case fHdr.datatype of
-   kDT_UNSIGNED_CHAR : lBPP := 1;
-   kDT_SIGNED_SHORT: lBPP := 2;
- end;
- ovox := (oHdr.dim[1]*oHdr.dim[2]*oHdr.dim[3]*oHdr.dim[4]);
- setlength(orawVolBytes, ovox * lBPP);
- //FillChar(orawVolBytes[0], ovox * lBPP, 0);
- ivox := 0;
- ovox := 0;
- i16s := TInt16s(fRawVolBytes);
- i32s := TInt32s(fRawVolBytes);
- o16s := TInt16s(oRawVolBytes);
- o32s := TInt32s(orawVolBytes);
- for v := 1 to fVolumesLoaded do begin
-     isV := (v > cropVols.x) and (v <= cropVols.y);
-     for z := 1 to fHdr.dim[3] do begin
-         isZ := (z > crop.zLo) and (z <= crop.zHi);
-         for y := 1 to fHdr.dim[2] do begin
-             isY := (y > crop.yLo) and (y <= crop.yHi);
-             for x := 1 to fHdr.dim[1] do begin
-                 if (isV) and (isZ) and (isY) and (x > crop.xLo) and (x <= crop.xHi) then begin
-                    if (lBPP = 4) then
-                       o32s[ovox] := i32s[ivox]
-                    else if (lBPP = 2) then
-                       o16s[ovox] := i16s[ivox]
-                    else
-                        orawVolBytes[ovox] := fRawVolBytes[ivox];
-                    ovox := ovox + 1;
-                 end;
-                 ivox := ivox + 1;
-             end; //x
-         end; //y
-     end; //z
- end;  //vol
- //showmessage(format('%d %d  -> %d', [ivox, ovox, oHdr.dim[1]*oHdr.dim[2]*oHdr.dim[3]]));
- mStream := TMemoryStream.Create;
- oHdr.vox_offset :=  sizeof(oHdr) + 4;
- mStream.Write(oHdr,sizeof(oHdr));
- oPad32 := 4;
- mStream.Write(oPad32, 4);
- mStream.Write(oRawVolBytes[0], length(orawVolBytes));
- oRawVolBytes := nil;
- mStream.Position := 0;
- FileMode := fmOpenWrite;
- NiftiOutName := fnm;
- lExt := uppercase(extractfileext(NiftiOutName));
- if (lExt = '.GZ') or (lExt = '.VOI') then begin  //
-    if (lExt = '.GZ') then
-       NiftiOutName := ChangeFileExtX(NiftiOutName,'.nii.gz'); //img.gz -> img.nii.gz
-    zStream := TGZFileStream.Create(NiftiOutName, gzopenwrite);
-    zStream.CopyFrom(mStream, mStream.Size);
-    zStream.Free;
- end else begin
-     if (lExt <> '.NII') then
-        NiftiOutName := NiftiOutName + '.nii';
-     mStream.SaveToFile(NiftiOutName); //save uncompressed
- end;
- mStream.Free;
- FileMode := fmOpenRead;
- exit(true);
-end;
-
-function TNIfTI.SaveRescaled(fnm: string; xFrac, yFrac, zFrac: single; OutDataType, Filter: integer; isAllVolumes: boolean): boolean;
-{$DEFINE 4DRESCALE}
-var
-  oHdr  : TNIFTIhdr;
-  mStream : TMemoryStream;
-  zStream: TGZFileStream;
-  NiftiOutName, lExt: string;
-  m: TMat4;
-  oPad32: Uint32; //nifti header is 348 bytes padded with 4
-  orawVolBytes: TUInt8s;
-  inVolBytes: int64;
-  {$IFDEF 4DRESCALE}
-  vrawVolBytes: TUInt8s;
-  outVolBytes, v, j, vOffset: int64;
-  vHdr, vvHdr  : TNIFTIhdr;
-  {$ENDIF}
-begin
- oHdr := fHdr;
- //showmessage(format('%d %d', [oHdr.dim[4], fVolumesLoaded])); exit;
- {$IFDEF 4DRESCALE}
- vHdr := fHdr;
- {$ENDIF}
- setlength(orawVolBytes, length(fRawVolBytes));
- inVolBytes := oHdr.dim[1] * oHdr.dim[2] * oHdr.dim[3] * (oHdr.bitpix div 8);
- orawVolBytes := copy(fRawVolBytes, 0, inVolBytes);
- if not ShrinkOrEnlarge(oHdr, orawVolBytes, Filter, xFrac, yFrac, zFrac, OutDataType) then begin
-    showmessage('Catastrophic error: perhaps format not supported '+inttostr(OutDataType));
-    orawVolBytes := nil;
-    exit(false);
- end;
- m := SForm2Mat(oHdr);
- Mat2QForm(m, oHdr);
- mStream := TMemoryStream.Create;
- oHdr.vox_offset :=  sizeof(oHdr) + 4;
- oHdr.dim[0] := 3;
- oHdr.dim[4] := 1;
- oHdr.dim[5] := 1;
- oHdr.dim[6] := 1;
- oHdr.dim[7] := 1;
- {$IFDEF 4DRESCALE}
- //showmessage(format('%d %d', [length(oRawVolBytes), fVolumesLoaded]));
- if (fVolumesLoaded > 1) and (isAllVolumes) then begin
-    outVolBytes := length(oRawVolBytes);
-    //showmessage(format('%d %d', [length(oRawVolBytes), fVolumesLoaded]));
-    setlength(orawVolBytes,  outVolBytes * fVolumesLoaded);
-    oHdr.dim[4] := fVolumesLoaded;
-    oHdr.dim[0] := 4;
-    for v := 2 to fVolumesLoaded do begin
-       vrawVolBytes := copy(fRawVolBytes, (v-1) * inVolBytes, inVolBytes);
-       vvHdr := vHdr;
-       ShrinkOrEnlarge(vvHdr, vrawVolBytes, Filter, xFrac, yFrac, zFrac, OutDataType);
-       vOffset := (v-1) * outVolBytes;
-       for j := 0 to (outVolBytes-1) do
-           orawVolBytes[j+vOffset] := vrawVolBytes[j];
-    end;  //vol
- end; //4D data
- {$ENDIF}
- mStream.Write(oHdr,sizeof(oHdr));
- oPad32 := 4;
- mStream.Write(oPad32, 4);
- mStream.Write(oRawVolBytes[0], length(oRawVolBytes));
- oRawVolBytes := nil;
- mStream.Position := 0;
- FileMode := fmOpenWrite;
- NiftiOutName := fnm;
- lExt := uppercase(extractfileext(NiftiOutName));
- if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
-    if (lExt = '.GZ') then
-       NiftiOutName := ChangeFileExtX(NiftiOutName,'.nii.gz'); //img.gz -> img.nii.gz
-    zStream := TGZFileStream.Create(NiftiOutName, gzopenwrite);
-    zStream.CopyFrom(mStream, mStream.Size);
-    zStream.Free;
- end else begin
-     if (lExt <> '.NII') then
-        NiftiOutName := NiftiOutName + '.nii';
-     mStream.SaveToFile(NiftiOutName); //save uncompressed
- end;
- mStream.Free;
- FileMode := fmOpenRead;
- exit(true);
-end;
-
-procedure TNIfTI.SaveAsSourceOrient(NiftiOutName, HdrDescrip, IntentName: string; rawVolBytes: TUInt8s; dataType: integer; intentCode: integer = 0; mn: single = 0; mx: single = 0);
-
-//for drawing rotate back to orientation of input image!
-var
-   nVox: int64;
-   oHdr  : TNIFTIhdr;
-   oDim, oPerm: TVec3i;
-   oScale: TVec3;
-   oPad32: Uint32; //nifti header is 348 bytes padded with 4
-   i: integer;
-   mStream : TMemoryStream;
-   zStream: TGZFileStream;
-   lExt: string;
-begin
- oHdr := fHdr;
- oHdr.descrip := HdrDescrip;
- oHdr.intent_name := IntentName;
- oHdr.intent_code:= intentCode;
- oHdr.datatype := dataType;
- if (dataType = kDT_UNSIGNED_CHAR) then
-    oHdr.bitpix := 8
- else if (dataType = kDT_INT16) then
-   oHdr.bitpix := 16
- else if (dataType = kDT_FLOAT) then
-   oHdr.bitpix := 32
- else begin
-      showmessage('Unsupported export datatype '+inttostr(datatype));
-     exit;
- end;
- oHdr.scl_slope := 1;
- oHdr.scl_inter := 0;
- oHdr.cal_min:= mn;
- oHdr.cal_max:= mx;
- oHdr.glmin:= 0;
- oHdr.glmax:= 0;
- oHdr.dim[0] := 3;
- for i := 4 to 7 do
-     oHdr.dim[i] := 1;
- nVox := prod(fDim);
- oDim := fDim;
- oScale := fScale;
- //rawVolBytes:= TUInt8s(rawVol);
- //output perm reverses input permute
- //fPermInOrient
- oPerm := pti(1,2,3);
- for i := 0 to 2 do
-     if abs(fPermInOrient.v[i]) = 1 then
-       oPerm.X := (i+1) * sign(fPermInOrient.v[i]);
- for i := 0 to 2 do
-     if abs(fPermInOrient.v[i]) = 2 then
-       oPerm.Y := (i+1) * sign(fPermInOrient.v[i]);
- for i := 0 to 2 do
-     if abs(fPermInOrient.v[i]) = 3 then
-       oPerm.Z := (i+1) * sign(fPermInOrient.v[i]);
- //showmessage(format('%d %d %d -> %d %d %d', [fPermInOrient.X, fPermInOrient.Y, fPermInOrient.Z, oPerm.X, oPerm.y, oPerm.Z]));
- ApplyVolumeReorient(oPerm, fMatInOrient, oDim, oScale, oHdr, rawVolBytes);
- mStream := TMemoryStream.Create;
- oHdr.vox_offset :=  sizeof(oHdr) + 4;
- mStream.Write(oHdr,sizeof(oHdr));
- oPad32 := 4;
- mStream.Write(oPad32, 4);
- mStream.Write(rawVolBytes[0],nvox * (oHdr.bitpix div 8));
- mStream.Position := 0;
- FileMode := fmOpenWrite;
- lExt := uppercase(extractfileext(NiftiOutName));
- if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
-    if (lExt = '.GZ') then
-       NiftiOutName := ChangeFileExtX(NiftiOutName,'.nii.gz'); //img.gz -> img.nii.gz
-    zStream := TGZFileStream.Create(NiftiOutName, gzopenwrite);
-    zStream.CopyFrom(mStream, mStream.Size);
-    zStream.Free;
- end else begin
-     if (lExt <> '.NII') then
-        NiftiOutName := NiftiOutName + '.nii';
-     mStream.SaveToFile(NiftiOutName); //save uncompressed
- end;
- mStream.Free;
- FileMode := fmOpenRead;
-end;
-
-procedure TNIfTI.SaveAsSourceOrient(NiftiOutName: string; rawVolBytes: TUInt8s);
-//for drawing rotate back to orientation of input image!
-var
-   oHdr  : TNIFTIhdr;
-   oDim, oPerm: TVec3i;
-   oScale: TVec3;
-   oPad32: Uint32; //nifti header is 348 bytes padded with 4
-   nBytes,nVox: int64;
-   i: integer;
-   mStream : TMemoryStream;
-   zStream: TGZFileStream;
-   lExt: string;
-begin
- nBytes := length(rawVolBytes);
- nVox := prod(fDim);
- oHdr := fHdr;
- if (nBytes = nVox) then
-   oHdr.bitpix := 8
- else if (nBytes = (2*nVox)) then
-   oHdr.bitpix := 16
- else if (nBytes = (4*nVox)) then
-   oHdr.bitpix := 32
- else
-     exit;
- if oHdr.bitpix = 8 then
-   oHdr.datatype := kDT_UNSIGNED_CHAR
- else if oHdr.bitpix = 16 then
-   oHdr.datatype := kDT_INT16
- else
-     oHdr.datatype := kDT_FLOAT;
- oDim := fDim;
- oScale := fScale;
- oHdr.scl_slope := 1;
- oHdr.scl_inter := 0;
- oHdr.cal_min:= 0.0;
- oHdr.cal_max:= 0.0;
- oHdr.glmin:= 0;
- oHdr.glmax:= 0;
- oHdr.dim[0] := 3;
- for i := 4 to 7 do
-     oHdr.dim[i] := 1;
- //output perm reverses input permute
- //fPermInOrient
- oPerm := pti(1,2,3);
- for i := 0 to 2 do
-     if abs(fPermInOrient.v[i]) = 1 then
-       oPerm.X := (i+1) * sign(fPermInOrient.v[i]);
- for i := 0 to 2 do
-     if abs(fPermInOrient.v[i]) = 2 then
-       oPerm.Y := (i+1) * sign(fPermInOrient.v[i]);
- for i := 0 to 2 do
-     if abs(fPermInOrient.v[i]) = 3 then
-       oPerm.Z := (i+1) * sign(fPermInOrient.v[i]);
- //showmessage(format('%d %d %d -> %d %d %d', [fPermInOrient.X, fPermInOrient.Y, fPermInOrient.Z, oPerm.X, oPerm.y, oPerm.Z]));
- ApplyVolumeReorient(oPerm, fMatInOrient, oDim, oScale, oHdr, rawVolBytes);
- mStream := TMemoryStream.Create;
- oHdr.vox_offset :=  sizeof(oHdr) + 4;
- mStream.Write(oHdr,sizeof(oHdr));
- oPad32 := 4;
- mStream.Write(oPad32, 4);
- mStream.Write(rawVolBytes[0],length(rawVolBytes));
-  mStream.Position := 0;
- FileMode := fmOpenWrite;
- lExt := uppercase(extractfileext(NiftiOutName));
- if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
-    if (lExt = '.GZ') then
-       NiftiOutName := ChangeFileExtX(NiftiOutName,'.nii.gz'); //img.gz -> img.nii.gz
-    zStream := TGZFileStream.Create(NiftiOutName, gzopenwrite);
-    zStream.CopyFrom(mStream, mStream.Size);
-    zStream.Free;
- end else begin
-     if (lExt <> '.NII') then
-        NiftiOutName := NiftiOutName + '.nii';
-     mStream.SaveToFile(NiftiOutName); //save uncompressed
- end;
- mStream.Free;
- FileMode := fmOpenRead;
 end;
 
 procedure TNIfTI.VolumeReorient();
@@ -2945,7 +2627,7 @@ begin
      lHdr.srow_z[3] := ((lHdr.dim[3]-1)*lHdr.pixdim[3]) * -0.5;
 end;
 
-function Nifti2to1(h2 : TNIFTI2hdr): TNIFTIhdr;
+function Nifti2to1(h2 : TNIFTI2hdr): TNIFTIhdr; overload;
 type
   tmagic = packed record
     case byte of
@@ -3187,8 +2869,9 @@ begin
 end;
 
 const
-     //kLoadFewVolumesBytes =  16777216 * 4;
-     kLoadFewVolumesBytes =  1677721 * 4;
+     kLoadFewVolumesBytes =  16777216 * 4;
+     kLoadFewVolumesN = 3;
+     //kLoadFewVolumesBytes =  168 * 144 * 111 * 3 *   4; //HCP DTI sequence V1 image
 
 function HdrVolumes(hdr: TNIfTIhdr): integer;
 var
@@ -3312,6 +2995,14 @@ begin
   gz.ZStreamDone;
 end;
 
+procedure TNIfTI.DetectV1();
+begin
+  if (fVolumesLoaded <> 3) or (fHdr.intent_code = kNIFTI_INTENT_RGB_VECTOR) or (fHdr.datatype <> kDT_FLOAT32) then
+     exit;
+  if AnsiContainsText(fShortName,'_V1') then
+  	 fHdr.intent_code := kNIFTI_INTENT_RGB_VECTOR;
+end;
+
 function TNIfTI.LoadFastGZ(FileName : AnsiString; out isNativeEndian: boolean): boolean;
 //FSL compressed nii.gz file
 var
@@ -3362,10 +3053,13 @@ begin
   end;
   fVolumesLoaded := max(HdrVolumes(fHdr),1);
   fVolumesTotal :=  fVolumesLoaded;
-  if (HdrVolumes(fHdr) > 1) and (not fIsOverlay) then begin
+  DetectV1();
+  if (fVolumesLoaded = 3) and (fHdr.intent_code = kNIFTI_INTENT_RGB_VECTOR) and (fHdr.datatype = kDT_FLOAT32) then
+     volBytes := volBytes * fVolumesLoaded
+  else if (HdrVolumes(fHdr) > 1) and (not fIsOverlay) then begin
      if LoadFewVolumes then
        //fVolumesLoaded :=  trunc((16777216.0 * 4) /volBytes)
-       fVolumesLoaded :=  trunc((kLoadFewVolumesBytes) /volBytes)
+       fVolumesLoaded :=  max(trunc((kLoadFewVolumesBytes) /volBytes), kLoadFewVolumesN)
      else
          fVolumesLoaded :=  trunc(2147483647.0 /volBytes);
      if fVolumesLoaded < 1 then fVolumesLoaded := 1;
@@ -3391,7 +3085,7 @@ function TNIfTI.LoadGZ(FileName : AnsiString; out isNativeEndian: boolean): bool
 //FSL compressed nii.gz file
 var
   {$IFDEF FASTGZ}
-  F: File of byte;
+  //F: File of byte;
   {$ENDIF}
   Stream: TGZFileStream;
   volBytes: int64;
@@ -3436,10 +3130,13 @@ begin
   volBytes := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3]* (fHdr.bitpix div 8);
   fVolumesLoaded := max(HdrVolumes(fHdr),1);
   fVolumesTotal :=  fVolumesLoaded;
-  if (HdrVolumes(fHdr) > 1) and (not fIsOverlay) then begin
+  DetectV1();
+  if (fVolumesLoaded = 3) and (fHdr.intent_code = kNIFTI_INTENT_RGB_VECTOR) and (fHdr.datatype = kDT_FLOAT32) then
+     volBytes := volBytes * fVolumesLoaded
+  else if (HdrVolumes(fHdr) > 1) and (not fIsOverlay) then begin
      if LoadFewVolumes then
        //fVolumesLoaded :=  trunc((16777216.0 * 4) /volBytes)
-        fVolumesLoaded :=  trunc((kLoadFewVolumesBytes) /volBytes)
+        fVolumesLoaded :=  max(trunc((kLoadFewVolumesBytes) /volBytes), kLoadFewVolumesN)
      else
          fVolumesLoaded :=  trunc(2147483647.0 /volBytes);
      if fVolumesLoaded < 1 then fVolumesLoaded := 1;
@@ -3462,18 +3159,18 @@ begin
  result := true;
 end;
 
-function TNIfTI.SaveGz(niftiFileName: string): boolean;
+(*function SaveGz(niftiFileName: string; var hdr: TNIFTIhdr; var img8: TUInt8s): boolean;
 var
    Stream : TGZFileStream;
    pad: uint32;
-   hdr : TNIFTIhdr;
+   //hdr : TNIFTIhdr;
 begin
  result := false;
  if fileexists(niftiFileName) then begin
     Showmessage('Unable to overwrite existing file "'+niftiFileName+'".');
     exit;
  end;
- hdr := fHdr;
+ //hdr := fHdr;
  hdr.HdrSz:= SizeOf (TNIFTIHdr);
  hdr.vox_offset:= 352;
  Stream:= TGZFileStream.Create(niftiFileName, gzopenwrite);
@@ -3481,105 +3178,25 @@ begin
     Stream.WriteBuffer(hdr, SizeOf(TNIFTIHdr));
     pad := 0;
     Stream.WriteBuffer(pad, SizeOf(pad));
-    Stream.WriteBuffer(fRawVolBytes[0], length(fRawVolBytes));
-
+    Stream.WriteBuffer(img8[0], length(img8));
  Finally
   Stream.Free;
  End;
  result := true;
-end;
+end; *)
+{$ENDIF} //GZIP
 
-{$ENDIF}
-
-function TNIfTI.SaveOsp(OspFileName: string): boolean;
-var
-  nByte: int64;
-  Stream : TFileStream;
-  fnm : string;
-  txt : TextFile;
+function TNIfTI.SaveFormatBasedOnExt(fnm: string): boolean; overload; //filename determines format.nii, .tif, .bvox, .nrrd, .nhdr etc...
 begin
- fnm := changefileext(OspFileName,'.osp');
- if fileexists(fnm) then begin
-    showmessage('Already a file named '+fnm);
-    exit;
- end;
- AssignFile (txt,fnm);
- fnm := changefileext(OspFileName,'.raw');
- Rewrite(txt);
- Writeln(txt, '<?xml version="1.0"?>');
- Writeln(txt, '<!-- OSPRay format file -->');
- Writeln(txt, '<volume name="volume">');
- Writeln(txt, format('  <dimensions> %d %d %d </dimensions>',[fHdr.dim[1], fHdr.dim[2], fHdr.dim[3]]));
- nByte := fHdr.dim[1] * fHdr.dim[2] * fHdr.dim[3];
- if fHdr.datatype = kDT_UINT8 then begin
-    Writeln(txt, '  <voxelType> uchar </voxelType>');
- end else if fHdr.datatype = kDT_INT16 then begin
-   Writeln(txt, '  <voxelType> short </voxelType>');
-   nByte := nByte * 2;
- end else if fHdr.datatype = kDT_FLOAT then begin
-     Writeln(txt, '  <voxelType> float </voxelType>');
-     nByte := nByte * 4;
- end;
- Writeln(txt, '  <samplingRate> 1.0 </samplingRate> ');
- Writeln(txt, format('  <filename> %s </filename> ',[extractfilename(fnm)]));
- Writeln(txt, '</volume> ');
- CloseFile(txt);
- Stream:= TFileStream.Create(fnm, fmCreate);
- Try
-    Stream.WriteBuffer(fRawVolBytes[0], nByte);
- Finally
-  Stream.Free;
- End;
- result := true;
+     result := SaveVolumeFormatBasedOnExt(fnm, fHdr, fRawVolBytes);
 end;
 
-
-function TNIfTI.SaveBVox(bVoxFileName: string): boolean;
-var
-  nX,nY,nZ,nVol: uint32;
-  i, nVox: int64;
-  vol16 : TInt16s;
-  vol32, v: TFloat32s;
-  Stream : TFileStream;
-  rawMin, rawMax, rawRange: single;
+(*function TNIfTI.SaveNii(niftiFileName: string): boolean;
 begin
- nX := fHdr.dim[1];
- nY := fHdr.dim[2];
- nZ := fHdr.dim[3];
- nVol := 1;
- nVox := nX * nY * nZ * nVol;
- setlength(v, nVox);
- vol16 := TInt16s(fRawVolBytes);
- vol32 := TFloat32s(fRawVolBytes);
- rawMin := (fMin - fHdr.scl_inter)/fHdr.scl_slope;
- rawMax := (fMax - fHdr.scl_inter)/fHdr.scl_slope;
- rawRange := abs(rawMax-rawMin);
- if fHdr.datatype = kDT_UINT8 then begin
-    for i := 0 to (nVox-1) do
-        v[i] := (fRawVolBytes[i]-rawMin) / rawRange;
- end else if fHdr.datatype = kDT_INT16 then begin
-     for i := 0 to (nVox-1) do
-         v[i] := (vol16[i]-rawMin) / rawRange;
- end else if fHdr.datatype = kDT_FLOAT then begin
-   for i := 0 to (nVox-1) do
-       v[i] := (vol32[i]-rawMin) / rawRange;
- end;
- Stream:= TFileStream.Create(bVoxFileName, fmCreate);
- Try
-    Stream.WriteBuffer(nX, SizeOf(nX));
-    Stream.WriteBuffer(nY, SizeOf(nX));
-    Stream.WriteBuffer(nZ, SizeOf(nX));
-    Stream.WriteBuffer(nVol, SizeOf(nX));
-    Stream.WriteBuffer(v[0], length(fRawVolBytes)* sizeof(single));
- Finally
-  Stream.Free;
- End;
- v := nil;
- result := true;
-end;
+     result := SaveNii(niftiFileName, fHdr, fRawVolBytes);
+end;*)
 
-function TNIfTI.Save(niftiFileName: string): boolean;
-var
+(*var
    Stream : TFileStream;
    pad: uint32;
    hdr : TNIFTIhdr;
@@ -3619,7 +3236,7 @@ begin
   Stream.Free;
  End;
  result := true;
-end;
+end; *)
 
 function isGz(hdrSz: longint): boolean;
 var
@@ -3715,11 +3332,11 @@ begin
   end;
   fVolumesLoaded := max(HdrVolumes(fHdr),1);
   fVolumesTotal :=  fVolumesLoaded;
-  if (HdrVolumes(fHdr) > 1) and (not fIsOverlay) then begin
-     if LoadFewVolumes then begin
-       fVolumesLoaded :=  trunc(kLoadFewVolumesBytes /volBytes);
-       //fVolumesLoaded :=  trunc((1677721.0 * 4) /volBytes);
-     end
+  if (fVolumesLoaded = 3) and (fHdr.intent_code = kNIFTI_INTENT_RGB_VECTOR) and (fHdr.datatype = kDT_FLOAT32) then
+     volBytes := volBytes * fVolumesLoaded
+  else if (HdrVolumes(fHdr) > 1) and (not fIsOverlay) then begin
+     if LoadFewVolumes then
+       fVolumesLoaded :=  max(trunc((kLoadFewVolumesBytes) /volBytes), kLoadFewVolumesN)
      else
          fVolumesLoaded :=  trunc(2147483647.0 /volBytes);
      if fVolumesLoaded < 1 then fVolumesLoaded := 1;
@@ -3759,7 +3376,10 @@ end;
 
 procedure TNIfTI.GPULoadDone();
 begin
-     fVolRGBA := nil; //close CPU buffer afterit has been copied to GPU
+ {$IFNDEF DYNRGBA}
+ setlengthP(fVolRGBA,0);
+ {$ENDIF}
+ fVolRGBA := nil; //close CPU buffer afterit has been copied to GPU
 end;
 
 procedure SmoothFloat(smoothImg: TFloat32s; X,Y,Z: int64);
@@ -4055,6 +3675,10 @@ begin
   end;
   fAutoBalMax := (i * fHdr.scl_slope) + fHdr.scl_inter;
   initHistogram(histo);
+  if histo[0] > round(0.75 * vx) then begin //thresholded image
+     fAutoBalMin := 0;
+     fAutoBalMax := 0;
+  end;
   histo := nil;
   {$IFDEF TIMER}
   printf(format('uint8 range %g...%g', [ fMin, fMax]));
@@ -4311,9 +3935,11 @@ begin
   fAutoBalMin := (fAutoBalMin * fHdr.scl_slope) + fHdr.scl_inter;
   {$ENDIF}
   sum := 0;
+  //printf(format('bins %d min %g max %g', [kMaxBin, mn, mx]));
   for i := kMaxBin downto 0 do begin
       sum := sum + histo[i];
       if (sum > thresh) then break;
+      //printf(format('%d%s%d', [i,#9 ,histo[i]]));
   end;
   {$IFDEF RESCALE32}
   fAutoBalMax := (i * 1/slope) + mn;
@@ -4397,6 +4023,10 @@ begin
   for i := mn to mx do begin
       j := round((i - mn) * slope);
       histo8[j] := histo8[j] + histo[i];
+  end;
+  if histo[kMin16] > round(0.75 * vx) then begin //thresholded image
+     fAutoBalMin := 0;
+     fAutoBalMax := 0;
   end;
   histo := nil;
   initHistogram(histo8);
@@ -4701,6 +4331,87 @@ begin
   SetDisplayMinMax(true);
 end;
 
+procedure TNIfTI.LoadRGBVector();
+var
+   i, vx, byts, k: int64;
+   in8: TUInt8s;
+   in32: TFloat32s;
+   r,g,b: single;
+begin
+ //printf(format('>>>%d', [fVolumesLoaded]));
+  	 if (fHdr.intent_code <> kNIFTI_INTENT_RGB_VECTOR) or (fHdr.datatype <> kDT_FLOAT32) or (fVolumesLoaded <> 3) then exit;
+ //printf(format('>>>??%d', [fVolumesLoaded]));
+     vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+     byts := vx * 3 * 4;
+     if length(fRawVolBytes) < byts then exit; //3 volumes, each 32-bit
+ //printf(format('>>>!%d', [fVolumesLoaded]));
+     setlength(in8, byts);
+     in8 := Copy(fRawVolBytes, 0, byts);
+     in32 := TFloat32s(in8);
+     setlength(fRawVolBytes, vx * 3);
+     fVolumesLoaded := 1;
+     fVolumesTotal := 1;
+     //fHdr.datatype := kDT_RGBA32;
+     //fHdr.bitpix := 32;
+
+     fHdr.datatype := kDT_RGB;
+     fHdr.cal_max := 255;
+     fHdr.cal_min := 0;
+     fHdr.bitpix := 24;
+     fHdr.dim[0] := 3;
+     for i := 4 to 7 do
+     	 fHdr.dim[i] := 1;
+     k := 0;
+     for i := 0 to (vx - 1) do begin
+         //alpha := (vol24[skipVx+i].r+vol24[skipVx+i].g+vol24[skipVx+i].g+vol24[skipVx+i].b) div 4;  //favor green
+         r := min(abs(in32[i]),1);
+         g := min(abs(in32[i+vx]),1);
+         b := min(abs(in32[i+vx+vx]),1);
+         //a := sqrt(r*r + g*g + b * b);
+         //{$IFDEF DYNRGBA}
+         //outRGBA[i] := SetRGBA(round(r*255), round(g*255), round(b*255), round(a*255));
+         fRawVolBytes[k] := round(r*255); k += 1;
+         fRawVolBytes[k] := round(g*255); k+= 1;
+         fRawVolBytes[k] := round(b*255); k+= 1;
+         //{$ELSE}
+         //fRawVolBytes[k] := round(r*255); k += 1;
+         //fRawVolBytes[k] := round(g*255); k+= 1;
+         //fRawVolBytes[k] := round(b*255); k+= 1;
+         //outRGBA^[i] := SetRGBA(luts[vol24[skipVx+i].r], luts[vol24[skipVx+i].g], luts[vol24[skipVx+i].b], alpha);
+         //{$ENDIF}
+     end;
+     fAutoBalMin := 0;
+     fAutoBalMax := 255;
+     fMin := 0;
+     fMax := 255;
+     fWindowMin := 0;
+     fWindowMax := 255;
+     in8 := nil;
+end;
+
+(*procedure TNIfTI.SetDisplayMinMaxRGBV1();
+var
+   i, vx, lC: int64;
+   vol32: TFloat32s;
+   r,g,b, a: single;
+begin
+  if (fHdr.datatype <> kDT_FLOAT32) or (fVolumesLoaded <> 3) then exit;
+  vol32 := TFloat32s(fRawVolBytes);
+  vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+  for i := 0 to (vx - 1) do begin
+      //alpha := (vol24[skipVx+i].r+vol24[skipVx+i].g+vol24[skipVx+i].g+vol24[skipVx+i].b) div 4;  //favor green
+      r := min(abs(vol32[i]),1);
+      g := min(abs(vol32[i+vx]),1);
+      b := min(abs(vol32[i+vx+vx]),1);
+      a := sqrt(r*r + g*g + b * b);
+      {$IFDEF DYNRGBA}
+      fVolRGBA[i] := SetRGBA(round(r*255), round(g*255), round(b*255), round(a*255));
+      {$ELSE}
+      fVolRGBA^[i] := SetRGBA(luts[vol24[skipVx+i].r], luts[vol24[skipVx+i].g], luts[vol24[skipVx+i].b], alpha);
+      {$ENDIF}
+  end;
+end;  *)
+
 procedure TNIfTI.SetDisplayMinMaxRGB24();
 var
    skipVx, i, vx, lC: int64;
@@ -4735,10 +4446,11 @@ begin
   for i := 0 to (vx - 1) do begin
       //alpha := (vol24[skipVx+i].r+vol24[skipVx+i].g+vol24[skipVx+i].g+vol24[skipVx+i].b) div 4;  //favor green
       alpha := max(max(vol24[skipVx+i].r,vol24[skipVx+i].g), vol24[skipVx+i].b);
+      {$IFDEF DYNRGBA}
       fVolRGBA[i] := SetRGBA(luts[vol24[skipVx+i].r], luts[vol24[skipVx+i].g], luts[vol24[skipVx+i].b], alpha);
-
-      //fVolRGBA[i] := SetRGBA(luts[vol24[skipVx+i].r],luts[vol24[skipVx+i].g],luts[vol24[skipVx+i].b]),clut.LUT[alpha].A);
-      //fVolRGBA[i] := SetRGBA(luts[vol24[skipVx+i].r],luts[vol24[skipVx+i].g],luts[vol24[skipVx+i].b],clut.LUT[vol24[skipVx+i].g].A);
+      {$ELSE}
+      fVolRGBA^[i] := SetRGBA(luts[vol24[skipVx+i].r], luts[vol24[skipVx+i].g], luts[vol24[skipVx+i].b], alpha);
+      {$ENDIF}
   end;
 end;
 
@@ -4782,7 +4494,8 @@ begin
  if (xMx <= xMn) or (yMx <= yMn) or (zMx <= zMn) then exit;
  dX := fHdr.dim[1];
  dXY := fHdr.dim[1] * fHdr.dim[2];
- if (length(fVolRGBA) < 1) and (DisplayMin < 0) and (DisplayMax < 0) then begin
+ //if (length(fVolRGBA) < 1) and (DisplayMin < 0) and (DisplayMax < 0) then begin
+ if (fVolRGBA = nil) and (DisplayMin < 0) and (DisplayMax < 0) then begin
     if (length(fCache8) < 1) then exit;
     for z := zMn to zMx do
         for y := yMn to yMx do
@@ -4790,7 +4503,8 @@ begin
                 fCache8[x + (y*dX) + (z * dXY)] := 255;
     exit;
  end;
- if (length(fVolRGBA) < 1) then begin
+ //if (length(fVolRGBA) < 1) then begin
+ if (fVolRGBA = nil) then begin
     if (length(fCache8) < 1) then exit;
     for z := zMn to zMx do
         for y := yMn to yMx do
@@ -4802,7 +4516,11 @@ begin
  for z := zMn to zMx do
      for y := yMn to yMx do
          for x := xMn to xMx do
-             fVolRGBA[x + (y*dX) + (z * dXY)] := clr;
+         {$IFDEF DYNRGBA}
+         	 fVolRGBA[x + (y*dX) + (z * dXY)] := clr;
+		 {$ELSE}
+     	 fVolRGBA^[x + (y*dX) + (z * dXY)] := clr;
+         {$ENDIF}
 end;
 
 function TNIfTI.NeedsUpdate(): boolean;
@@ -4926,6 +4644,26 @@ begin
  end;
 end;
 {$ENDIF}
+procedure TNIfTI.DisplayRGB();
+var
+   vx, i: integer;
+begin
+ vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+ if (vx < 1) then exit;
+ {$IFDEF DYNRGBA}
+ setlength(fVolRGBA, vx);
+ {$ELSE}
+ setlengthp(fVolRGBA, vx);
+ {$ENDIF}
+ //for i := 0 to (vx -1) do
+ //	 fVolRGBA[i] := setrgba(255,0,128,128);
+
+ //exit;
+ if fHdr.datatype = kDT_RGB then
+ 	SetDisplayMinMaxRGB24;
+ //if (fDTImode = kDTIrgb) and (fHdr.datatype = kDT_FLOAT32) and (fVolumesLoaded = 3) then
+ //	SetDisplayMinMaxRGBV1();
+end;
 
 function TNIfTI.DisplayRGBGreen(): TUInt8s;
 //return green component as volume: must free memory!
@@ -4952,7 +4690,7 @@ begin
 end;
 
 function TNIfTI.DisplayMinMax2Uint8(isForceRefresh: boolean = false): TUInt8s;
-{$DEFINE LUT16}
+//{$DEFINE LUT16}
 {$IFDEF LUT16}
 const
  kMaxWord = 65535;
@@ -4960,8 +4698,11 @@ const
 {$ENDIF}
 var
   {$IFDEF LUT16}luts16: TUInt16s;{$ENDIF}
-  slope, lMin, lMax, lSwap, lRng, lMod: single;
-  skipVx, i, j, vx: int64;
+  {$IFNDEF SSE} slope: single;
+  j : int64;
+  {$ENDIF}
+  lMin, lMax, lSwap, lRng, lMod: single;
+  skipVx, i,  vx: int64;
   zero8: UInt8;
   zero16: UInt16;
   zero32: single;
@@ -4999,7 +4740,6 @@ begin
   end else {$ENDIF} begin
     lMin := Scaled2RawIntensity(fHdr, fWindowMin);
     lMax := Scaled2RawIntensity(fHdr, fWindowMax);
-    slope := 255.0/(lMax - lMin);
     vol16 := TInt16s(vol8);
     vol32 := TFloat32s(vol8);
     if fHdr.datatype = kDT_UINT8 then begin
@@ -5023,9 +4763,15 @@ begin
       end;
       for i := 0 to (vx - 1) do
           fCache8[i] := luts[vol8[skipVx+i]];
+    {$IFDEF SSE}
+    end else if fHdr.datatype = kDT_INT16 then begin
+    	//int2byte(vol16, fCache8, lMin, lMax, skipVx);
+        int2byte(lMin, lMax, vol16, fCache8, skipVx);
+    {$ELSE}
     {$IFDEF LUT16}
-    end else if (fHdr.datatype = kDT_INT16) and (vx > (10 * kMaxWord)) then begin
-        setlength(luts16, kMaxWord + 1); // 0..65535
+    end else if (fHdr.datatype = kDT_INT16) and (true) and (vx > (10 * kMaxWord)) then begin
+        slope := 255.0/(lMax - lMin);
+    	setlength(luts16, kMaxWord + 1); // 0..65535
         for i := 0 to kMaxWord do begin
           j := i - kMin16;
           if (j >= lMax) then
@@ -5040,7 +4786,8 @@ begin
         luts16 := nil;
     {$ENDIF} //LUT16
     end else if fHdr.datatype = kDT_INT16 then begin
-        for i := 0 to (vx - 1) do begin
+        slope := 255.0/(lMax - lMin);
+    	for i := 0 to (vx - 1) do begin
           if (vol16[skipVx+i] >= lMax) then
              fCache8[i] := 255
           else if  (vol16[skipVx+i] <= lMin) then
@@ -5048,10 +4795,12 @@ begin
           else
              fCache8[i] := round((vol16[skipVx+i] - lMin) * slope);
         end;
+    {$ENDIF} //SSE
     end else if fHdr.datatype = kDT_FLOAT then begin
       {$IFDEF SSE} //54ms->29ms
       //printf('---->SSE!!!');
-      float2byte(vol32, fCache8, lMin, lMax, skipVx);
+      //float2byte(vol32, fCache8, lMin, lMax, skipVx);
+      flt2byte(vol32, fCache8, lMin, lMax, skipVx);
       {$ELSE}
         for i := 0 to (vx - 1) do begin
           if (vol32[skipVx+i] >= lMax) then
@@ -5098,7 +4847,7 @@ begin
 end;
 
 {$IFDEF PARALLEL}
-const kMaxParallel = 6;
+(*const kMaxParallel = 6;
 
 procedure TNIfTI.SetDisplayMinMaxParallel(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
 //Compute transfer function across cores
@@ -5119,19 +4868,33 @@ begin
   {$ENDIF}
   printf(format('>%d..%d %d',[vxLo, vxHi, index]));
 end;
+*)
 {$ENDIF}
 procedure TNIfTI.SetDisplayMinMax(isForceRefresh: boolean = false); overload;
 {$DEFINE UNROLL}
+{$IFDEF PARALLEL}
+		{$DEFINE PARA}
+        {$IFDEF DYNRGBA}parallel does not help when dynrgba {$ENDIF}
+{$ENDIF}
 type
   TLUTi = array [0..255] of Int32; //Color Lookup Table
-
+  {$IFNDEF DYNRGBA}
+  TInt320 = array [0..MAXINT] of int32;
+  TInt32p = ^TInt320; //pointer to RGBA array
+  {$ENDIF}
 var
   {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
   i, vx: int64;
   {$IFDEF UNROLL}
   vx8: int64;
   lut: TLUTi;
+  {$IFDEF DYNRGBA}
   rgba: TInt32s;
+  {$ELSE}
+  rgba: TInt32p;
+  {$ENDIF}
+
+
   {$ENDIF}
 //{$DEFINE PARA}   No benefit from parallel threads
  {$IFDEF PARA}
@@ -5148,7 +4911,11 @@ begin
 	tEnd := tStart + tPerThread - 1; //e.g. if zStart=4 and zPerThread=1 then zEnd=4
 	tEnd := min(tEnd, vx-1); //final thread when slices in Z not evenly divisible by number of threads
         for j := tStart to tEnd do
+        {$IFDEF DYNRGBA}
             fVolRGBA[j] := clut.LUT[fCache8[j]];
+        {$ELSE}
+        fVolRGBA^[j] := clut.LUT[fCache8[j]];
+        {$ENDIF}
 end; //SubProc()
 {$ENDIF}
 
@@ -5161,19 +4928,44 @@ begin
   vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
   if (vx < 1) then exit;
   if fHdr.datatype = kDT_RGB then begin
+    {$IFDEF DYNRGBA}
     setlength(fVolRGBA, vx);
+    {$ELSE}
+    setlengthp(fVolRGBA, vx);
+    {$ENDIF}
     SetDisplayMinMaxRGB24();
     ApplyCutout();
     {$IFDEF TIMER}printf(format('Set Min/Max Window RGB time %d', [ MilliSecondsBetween(Now,startTime)]));{$ENDIF}
     exit;
   end;
+  (*if (fDTImode = kDTIrgb) and (fHdr.datatype = kDT_FLOAT32) and (fVolumesLoaded = 3) then begin
+    {$IFDEF DYNRGBA}
+    setlength(fVolRGBA, vx);
+    {$ELSE}
+    setlengthp(fVolRGBA, vx);
+    {$ENDIF}
+    SetDisplayMinMaxRGBV1();
+    ApplyCutout();
+    {$IFDEF TIMER}printf(format('Set Min/Max Window V1 time %d', [ MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+    exit;
+  end;  *)
   DisplayMinMax2Uint8(isForceRefresh);
   {$IFDEF TIMER}
   printf(format('Set Min/Max Window %g..%g time %d', [fWindowMin, fWindowMax, MilliSecondsBetween(Now,startTime)]));
   startTime := now;
   {$ENDIF}
-  setlength(fVolRGBA, vx);
- {$IFDEF PARA}
+  //https://alt.comp.lang.borland-delphi.narkive.com/O0jRrNgS/speed-problem-with-setlength
+  {$IFDEF DYNRGBA}
+  setlength(fVolRGBA, vx); //TODO: this takes the most time
+  {$ELSE}
+  setlengthP(fVolRGBA, vx); //TODO: this takes the most time
+  {$ENDIF}
+  {$IFDEF PARALLEL} //test to see if CMem is faster for setlength()
+  //{$IFDEF TIMER}printf(format('PARALLEL Update RGBA time %d', [MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+  {$ELSE}
+  //{$IFDEF TIMER}printf(format('SERIAL Update RGBA time %d', [MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+  {$ENDIF}
+  {$IFDEF PARA}
  if (MaxThreads < 1) then MaxThreads :=  GetSystemThreadCount();
  printf('Threads'+inttostr(MaxThreads));
  tPerThread := ceil(vx/MaxThreads);
@@ -5185,25 +4977,48 @@ begin
   {$IFDEF UNROLL}
   //~20% faster
   lut := TLUTi(clut.LUT);
+ {$IFDEF DYNRGBA}
   rgba := TInt32s(fVolRGBA);
-  vx8 := ((vx div 8) * 8);
-  i := 0;
-  while i < vx8 do begin
-        rgba[i+0] := lut[fCache8[i+0]];
-        rgba[i+1] := lut[fCache8[i+1]];
-        rgba[i+2] := lut[fCache8[i+2]];
-        rgba[i+3] := lut[fCache8[i+3]];
-        rgba[i+4] := lut[fCache8[i+4]];
-        rgba[i+5] := lut[fCache8[i+5]];
-        rgba[i+6] := lut[fCache8[i+6]];
-        rgba[i+7] := lut[fCache8[i+7]];
-        i := i + 8;
-  end;
-  //tail - for volumes not evenly vivisible by 8
-  while i < (vx) do begin
-        rgba[i] := lut[fCache8[i]];
-        i := i + 1;
-  end;
+ vx8 := ((vx div 8) * 8);
+ i := 0;
+ while i < vx8 do begin
+   rgba[i+0] := lut[fCache8[i+0]];
+   rgba[i+1] := lut[fCache8[i+1]];
+   rgba[i+2] := lut[fCache8[i+2]];
+   rgba[i+3] := lut[fCache8[i+3]];
+   rgba[i+4] := lut[fCache8[i+4]];
+   rgba[i+5] := lut[fCache8[i+5]];
+   rgba[i+6] := lut[fCache8[i+6]];
+   rgba[i+7] := lut[fCache8[i+7]];
+   i := i + 8;
+ end;
+ //tail - for volumes not evenly divisible by 8
+ while i < (vx) do begin
+       rgba[i] := lut[fCache8[i]];
+       i := i + 1;
+ end;
+ {$ELSE}
+ rgba := TInt32p(fVolRGBA);
+ vx8 := ((vx div 8) * 8);
+ i := 0;
+ while i < vx8 do begin
+   rgba^[i+0] := lut[fCache8[i+0]];
+   rgba^[i+1] := lut[fCache8[i+1]];
+   rgba^[i+2] := lut[fCache8[i+2]];
+   rgba^[i+3] := lut[fCache8[i+3]];
+   rgba^[i+4] := lut[fCache8[i+4]];
+   rgba^[i+5] := lut[fCache8[i+5]];
+   rgba^[i+6] := lut[fCache8[i+6]];
+   rgba^[i+7] := lut[fCache8[i+7]];
+   i := i + 8;
+ end;
+ //tail - for volumes not evenly vivisible by 8
+ while i < (vx) do begin
+       rgba^[i] := lut[fCache8[i]];
+       i := i + 1;
+ end;
+ {$ENDIF}
+
   {$ELSE}
   //next stage remarkably slow, even though just lookup table.
   for i := 0 to (vx - 1) do
@@ -5291,8 +5106,6 @@ begin
   //close old image
   fLabels.clear;
   fLabelMask := nil;
-  //fRawVolBytes := nil;
-  //fVolRGBA := nil;
   fCache8 := nil;
   {$IFDEF CUSTOMCOLORS}
   //clut := nil;
@@ -6080,7 +5893,7 @@ end;
 
 {$DEFINE OVERLAY}
 {$IFDEF OVERLAY}
-procedure  Coord(var lV: TVec3; lMat: TMat4);
+procedure  CoordX(var lV: TVec3; lMat: TMat4);
 //transform X Y Z by matrix
 var
   lXi,lYi,lZi: single;
@@ -6139,10 +5952,10 @@ begin
      lVx := Vec3( 1,0,0);
      lVy := Vec3( 0,1,0);
      lVz := Vec3( 0,0,1);
-     Coord(lV0,lDestMat);
-     Coord(lVx,lDestMat);
-     Coord(lVy,lDestMat);
-     Coord(lVz,lDestMat);
+     CoordX(lV0,lDestMat);
+     CoordX(lVx,lDestMat);
+     CoordX(lVy,lDestMat);
+     CoordX(lVz,lDestMat);
      lSrcMatInv := lSrcMat.inverse;
      //ReportMat(lSrcMat);
      //ReportMat(lSrcMatInv);
@@ -6711,7 +6524,7 @@ begin
   //showmessage(format('%d', [prod(tarDim)]));
   //IsLabels := true;
   if (prod(tarDim) = 0) and (fHdr.dim[3] > 1) and (MaxTexMb > 0) then //reduce size of huge background images
-     if ShrinkLargeMb(fHdr,fRawVolBytes, MaxTexMb, true) then begin
+     if ShrinkLargeMb(fHdr,fRawVolBytes, MaxTexMb, isAntiAliasHugeTexMb, true) then begin
         fVolumesLoaded := 1;
         IsShrunken := true;
      end;
@@ -6773,6 +6586,8 @@ begin
      fWindowMax := 1;
   end;
   //{$IFDEF TIMER}startTime := now;{$ENDIF}
+  (*if (fHdr.datatype = kDT_FLOAT32) and (fVolumesLoaded = 3) then
+    fDTImode := kDTIscalar;*)
   SetDisplayMinMax();
   //{$IFDEF TIMER}printf(format('Set Min/Max time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
 end;
@@ -7054,6 +6869,7 @@ begin
        label16 := TInt16s(label8);
        n := length(LabelMap.clusters);
        setlength(clusters, n);
+       mm3PerVox := VoxMM3();
        //clusters := copy(LabelMap.clusters, 0, n);
        for i := 0 to (n-1) do begin
            clusters[i] := LabelMap.clusters[i];
@@ -7061,19 +6877,30 @@ begin
            //clusters[i].Structure := LabelMap.clusters[i].Structure +' ('+inttostr(o)+')';
            //clusters[i].Structure :=  format('%d (%g %g)',[vx, fHdr.scl_slope, fHdr.scl_inter]);
            total := 0.0;
+           nVox := 0;
            if (LabelMap.fHdr.bitpix = 16) then begin
              for v := 0 to (vx-1) do begin
-                 if label16[v] = o then
+                 if label16[v] = o then begin
                     total += v32[v];
+                    nVox := nVox + 1;
+                 end;
              end;
            end else begin
              for v := 0 to (vx-1) do begin
-                 if label8[v] = o then
+                 if label8[v] = o then begin
                     total += v32[v];
+                    nVox := nVox + 1;
+                 end;
              end;
            end;
-           clusters[i].SzMM3 := total;
+           if nVox > 0 then
+           	  clusters[i].Peak := total/nVox
+           else
+               clusters[i].Peak := 0;
            clusters[i].PeakStructure := '~';
+           clust.SzMM3:= nVox * mm3PerVox;
+           //xxx
+
        end;
        v32 := nil;
        exit;
@@ -8029,7 +7856,7 @@ begin
   end;
   fHdrNoRotation := fHdr; //raw header without reslicing or orthogonal rotation
   if (prod(tarDim) = 0) and (fHdr.dim[3] > 1) and (MaxTexMb > 0) then //reduce size of huge background images
-  if ShrinkLargeMb(fHdr,fRawVolBytes, MaxTexMb, IsLabels) then begin
+  if ShrinkLargeMb(fHdr,fRawVolBytes, MaxTexMb, isAntiAliasHugeTexMb, IsLabels) then begin
         fVolumesLoaded := 1;
         IsShrunken := true;
   end;
@@ -8048,6 +7875,7 @@ begin
   fMatInOrient := fMat;
   {$IFDEF TIMER}startTime := now;{$ENDIF}
   if fHdr.scl_slope = 0 then fHdr.scl_slope := 1;
+  LoadRGBVector();
   Convert2RGB();
   Convert2UInt8();
   if (fHdr.datatype = kDT_UINT16) or (fHdr.datatype = kDT_INT32) or (fHdr.datatype = kDT_UINT32) or (fHdr.datatype = kDT_DOUBLE)  then
@@ -8136,6 +7964,8 @@ begin
      fWindowMax := 1;
   end;
   //{$IFDEF TIMER}startTime := now;{$ENDIF}
+  (*if (fHdr.datatype = kDT_FLOAT32) and (fVolumesLoaded = 3) then
+    fDTImode := kDTIscalar;*)
   SetDisplayMinMax();
   //{$IFDEF TIMER}printf(format('Set Min/Max time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
 end;
@@ -8150,6 +7980,535 @@ begin
      result := Load(niftiFileName,tarMat, tarDim, false);
 end;
 
+procedure TNIfTI.SaveAsSourceOrient(NiftiOutName, HdrDescrip, IntentName: string; rawVolBytes: TUInt8s; dataType: integer; intentCode: integer = 0; mn: single = 0; mx: single = 0);
+//for drawing rotate back to orientation of input image!
+var
+   nVox: int64;
+   oHdr  : TNIFTIhdr;
+   oDim, oPerm: TVec3i;
+   oScale: TVec3;
+   i: integer;
+   {$IFDEF OLDSAVE}
+   oPad32: Uint32; //nifti header is 348 bytes padded with 4
+   mStream : TMemoryStream;
+   zStream: TGZFileStream;
+   lExt: string;
+   {$ENDIF}
+begin
+ oHdr := fHdr;
+ oHdr.descrip := HdrDescrip;
+ oHdr.intent_name := IntentName;
+ oHdr.intent_code:= intentCode;
+ oHdr.datatype := dataType;
+ if (dataType = kDT_UNSIGNED_CHAR) then
+    oHdr.bitpix := 8
+ else if (dataType = kDT_INT16) then
+   oHdr.bitpix := 16
+ else if (dataType = kDT_FLOAT) then
+   oHdr.bitpix := 32
+ else begin
+      showmessage('Unsupported export datatype '+inttostr(datatype));
+     exit;
+ end;
+ oHdr.scl_slope := 1;
+ oHdr.scl_inter := 0;
+ oHdr.cal_min:= mn;
+ oHdr.cal_max:= mx;
+ oHdr.glmin:= 0;
+ oHdr.glmax:= 0;
+ oHdr.dim[0] := 3;
+ for i := 4 to 7 do
+     oHdr.dim[i] := 1;
+ nVox := prod(fDim);
+ oDim := fDim;
+ oScale := fScale;
+ //rawVolBytes:= TUInt8s(rawVol);
+ //output perm reverses input permute
+ //fPermInOrient
+ oPerm := pti(1,2,3);
+ for i := 0 to 2 do
+     if abs(fPermInOrient.v[i]) = 1 then
+       oPerm.X := (i+1) * sign(fPermInOrient.v[i]);
+ for i := 0 to 2 do
+     if abs(fPermInOrient.v[i]) = 2 then
+       oPerm.Y := (i+1) * sign(fPermInOrient.v[i]);
+ for i := 0 to 2 do
+     if abs(fPermInOrient.v[i]) = 3 then
+       oPerm.Z := (i+1) * sign(fPermInOrient.v[i]);
+ //showmessage(format('%d %d %d -> %d %d %d', [fPermInOrient.X, fPermInOrient.Y, fPermInOrient.Z, oPerm.X, oPerm.y, oPerm.Z]));
+ ApplyVolumeReorient(oPerm, fMatInOrient, oDim, oScale, oHdr, rawVolBytes);
+ oHdr.vox_offset :=  sizeof(oHdr) + 4;
+ {$IFDEF OLDSAVE}
+ mStream := TMemoryStream.Create;
+ mStream.Write(oHdr,sizeof(oHdr));
+ oPad32 := 4;
+ mStream.Write(oPad32, 4);
+ mStream.Write(rawVolBytes[0],nvox * (oHdr.bitpix div 8));
+ mStream.Position := 0;
+ FileMode := fmOpenWrite;
+ lExt := uppercase(extractfileext(NiftiOutName));
+ if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
+    if (lExt = '.GZ') then
+       NiftiOutName := ChangeFileExtX(NiftiOutName,'.nii.gz'); //img.gz -> img.nii.gz
+    zStream := TGZFileStream.Create(NiftiOutName, gzopenwrite);
+    zStream.CopyFrom(mStream, mStream.Size);
+    zStream.Free;
+ end else begin
+     if (lExt <> '.NII') then
+        NiftiOutName := NiftiOutName + '.nii';
+     mStream.SaveToFile(NiftiOutName); //save uncompressed
+ end;
+ mStream.Free;
+ FileMode := fmOpenRead;
+ {$ELSE}
+ setlength(rawVolBytes,nvox * (oHdr.bitpix div 8) );
+ SaveVolumeFormatBasedOnExt(NiftiOutName, oHdr, rawVolBytes);
+ {$ENDIF}
+end;
+
+procedure TNIfTI.SaveAsSourceOrient(NiftiOutName: string; rawVolBytes: TUInt8s);
+//for drawing rotate back to orientation of input image!
+var
+   oHdr  : TNIFTIhdr;
+   oDim, oPerm: TVec3i;
+   oScale: TVec3;
+   nBytes,nVox: int64;
+   i: integer;
+   {$IFDEF OLDSAVE}
+   oPad32: Uint32; //nifti header is 348 bytes padded with 4
+   mStream : TMemoryStream;
+   zStream: TGZFileStream;
+   lExt: string;
+   {$ENDIF}
+begin
+ nBytes := length(rawVolBytes);
+ nVox := prod(fDim);
+ oHdr := fHdr;
+ if (nBytes = nVox) then
+   oHdr.bitpix := 8
+ else if (nBytes = (2*nVox)) then
+   oHdr.bitpix := 16
+ else if (nBytes = (4*nVox)) then
+   oHdr.bitpix := 32
+ else
+     exit;
+ if oHdr.bitpix = 8 then
+   oHdr.datatype := kDT_UNSIGNED_CHAR
+ else if oHdr.bitpix = 16 then
+   oHdr.datatype := kDT_INT16
+ else
+     oHdr.datatype := kDT_FLOAT;
+ oDim := fDim;
+ oScale := fScale;
+ oHdr.scl_slope := 1;
+ oHdr.scl_inter := 0;
+ oHdr.cal_min:= 0.0;
+ oHdr.cal_max:= 0.0;
+ oHdr.glmin:= 0;
+ oHdr.glmax:= 0;
+ oHdr.dim[0] := 3;
+ for i := 4 to 7 do
+     oHdr.dim[i] := 1;
+ //output perm reverses input permute
+ //fPermInOrient
+ oPerm := pti(1,2,3);
+ for i := 0 to 2 do
+     if abs(fPermInOrient.v[i]) = 1 then
+       oPerm.X := (i+1) * sign(fPermInOrient.v[i]);
+ for i := 0 to 2 do
+     if abs(fPermInOrient.v[i]) = 2 then
+       oPerm.Y := (i+1) * sign(fPermInOrient.v[i]);
+ for i := 0 to 2 do
+     if abs(fPermInOrient.v[i]) = 3 then
+       oPerm.Z := (i+1) * sign(fPermInOrient.v[i]);
+ //showmessage(format('%d %d %d -> %d %d %d', [fPermInOrient.X, fPermInOrient.Y, fPermInOrient.Z, oPerm.X, oPerm.y, oPerm.Z]));
+ ApplyVolumeReorient(oPerm, fMatInOrient, oDim, oScale, oHdr, rawVolBytes);
+ oHdr.vox_offset :=  sizeof(oHdr) + 4;
+ {$IFDEF OLDSAVE}
+ mStream := TMemoryStream.Create;
+ mStream.Write(oHdr,sizeof(oHdr));
+ oPad32 := 4;
+ mStream.Write(oPad32, 4);
+ mStream.Write(rawVolBytes[0],length(rawVolBytes));
+  mStream.Position := 0;
+ FileMode := fmOpenWrite;
+ lExt := uppercase(extractfileext(NiftiOutName));
+ if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
+    if (lExt = '.GZ') then
+       NiftiOutName := ChangeFileExtX(NiftiOutName,'.nii.gz'); //img.gz -> img.nii.gz
+    zStream := TGZFileStream.Create(NiftiOutName, gzopenwrite);
+    zStream.CopyFrom(mStream, mStream.Size);
+    zStream.Free;
+ end else begin
+     if (lExt <> '.NII') then
+        NiftiOutName := NiftiOutName + '.nii';
+     mStream.SaveToFile(NiftiOutName); //save uncompressed
+ end;
+ mStream.Free;
+ FileMode := fmOpenRead;
+ {$ELSE}
+ SaveVolumeFormatBasedOnExt(NiftiOutName, oHdr, rawVolBytes);
+ {$ENDIF}
+end;
+
+function TNIfTI.SaveCropped(fnm: string; crop: TVec6i; cropVols: TPoint): boolean;
+var
+  oHdr  : TNIFTIhdr;
+  {$IFDEF OLDSAVE}
+  mStream : TMemoryStream;
+  zStream: TGZFileStream;
+  NiftiOutName, lExt: string;
+  oPad32: Uint32; //nifti header is 348 bytes padded with 4
+  {$ENDIF}
+  isV, isZ, isY: boolean;
+  offsetMM: TVec3;
+  lBPP, ovox, ivox, v,x,y,z: int64;
+  orawVolBytes: TUInt8s;
+  o16s, i16s: TInt16s;
+  o24s, i24s: TRGBs;
+  o32s, i32s: TInt32s;
+  oMat: TMat4;
+begin
+ //xLo goes from 0 (no slices cropped) to (dim[1]-1) all but one slice cropped
+ //xHi goes from dim[1] (no slices cropped) to 1 (all but first slice)
+ if (crop.xLo < 0) or (crop.yLo < 0) or (crop.zLo < 0) then
+    exit(false);
+ if (crop.xHi > fHdr.dim[1]) or (crop.yHi > fHdr.dim[2]) or (crop.zHi > fHdr.dim[3]) then
+    exit(false);
+ if (crop.xLo >= crop.xHi) or (crop.yLo >= crop.yHi) or (crop.zLo >= crop.zHi) then
+    exit(false);
+ if (cropVols.x >= cropVols.y) or (cropVols.y >  fVolumesLoaded) then
+    exit(false);
+ oHdr := fHdr;
+ oHdr.dim[0] := 3;
+ oHdr.dim[1] := crop.xHi- crop.xLo;
+ oHdr.dim[2] := crop.yHi- crop.yLo;
+ oHdr.dim[3] := crop.zHi- crop.zLo;
+ oHdr.dim[4] := cropVols.y - cropVols.x;
+ oHdr.dim[5] := 1;
+ oHdr.dim[6] := 1;
+ oHdr.dim[7] := 1;
+ if (oHdr.dim[4] > 1) then oHdr.dim[1] := 4;
+ offsetMM := NIFTIhdr_SlicesToCoord (oHdr,crop.xLo,crop.yLo,crop.zLo);
+ oHdr.srow_x[3] := oHdr.srow_x[3] + offsetMM.x;
+ oHdr.srow_y[3] := oHdr.srow_y[3] + offsetMM.y;
+ oHdr.srow_z[3] := oHdr.srow_z[3] + offsetMM.z;
+ oMat := SForm2Mat(oHdr);
+ Mat2QForm(oMat, oHdr);
+ lBPP := 4;
+ case fHdr.datatype of
+   kDT_UNSIGNED_CHAR : lBPP := 1;
+   kDT_SIGNED_SHORT: lBPP := 2;
+   kDT_RGB: lBPP := 3;
+ end;
+ ovox := (oHdr.dim[1]*oHdr.dim[2]*oHdr.dim[3]*oHdr.dim[4]);
+ setlength(orawVolBytes, ovox * lBPP);
+ //FillChar(orawVolBytes[0], ovox * lBPP, 0);
+ ivox := 0;
+ ovox := 0;
+ i16s := TInt16s(fRawVolBytes);
+ i24s := TRGBs(fRawVolBytes);
+ i32s := TInt32s(fRawVolBytes);
+ o16s := TInt16s(oRawVolBytes);
+ o24s := TRGBs(oRawVolBytes);
+ o32s := TInt32s(orawVolBytes);
+ for v := 1 to fVolumesLoaded do begin
+     isV := (v > cropVols.x) and (v <= cropVols.y);
+     for z := 1 to fHdr.dim[3] do begin
+         isZ := (z > crop.zLo) and (z <= crop.zHi);
+         for y := 1 to fHdr.dim[2] do begin
+             isY := (y > crop.yLo) and (y <= crop.yHi);
+             for x := 1 to fHdr.dim[1] do begin
+                 if (isV) and (isZ) and (isY) and (x > crop.xLo) and (x <= crop.xHi) then begin
+                    if (lBPP = 4) then
+                       o32s[ovox] := i32s[ivox]
+                    else if (lBPP = 3) then
+                       o24s[ovox] := i24s[ivox]
+                    else if (lBPP = 2) then
+                       o16s[ovox] := i16s[ivox]
+                    else
+                        orawVolBytes[ovox] := fRawVolBytes[ivox];
+                    ovox := ovox + 1;
+                 end;
+                 ivox := ivox + 1;
+             end; //x
+         end; //y
+     end; //z
+ end;  //vol
+ //showmessage(format('%d %d  -> %d', [ivox, ovox, oHdr.dim[1]*oHdr.dim[2]*oHdr.dim[3]]));
+ oHdr.vox_offset :=  sizeof(oHdr) + 4;
+ {$IFDEF OLDSAVE}
+ mStream := TMemoryStream.Create;
+ mStream.Write(oHdr,sizeof(oHdr));
+ oPad32 := 4;
+ mStream.Write(oPad32, 4);
+ mStream.Write(oRawVolBytes[0], length(orawVolBytes));
+ oRawVolBytes := nil;
+ mStream.Position := 0;
+ FileMode := fmOpenWrite;
+ NiftiOutName := fnm;
+ lExt := uppercase(extractfileext(NiftiOutName));
+ if (lExt = '.GZ') or (lExt = '.VOI') then begin  //
+    if (lExt = '.GZ') then
+       NiftiOutName := ChangeFileExtX(NiftiOutName,'.nii.gz'); //img.gz -> img.nii.gz
+    zStream := TGZFileStream.Create(NiftiOutName, gzopenwrite);
+    zStream.CopyFrom(mStream, mStream.Size);
+    zStream.Free;
+ end else begin
+     if (lExt <> '.NII') then
+        NiftiOutName := NiftiOutName + '.nii';
+     mStream.SaveToFile(NiftiOutName); //save uncompressed
+ end;
+ mStream.Free;
+ FileMode := fmOpenRead;
+ exit(true);
+ {$ELSE}
+ result := SaveVolumeFormatBasedOnExt(fnm, oHdr, oRawVolBytes);
+ oRawVolBytes := nil;
+ {$ENDIF}
+end;
+
+procedure TNIfTI.SaveRotated(fnm: string; perm: TVec3i);
+//perm[1,2,3) means unchanged, perm[-1,2,3] flips X
+{$DEFINE RESLICE}
+var
+  oHdr  : TNIFTIhdr;
+  oMat: TMat4;
+  {$IFDEF OLDSAVE}
+  mStream : TMemoryStream;
+  zStream: TGZFileStream;
+  NiftiOutName, lExt: string;
+  oPad32: Uint32; //nifti header is 348 bytes padded with 4
+  {$ENDIF}
+  {$IFDEF RESLICE}
+  orawVolBytes: TUInt8s;
+  iMat: TMat4;
+  //oPerm: TVec3i;
+  oDim: TVec3i;
+  oScale : TVec3;
+  {$ENDIF}
+begin
+ //showmessage('Memory exhausted ' + inttostr(length(fRawVolBytes))); exit; xxx
+ if length(fRawVolBytes) < 1 then begin
+    showmessage(format('Load image to rotate %d %d %d',[fDim.x, fDim.y, fDim.z ] ));
+    exit;
+ end;
+ oHdr := fHdr;
+ oMat := EstimateResidual(fMat, perm);
+ Mat2SForm(oMat, oHdr);
+ Mat2QForm(oMat, oHdr);
+ {$IFDEF RESLICE}
+ try
+ setlength(orawVolBytes, length(fRawVolBytes));
+ except
+   showmessage(format('Memory exhausted (%d bytes) ',[length(fRawVolBytes)]));
+   exit;
+ end;
+ orawVolBytes := copy(fRawVolBytes, low(fRawVolBytes), length(fRawVolBytes));
+ //orawVolBytes := copy(fRawVolBytes, 0, maxint);
+ oDim := fDim;
+ oScale := fScale;
+ iMat := oMat;
+ //showmessage( mStr('i!', fMat)+chr(10)+mStr('o', oMat));
+ //showmessage(format('%d %d %d', [Perm.x, perm.y, perm.z]));
+ if not EstimateReorient(oDim, iMat, oMat, Perm)  then exit;
+ //showmessage(format('%d %d %d', [Perm.x, perm.y, perm.z]));
+ //showmessage( mStr('i?', fMat)+chr(10)+mStr('o', oMat));
+ //showmessage( mStr('i', fMat)+chr(10)+mStr('o', oMat));
+ ApplyVolumeReorient(Perm, oMat, oDim, oScale, oHdr, orawVolBytes);
+ //Clipboard.AsText := mStr('i', iMat)+chr(10)+mStr('o', oMat);
+ {$ENDIF}
+ oHdr.vox_offset :=  sizeof(oHdr) + 4;
+ oHdr.dim[0] := 3;
+ if fVolumesLoaded > 1 then oHdr.dim[0] := 4;
+ oHdr.dim[4] := fVolumesLoaded;
+ oHdr.dim[5] := 1;
+ oHdr.dim[6] := 1;
+ oHdr.dim[7] := 1;
+ {$IFDEF OLDSAVE}
+ mStream := TMemoryStream.Create;
+ mStream.Write(oHdr,sizeof(oHdr));
+ oPad32 := 4;
+ mStream.Write(oPad32, 4);
+ {$IFDEF RESLICE}
+ mStream.Write(oRawVolBytes[0], length(fRawVolBytes));
+ oRawVolBytes := nil;
+ {$ELSE}
+ mStream.Write(fRawVolBytes[0], length(fRawVolBytes));
+ {$ENDIF}
+ mStream.Position := 0;
+ FileMode := fmOpenWrite;
+ NiftiOutName := fnm;
+ lExt := uppercase(extractfileext(NiftiOutName));
+ if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
+    if (lExt = '.GZ') then
+       NiftiOutName := ChangeFileExtX(NiftiOutName,'.nii.gz'); //img.gz -> img.nii.gz
+    zStream := TGZFileStream.Create(NiftiOutName, gzopenwrite);
+    zStream.CopyFrom(mStream, mStream.Size);
+    zStream.Free;
+ end else begin
+     if (lExt <> '.NII') then
+        NiftiOutName := NiftiOutName + '.nii';
+     mStream.SaveToFile(NiftiOutName); //save uncompressed
+ end;
+ mStream.Free;
+ FileMode := fmOpenRead;
+ {$ELSE}
+ {$IFDEF RESLICE}
+ SaveVolumeFormatBasedOnExt(fnm, oHdr, oRawVolBytes);
+ oRawVolBytes := nil;
+ {$ELSE}
+ SaveFormatBasedOnExtCore(fnm, oHdr, fRawVolBytes);
+ {$ENDIF}
+ {$ENDIF}
+end;
+
+function TNIfTI.SaveAs8Bit(fnm: string; Lo,Hi: single): boolean;
+var
+  out8, in8: TUInt8s;
+  in16: TInt16s;
+  in32: TFloat32s;
+  oHdr  : TNIFTIhdr;
+  nVox,i: int64;
+  scl, mns, mxs, mn, mx, rng: single;
+begin
+     result := false;
+ 	 if (fHdr.DataType <> kDT_UINT8) and (fHdr.DataType <> kDT_INT16) and (fHdr.DataType <> kDT_FLOAT) then begin
+     	printf('Unsupported format for 8-bit downsampling');
+        exit;
+     end;
+     nVox := length(fRawVolBytes) div (fHdr.bitpix div 8);
+     if (Lo > Hi) then begin
+     	rng := Lo;
+        Lo := Hi;
+        Hi := rng;
+     end;
+     rng := abs(fWindowMax-fWindowMin);
+     mns := fWindowMin + (Lo * rng);
+     mxs := fWindowMin + (Hi * rng);
+     mn := Scaled2RawIntensity(fHdr, mns);
+  	 mx := Scaled2RawIntensity(fHdr, mxs);
+     rng := abs(mx-mn);
+     if rng = 0 then
+     	rng := 0.00001;
+     printf(format('Clip intensity fraction %g..%g = raw %g..%g\n', [Lo,Hi, mn, mx]));
+     scl := 255/rng;
+     in8 := fRawVolBytes;
+     in16 := TInt16s(in8);
+     in32 := TFloat32s(in8);
+     setlength(out8, nVox);
+     if (fHdr.DataType = kDT_FLOAT) then begin
+	 	for i := 0 to (nVox -1) do
+        	out8[i] := round(max(min((in32[i]-mn)*scl,255),0)) ;
+     end else if (fHdr.DataType = kDT_INT16) then begin
+	 	for i := 0 to (nVox -1) do
+        	out8[i] := round(max(min((in16[i]-mn)*scl,255),0)) ;
+     end else begin
+   	 	 for i := 0 to (nVox -1) do
+      	 	 out8[i] := round(max(min((in8[i]-mn)*scl,255),0)) ;
+     end;
+ 	 oHdr := fHdr;
+     oHdr.datatype := kDT_Uint8;
+     oHdr.bitpix := 8;
+	 oHdr.scl_inter := mns;
+     oHdr.scl_slope := abs(mxs-mns)/255;
+     oHdr.cal_min := 0;
+     oHdr.cal_max := 0;
+     oHdr.glmin := 0;
+     oHdr.glmax := 0;
+     result := SaveVolumeFormatBasedOnExt(fnm, oHdr, out8);
+end;
+
+function TNIfTI.SaveRescaled(fnm: string; xFrac, yFrac, zFrac: single; OutDataType, Filter: integer; isAllVolumes: boolean): boolean;
+{$DEFINE 4DRESCALE}
+//{$DEFINE OLDSAVE}
+var
+  oHdr  : TNIFTIhdr;
+  {$IFDEF OLDSAVE}
+  mStream : TMemoryStream;
+  zStream: TGZFileStream;
+  NiftiOutName, lExt: string;
+  {$ENDIF}
+  m: TMat4;
+  {$IFDEF OLDSAVE} oPad32: Uint32;{$ENDIF} //nifti header is 348 bytes padded with 4
+  orawVolBytes: TUInt8s;
+  inVolBytes: int64;
+  {$IFDEF 4DRESCALE}
+  vrawVolBytes: TUInt8s;
+  outVolBytes, v, j, vOffset: int64;
+  vHdr, vvHdr  : TNIFTIhdr;
+  {$ENDIF}
+begin
+ oHdr := fHdr;
+ //showmessage(format('%d %d', [oHdr.dim[4], fVolumesLoaded])); exit;
+ {$IFDEF 4DRESCALE}
+ vHdr := fHdr;
+ {$ENDIF}
+ setlength(orawVolBytes, length(fRawVolBytes));
+ inVolBytes := oHdr.dim[1] * oHdr.dim[2] * oHdr.dim[3] * (oHdr.bitpix div 8);
+ orawVolBytes := copy(fRawVolBytes, 0, inVolBytes);
+ if not ShrinkOrEnlarge(oHdr, orawVolBytes, Filter, xFrac, yFrac, zFrac, OutDataType) then begin
+    showmessage('Catastrophic error: perhaps format not supported '+inttostr(OutDataType));
+    orawVolBytes := nil;
+    exit(false);
+ end;
+ m := SForm2Mat(oHdr);
+ Mat2QForm(m, oHdr);
+
+ oHdr.vox_offset :=  sizeof(oHdr) + 4;
+ oHdr.dim[0] := 3;
+ oHdr.dim[4] := 1;
+ oHdr.dim[5] := 1;
+ oHdr.dim[6] := 1;
+ oHdr.dim[7] := 1;
+ {$IFDEF 4DRESCALE}
+ //showmessage(format('%d %d', [length(oRawVolBytes), fVolumesLoaded]));
+ if (fVolumesLoaded > 1) and (isAllVolumes) then begin
+    outVolBytes := length(oRawVolBytes);
+    //showmessage(format('%d %d', [length(oRawVolBytes), fVolumesLoaded]));
+    setlength(orawVolBytes,  outVolBytes * fVolumesLoaded);
+    oHdr.dim[4] := fVolumesLoaded;
+    oHdr.dim[0] := 4;
+    for v := 2 to fVolumesLoaded do begin
+       vrawVolBytes := copy(fRawVolBytes, (v-1) * inVolBytes, inVolBytes);
+       vvHdr := vHdr;
+       ShrinkOrEnlarge(vvHdr, vrawVolBytes, Filter, xFrac, yFrac, zFrac, OutDataType);
+       vOffset := (v-1) * outVolBytes;
+       for j := 0 to (outVolBytes-1) do
+           orawVolBytes[j+vOffset] := vrawVolBytes[j];
+    end;  //vol
+ end; //4D data
+ {$ENDIF}
+ {$IFDEF OLDSAVE}
+ mStream := TMemoryStream.Create;
+ mStream.Write(oHdr,sizeof(oHdr));
+ oPad32 := 4;
+ mStream.Write(oPad32, 4);
+ mStream.Write(oRawVolBytes[0], length(oRawVolBytes));
+ oRawVolBytes := nil;
+ mStream.Position := 0;
+ FileMode := fmOpenWrite;
+ NiftiOutName := fnm;
+ lExt := uppercase(extractfileext(NiftiOutName));
+ if (lExt = '.GZ') or (lExt = '.VOI') then begin  //save gz compressed
+    if (lExt = '.GZ') then
+       NiftiOutName := ChangeFileExtX(NiftiOutName,'.nii.gz'); //img.gz -> img.nii.gz
+    zStream := TGZFileStream.Create(NiftiOutName, gzopenwrite);
+    zStream.CopyFrom(mStream, mStream.Size);
+    zStream.Free;
+ end else begin
+     if (lExt <> '.NII') then
+        NiftiOutName := NiftiOutName + '.nii';
+     mStream.SaveToFile(NiftiOutName); //save uncompressed
+ end;
+ mStream.Free;
+ FileMode := fmOpenRead;
+ exit(true);
+ {$ELSE}
+ result := SaveVolumeFormatBasedOnExt(fnm, oHdr, oRawVolBytes);
+ {$ENDIF}
+end;
+
 constructor TNIfTI.Create(niftiFileName: string; backColor: TRGBA;  tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s); overload;
 {$IFNDEF CUSTOMCOLORS}
 var
@@ -8161,8 +8520,10 @@ begin
  ZeroIntensityInvisible := false;
  IsFightInterpolationBleeding := false;
  IsShrunken := false;
+ //fDTImode := kDTIno;
  IsInterpolated := false;
  MaxTexMb := 1024;
+ isAntiAliasHugeTexMb := false;
  RefreshCount := Random(maxint);
  {$IFDEF CACHEUINT8}  //release cache, force creation on next refresh
  fWindowMinCache8 := infinity;
@@ -8206,6 +8567,7 @@ var
 {$ENDIF}
 begin
  IsShrunken := false;
+ //fDTImode := kDTIno;
  IsFightInterpolationBleeding := false;
  SortClustersBySize := false;
  LoadFewVolumes := lLoadFewVolumes;
@@ -8278,6 +8640,9 @@ destructor TNIfTI.Destroy;
 begin
   fLabels.Free;
   fRawVolBytes := nil;
+  {$IFNDEF DYNRGBA}
+  setlengthP(fVolRGBA,0);
+  {$ENDIF}
   fVolRGBA := nil;
   fCache8 := nil;
   clusterNotes := '';

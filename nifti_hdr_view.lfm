@@ -348,7 +348,6 @@ object HdrForm: THdrForm
         MaxValue = 99999999
         MinValue = -99999999
         TabOrder = 10
-        Value = 0
       end
       object Ymm: TFloatSpinEdit
         AnchorSideLeft.Control = Xmm
@@ -363,7 +362,6 @@ object HdrForm: THdrForm
         MaxValue = 99999999
         MinValue = -99999999
         TabOrder = 11
-        Value = 0
       end
       object Zmm: TFloatSpinEdit
         AnchorSideLeft.Control = Xmm
@@ -378,7 +376,6 @@ object HdrForm: THdrForm
         MaxValue = 99999999
         MinValue = -99999999
         TabOrder = 12
-        Value = 0
       end
       object OffsetEdit: TSpinEdit
         AnchorSideLeft.Control = Label7
@@ -420,7 +417,6 @@ object HdrForm: THdrForm
         MaxValue = 99999999
         MinValue = -99999999
         TabOrder = 13
-        Value = 0
       end
       object Dim5Edit: TSpinEdit
         AnchorSideLeft.Control = Xdim
@@ -474,7 +470,6 @@ object HdrForm: THdrForm
         MaxValue = 99999999
         MinValue = -99999999
         TabOrder = 6
-        Value = 0
       end
       object PixDim6: TFloatSpinEdit
         AnchorSideLeft.Control = Xmm
@@ -489,7 +484,6 @@ object HdrForm: THdrForm
         MaxValue = 99999999
         MinValue = -99999999
         TabOrder = 7
-        Value = 0
       end
       object PixDim7: TFloatSpinEdit
         AnchorSideLeft.Control = Xmm
@@ -504,7 +498,6 @@ object HdrForm: THdrForm
         MaxValue = 99999999
         MinValue = -99999999
         TabOrder = 8
-        Value = 0
       end
       object LengthLabel: TLabel
         AnchorSideLeft.Control = Xdim
@@ -715,7 +708,6 @@ object HdrForm: THdrForm
         MaxValue = 9999999999999
         MinValue = -9999999999999
         TabOrder = 8
-        Value = 0
       end
       object srow_x2Edit: TFloatSpinEdit
         AnchorSideLeft.Control = srow_x1Edit
@@ -731,7 +723,6 @@ object HdrForm: THdrForm
         MaxValue = 9999999999999
         MinValue = -9999999999999
         TabOrder = 9
-        Value = 0
       end
       object srow_y0Edit: TFloatSpinEdit
         AnchorSideLeft.Control = srow_x0Edit
@@ -746,7 +737,6 @@ object HdrForm: THdrForm
         MaxValue = 9999999999999
         MinValue = -9999999999999
         TabOrder = 11
-        Value = 0
       end
       object srow_y1Edit: TFloatSpinEdit
         AnchorSideLeft.Control = srow_x1Edit
@@ -774,7 +764,6 @@ object HdrForm: THdrForm
         MaxValue = 9999999999999
         MinValue = -9999999999999
         TabOrder = 13
-        Value = 0
       end
       object srow_z0Edit: TFloatSpinEdit
         AnchorSideLeft.Control = srow_x0Edit
@@ -789,7 +778,6 @@ object HdrForm: THdrForm
         MaxValue = 9999999999999
         MinValue = -9999999999999
         TabOrder = 15
-        Value = 0
       end
       object srow_z1Edit: TFloatSpinEdit
         AnchorSideLeft.Control = srow_x1Edit
@@ -803,7 +791,6 @@ object HdrForm: THdrForm
         MaxValue = 9999999999999
         MinValue = -9999999999999
         TabOrder = 16
-        Value = 0
       end
       object srow_z2Edit: TFloatSpinEdit
         AnchorSideLeft.Control = srow_x2Edit
@@ -832,7 +819,6 @@ object HdrForm: THdrForm
         MaxValue = 9999999999999
         MinValue = -9999999999999
         TabOrder = 10
-        Value = 0
       end
       object srow_y3Edit: TFloatSpinEdit
         AnchorSideLeft.Control = srow_x3Edit
@@ -846,7 +832,6 @@ object HdrForm: THdrForm
         MaxValue = 9999999999999
         MinValue = -9999999999999
         TabOrder = 14
-        Value = 0
       end
       object srow_z3Edit: TFloatSpinEdit
         AnchorSideLeft.Control = srow_x3Edit
@@ -860,7 +845,6 @@ object HdrForm: THdrForm
         MaxValue = 9999999999999
         MinValue = -9999999999999
         TabOrder = 18
-        Value = 0
       end
       object quatern_bEdit: TFloatSpinEdit
         AnchorSideLeft.Control = Label40
@@ -877,7 +861,6 @@ object HdrForm: THdrForm
         MaxValue = 9999999999999
         MinValue = -9999999999999
         TabOrder = 1
-        Value = 0
       end
       object quatern_cEdit: TFloatSpinEdit
         AnchorSideLeft.Control = quatern_bEdit
@@ -893,7 +876,6 @@ object HdrForm: THdrForm
         MaxValue = 9999999999999
         MinValue = -9999999999999
         TabOrder = 2
-        Value = 0
       end
       object quatern_dEdit: TFloatSpinEdit
         AnchorSideLeft.Control = quatern_cEdit
@@ -909,7 +891,6 @@ object HdrForm: THdrForm
         MaxValue = 9999999999999
         MinValue = -9999999999999
         TabOrder = 3
-        Value = 0
       end
       object qoffset_x_Edit: TFloatSpinEdit
         AnchorSideLeft.Control = quatern_bEdit
@@ -924,7 +905,6 @@ object HdrForm: THdrForm
         MaxValue = 9999999999999
         MinValue = -9999999999999
         TabOrder = 4
-        Value = 0
       end
       object qoffset_y_Edit: TFloatSpinEdit
         AnchorSideLeft.Control = quatern_cEdit
@@ -938,7 +918,6 @@ object HdrForm: THdrForm
         MaxValue = 9999999999999
         MinValue = -9999999999999
         TabOrder = 5
-        Value = 0
       end
       object qoffset_z_Edit: TFloatSpinEdit
         AnchorSideLeft.Control = quatern_dEdit
@@ -952,7 +931,6 @@ object HdrForm: THdrForm
         MaxValue = 9999999999999
         MinValue = -9999999999999
         TabOrder = 6
-        Value = 0
       end
       object QFacEdit: TFloatSpinEdit
         AnchorSideLeft.Control = Label46
@@ -1058,7 +1036,6 @@ object HdrForm: THdrForm
         MaxValue = 99999999
         MinValue = -99999999
         TabOrder = 3
-        Value = 0
       end
       object cmin: TFloatSpinEdit
         AnchorSideLeft.Control = MinLabel
@@ -1075,7 +1052,6 @@ object HdrForm: THdrForm
         MaxValue = 99999999
         MinValue = -99999999
         TabOrder = 2
-        Value = 0
       end
       object Scale: TFloatSpinEdit
         AnchorSideLeft.Control = InterceptLabel
@@ -1092,7 +1068,6 @@ object HdrForm: THdrForm
         MaxValue = 99999999
         MinValue = -99999999
         TabOrder = 0
-        Value = 0
       end
       object Intercept: TFloatSpinEdit
         AnchorSideLeft.Control = Scale
@@ -1107,13 +1082,12 @@ object HdrForm: THdrForm
         MaxValue = 99999999
         MinValue = -99999999
         TabOrder = 1
-        Value = 0
       end
     end
     object StatSheet: TTabSheet
       Caption = 'Statistics'
-      ClientHeight = 322
-      ClientWidth = 593
+      ClientHeight = 272
+      ClientWidth = 539
       object IntentLabel: TLabel
         AnchorSideLeft.Control = StatSheet
         AnchorSideTop.Control = IntentCodeDrop
@@ -1205,6 +1179,19 @@ object HdrForm: THdrForm
           'Points'
           'Triangle (mesh)'
           'Quaternion'
+          'Dimensionless'
+          'Time series'
+          'Node index'
+          'RGB Vector'
+          'RGBA Vector'
+          'Shape'
+          'Displacement Field'
+          'Cubic Spline Coefficients'
+          'DCT Coefficients'
+          'Quadratic Spline Coefficients'
+          'TOPUP Cubic Spline Coefficients'
+          'TOPUP Quadratic Spline Coefficients'
+          'TOPUP Field'
         )
         Style = csDropDownList
         TabOrder = 3
@@ -1225,7 +1212,6 @@ object HdrForm: THdrForm
         MaxValue = 99999999
         MinValue = -99999999
         TabOrder = 0
-        Value = 0
       end
       object intent_p2Edit: TFloatSpinEdit
         AnchorSideLeft.Control = intent_p1Edit
@@ -1240,7 +1226,6 @@ object HdrForm: THdrForm
         MaxValue = 99999999
         MinValue = -99999999
         TabOrder = 1
-        Value = 0
       end
       object intent_p3Edit: TFloatSpinEdit
         AnchorSideLeft.Control = intent_p1Edit
@@ -1255,7 +1240,6 @@ object HdrForm: THdrForm
         MaxValue = 99999999
         MinValue = -99999999
         TabOrder = 2
-        Value = 0
       end
     end
     object fmriSheet: TTabSheet
@@ -1759,8 +1743,8 @@ object HdrForm: THdrForm
     SimplePanel = False
   end
   object HdrMenu: TMainMenu
-    left = 472
-    top = 280
+    Left = 472
+    Top = 280
     object File1: TMenuItem
       Caption = '&File'
       object Save1: TMenuItem
@@ -1817,7 +1801,7 @@ object HdrForm: THdrForm
     OnClose = SaveHdrDlgClose
     Title = 'Save NIfTI header'
     Filter = 'NIfTI embedded header (*.nii)|*.nii|NIfTI separate header (*.hdr)|*.hdr'
-    left = 544
-    top = 272
+    Left = 544
+    Top = 272
   end
 end

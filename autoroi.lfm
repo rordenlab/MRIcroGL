@@ -1,11 +1,11 @@
 object AutoROIForm: TAutoROIForm
-  Left = 364
+  Left = 480
   Height = 249
-  Top = 76
+  Top = 75
   Width = 252
   HorzScrollBar.Page = 264
   VertScrollBar.Page = 354
-  ActiveControl = VarianceEdit
+  ActiveControl = OriginBtn
   AutoSize = True
   BorderStyle = bsDialog
   BorderWidth = 6
@@ -21,25 +21,13 @@ object AutoROIForm: TAutoROIForm
   OnShow = FormShow
   Position = poScreenCenter
   LCLVersion = '2.1.0.0'
-  object OriginLabel: TLabel
-    AnchorSideLeft.Control = OriginBtn
-    AnchorSideTop.Control = OriginBtn
-    AnchorSideTop.Side = asrBottom
-    Left = 10
-    Height = 16
-    Top = 34
-    Width = 44
-    BorderSpacing.Top = 4
-    Caption = 'Origin: '
-    ParentColor = False
-  end
   object DiffLabel: TLabel
     AnchorSideLeft.Control = OriginBtn
     AnchorSideTop.Control = VarianceEdit
     AnchorSideTop.Side = asrCenter
     Left = 10
     Height = 16
-    Top = 76
+    Top = 36
     Width = 132
     Caption = 'Difference from origin'
     ParentColor = False
@@ -50,31 +38,19 @@ object AutoROIForm: TAutoROIForm
     AnchorSideTop.Side = asrCenter
     Left = 10
     Height = 16
-    Top = 101
+    Top = 61
     Width = 77
     Caption = 'Radius (mm)'
-    ParentColor = False
-  end
-  object Label4: TLabel
-    AnchorSideLeft.Control = OriginBtn
-    AnchorSideTop.Control = OriginLabel
-    AnchorSideTop.Side = asrBottom
-    Left = 10
-    Height = 16
-    Top = 54
-    Width = 70
-    BorderSpacing.Top = 4
-    Caption = 'Constraints'
     ParentColor = False
   end
   object VarianceEdit: TSpinEdit
     AnchorSideLeft.Control = DiffLabel
     AnchorSideLeft.Side = asrBottom
-    AnchorSideTop.Control = Label4
+    AnchorSideTop.Control = OriginBtn
     AnchorSideTop.Side = asrBottom
     Left = 150
     Height = 21
-    Top = 74
+    Top = 34
     Width = 72
     BorderSpacing.Left = 8
     BorderSpacing.Top = 4
@@ -89,7 +65,7 @@ object AutoROIForm: TAutoROIForm
     AnchorSideTop.Side = asrBottom
     Left = 150
     Height = 21
-    Top = 99
+    Top = 59
     Width = 72
     BorderSpacing.Top = 4
     MaxValue = 9999
@@ -103,7 +79,7 @@ object AutoROIForm: TAutoROIForm
     AnchorSideTop.Side = asrBottom
     Left = 10
     Height = 20
-    Top = 124
+    Top = 84
     Width = 226
     BorderSpacing.Top = 4
     ItemHeight = 26
@@ -140,7 +116,7 @@ object AutoROIForm: TAutoROIForm
     AnchorSideRight.Side = asrBottom
     Left = 132
     Height = 20
-    Top = 152
+    Top = 112
     Width = 114
     Anchors = [akTop, akRight]
     AutoSize = True
@@ -157,7 +133,7 @@ object AutoROIForm: TAutoROIForm
     AnchorSideRight.Control = AutoROIBtn
     Left = 14
     Height = 20
-    Top = 152
+    Top = 112
     Width = 114
     Anchors = [akTop, akRight]
     AutoSize = True

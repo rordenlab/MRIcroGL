@@ -52,7 +52,7 @@ type
         {$IFDEF CLRBAR}clrbar: TGPUClrbar; {$ENDIF}
         {$IFDEF CUBE} gCube :TGPUCube; {$ENDIF}
         procedure LoadCube();
-        procedure LoadTexture(var vol: TNIfTI);
+        procedure LoadTexture(var vol: TNIfTI; deferGradients: boolean);
         procedure CreateDrawColorTable;//1D texture for drawing
         procedure CreateDrawTex(Dim: TVec3i; Vals: TUInt8s);
         procedure UpdateDraw(Drawing: TDraw);
@@ -693,7 +693,7 @@ begin
   CreateOverlayTextures(Vol.Dim, intensityData);
 end;
 
-procedure TGPUVolume.LoadTexture(var vol: TNIfTI);
+procedure TGPUVolume.LoadTexture(var vol: TNIfTI; deferGradients: boolean);
 var
  volTexDesc: MTLTextureDescriptor;
  volRegion: MTLRegion;
@@ -703,8 +703,13 @@ var
  gradRegion: MTLRegion;
  {$ENDIF}
 begin
- volTex := nil;
+ {$IFDEF GPUGRADIENTS}
+ //see if gradients were previously deferred but now required
+ if (Vol.VolRGBA = nil) and (volTex <> nil) and(gradTex = nil) and (not deferGradients) then CreateGradientVolumeGPU(Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, volTex, gradTex);
+ {$ENDIF}
  if (Vol.VolRGBA = nil) then exit;
+ volTex := nil;
+ gradTex := nil;
  maxDim := max(Vol.Dim.X,max(Vol.Dim.Y,Vol.Dim.Z));
  volTexDesc := MTLTextureDescriptor.alloc.init.autorelease;
  volTexDesc.setTextureType(MTLTextureType3D);
@@ -720,16 +725,9 @@ begin
  volTex.replaceRegion_mipmapLevel_slice_withBytes_bytesPerRow_bytesPerImage(volRegion, 0,0, @Vol.VolRGBA[0], Vol.Dim.X*4, Vol.Dim.X*Vol.Dim.Y*4);
  //compute and load gradients
  {$IFDEF GPUGRADIENTS}
- CreateGradientVolumeGPU(Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, volTex, gradTex);
+ if (not deferGradients) then
+ 	CreateGradientVolumeGPU(Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, volTex, gradTex);
  {$ELSE}
- (*gradTexDesc := MTLTextureDescriptor.alloc.init.autorelease;
- gradTexDesc.setTextureType(MTLTextureType3D);
- gradTexDesc.setUsage(MTLTextureUsageShaderWrite or MTLTextureUsageShaderRead);
- gradTexDesc.setPixelFormat(MTLPixelFormatRGBA8Unorm);
- gradTexDesc.setWidth(Vol.Dim.X);
- gradTexDesc.setHeight(Vol.Dim.Y);
- gradTexDesc.setDepth(Vol.Dim.Z);
- gradTex := mtlControl.renderView.device.newTextureWithDescriptor(gradTexDesc);*)
  volTexDesc.setUsage(MTLTextureUsageShaderWrite or MTLTextureUsageShaderRead);
  if gradTex <> nil then gradTex.release;
  gradTex := mtlControl.renderView.device.newTextureWithDescriptor(volTexDesc);
@@ -808,8 +806,8 @@ var
 begin
   if vertexBuffer = nil then // only once
     LoadCube();
-  if (vol.VolRGBA <> nil) then
-     LoadTexture(vol);
+  //if (vol.VolRGBA <> nil) then
+     LoadTexture(vol, true);
   if (volTex = nil) then
     exit;
   w := mtlControl.clientwidth;
@@ -924,8 +922,8 @@ var
 begin
     if vertexBuffer = nil then // only once
       LoadCube();
-    if (vol.VolRGBA <> nil) then
-       LoadTexture(vol);
+    //if (vol.VolRGBA <> nil) then
+       LoadTexture(vol, false);
     if (volTex = nil) then
       exit;
   case lRender.Orient of
@@ -1117,8 +1115,8 @@ procedure TGPUVolume.PaintMosaic2D(var vol: TNIfTI; Drawing: TDraw; MosaicString
   begin
     if vertexBuffer = nil then // only once
       LoadCube();
-    if (vol.VolRGBA <> nil) then
-       LoadTexture(vol);
+    //if (vol.VolRGBA <> nil) then
+       LoadTexture(vol, false);
     if (volTex = nil) then
       exit;
     w := mtlControl.clientwidth;
@@ -1214,8 +1212,8 @@ begin
   h := mtlControl.clientheight;
   if vertexBuffer = nil then // only once
     LoadCube();
-  if (vol.VolRGBA <> nil) then
-     LoadTexture(vol);
+  //if (vol.VolRGBA <> nil) then
+     LoadTexture(vol, false);
   if (volTex = nil) then
     exit;
   modelMatrix := TMat4.Identity;

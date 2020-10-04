@@ -5605,7 +5605,6 @@ begin
 	result := true;
 end;
 
-
 function readPVLNC(var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
 //https://github.com/nci/drishti/wiki/file-format---.pvl.nc
 //http://paulbourke.net/dataformats/pvl/
@@ -5769,6 +5768,111 @@ begin
 	mArray.Free;
 end; //readPVLNC()
 
+
+function readOSP(var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+//https://www.ospray.org/documentation.html
+label
+  666;
+var
+  FP: TextFile;
+  F : File Of byte;
+  str, rawfile, tag: string;
+  mArray: TStringList;
+  //Sz, FSz: int64;
+procedure ParseStr();
+var
+	e: integer;
+begin
+	tag := '';
+	mArray.clear;
+	str := trim(str);
+	if (length(str) < 2) or (str[1] <> '<') or (str[2] = '/') then exit;
+	e := Pos('>', str);
+	if e < 3 then exit;
+	tag := copy(str, 2, e-2);
+	str := copy(str, e+1, maxint);
+	e := Pos('<', str);
+	str := copy(str, 1, e-1);
+	mArray.DelimitedText := str;
+	//writeln(tag+':'+str+':'+inttostr(mArray.count));
+end; //ParseStr()
+begin
+	result := false;
+	FileMode := fmOpenRead;
+	AssignFile(fp,fname);
+	reset(fp);
+	mArray := TStringList.Create;
+        tag := '';
+	rawfile := changefileext(fname,'.raw');
+	nhdr.datatype := kDT_UINT8; //default if pvlvoxeltype not specified
+	if EOF(fp) then goto 666;
+	readln(fp,str);
+	if PosEx('<?xml version="',  str) < 1 then begin
+		{$IFDEF UNIX}
+                Writeln('ospray files should begin with" <?xml ". Perhaps this is a Drishti geometry file.');
+                {$ENDIF}
+                goto 666;
+	end;
+	while (not EOF(fp))  do begin
+		readln(fp,str);
+		ParseStr();
+		if tag = '' then continue;
+		if (PosEx('dimensions', tag) > 0) and (mArray.count > 2) then begin
+			nhdr.dim[1] := strtointdef(mArray[0],0);
+			nhdr.dim[2] := strtointdef(mArray[1],0);
+			nhdr.dim[3] := strtointdef(mArray[2],0);
+			continue;
+		end;
+		if (PosEx('voxelType', tag) > 0) and (mArray.count > 0) then begin
+			if (PosEx('uchar', mArray[0]) > 0) then
+				nhdr.datatype := kDT_UINT8
+			else if (PosEx('short', mArray[0]) > 0) then
+				nhdr.datatype := kDT_INT16
+			else if (PosEx('float', mArray[0]) > 0) then
+				nhdr.datatype := kDT_FLOAT32
+			else begin
+				NSLog('Unknown ospray voxeltype: "'+mArray[0]+'"');
+				goto 666;
+			end;
+			continue;
+		end; //voxeltype
+		if (PosEx('filename', tag) > 0) and (mArray.count > 0) then begin //aka pvlvoxeltype
+			rawfile := mArray[0];
+			if not fileexists(rawfile) then
+				rawfile := ExtractFilePath(fname) + ExtractFileName(mArray[0]);
+			if not fileexists(rawfile) then
+				NSLog('Unable to find image data '+rawfile);
+			if mArray.count > 1 then begin
+				NSLog('ospray "filename" has multiple elements: spaces in filenames or multiple files?');
+			end;
+			continue;
+		end;
+	end;
+	if not fileexists(rawfile) then begin
+		NSLog('Unable to find Drishti raw file named '+rawfile);
+		goto 666;
+	end;
+	convertForeignToNifti(nhdr);
+	//Sz := round(nhdr.vox_offset) + (nhdr.dim[1]*nhdr.dim[2]*nhdr.dim[3]*(nhdr.bitpix div 8));
+	Assign (F,rawfile);
+  	Reset (F);
+  	//FSz := FileSize(F);
+  	Close (F);
+	//all good
+        {$IFDEF ENDIAN_BIG}
+        swapEndian := true;
+        {$ELSE}
+        swapEndian := false;
+        {$ENDIF}
+	fname := rawfile;
+	nhdr.descrip := 'ospray'+kIVers;
+	result := true;
+	666:
+	CloseFile(FP);
+	Filemode := 2;
+	mArray.Free;
+end; //readOSP()
+
 function readForeignHeader(var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean; out xDim64: int64): boolean; overload;
 var
   lExt, lExt2GZ: string;
@@ -5818,6 +5922,8 @@ begin
        result := readIdf(lFilename, lHdr, swapEndian)
   else if (lExt = '.RAW') then
     result := readRAW(lFilename, lHdr, swapEndian)
+  else if (lExt = '.OSP') then
+    result := readOSP(lFilename, lHdr, swapEndian)
   else if (lExt = '.NC') then
     result := readPVLNC(lFilename, lHdr, swapEndian)
   else if (lExt = '.PIC') then
