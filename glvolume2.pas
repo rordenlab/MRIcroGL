@@ -49,10 +49,11 @@ type
         {$ENDIF}
         {$IFDEF COREGL}vboBox3D: GLuint;{$ENDIF}
         shaderPrefs: TShaderPrefs;
-        RayCastQuality1to5, maxDim,fAzimuth,fElevation, overlayNum, overlayGradTexWidth: integer;
+        RayCastQuality1to5, maxDim,fAzimuth,fElevation, fPitch, overlayNum, overlayGradTexWidth: integer;
         fDistance: single;
         fLightPos: TVec4;
         fClipPlane: TVec4;
+        {$IFDEF MTX}fModelMatrix: TMat4;{$ENDIF}
         {$IFDEF CLRBAR}clrbar: TGPUClrbar;{$ENDIF}
         glControl: TOpenGLControl;
         prefLoc: array [1..kMaxUniform] of GLint;
@@ -103,6 +104,8 @@ type
         procedure SetShaderSlider(idx: integer; newVal: single);
         property Azimuth: integer read fAzimuth write fAzimuth;
         property Elevation: integer read fElevation write fElevation;
+        property Pitch: integer read fPitch write fPitch;
+        {$IFDEF MTX} property ModelMatrix3D: TMat4 read fModelMatrix write fModelMatrix; {$ENDIF}
         property Distance: single read fDistance write fDistance;
         property LightPosition: TVec4 read fLightPos write fLightPos;
         property ClipPlane: TVec4 read fClipPlane write fClipPlane;
@@ -1408,6 +1411,14 @@ begin
   fDistance := kDefaultDistance;
   fAzimuth := 110;
   fElevation := 30;
+  fPitch := 0;
+  {$IFDEF MTX}
+  fModelMatrix := TMat4.Identity;
+  fModelMatrix *= TMat4.Translate(0, 0, -fDistance);
+  fModelMatrix *= TMat4.RotateY(-DegToRad(32));
+  fModelMatrix *= TMat4.RotateX(-DegToRad(90-fElevation));
+  fModelMatrix *= TMat4.RotateZ(DegToRad(fAzimuth));
+  {$ENDIF}
   overlayNum := 0;
   overlayGradTexWidth := 2; //refresh
   RaycastQuality1to5 := 5;
@@ -1684,7 +1695,7 @@ begin
  glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, @height);
  glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, @depth);
  //https://www.opengl.org/archives/resources/faq/technical/texture.htm
- printf(format('intensityTexture3D proxy test %dx%dx%d',[width, height, depth]));
+ // printf(format('intensityTexture3D proxy test %dx%dx%d',[width, height, depth]));
  if (width < 1) then begin
     printf(format('Unable to create large intensity texture (%dx%dx%d). Solution: adjust "MaxVox" or press "Reset" button in preferences.', [Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z]));
     glControl.ReleaseContext;
@@ -1900,7 +1911,6 @@ begin
     modelMatrix *= TMat4.Translate(-vol.Scale.X/2, -vol.Scale.Y/2, -vol.Scale.Z/2);
     modelLightPos := (modelMatrix.Transpose * fLightPos);
     modelMatrix *= TMat4.Scale(vol.Scale.X, vol.Scale.Y, vol.Scale.Z); //for volumes that are rectangular not square
-
     glActiveTexture(GL_TEXTURE6);
     glBindTexture(GL_TEXTURE_2D, matcap2D);
     glUniform1i(matcapLoc, 6);
@@ -2396,10 +2406,16 @@ begin
   glUniform1f(sliceSizeLoc, 1/maxDim);
   //glUniform1i(loopsLoc,round(maxDim*2.2));
   //glUniform3f(clearColorLoc, fClearColor.r/255, fClearColor.g/255, fClearColor.b/255);
+  {$IFDEF MTX}
+  modelMatrix := fModelMatrix;
+  {$ELSE}
   modelMatrix := TMat4.Identity;
   modelMatrix *= TMat4.Translate(0, 0, -fDistance);
+
   modelMatrix *= TMat4.RotateX(-DegToRad(90-fElevation));
   modelMatrix *= TMat4.RotateZ(DegToRad(fAzimuth));
+  modelMatrix *= TMat4.RotateX(DegToRad(fPitch));
+  {$ENDIF}
   modelMatrix *= TMat4.Translate(-vol.Scale.X/2, -vol.Scale.Y/2, -vol.Scale.Z/2);
   modelLightPos := (modelMatrix.Transpose * fLightPos);
   modelLightPos := modelLightPos.Normalize;
@@ -2509,8 +2525,9 @@ begin
      glCullFace(GL_BACK);
      {$ENDIF}
      //gCube.Size := 0.02;
-     gCube.Azimuth:=fAzimuth;
-     gCube.Elevation:=-fElevation;
+     gCube.Azimuth := fAzimuth;
+     gCube.Elevation := -fElevation;
+     gCube.Pitch := fPitch;
      gCube.Draw(glControl.ClientWidth, glControl.ClientHeight);
   end;
   {$ENDIF}{$ENDIF}

@@ -1953,7 +1953,7 @@ object GLForm1: TGLForm1
           OnClick = ReorientMenuClick
         end
         object ResizeMenu1: TMenuItem
-          Caption = 'Resize and Resample'
+          Caption = 'Resize'
           OnClick = ResizeMenuClick
         end
         object CropMenu1: TMenuItem
@@ -1970,6 +1970,7 @@ object GLForm1: TGLForm1
       end
       object DrawSaveMenu: TMenuItem
         Caption = 'Save VOI'
+        ShortCut = 16467
         OnClick = DrawSaveMenuClick
       end
       object DrawCloseMenu: TMenuItem

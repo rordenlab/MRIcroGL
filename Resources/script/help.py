@@ -1,3 +1,6 @@
+import sys
+print(sys.version)
+print(sys.path)
 import gl
 print(gl.__doc__)
 for key in dir( gl ):

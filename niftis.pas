@@ -330,6 +330,7 @@ begin
         Drawing.voiCreate(nii.Dim.x, nii.Dim.y, nii.Dim.z, nii.fRawVolBytes)
      else
          Drawing.voiCreate(nii.Dim.x, nii.Dim.y, nii.Dim.z, nii.DisplayMinMax2Uint8, true);
+     Drawing.filename:= niftiFileName;
      nii.Destroy;
 end;
 

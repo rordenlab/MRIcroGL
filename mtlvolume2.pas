@@ -39,7 +39,7 @@ type
         txt: TGPUFont;
         drawVolTex, drawVolLut: MTLTextureProtocol;
         {$ENDIF}
-        RayCastQuality1to5, maxDim, fAzimuth,fElevation: integer;
+        RayCastQuality1to5, maxDim, fAzimuth, fElevation, fPitch: integer;
         shaderPrefs: TShaderPrefs;
         prefValues: array [1..kMaxUniform] of single;
         fDistance, overlayNum: single;
@@ -79,10 +79,10 @@ type
         {$ENDIF}
         procedure UpdateOverlays(vols: TNIfTIs);
         property Quality1to5: integer read RayCastQuality1to5 write RayCastQuality1to5;
-
         property ShaderSliders: TShaderPrefs read shaderPrefs write shaderPrefs;
         property Azimuth: integer read fAzimuth write fAzimuth;
         property Elevation: integer read fElevation write fElevation;
+        property Pitch: integer read fPitch write fPitch;
         property Distance: single read fDistance write fDistance;
         property LightPosition: TVec4 read fLightPos write fLightPos;
         property ClipPlane: TVec4 read fClipPlane write fClipPlane;
@@ -455,6 +455,7 @@ begin
   lineVertexBuffer := nil;
   fAzimuth := 110;
   fElevation := 30;
+  fPitch := 0;
   RaycastQuality1to5 := 5;
   SelectionRect := Vec4(-1,0,0,0);
   fLightPos := Vec4(0, 0.707, 0.707, 0);
@@ -1220,6 +1221,8 @@ begin
   modelMatrix *= TMat4.Translate(0, 0, -fDistance);
   modelMatrix *= TMat4.RotateX(-DegToRad(90-fElevation));
   modelMatrix *= TMat4.RotateZ(DegToRad(fAzimuth));
+  modelMatrix *= TMat4.RotateX(-DegToRad(fPitch));
+
   modelMatrix *= TMat4.Translate(-vol.Scale.X/2, -vol.Scale.Y/2, -vol.Scale.Z/2);
   modelLightPos := (modelMatrix.Transpose * fLightPos);
   modelMatrix *= TMat4.Scale(vol.Scale.X, vol.Scale.Y, vol.Scale.Z); //for volumes that are rectangular not square
@@ -1301,8 +1304,9 @@ begin
     {$ENDIF}
     {$IFDEF CUBE}
     if Slices.LabelOrient then begin
-       gCube.Azimuth:=fAzimuth;
-       gCube.Elevation:=-fElevation;
+       gCube.Azimuth := fAzimuth;
+       gCube.Elevation := -fElevation;
+       gCube.Pitch := fPitch;
        gCube.Draw(mtlControl.clientwidth, mtlControl.clientheight);
     end;
     {$ENDIF}

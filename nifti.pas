@@ -169,6 +169,7 @@ Type
         {$ENDIF}
         clusters: TClusters;
         clusterNotes: string[128]; //interpolated, label map, etc
+        property InputReorientPermute: TVec3i read fPermInOrient;
         property IsNativeEndian: boolean read fIsNativeEndian;
         property VolumeDisplayed: integer read fVolumeDisplayed; //indexed from 0 (0..VolumesLoaded-1)
         property VolumesLoaded: integer read fVolumesLoaded; //1 for 3D data, for 4D 1..hdr.dim[4] depending on RAM
@@ -282,7 +283,7 @@ Type
   procedure SetLengthP(var S: TRGBAp; Len: SizeInt);
   {$ENDIF}
   {$ENDIF}
-
+  function extractfileextX(fnm: string): string;
 
 implementation
 
@@ -2512,47 +2513,38 @@ begin
    lR[2,3]:= qz ;
 end;
 
-procedure CheckXForm(var lHdr: TNIfTIHdr);
+procedure fixBogusHeaders(var h: TNIFTIhdr);
+var
+   isBogus : boolean = false;
+   i: integer;
+procedure checkSingle(var f: single);
 begin
- if (lHdr.qform_code > kNIFTI_XFORM_OTHER_TEMPLATE) or (lHdr.qform_code < kNIFTI_XFORM_UNKNOWN) then begin
-    {$IFDEF UNIX}
-    printf('Unkown qform_code (update)');
-    {$ENDIF}
-    lHdr.qform_code := kNIFTI_XFORM_UNKNOWN;
- end;
- if (lHdr.sform_code > kNIFTI_XFORM_OTHER_TEMPLATE) or (lHdr.sform_code < kNIFTI_XFORM_UNKNOWN) then begin
-    {$IFDEF UNIX}
-    printf('Unkown sform_code (update)');
-    {$ENDIF}
-    lHdr.sform_code := kNIFTI_XFORM_UNKNOWN;
+ if (specialSingle(f)) or (f = 0.0) then begin
+    isBogus := true;
+    f := 1.0;
  end;
 end;
-
-function Quat2Mat( var lHdr: TNIfTIHdr ): boolean;
-var lR :TMat4;
 begin
-  result := false;
-  CheckXForm(lHdr);
-  if (lHdr.sform_code <> kNIFTI_XFORM_UNKNOWN) or (lHdr.qform_code <= kNIFTI_XFORM_UNKNOWN) or (lHdr.qform_code > kNIFTI_XFORM_MNI_152) then
-     exit;
-  result := true;
-  nifti_quatern_to_mat44(lR,lHdr.quatern_b,lHdr.quatern_c,lHdr.quatern_d,
-  lHdr.qoffset_x,lHdr.qoffset_y,lHdr.qoffset_z,
-  lHdr.pixdim[1],lHdr.pixdim[2],lHdr.pixdim[3],
-  lHdr.pixdim[0]);
-  lHdr.srow_x[0] := lR[0,0];
-  lHdr.srow_x[1] := lR[0,1];
-  lHdr.srow_x[2] := lR[0,2];
-  lHdr.srow_x[3] := lR[0,3];
-  lHdr.srow_y[0] := lR[1,0];
-  lHdr.srow_y[1] := lR[1,1];
-  lHdr.srow_y[2] := lR[1,2];
-  lHdr.srow_y[3] := lR[1,3];
-  lHdr.srow_z[0] := lR[2,0];
-  lHdr.srow_z[1] := lR[2,1];
-  lHdr.srow_z[2] := lR[2,2];
-  lHdr.srow_z[3] := lR[2,3];
-  lHdr.sform_code := kNIFTI_XFORM_SCANNER_ANAT;
+  checkSingle(h.PixDim[1]);
+  checkSingle(h.PixDim[2]);
+  checkSingle(h.PixDim[3]);
+  if (isBogus) then
+    printf('Bogus PixDim repaired. Check dimensions and orientation.');
+  isBogus := false;
+  for i := 0 to 3 do begin
+      if specialSingle(h.srow_x[i]) then isBogus := true;
+      if specialSingle(h.srow_y[i]) then isBogus := true;
+      if specialSingle(h.srow_z[i]) then isBogus := true;
+  end;
+  if (h.srow_x[0] = 0) and (h.srow_x[1] = 0) and (h.srow_x[2] = 0) then isBogus := true;
+  if (h.srow_y[0] = 0) and (h.srow_y[1] = 0) and (h.srow_y[2] = 0) then isBogus := true;
+  if (h.srow_z[0] = 0) and (h.srow_z[1] = 0) and (h.srow_z[2] = 0) then isBogus := true;
+  if (h.srow_x[0] = 0) and (h.srow_y[0] = 0) and (h.srow_z[0] = 0) then isBogus := true;
+  if (h.srow_x[1] = 0) and (h.srow_y[1] = 0) and (h.srow_z[1] = 0) then isBogus := true;
+  if (h.srow_x[2] = 0) and (h.srow_y[2] = 0) and (h.srow_z[2] = 0) then isBogus := true;
+  if (not isBogus) then exit;
+  NII_SetIdentityMatrix(h);
+  printf('Bogus header repaired. Check orientation.');
 end;
 
 procedure fixHdr( var lHdr: TNIfTIHdr );
@@ -2613,6 +2605,7 @@ begin
      if lHdr.pixdim[1] = 0 then lHdr.pixdim[1] := 1;
      if lHdr.pixdim[2] = 0 then lHdr.pixdim[2] := 1;
      if lHdr.pixdim[3] = 0 then lHdr.pixdim[3] := 1;
+     printf('>>>>>>><<<<<<<<<');
      lHdr.srow_x[0] := lHdr.pixdim[1];
      lHdr.srow_x[1] := 0;
      lHdr.srow_x[2] := 0;
@@ -2625,6 +2618,102 @@ begin
      lHdr.srow_z[1] := 0;
      lHdr.srow_z[2] := lHdr.pixdim[3];
      lHdr.srow_z[3] := ((lHdr.dim[3]-1)*lHdr.pixdim[3]) * -0.5;
+end;
+
+procedure fixAnalyze(var h: TNIfTIHdr; isNativeEndian: boolean);
+var
+   //isBogus: boolean = false;
+   h2: TNIfTIHdr;
+   a: TAnalyzeHdrSection;
+   //i : integer;
+begin
+	 if (h.magic = kNIFTI_MAGIC_SEPARATE_HDR) or (h.magic = kNIFTI_MAGIC_EMBEDDED_HDR) then exit;
+     if (h.magic = kNIFTI2_MAGIC_SEPARATE_HDR) or (h.magic = kNIFTI2_MAGIC_EMBEDDED_HDR) then exit;
+     if  (h.HdrSz <> 348) then exit;;
+     printf('Warning: this does not appear to be a valid  NIfTI image. Perhaps legacy Analyze.');
+     (*if (h.pixdim[1] = 0) or (h.pixdim[2] = 0) or (h.pixdim[3] = 0) then exit;
+     for i := 0 to 3 do begin
+         if specialSingle(h.srow_x[i]) then isBogus := true;
+         if specialSingle(h.srow_y[i]) then isBogus := true;
+         if specialSingle(h.srow_z[i]) then isBogus := true;
+     end;
+     if (not isBogus) then begin
+     	isBogus := true;
+        for i := 0 to 2 do begin
+            if h.srow_x[i] <> 0 then isBogus := false;
+            if h.srow_y[i] <> 0 then isBogus := false;
+            if h.srow_z[i] <> 0 then isBogus := false;
+        end;
+     end;
+     if not isBogus then exit;*)
+     h2 := h;
+     if not isNativeEndian then NIFTIhdr_SwapBytes(h2);
+     move(h2,a,sizeof(a));
+     if not isNativeEndian then begin
+     	swap(a.originator[1]);
+        swap(a.originator[2]);
+        swap(a.originator[3]);
+
+     end;
+     if  (a.originator[1] < 0) or (a.originator[2] < 0) or (a.originator[3] < 0)  then  exit;
+     if  (a.originator[1] > h.dim[1]) or (a.originator[2] > h.dim[2]) or (a.originator[3] > h.dim[3])  then  exit;
+     //printf(format(' %d %d %d', [a.originator[1], a.originator[2], a.originator[3]]));
+     h.srow_x[0] := h.pixdim[1];
+     h.srow_x[1] := 0;
+     h.srow_x[2] := 0;
+     h.srow_x[3] := -(a.originator[1]-1) *h.pixdim[1];
+     h.srow_y[0] := 0;
+     h.srow_y[1] := h.pixdim[2];
+     h.srow_y[2] := 0;
+     h.srow_y[3] := -(a.originator[2]-1) *h.pixdim[2];
+     h.srow_z[0] := 0;
+     h.srow_z[1] := 0;
+     h.srow_z[2] := h.pixdim[3];
+     h.srow_z[3] := -(a.originator[3]-1) *h.pixdim[3];
+     printf('Warning: unable to determin left from right side SPM-style for Analyze images');
+end;
+
+procedure CheckXForm(var lHdr: TNIfTIHdr);
+begin
+ if (lHdr.qform_code > kNIFTI_XFORM_OTHER_TEMPLATE) or (lHdr.qform_code < kNIFTI_XFORM_UNKNOWN) then begin
+    {$IFDEF UNIX}
+    printf('Unkown qform_code (update)');
+    {$ENDIF}
+    lHdr.qform_code := kNIFTI_XFORM_UNKNOWN;
+ end;
+ if (lHdr.sform_code > kNIFTI_XFORM_OTHER_TEMPLATE) or (lHdr.sform_code < kNIFTI_XFORM_UNKNOWN) then begin
+    {$IFDEF UNIX}
+    printf('Unkown sform_code (update)');
+    {$ENDIF}
+    lHdr.sform_code := kNIFTI_XFORM_UNKNOWN;
+ end;
+end;
+
+function Quat2Mat( var lHdr: TNIfTIHdr ): boolean;
+var lR :TMat4;
+begin
+  result := false;
+  CheckXForm(lHdr);
+  if (lHdr.sform_code <> kNIFTI_XFORM_UNKNOWN) or (lHdr.qform_code <= kNIFTI_XFORM_UNKNOWN) or (lHdr.qform_code > kNIFTI_XFORM_MNI_152) then
+     exit;
+  result := true;
+  nifti_quatern_to_mat44(lR,lHdr.quatern_b,lHdr.quatern_c,lHdr.quatern_d,
+  lHdr.qoffset_x,lHdr.qoffset_y,lHdr.qoffset_z,
+  lHdr.pixdim[1],lHdr.pixdim[2],lHdr.pixdim[3],
+  lHdr.pixdim[0]);
+  lHdr.srow_x[0] := lR[0,0];
+  lHdr.srow_x[1] := lR[0,1];
+  lHdr.srow_x[2] := lR[0,2];
+  lHdr.srow_x[3] := lR[0,3];
+  lHdr.srow_y[0] := lR[1,0];
+  lHdr.srow_y[1] := lR[1,1];
+  lHdr.srow_y[2] := lR[1,2];
+  lHdr.srow_y[3] := lR[1,3];
+  lHdr.srow_z[0] := lR[2,0];
+  lHdr.srow_z[1] := lR[2,1];
+  lHdr.srow_z[2] := lR[2,2];
+  lHdr.srow_z[3] := lR[2,3];
+  lHdr.sform_code := kNIFTI_XFORM_SCANNER_ANAT;
 end;
 
 function Nifti2to1(h2 : TNIFTI2hdr): TNIFTIhdr; overload;
@@ -2738,6 +2827,8 @@ begin
     end;
 
 end;
+
+
 
 function Nifti2to1(Stream:TFileStream; var isNativeEndian: boolean): TNIFTIhdr; overload;
 var
@@ -3054,7 +3145,7 @@ begin
   fVolumesLoaded := max(HdrVolumes(fHdr),1);
   fVolumesTotal :=  fVolumesLoaded;
   DetectV1();
-  if (fVolumesLoaded = 3) and (fHdr.intent_code = kNIFTI_INTENT_RGB_VECTOR) and (fHdr.datatype = kDT_FLOAT32) then
+  if (fVolumesLoaded = 3) and ((fHdr.intent_code = kNIFTI_INTENT_RGB_VECTOR) or (fHdr.intent_code = kNIFTI_INTENT_VECTOR)) and (fHdr.datatype = kDT_FLOAT32) then
      volBytes := volBytes * fVolumesLoaded
   else if (HdrVolumes(fHdr) > 1) and (not fIsOverlay) then begin
      if LoadFewVolumes then
@@ -3131,7 +3222,7 @@ begin
   fVolumesLoaded := max(HdrVolumes(fHdr),1);
   fVolumesTotal :=  fVolumesLoaded;
   DetectV1();
-  if (fVolumesLoaded = 3) and (fHdr.intent_code = kNIFTI_INTENT_RGB_VECTOR) and (fHdr.datatype = kDT_FLOAT32) then
+  if (fVolumesLoaded = 3) and ((fHdr.intent_code = kNIFTI_INTENT_RGB_VECTOR) or (fHdr.intent_code = kNIFTI_INTENT_VECTOR)) and (fHdr.datatype = kDT_FLOAT32) then
      volBytes := volBytes * fVolumesLoaded
   else if (HdrVolumes(fHdr) > 1) and (not fIsOverlay) then begin
      if LoadFewVolumes then
@@ -3294,6 +3385,7 @@ begin
      exit;
   end;
   {$ENDIF}
+  fixAnalyze(fHdr, isNativeEndian);
   if fHdr.HdrSz <> SizeOf (TNIFTIHdr) then begin
     fHdr := Nifti2to1(Stream, isNativeEndian);
     if fHdr.HdrSz <> SizeOf (TNIFTIHdr) then begin
@@ -3332,7 +3424,7 @@ begin
   end;
   fVolumesLoaded := max(HdrVolumes(fHdr),1);
   fVolumesTotal :=  fVolumesLoaded;
-  if (fVolumesLoaded = 3) and (fHdr.intent_code = kNIFTI_INTENT_RGB_VECTOR) and (fHdr.datatype = kDT_FLOAT32) then
+  if (fVolumesLoaded = 3) and ((fHdr.intent_code = kNIFTI_INTENT_RGB_VECTOR) or (fHdr.intent_code = kNIFTI_INTENT_VECTOR)) and (fHdr.datatype = kDT_FLOAT32) then
      volBytes := volBytes * fVolumesLoaded
   else if (HdrVolumes(fHdr) > 1) and (not fIsOverlay) then begin
      if LoadFewVolumes then
@@ -4336,10 +4428,10 @@ var
    i, vx, byts, k: int64;
    in8: TUInt8s;
    in32: TFloat32s;
-   r,g,b: single;
+   r,g,b, mx, slope: single;
 begin
  //printf(format('>>>%d', [fVolumesLoaded]));
-  	 if (fHdr.intent_code <> kNIFTI_INTENT_RGB_VECTOR) or (fHdr.datatype <> kDT_FLOAT32) or (fVolumesLoaded <> 3) then exit;
+  	 if ((fHdr.intent_code <> kNIFTI_INTENT_RGB_VECTOR) and (fHdr.intent_code <> kNIFTI_INTENT_VECTOR)) or (fHdr.datatype <> kDT_FLOAT32) or (fVolumesLoaded <> 3) then exit;
  //printf(format('>>>??%d', [fVolumesLoaded]));
      vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
      byts := vx * 3 * 4;
@@ -4359,14 +4451,24 @@ begin
      fHdr.cal_min := 0;
      fHdr.bitpix := 24;
      fHdr.dim[0] := 3;
+     mx := abs(in32[0]);
+     for i := 0 to ((vx * 3) - 1) do
+         mx := max(mx, abs(in32[i]));
+     slope := 1.0;
+     if (mx > 0.0) then
+     	slope := 1.0 / mx;
      for i := 4 to 7 do
      	 fHdr.dim[i] := 1;
      k := 0;
      for i := 0 to (vx - 1) do begin
          //alpha := (vol24[skipVx+i].r+vol24[skipVx+i].g+vol24[skipVx+i].g+vol24[skipVx+i].b) div 4;  //favor green
-         r := min(abs(in32[i]),1);
+         (*r := min(abs(in32[i]),1);
          g := min(abs(in32[i+vx]),1);
-         b := min(abs(in32[i+vx+vx]),1);
+         b := min(abs(in32[i+vx+vx]),1); *)
+         r := abs(in32[i]) * slope;
+         g := abs(in32[i+vx]) * slope;
+         b := abs(in32[i+vx+vx]) * slope;
+
          //a := sqrt(r*r + g*g + b * b);
          //{$IFDEF DYNRGBA}
          //outRGBA[i] := SetRGBA(round(r*255), round(g*255), round(b*255), round(a*255));
@@ -6436,41 +6538,6 @@ begin
      LoadLabels(lLUTname, lLabels,0,-1);
 end;
 
-procedure fixBogusHeaders(var h: TNIFTIhdr);
-var
-   isBogus : boolean = false;
-   i: integer;
-procedure checkSingle(var f: single);
-begin
- if (specialSingle(f)) or (f = 0.0) then begin
-    isBogus := true;
-    f := 1.0;
- end;
-end;
-
-begin
-  checkSingle(h.PixDim[1]);
-  checkSingle(h.PixDim[2]);
-  checkSingle(h.PixDim[3]);
-  if (isBogus) then
-    printf('Bogus PixDim repaired. Check dimensions and orientation.');
-  isBogus := false;
-  for i := 0 to 3 do begin
-      if specialSingle(h.srow_x[i]) then isBogus := true;
-      if specialSingle(h.srow_y[i]) then isBogus := true;
-      if specialSingle(h.srow_z[i]) then isBogus := true;
-  end;
-  if (h.srow_x[0] = 0) and (h.srow_x[1] = 0) and (h.srow_x[2] = 0) then isBogus := true;
-  if (h.srow_y[0] = 0) and (h.srow_y[1] = 0) and (h.srow_y[2] = 0) then isBogus := true;
-  if (h.srow_z[0] = 0) and (h.srow_z[1] = 0) and (h.srow_z[2] = 0) then isBogus := true;
-  if (h.srow_x[0] = 0) and (h.srow_y[0] = 0) and (h.srow_z[0] = 0) then isBogus := true;
-  if (h.srow_x[1] = 0) and (h.srow_y[1] = 0) and (h.srow_z[1] = 0) then isBogus := true;
-  if (h.srow_x[2] = 0) and (h.srow_y[2] = 0) and (h.srow_z[2] = 0) then isBogus := true;
-  if (not isBogus) then exit;
-  NII_SetIdentityMatrix(h);
-  printf('Bogus header repaired. Check orientation.');
-end;
-
 function TNIfTI.Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s): boolean; overload;
 var
    scaleMx: single;
@@ -7945,7 +8012,7 @@ begin
      //
   else if (fHdr.cal_max > fHdr.cal_min)then begin
      if (fHdr.dataType > kDT_UNSIGNED_CHAR) and (fAutoBalMax > fAutoBalMin) and (((fHdr.cal_max - fHdr.cal_min)/(fAutoBalMax - fAutoBalMin)) > 5) then begin
-          printf('yIgnoring implausible cal_min..cal_max: FSL eddy?');
+          printf('Ignoring implausible cal_min..cal_max: FSL eddy?');
      end else begin
         printf(format('cal_min %g cal_max %g', [fHdr.cal_min, fHdr.cal_max]));
         fAutoBalMin := fHdr.cal_min;
@@ -8188,7 +8255,7 @@ begin
  oHdr.dim[5] := 1;
  oHdr.dim[6] := 1;
  oHdr.dim[7] := 1;
- if (oHdr.dim[4] > 1) then oHdr.dim[1] := 4;
+ if (oHdr.dim[4] > 1) then oHdr.dim[0] := 4;
  offsetMM := NIFTIhdr_SlicesToCoord (oHdr,crop.xLo,crop.yLo,crop.zLo);
  oHdr.srow_x[3] := oHdr.srow_x[3] + offsetMM.x;
  oHdr.srow_y[3] := oHdr.srow_y[3] + offsetMM.y;

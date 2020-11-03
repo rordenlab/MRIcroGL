@@ -42,7 +42,7 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20200707e'; //+ save image
+  kVers = '1.2.20201102';
 type
 
   { TGLForm1 }
@@ -481,7 +481,7 @@ type
     procedure LayerResetBrightnessMenuClick(Sender: TObject);
     procedure LayerUpDownClick(Sender: TObject);
     procedure NewWindowMenuClick(Sender: TObject);
-    function NiftiSaveDialogFilename(isVOI: boolean = false): string;
+    function NiftiSaveDialogFilename(isVOI: boolean = false; initialFilename: string = ''): string;
     procedure SaveNIfTIMenuClick(Sender: TObject);
     procedure ClipIntensity(Lo, Hi: single);
     procedure ScriptingPyVersionClick(Sender: TObject);
@@ -573,6 +573,7 @@ type
     procedure ViewGPUDblClick(Sender: TObject);
     procedure ViewGPUKeyPress(Sender: TObject; var Key: char);
     procedure ViewGPUKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure ViewGPUKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure ViewGPUgKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure ViewGPUgResize(Sender: TObject);
     procedure setShaderSliders;
@@ -1571,6 +1572,84 @@ var
   layer, i, isHide01, n, idx, maxIdx: integer;
   //f: single;
   v: TNIfTI;
+  ob, obi: PPyObject;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(False));
+  n := GetPythonEngine.PyTuple_Size(args);
+  if ((n < 1) or (n > 2))then begin
+       GLForm1.ScriptOutputMemo.lines.add('atlashide: requires at least two arguments (layer, (regions)) ');
+       exit;
+  end;
+  ob :=   GetPythonEngine.PyTuple_GetItem(Args,0);
+  if(ob = nil) then exit;
+  if (GetPythonEngine.PyNumber_Check(ob) <> 1) then begin
+     GLForm1.ScriptOutputMemo.lines.add('atlashide: layer argument should be an integer');
+     exit;
+  end;
+  layer := GetPythonEngine.PyLong_AsLong(ob);
+  if (layer < 0) or (layer >= vols.NumLayers) then begin
+     GLForm1.ScriptOutputMemo.lines.add('atlashide: layer should be in range 0..'+inttostr(vols.NumLayers-1));
+     exit;
+  end;
+  if not vols.Layer(layer,v) then begin
+     GLForm1.ScriptOutputMemo.lines.add('atlashide: fatal error');
+     exit;
+  end;
+  if (not v.IsLabels) or (v.fLabels.count < 1) then begin
+     GLForm1.ScriptOutputMemo.lines.add('atlashide: selected layer is not an indexed label map (NIfTI header intention not Labels)');
+     GLForm1.updateTimer.Enabled := true;
+     exit;
+  end;
+  //GLForm1.ScriptOutputMemo.lines.add('atlashide:::: '+inttostr(v.fLabels.count));
+  maxIdx := v.fLabels.count - 1;
+  //for i := 0 to  v.fLabels.count -1 do
+  //    GLForm1.ScriptOutputMemo.lines.add(inttostr(i)+':'+v.fLabels[i]);
+  if (v.fLabelMask = nil) or (length(v.fLabelMask) < v.fLabels.count) then begin
+     setlength(v.fLabelMask, v.fLabels.count);
+     for i := 0 to  maxIdx do
+            v.fLabelMask[i] := 0; //assume no masks
+  end;
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  isHide01 := 0;
+  if isHide then
+     isHide01 := 1;
+  for i := 0 to  maxIdx do
+      v.fLabelMask[i] := 1 - isHide01;
+  if n < 2 then begin
+     for i := 0 to  maxIdx do
+         v.fLabelMask[i] := isHide01;
+     v.ForceUpdate;
+     exit;
+  end;
+  ob :=   GetPythonEngine.PyTuple_GetItem(Args,1);
+  if(ob = nil) then exit;
+  if not (GetPythonEngine.PyTuple_Check(ob)) then begin  //2nd argument of atlashide(1,(17,22)) is tuple, atlashide(1,(17)) is integer
+  	 idx := GetPythonEngine.PyLong_AsLong(ob);
+     idx := min(idx, maxIdx);
+     idx := max(0, idx);
+     v.fLabelMask[idx] := isHide01;
+  end else begin
+    n := GetPythonEngine.PyTuple_Size(ob);
+    if n < 1 then exit;
+    for i := 0 to (n-1) do begin
+  	    obi :=   GetPythonEngine.PyTuple_GetItem(ob,i);
+        idx := GetPythonEngine.PyLong_AsLong(obi);
+        idx := min(idx, maxIdx);
+        idx := max(0, idx);
+        v.fLabelMask[idx] := isHide01;
+    end;
+  end;
+  v.ForceUpdate;
+  //if (layer > 0) then
+  //   Vol1.UpdateOverlays(vols);
+end; //PyATLASSHOWHIDE()
+
+(*function PyATLASSHOWHIDE(Self, Args : PPyObject; isHide: boolean): PPyObject; cdecl;
+//https://stackoverflow.com/questions/8001923/python-extension-module-with-variable-number-of-arguments
+var
+  layer, i, isHide01, n, idx, maxIdx: integer;
+  //f: single;
+  v: TNIfTI;
   ob:PPyObject;
 begin
   Result:= GetPythonEngine.PyBool_FromLong(Ord(False));
@@ -1639,7 +1718,7 @@ begin
   //if (layer > 0) then
   //   Vol1.UpdateOverlays(vols);
 end; //PyATLASSHOWHIDE()
-
+*)
 function PyATLASHIDE(Self, Args : PPyObject): PPyObject; cdecl;
 begin
      result := PyATLASSHOWHIDE(Self, Args, true);
@@ -1861,6 +1940,55 @@ begin
   ViewGPU1.Invalidate;
 end;
 
+function PyCOLORNODE(Self, Args : PPyObject): PPyObject; cdecl;
+var
+ layer, index, intensity, R,G,B, A: integer;
+ vol: TNIfTI;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, 'iiiiiiI:colornode', @layer, @index, @intensity, @R,@G,@B, @A)) then begin
+       if not vols.Layer(layer,vol) then exit;
+       if (vol.CX.FullColorTable.numnodes < 2) then exit;
+       if (index >= vol.CX.FullColorTable.numnodes) then begin
+          pyprintf(format('index should be in the range 0..%d',[vol.CX.FullColorTable.numnodes - 1]));
+          exit;
+       end;
+       vol.CX.ChangeNode(index, intensity,R,G,B,A);
+    end;
+  ViewGPU1.Invalidate;
+end;
+
+function PyCOLORNAME(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  PtrName: PChar;
+  StrName: string;
+  V, i: integer;
+  ret: boolean;
+  niftiVol: TNIfTI;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(FALSE));
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, 'is:overlaycolorname', @V, @PtrName)) then
+    begin
+      StrName:= string(PtrName);
+      i := GLForm1.LayerColorDrop.Items.IndexOf(StrName); //search is case-insensitive!
+      ret := (i >= 0);
+      Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+      if ret then begin
+         GLForm1.LayerChange(V, i, -1, kNaNsingle, kNaNsingle); //kNaNsingle
+      end else if fileexists(StrName)  and vols.Layer(V,niftiVol)then begin
+         while (isBusy) or (GLForm1.Updatetimer.enabled) do
+               Application.ProcessMessages;
+          niftiVol.SetDisplayColorScheme(StrName, 0);
+          niftiVol.CX.NeedsUpdate := true;
+          niftiVol.CX.GenerateLUT();
+          niftiVol.ForceUpdate();
+          GLForm1.UpdateTimer.Enabled := true;
+      end else
+      	  Result:= GetPythonEngine.PyBool_FromLong(Ord(false));
+    end;
+end;
 
 function PyVERSION(Self, Args : PPyObject): PPyObject; cdecl;
 var
@@ -1962,6 +2090,21 @@ begin
     if Boolean(PyArg_ParseTuple(Args, 'ii:azimuthelevation', @A, @E)) then begin
       Vol1.Azimuth := A;
       Vol1.Elevation := E;
+      {$IFDEF COMPILEYOKE}
+      SetShareFloats3D(Vol1.Azimuth, Vol1.Elevation);
+      {$ENDIF}
+    end;
+    ViewGPU1.Invalidate;
+end;
+
+function PyPITCH(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  P : integer;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, 'i:pitch', @P)) then begin
+      Vol1.Pitch := P;
       {$IFDEF COMPILEYOKE}
       SetShareFloats3D(Vol1.Azimuth, Vol1.Elevation);
       {$ENDIF}
@@ -2281,27 +2424,6 @@ begin
      GLForm1.CutoutChange(nil);
      niftiVol.CX.NeedsUpdate := true;
      Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
-    end;
-end;
-
-function PyOVERLAYCOLORNAME(Self, Args : PPyObject): PPyObject; cdecl;
-var
-  PtrName: PChar;
-  StrName: string;
-  V, i: integer;
-  ret: boolean;
-begin
-  Result:= GetPythonEngine.PyBool_FromLong(Ord(FALSE));
-  with GetPythonEngine do
-    if Boolean(PyArg_ParseTuple(Args, 'is:overlaycolorname', @V, @PtrName)) then
-    begin
-      StrName:= string(PtrName);
-      i := GLForm1.LayerColorDrop.Items.IndexOf(StrName); //search is case-insensitive!
-      ret := (i >= 0);
-      if ret then begin
-         GLForm1.LayerChange(V, i, -1, kNaNsingle, kNaNsingle); //kNaNsingle
-      end;
-      Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
     end;
 end;
 
@@ -2850,12 +2972,12 @@ procedure TGLForm1.PyModInitialization(Sender: TObject);
 begin
   with Sender as TPythonModule do begin
     //AddMethod('smoothmask', @PySMOOTHMASK, ' smoothmask(i) -> Blur edges of a masked image.');
-    AddMethod('atlashide', @PyATLASHIDE, ' atlashide(layer, indices...) -> Hide all (e.g. "atlashide(1)") or some (e.g. "atlashide(1, 17, 22)") regions of an atlas.');
-    AddMethod('atlasshow', @PyATLASSHOW, ' atlasshow(layer, indices...) -> Show all (e.g. "atlasshow(1)") or some (e.g. "atlasshow(1, 17, 22)") regions of an atlas.');
+    AddMethod('atlashide', @PyATLASHIDE, ' atlashide(layer, indices...) -> Hide all (e.g. "atlashide(1)") or some (e.g. "atlashide(1, (17, 22))") regions of an atlas.');
+    AddMethod('atlasshow', @PyATLASSHOW, ' atlasshow(layer, indices...) -> Show all (e.g. "atlasshow(1)") or some (e.g. "atlasshow(1, (17, 22))") regions of an atlas.');
     AddMethod('atlasmaxindex', @PyATLASMAXINDEX, ' atlasmaxindex(layer) -> Returns maximum region humber in specified atlas. For example, if you load the CIT168 atlas (which has 15 regions) as your background image, then atlasmaxindex(0) will return 15.');
     AddMethod('atlaslabels', @PyATLASLABELS, ' atlasmaxindex(layer) -> Returns string listing all regions in an atlas');
     //AddMethod('array', @PyARRAY, 'profound');
-    AddMethod('azimuthelevation', @PyAZIMUTHELEVATION, ' azimuthelevation(azi, elev) -> Sets the camera location.');
+    AddMethod('azimuthelevation', @PyAZIMUTHELEVATION, ' azimuthelevation(azi, elev) -> Sets the render camera location.');
     AddMethod('backcolor', @PyBACKCOLOR, ' backcolor(r, g, b) -> changes the background color, for example backcolor(255, 0, 0) will set a bright red background');
     AddMethod('bmpzoom', @PyBMPZOOM, ' bmpzoom(z) -> changes resolution of savebmp(), for example bmpzoom(2) will save bitmaps at twice screen resolution');
     AddMethod('bmptransparent', @pyBMPTRANSPARENT, ' bmptransparent(v) -> set if bitmaps use transparent (1) or opaque (0) background');
@@ -2864,7 +2986,8 @@ begin
     AddMethod('colorbarsize', @PyCOLORBARSIZE, ' colorbarsize(p) -> Change width of color bar f is a value 0.01..0.5 that specifies the fraction of the screen used by the colorbar.');
     AddMethod('coloreditor', @PyCOLOREDITOR, ' coloreditor(s) -> Show (1) or hide (0) color editor and histogram.');
     AddMethod('colorfromzero', @PyCOLORFROMZERO, ' colorfromzero(layer, isFromZero) -> Color scheme display range from zero (1) or from treshold value (0)?');
-    AddMethod('colorname', @PyOVERLAYCOLORNAME, ' colorname(layer, colorName) -> Set the colorscheme for the target overlay (0=background layer) to a specified name.');
+    AddMethod('colorname', @PyCOLORNAME, ' colorname(layer, colorName) -> Set the colorscheme for the target overlay (0=background layer) to a specified name.');
+    AddMethod('colornode', @PyCOLORNODE, ' colornode(layer, index, intensity, r, g, b, a) -> Adjust color scheme for image.');
     AddMethod('clipazimuthelevation', @PyCLIPAZIMUTHELEVATION, ' clipazimuthelevation(depth, azi, elev) -> Set a view-point independent clip plane.');
     AddMethod('clipthick', @PyCLIPTHICK, ' clipthick(thick) -> Set size of clip plane slab (0..1).');
     AddMethod('cutout', @PyCUTOUT, ' cutout(L,A,S,R,P,I) -> Remove sector from volume.');
@@ -2893,6 +3016,7 @@ begin
     AddMethod('overlayloadsmooth', @PyOVERLAYLOADSMOOTH, ' overlayloadsmooth(0) -> Will future overlayload() calls use smooth (1) or jagged (0) interpolation?');
     AddMethod('minmax', @PyOVERLAYMINMAX, ' minmax(layer, min, max) -> Sets the color range for the overlay (layer 0 = background).');
     AddMethod('opacity', @PyOVERLAYOPACITY, ' opacity(layer, opacityPct) -> Make the layer (0 for background, 1 for 1st overlay) transparent(0), translucent (~50) or opaque (100).');
+    AddMethod('pitch', @PyPITCH, ' pitch(degrees) -> Sets the pitch of object to be rendered.');
     AddMethod('quit', @PyQUIT, ' quit() -> Terminate the application.');
     //pyREMOVESMALLCLUSTERS Set the colorscheme for the target overlay (0=background layer) to a specified name.
     AddMethod('removesmallclusters', @pyREMOVESMALLCLUSTERS, ' removesmallclusters(layer, thresh, mm, neighbors) -> only keep clusters where intensity exceeds thresh and size exceed mm. Clusters based on neighbors that share faces (1), faces+edges (2) or faces+edges+corners (3)');
@@ -4295,20 +4419,17 @@ var
     threshLabel: TLabel;
     threshEdit: TEdit;
     smoothCheck, singleCheck: TCheckBox;
-
-
-    //NeighborCombo: TComboBox;
 begin
   PrefForm:=TForm.Create(nil);
   //PrefForm.SetBounds(100, 100, 512, 212);
   PrefForm.AutoSize := True;
   PrefForm.BorderWidth := 8;
-  PrefForm.Caption:='Overlay Settings';
+  PrefForm.Caption:='Remove Haze Settings';
   PrefForm.Position := poScreenCenter;
   PrefForm.BorderStyle := bsDialog;
   //label
   threshLabel:=TLabel.create(PrefForm);
-  threshLabel.Caption:= 'Threshold 1..5 (small..big)';
+  threshLabel.Caption:= 'Threshold 1..5 (only brightest survive..dim voxels survive)';
   threshLabel.AutoSize := true;
   threshLabel.AnchorSide[akTop].Side := asrTop;
   threshLabel.AnchorSide[akTop].Control := PrefForm;
@@ -4593,8 +4714,9 @@ begin
   end;
   fnm := dlg.FileName;
   dlg.Free;*)
-  fnm := NiftiSaveDialogFilename(true);
+  fnm := NiftiSaveDialogFilename(true, vols.Drawing.Filename);
   if fnm = '' then exit;
+  vols.Drawing.Filename := fnm;
   niftiVol.SaveAsSourceOrient(fnm, vols.Drawing.VolRawBytes);
   vols.Drawing.NeedsSave := false;
 end;
@@ -5199,24 +5321,41 @@ end;
 
 {$ENDIF}
 
-function TGLForm1.NiftiSaveDialogFilename(isVOI: boolean = false): string;
+function TGLForm1.NiftiSaveDialogFilename(isVOI: boolean = false; initialFilename: string = ''): string;
 const
-     kOutFilter = 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz|Volume of interest|*.voi|Blender Volume|*.bvox|OSPRay Volume|*.osp|TIF|*.tif|NRRD|*.nrrd|Compressed NRRD|*.nhdr';
+     kOutFilter = 'NIfTI (.nii)|*.nii|Compressed NIfTI (.nii.gz)|*.nii.gz|Volume of interest (.voi)|*.voi|Blender Volume (.bvox)|*.bvox|OSPRay Volume (.osp)|*.osp|TIF (.tif)|*.tif|NRRD (.nrrd)|*.nrrd|Compressed NRRD (.nhdr)|*.nhdr';
      kMaxExt = 8;
      kExt : array [1..kMaxExt] of string = ('*.nii', '*.nii.gz', '*.voi', '*.bvox', '*.osp', '*.tif', '*.nrrd', '*.nhdr');
 var
    dlg : TSaveDialog;
+   ext: string = '';
+   i, len : integer;
+   idx: integer = 0;
 begin
   result := '';
   dlg := TSaveDialog.Create(self);
+  dlg.Options := [ofEnableSizing, ofViewDetail]; //disable ofOverwritePrompt
   dlg.Title := 'Save NIfTI volume';
   dlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
+  if ( initialFilename <> '') then begin
+     dlg.InitialDir := extractfilepath(initialFilename);
+     //dlg.FileName := ChangeFileExt(extractfilename(initialFilename), '');
+     ext := extractfileextX(initialFilename);
+     dlg.FileName := extractfilename(initialFilename);
+     dlg.FileName := copy(dlg.FileName, 1, length(dlg.FileName)-length(ext));
+     for i := 1 to kMaxExt do
+     	 if (ext  = extractfileextX(kExt[i])) then
+         	idx := i;
+  end;
   {$IFDEF Darwin}
   if PosEx('.app', dlg.InitialDir) > 0  then
        dlg.InitialDir := HomeDir(false);
   {$ENDIF}
   dlg.Filter := kOutFilter;
-  if isVoi then begin
+  if idx > 0 then begin
+     dlg.DefaultExt := kExt[idx];
+     dlg.FilterIndex:= idx;
+  end else if isVoi then begin
      if (gPrefs.VoiSaveFormat < 1) or (gPrefs.VoiSaveFormat > kMaxExt) then
         gPrefs.VoiSaveFormat := 1;
      dlg.DefaultExt := kExt[gPrefs.VoiSaveFormat];
@@ -5229,13 +5368,33 @@ begin
     dlg.FilterIndex:= gPrefs.VolumeSaveFormat;
   end;
   //niftiVol.SaveBVox('/Users/rorden/tmp/v.bvox'); exit;
-  if dlg.Execute then begin
-    result := dlg.FileName;
-    if isVoi then
-	   gPrefs.VoiSaveFormat :=  dlg.FilterIndex
-    else
-    	gPrefs.VolumeSaveFormat :=  dlg.FilterIndex;
+  if not dlg.Execute then begin
+  	 dlg.Free;
+     exit;
   end;
+  result := dlg.FileName;
+  //
+  ext := extractfileextX(result);
+  len := length(ext);
+  idx := 0;
+  for i := 1 to kMaxExt do
+  	  if (ext  = extractfileextX(kExt[i])) then
+      	 idx := i;
+  //i := idx; //0 if idx not found
+  if idx = 0 then
+  	 idx := dlg.FilterIndex;
+  result := copy(result, 1, length(result)-len)+LowerCase(extractfileextX(kExt[idx]));
+  if fileexists(result) then begin
+  	 if MessageDlg('“'+extractfilename(result)+'” already exists. Do you want to replace it?', mtConfirmation,[mbYes, mbNo], 0) = mrNo then begin
+  	 	result := '';
+     	dlg.Free;
+        exit;
+     end;
+  end;
+  if isVoi then
+  	 gPrefs.VoiSaveFormat :=  dlg.FilterIndex
+  else
+  	  gPrefs.VolumeSaveFormat :=  dlg.FilterIndex;
   dlg.Free;
 end;
 
@@ -5256,7 +5415,7 @@ var
    fnm : string;
 begin
  if not vols.Layer(0,niftiVol) then exit;
- fnm := NiftiSaveDialogFilename();
+ fnm := NiftiSaveDialogFilename(false, niftiVol.Filename);
  if fnm = '' then exit;
  niftiVol.SaveFormatBasedOnExt(fnm);
 end;
@@ -5619,7 +5778,12 @@ end;
 
 procedure TGLForm1.ScriptingRunMenuClick(Sender: TObject);
 begin
- {$IFDEF MYPY}
+  if (vols.Drawing.NeedsSave) then begin
+     showmessage('Please close or save your drawing before running a script.');
+     exit;
+  end;
+ //DrawSaveMenuClick
+  {$IFDEF MYPY}
  if gPyRunning then begin
    //PyEngine.PyErr_SetString(PyExc_KeyboardInterrupt^, 'Terminated');
    //PyEngine.PyExc_KeyboardInterrupt();
@@ -6581,7 +6745,7 @@ begin
  {$ENDIF}
 end;
 
-{$DEFINE RESIZE_FROM_DISK}
+//{$DEFINE RESIZE_FROM_DISK}
 {$IFDEF RESIZE_FROM_DISK}
 (*procedure TGLForm1.ResizeMenuClick(Sender: TObject);
 const
@@ -6710,16 +6874,36 @@ begin
      nii.Free;
 end;
 {$ELSE} //not RESIZE_FROM_DISK
+function HeaderRotate(hdr: TNIFTIhdr; perm: TVec3i): TNIFTIhdr;
+begin
+	 result := hdr;
+     result.dim[1] := hdr.dim[abs(perm.x)];
+     result.dim[2] := hdr.dim[abs(perm.y)];
+     result.dim[3] := hdr.dim[abs(perm.z)];
+     result.pixdim[1] := hdr.pixdim[abs(perm.x)];
+     result.pixdim[2] := hdr.pixdim[abs(perm.y)];
+     result.pixdim[3] := hdr.pixdim[abs(perm.z)];
+end;
+
 procedure TGLForm1.ResizeMenuClick(Sender: TObject);
 var
-   dlg : TSaveDialog;
-   nii: TNIfTI;
+   //dlg : TSaveDialog;
+   isOK: boolean;
+   nii, niiBig: TNIfTI;
    hdr: TNIFTIhdr;
    filter, datatype: integer;
    scale: TVec3;
+   fnm: string;
    isAllVolumes: boolean;
+   backColor: TRGBA;
 begin
- if not vols.Layer(0, nii) then exit;
+
+  if not vols.Layer(0, nii) then exit;
+
+  //TODO:2020 if big is reoriented
+  //TODO:2020 clip when big
+  //TODO:2020 reorient when big
+
  (*if (nii.Header.datatype= kDT_RGB) then begin
     showmessage('This function does not yet support RGB images');
     exit;
@@ -6734,30 +6918,56 @@ begin
  nii.SaveRescaled('ax.nii', 0.5, 1, 0.5, kDT_SIGNED_SHORT, -1, true);
  exit;
  {$ENDIF}
- hdr := nii.Header;
+ //showmessage(format('%d %d', [nii.HeaderNoRotation.Dim[1], nii.Header.Dim[1] ]));
+ //exit;
+
+ //hdr := nii.Header;
+ //hdr := nii.HeaderNoRotation;
+ if (not nii.IsShrunken) then
+ 	hdr := HeaderRotate(nii.HeaderNoRotation, nii.InputReorientPermute)
+ else
+ 	 hdr := nii.HeaderNoRotation;
+ //showmessage(format('%d %d %d', [nii.InputReorientPermute.x, nii.InputReorientPermute.y, nii.InputReorientPermute.z ]));
+ //exit;
  scale := ResizeForm.GetScale(hdr, nii.isLabels, nii.ShortName, datatype, filter, isAllVolumes);
  if scale.x <= 0 then exit;
  if (scale.x = 1) and (scale.y = 1) and (scale.z = 1) and (datatype = hdr.datatype) then begin
     showmessage('Nothing to do: no change to volume.' );
     exit;
  end;
- //ResizeForm.ShowModal;
- //if not GetScale(nii.Dim, mm, scale) then exit;
- dlg := TSaveDialog.Create(self);
+ (*dlg := TSaveDialog.Create(self);
  dlg.Title := 'Save NIfTI volume';
  dlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
  {$IFDEF Darwin}
  if PosEx('.app', dlg.InitialDir) > 0  then
        dlg.InitialDir := HomeDir(false);
  {$ENDIF}
- //dlg.FileName:= 'r'+extractfilename(gPrefs.PrevBackgroundImage);
  dlg.Filename := 'r'+ChangeFileExtX(extractfilename(gPrefs.PrevBackgroundImage),'');
  dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz';
  dlg.DefaultExt := '*.nii';
  dlg.FilterIndex := 0;
- if not dlg.Execute then exit;
- nii.SaveRescaled(dlg.filename, scale.x, scale.y, scale.z, datatype, filter, isAllVolumes);
- dlg.Free;
+ if not dlg.Execute then begin
+    dlg.Free;
+    exit;
+ end;
+ fnm :=  dlg.filename;
+ dlg.Free; *)
+ fnm := NiftiSaveDialogFilename();
+ if fnm = '' then exit;
+ if (not nii.IsShrunken) then begin
+ 	nii.SaveRescaled(fnm, scale.x, scale.y, scale.z, datatype, filter, isAllVolumes);
+    exit;
+ end;
+ //we shrank the image - load full size
+ backColor := setRGBA(0,0,0,0);
+ niiBig := TNIfTI.Create(nii.Filename, backColor, false, -1, isOK);
+ //nii.Create(fnm, rgba, false, 4096, ok);
+ if not isOK then
+ 	exit;
+ niiBig.SaveRescaled(fnm, scale.x, scale.y, scale.z, datatype, filter, isAllVolumes);
+ //saveDlg.Free;
+ niiBig.Free;
+
 end;
 {$ENDIF} //if RESIZE_FROM_DISK else end
 
@@ -6838,8 +7048,10 @@ label
 var
   //dlg : TSaveDialog;
   fnm : string;
-  niftiVol: TNIfTI;
+  nii, niiBig: TNIfTI;
+  backColor: TRGBA;
   perm: TVec3i;
+  isOK: boolean;
   btn : array  [1..6] of string = ('red','green','blue','purple','orange','yellow');
   btnR,btnA,btnS: integer;
 begin
@@ -6891,17 +7103,29 @@ begin
  Vol1.Slices.isOrientationTriangles := false;
  if (btnR=2) and (btnA=4) and (btnS=6) then begin
     showmessage('Image already oriented');
-    exit;
+    goto 245;
  end;
  perm := pti( (btnR + 1) div 2, (btnA + 1) div 2,  (btnS + 1) div 2);
  if odd(btnR) then perm.x := -perm.x;
  if odd(btnA) then perm.y := -perm.y;
  if odd(btnS) then perm.z := -perm.z;
  //showmessage(format('%d %d %d', [perm.x, perm.y, perm.z]));
- if not vols.Layer(0, niftiVol) then exit;
+ if not vols.Layer(0, nii) then goto 245;
  fnm := NiftiSaveDialogFilename();
- if fnm = '' then exit;
- niftiVol.SaveRotated(fnm, perm);
+ if fnm = '' then goto 245;
+ if (not nii.IsShrunken) then begin
+ 	nii.SaveRotated(fnm, perm);
+    goto 245;
+ end;
+ //we shrank the image - load full size
+ backColor := setRGBA(0,0,0,0);
+ niiBig := TNIfTI.Create(nii.Filename, backColor, false, -1, isOK);
+ //nii.Create(fnm, rgba, false, 4096, ok);
+ if not isOK then
+ 	exit;
+ niiBig.SaveRotated(fnm, perm);
+ //saveDlg.Free;
+ niiBig.Free;
  245:
  Vol1.Slices.isOrientationTriangles := false;
 end;
@@ -6940,6 +7164,19 @@ begin
 end;
 {$ENDIF}
 
+var
+  gHideDrawing: boolean = false;
+
+procedure TGLForm1.ViewGPUKeyUp(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  if (gHideDrawing) then begin //we can not read shift state, as released
+  	 Vols.Drawing.OpacityFraction := abs(Vols.Drawing.OpacityFraction);
+  	 ViewGPU1.Invalidate;
+     gHideDrawing := false;
+  end;
+end;
+
 procedure TGLForm1.ViewGPUKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
  var
   sliceMove: TVec3i;
@@ -6947,6 +7184,12 @@ procedure TGLForm1.ViewGPUKeyDown(Sender: TObject; var Key: Word; Shift: TShiftS
   niftiVol: TNIfTI;
  begin
   if not vols.Layer(0,niftiVol) then exit;
+  if (vols.Drawing.IsOpen) and (ssAlt in Shift) then begin
+  	 Vols.Drawing.OpacityFraction := -abs(Vols.Drawing.OpacityFraction);
+     gHideDrawing := true;
+  	 ViewGPU1.Invalidate;
+  end;
+
   (*if not vols.Layer(0,niftiVol) then begin
     if DisplayNextMenu.Enabled then begin
        if (Key = VK_LEFT) or (Key = VK_Down) then DisplayPrevMenu.Click;
@@ -7063,6 +7306,7 @@ begin
   SetColorbarPosition;
   Vol1.Azimuth := 110;
   Vol1.Elevation := 30;
+  Vol1.Pitch := 0;
   ClipDepthTrack.Position := 0;
   ClipAziTrack.Position := 180;
   ClipElevTrack.Position := 0;
@@ -7846,8 +8090,10 @@ procedure TGLForm1.MouseGesturesMenu(Sender: TObject);
 const
   {$IFDEF Darwin}
   kAlt = 'Command';
+  kAlt2 = 'Option';
   {$ELSE}
   kAlt = 'Alt';
+  kAlt2 = 'Alt';
   {$ENDIF}
 var
   s: string;
@@ -7873,6 +8119,7 @@ begin
     +kEOLN+'Drawing (Draw/DrawColor selected)'
     +kEOLN+'  Drag: draw filled region'
     +kEOLN+'  Shift-Drag: erase filled region'
+    +kEOLN+'  '+kAlt2+'-Down: Briefly hide drawing'
     +kEOLN+'  '+kAlt+'-Click: Move crosshair';
   //{$IFDEF NewCocoa}
   //ShowAlertSheet(GLForm1.Handle,'Mouse Gestures', s);
@@ -8468,6 +8715,7 @@ var
 gIsMouseDown: boolean = false;      // https://bugs.freepascal.org/view.php?id=35480
 {$ENDIF}
 
+
 procedure TGLForm1.ViewGPUMouseDown(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
 var
@@ -8495,6 +8743,7 @@ begin
      exit;
   end;
   if not vols.Layer(0,niftiVol) then exit;
+
  gMouse.Y := Y;
  gMouse.X := X;
  if (Vol1.CE.ColorEditorMouseDown(X,Y, (ssShift in Shift), (ssCtrl in Shift), niftiVol)) then begin
@@ -8648,6 +8897,16 @@ begin
     exit;
   end;
   if gPrefs.DisplayOrient <> kRenderOrient then exit; //e.g. mosaics
+  if (ssCtrl in Shift)  then begin  //adjust pitch
+     //
+     Vol1.Pitch := Vol1.Pitch - (Y - gMouse.Y);
+     Vol1.Pitch := min(Vol1.Pitch, 180);
+     Vol1.Pitch := max(Vol1.Pitch, -180);
+     gMouse.X := X;
+     gMouse.Y := Y;
+     ViewGPU1.Invalidate;
+     exit;
+  end;
   Vol1.Azimuth := Vol1.Azimuth + (X - gMouse.X);
   Vol1.Elevation := Vol1.Elevation + (Y - gMouse.Y);
   while Vol1.Azimuth > 360 do Vol1.Azimuth := Vol1.Azimuth - 360;
@@ -9141,6 +9400,7 @@ begin
   GraphShow();
   ViewGPU1.OnKeyPress:=@ViewGPUKeyPress;
   ViewGPU1.OnKeyDown := @ViewGPUKeyDown;
+  ViewGPU1.OnKeyUp := @ViewGPUKeyUp;
   ViewGPU1.OnDblClick :=  @ViewGPUDblClick;
   ViewGPU1.OnMouseDown := @ViewGPUMouseDown;
   ViewGPU1.OnMouseMove := @ViewGPUMouseMove;
@@ -9212,6 +9472,8 @@ begin
   ScriptingRunMenu.ShortCut := ShortCut(Word('R'), [ssModifier]); //ssCtrl -> ssMeta
   OpenMenu.ShortCut := ShortCut(Word('O'), [ssModifier]); //ssCtrl -> ssMeta
   AddOverlayMenu.ShortCut := ShortCut(Word('A'), [ssModifier]); //ssCtrl -> ssMeta
+  //SaveNIfTIMenu.ShortCut := ShortCut(Word('S'), [ssModifier]);
+  DrawSaveMenu.ShortCut := ShortCut(Word('S'), [ssModifier]); //ssCtrl -> ssMeta used to be meta-H but used by Apple to Hide program
   DrawHideMenu.ShortCut := ShortCut(Word('T'), [ssModifier]); //ssCtrl -> ssMeta used to be meta-H but used by Apple to Hide program
   ScriptingNewMenu.ShortCut  := ShortCut(Word('N'), [ssModifier]); //ssCtrl -> ssMeta
   DrawUndoMenu.ShortCut  := ShortCut(Word('U'), [ssModifier]);
@@ -9334,7 +9596,7 @@ begin
   v := nil;
   i := 0;
   while (i < GLForm1.LayerList.Count) do begin
-        if not vols.Layer(i,v) then exit;
+        if not vols.Layer(i,v) then exit(false);
         if v.IsLabels then
            break;
         i := i + 1;

@@ -302,7 +302,6 @@ begin
          fLUT[255].R := lPreInvert[1].R;
          fLUT[255].G := lPreInvert[1].G;
          fLUT[255].B := lPreInvert[1].B;
-
   end;
 end;
 

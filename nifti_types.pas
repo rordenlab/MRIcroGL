@@ -81,7 +81,6 @@ end;//TAnalyzeHdrSection Structure
  K_gzBytes_onlyImageCompressed= -1;
  K_gzBytes_headerAndImageUncompressed= 0;
 //
-kNIFTI_INTENT_RGB_VECTOR = 2003;
 //DataTypes
 kDT_BINARY                 =1;     // binary (1 bit/voxel)
 kDT_UNSIGNED_CHAR          =2;     // unsigned char (8 bits/voxel)
@@ -188,6 +187,8 @@ kNIFTI_INTENT_VECTOR    =1007;
 kNIFTI_INTENT_POINTSET  =1008;
 kNIFTI_INTENT_TRIANGLE  =1009;
 kNIFTI_INTENT_QUATERNION =1010;
+kNIFTI_INTENT_RGB_VECTOR = 2003;
+
 
  procedure NIFTIhdr_SwapBytes (var lAHdr: TNIFTIhdr); //Swap Byte order for the Analyze type
  function Swap2(s : SmallInt): smallint;

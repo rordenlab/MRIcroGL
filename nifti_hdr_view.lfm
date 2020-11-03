@@ -21,14 +21,14 @@ object HdrForm: THdrForm
     Height = 302
     Top = 6
     Width = 545
-    ActivePage = DimensionSheet
+    ActivePage = StatSheet
     Align = alClient
     BorderSpacing.Left = 2
     BorderSpacing.Top = 2
     BorderSpacing.Right = 2
     BorderSpacing.Bottom = 2
     BorderSpacing.Around = 2
-    TabIndex = 0
+    TabIndex = 3
     TabOrder = 0
     OnChange = PageControl1Change
     object DimensionSheet: TTabSheet
@@ -1174,8 +1174,8 @@ object HdrForm: THdrForm
           'NeuroN'
           'Generic M'
           'Symmetric Matrix'
-          'Displacement Field/Vector'
-          'Vectorcement Field/Vector'
+          'Displacement Field'
+          'Vector'
           'Points'
           'Triangle (mesh)'
           'Quaternion'
@@ -1484,15 +1484,15 @@ object HdrForm: THdrForm
     end
     object OptionalSheet: TTabSheet
       Caption = 'Optional'
-      ClientHeight = 318
-      ClientWidth = 589
+      ClientHeight = 272
+      ClientWidth = 539
       object DataLabel: TLabel
         AnchorSideLeft.Control = IntentStrLabel
         AnchorSideTop.Control = data_typeEdit
         AnchorSideTop.Side = asrCenter
         Left = 6
         Height = 16
-        Top = 29
+        Top = 31
         Width = 61
         Caption = 'Data Type'
         ParentColor = False
@@ -1503,7 +1503,7 @@ object HdrForm: THdrForm
         AnchorSideTop.Side = asrCenter
         Left = 6
         Height = 16
-        Top = 6
+        Top = 7
         Width = 53
         BorderSpacing.Left = 6
         Caption = 'Intention'
@@ -1515,7 +1515,7 @@ object HdrForm: THdrForm
         AnchorSideTop.Side = asrCenter
         Left = 6
         Height = 16
-        Top = 190
+        Top = 195
         Width = 45
         Caption = 'Extents'
         ParentColor = False
@@ -1526,7 +1526,7 @@ object HdrForm: THdrForm
         AnchorSideTop.Side = asrCenter
         Left = 6
         Height = 16
-        Top = 167
+        Top = 172
         Width = 81
         Caption = 'Session Error'
         ParentColor = False
@@ -1537,7 +1537,7 @@ object HdrForm: THdrForm
         AnchorSideTop.Side = asrCenter
         Left = 6
         Height = 16
-        Top = 213
+        Top = 218
         Width = 80
         Caption = 'Regular [114]'
         ParentColor = False
@@ -1548,7 +1548,7 @@ object HdrForm: THdrForm
         AnchorSideTop.Side = asrCenter
         Left = 6
         Height = 16
-        Top = 121
+        Top = 126
         Width = 35
         Caption = 'G Min'
         ParentColor = False
@@ -1559,7 +1559,7 @@ object HdrForm: THdrForm
         AnchorSideTop.Side = asrCenter
         Left = 6
         Height = 16
-        Top = 144
+        Top = 149
         Width = 38
         Caption = 'G Max'
         ParentColor = False
@@ -1570,7 +1570,7 @@ object HdrForm: THdrForm
         AnchorSideTop.Side = asrCenter
         Left = 6
         Height = 16
-        Top = 98
+        Top = 103
         Width = 47
         Caption = 'Aux File'
         ParentColor = False
@@ -1581,7 +1581,7 @@ object HdrForm: THdrForm
         AnchorSideTop.Side = asrCenter
         Left = 6
         Height = 16
-        Top = 75
+        Top = 79
         Width = 57
         Caption = 'DB Name'
         ParentColor = False
@@ -1592,7 +1592,7 @@ object HdrForm: THdrForm
         AnchorSideTop.Side = asrCenter
         Left = 6
         Height = 16
-        Top = 52
+        Top = 55
         Width = 69
         Caption = 'Description'
         ParentColor = False
@@ -1602,7 +1602,7 @@ object HdrForm: THdrForm
         AnchorSideLeft.Side = asrBottom
         AnchorSideTop.Control = OptionalSheet
         Left = 93
-        Height = 21
+        Height = 22
         Top = 4
         Width = 360
         BorderSpacing.Left = 6
@@ -1616,8 +1616,8 @@ object HdrForm: THdrForm
         AnchorSideTop.Control = intent_nameEdit
         AnchorSideTop.Side = asrBottom
         Left = 93
-        Height = 21
-        Top = 27
+        Height = 22
+        Top = 28
         Width = 360
         BorderSpacing.Top = 2
         MaxLength = 10
@@ -1629,8 +1629,8 @@ object HdrForm: THdrForm
         AnchorSideTop.Control = data_typeEdit
         AnchorSideTop.Side = asrBottom
         Left = 93
-        Height = 21
-        Top = 50
+        Height = 22
+        Top = 52
         Width = 360
         BorderSpacing.Top = 2
         MaxLength = 80
@@ -1642,8 +1642,8 @@ object HdrForm: THdrForm
         AnchorSideTop.Control = CommentEdit
         AnchorSideTop.Side = asrBottom
         Left = 93
-        Height = 21
-        Top = 73
+        Height = 22
+        Top = 76
         Width = 360
         BorderSpacing.Top = 2
         MaxLength = 18
@@ -1655,8 +1655,8 @@ object HdrForm: THdrForm
         AnchorSideTop.Control = db_nameEdit
         AnchorSideTop.Side = asrBottom
         Left = 93
-        Height = 21
-        Top = 96
+        Height = 22
+        Top = 100
         Width = 360
         BorderSpacing.Top = 2
         MaxLength = 24
@@ -1669,7 +1669,7 @@ object HdrForm: THdrForm
         AnchorSideTop.Side = asrBottom
         Left = 99
         Height = 21
-        Top = 142
+        Top = 147
         Width = 66
         BorderSpacing.Top = 2
         TabOrder = 6
@@ -1681,7 +1681,7 @@ object HdrForm: THdrForm
         AnchorSideTop.Side = asrBottom
         Left = 99
         Height = 21
-        Top = 119
+        Top = 124
         Width = 66
         BorderSpacing.Left = 6
         BorderSpacing.Top = 2
@@ -1694,7 +1694,7 @@ object HdrForm: THdrForm
         AnchorSideTop.Side = asrBottom
         Left = 99
         Height = 21
-        Top = 165
+        Top = 170
         Width = 66
         BorderSpacing.Top = 2
         TabOrder = 7
@@ -1706,7 +1706,7 @@ object HdrForm: THdrForm
         AnchorSideTop.Side = asrBottom
         Left = 99
         Height = 21
-        Top = 188
+        Top = 193
         Width = 66
         BorderSpacing.Top = 2
         TabOrder = 8
@@ -1718,7 +1718,7 @@ object HdrForm: THdrForm
         AnchorSideTop.Side = asrBottom
         Left = 99
         Height = 21
-        Top = 211
+        Top = 216
         Width = 66
         BorderSpacing.Top = 2
         MaxValue = 255

@@ -1,14 +1,14 @@
 //pref
-brighten|float|0.5|2.2|3.5
+brighten|float|0.5|2|3.5
 surfaceColor|float|0.0|1.0|1.0
-occlusion|float|0.01|0.1|0.5
+translucency|float|0.01|0.5|0.5
 overlayFuzzy|float|0.01|0.5|1
 overlayDepth|float|0.0|0.15|0.99
 overlayClip|float|0|0|1|Does clipping also influence overlay layers?
 //frag
 uniform float brighten = 1.5;
 uniform float surfaceColor = 1.0;
-uniform float occlusion = 0.2;
+uniform float translucency = 0.5;
 uniform float overlayDepth = 0.3;
 uniform float overlayFuzzy = 0.5;
 uniform float overlayClip = 0.0;
@@ -62,9 +62,13 @@ void main() {
 	float ran = fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453);
 	samplePos += deltaDir * ran;
 	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
+	float transRecip = 1.0/translucency;
+	
 	while (samplePos.a <= len) {
 		colorSample = texture3Df(intensityVol,samplePos.xyz);
 		if (colorSample.a > 0.0) {
+			//colorSample.a = 1.0 - pow(1.0- colorSample.a, translucency); 
+			colorSample.a = (colorSample.a / (((transRecip - 2)*(1 - colorSample.a))+1));
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
 			bgNearest = min(samplePos.a,bgNearest);
 			gradSample= texture3Df(gradientVol,samplePos.xyz);
@@ -77,24 +81,6 @@ void main() {
 			vec3 d = texture2D(matcap2D, n.xy * 0.5 + 0.5).rgb;
 			vec3 surf = mix(defaultDiffuse, colorSample.rgb, surfaceColor); //0.67 as default Brighten is 1.5
 			colorSample.rgb = d * surf * brighten * colorSample.a;
-			
-			//float occlude = step(occlusion, gradSample.a); //0=no occlusion, 1=high 
-			float occlude = smoothstep(occlusion, occlusion+0.1, gradSample.a); //0=no occlusion, 1=high 
-			
-			colorSample.a = mix(sqrt(colorSample.a), colorSample.a, occlude);
-			
-			
-			//float occlude = max(gradSample.a - occlusion, 0.0) / (1.0 - occlusion); //1.0 = high occlusion
-			//occlude = smoothstep(0.0, 1.0, occlude);
-			//colorSample.rgb *= (1.0 - occlude);
-			//float occlude = mix(1.0, 0.0, max(gradSample.a - occlusion, 0.0));
-			//colorSample.r = occlude;
-			//float occlude = mix(0.0, 1.0, max(gradSample.a - occlusion, 0.0));
-			//colorSample.a *= occlude;
-			//colorSample.a = mix(colorSample.a, sqrt(colorSample.a),  occlude);
-			
-			//colorSample.a = mix( colorSample.a, sqrt(colorSample.a), occlude);
-			
 			colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
 			if ( colAcc.a > 0.95 )
 				break;
@@ -130,7 +116,7 @@ void main() {
 	fastPass (len, dir, intensityOverlay, samplePos);
 	if (samplePos.a < clipPos.a)
 		samplePos = clipPos;
-	deltaDir = vec4(dir.xyz * stepSize, stepSize);
+	//deltaDir = vec4(dir.xyz * stepSize, stepSize);
 	//end fastpass - optional
 	while (samplePos.a <= len) {
 		colorSample = texture3Df(intensityOverlay,samplePos.xyz);

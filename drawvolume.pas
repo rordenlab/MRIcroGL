@@ -51,6 +51,7 @@ TDraw = Class //(TNIfTI)  // This is an actual class definition :
 
   public
     //constructor Create();
+    Filename: string;
     PenColorOnRelease: integer;
     property OpacityFraction: single read fOpacityFrac write fOpacityFrac;
     property ColorTable: TLUT read colorLUt;
@@ -1754,6 +1755,7 @@ begin
   view2d := nil;
   undo2d := nil;
   modified2d := nil;
+  filename := '';
   //view3d := nil;
   //isForceCreate := false;
   isMouseDown:= false;
