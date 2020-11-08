@@ -34,7 +34,7 @@ It is generally recommended that download a pre-compiled executable (see previou
  - The Metal-Demos and MRIcroGL12 folders should share the same parent folder, e.g. `~/src/MRIcroGL12` and `~/src/Metal-Demos`.
   - **Option for Windows** You you can decide to build with or without faster gzip decompression:
    - To build **without** faster GZip: Remove the text "{$DEFINE FASTGZ}" from the file opts.inc. Benefit: easier build, uses permissive BSD license.
-   - To build **with** faster GZip. Download the [mORMot](https://github.com/synopse/mORMot) repository. Place the "static" folder and its contents so it can be found, for example if you have c:\MRIcroGL12\MRIcroGL.lpi, you will want c:\static. Benefit: faster gzip decompression, albeit GPL license.
+   - To build **with** faster GZip. Preserve the text "{$DEFINE FASTGZ}" in the file opts.inc. Benefit: faster gzip decompression. However, this only supports CPUs that support SSE4 (2008 and later).
  - **Option** You you can decide to build with or without Python Scripting:
    - To build **without** Python: Remove the text "-dMYPY" from the file MRIcroGL.lpi.
    - To build **with** Python. You will need [python4lazarus_package](https://github.com/Alexey-T/Python-for-Lazarus), but hopefully Lazarus will detect and install this for you automatically.   * Get the [lazmetalcontrol repository](https://github.com/genericptr/Metal-Framework).
