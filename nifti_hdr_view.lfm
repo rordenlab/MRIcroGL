@@ -21,14 +21,14 @@ object HdrForm: THdrForm
     Height = 302
     Top = 6
     Width = 545
-    ActivePage = StatSheet
+    ActivePage = DimensionSheet
     Align = alClient
     BorderSpacing.Left = 2
     BorderSpacing.Top = 2
     BorderSpacing.Right = 2
     BorderSpacing.Bottom = 2
     BorderSpacing.Around = 2
-    TabIndex = 3
+    TabIndex = 0
     TabOrder = 0
     OnChange = PageControl1Change
     object DimensionSheet: TTabSheet

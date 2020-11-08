@@ -31,10 +31,13 @@ It is generally recommended that download a pre-compiled executable (see previou
  - Download and install [Lazarus 2.0.6 or later](https://www.lazarus-ide.org/).
  - Get the [Metal-Demos repository](https://github.com/neurolabusc/Metal-Demos), for example: `git clone https://github.com/neurolabusc/Metal-Demos`.
  - Get the [MRIcroGL12 repository]( https://github.com/rordenlab/MRIcroGL12.git), for example: `git clone https://github.com/neurolabusc/MRIcroGL12`.
- - The Metal-Demos and MRIcroGL12 folders should share the same parent folder, e.g. `~/src/MRIcroGL12` and `~/src/Metal-Demos`. 
- - You will need [python4lazarus_package](https://github.com/Alexey-T/Python-for-Lazarus), but hopefully Lazarus will detect and install this for you automatically.
- - If you are using MacOS and want to build for Apple Metal (instead of OpenGL):
-   * Get the [lazmetalcontrol repository](https://github.com/genericptr/Metal-Framework).
+ - The Metal-Demos and MRIcroGL12 folders should share the same parent folder, e.g. `~/src/MRIcroGL12` and `~/src/Metal-Demos`.
+  - **Option for Windows** You you can decide to build with or without faster gzip decompression:
+   - To build **without** faster GZip: Remove the text "{$DEFINE FASTGZ}" from the file opts.inc. Benefit: easier build, uses permissive BSD license.
+   - To build **with** faster GZip. Download the [mORMot](https://github.com/synopse/mORMot) repository. Place the "static" folder and its contents so it can be found, for example if you have c:\MRIcroGL12\MRIcroGL.lpi, you will want c:\static. Benefit: faster gzip decompression, albeit GPL license.
+ - **Option** You you can decide to build with or without Python Scripting:
+   - To build **without** Python: Remove the text "-dMYPY" from the file MRIcroGL.lpi.
+   - To build **with** Python. You will need [python4lazarus_package](https://github.com/Alexey-T/Python-for-Lazarus), but hopefully Lazarus will detect and install this for you automatically.   * Get the [lazmetalcontrol repository](https://github.com/genericptr/Metal-Framework).
    * Use the Lazarus Package menu to open and install the lazmetal control.
    * Open and compile the MRIcroGL_Metal.lpi project instead of the MRIcroGL.lpi project with Lazarus.
  - Use the `Run` command from the `Run` menu compile and run your project.
@@ -46,7 +49,7 @@ Alternatively, Debian/Ubuntu Linux users may want to look at the [docker script]
 It is generally recommended that download a pre-compiled executable (see previous section). However, you can compile your own copy from source code. Download and install [Lazarus 2.0.6 or later](https://www.lazarus-ide.org/), at which point the lazbuild command should be available from the command line.
 
 
-For Linux (GTK2) or Windows, the compilation will look like this :
+For Linux (GTK2) or Windows (though see notes above), the compilation will look like this :
 
 ```
 git clone https://github.com/rordenlab/MRIcroGL12.git

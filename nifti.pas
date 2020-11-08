@@ -577,7 +577,12 @@ var
    f, q : single;
    i: integer;
 begin
-     f :=  VoxIntensity(vox);
+     if fHdr.datatype = kDT_RGB then begin
+        i := vox * 3;
+        result := format('%d,%d,%d',[fRawVolBytes[i],fRawVolBytes[i+1],fRawVolBytes[i+2]]);
+        exit;
+     end;
+ 	 f :=  VoxIntensity(vox);
      {$IFDEF AFNI}
      if (f <> 0) and (length(AFNIs) > 0) and (fVolumeDisplayed  < length(AFNIs)) and (isStat(AFNIs[fVolumeDisplayed].jv) ) then begin
         q := VoxelIntensity2q(AFNIs[fVolumeDisplayed].FDRcurv, f);
@@ -1131,7 +1136,7 @@ begin
        nVx := nVx * 3;
        vx := (vx * 3) + 1; //read green
        for vol := 0 to (nVol - 1) do
-           result[vol] := vol16[vx + (vol * nVx)];
+           result[vol] := vol8[vx + (vol * nVx)];  //20201102
      end else if fHdr.datatype = kDT_INT16 then begin
        for vol := 0 to (nVol - 1) do
            result[vol] := vol16[vx + (vol * nVx)];

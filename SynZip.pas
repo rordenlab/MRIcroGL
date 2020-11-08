@@ -5036,14 +5036,23 @@ end;
   {$endif}
   {$ifdef WIN64}
     {$ifdef USEZLIBSSE}
-    {$L ..\static\x86_64-win64\sse\inffast.o}
+    (*{$L ..\static\x86_64-win64\sse\inffast.o}
     {$L ..\static\x86_64-win64\sse\inftrees.o}
     {$L ..\static\x86_64-win64\sse\inflate.o}
     {$L ..\static\x86_64-win64\sse\deflate.o}
     {$L ..\static\x86_64-win64\sse\trees.o}
     {$L ..\static\x86_64-win64\sse\adler32.o}
     {$L ..\static\x86_64-win64\sse\crc32.o}
-    {$L ..\static\x86_64-win64\sse\zutil.o}
+    {$L ..\static\x86_64-win64\sse\zutil.o} *)
+
+        {$L .\x86_64-win64\inffast.o}
+    {$L .\x86_64-win64\inftrees.o}
+    {$L .\x86_64-win64\inflate.o}
+    {$L .\x86_64-win64\deflate.o}
+    {$L .\x86_64-win64\trees.o}
+    {$L .\x86_64-win64\adler32.o}
+    {$L .\x86_64-win64\crc32.o}
+    {$L .\x86_64-win64\zutil.o}
     {$else USEZLIBSSE}
     {$L static\x86_64-win64\inffast.o}
     {$L static\x86_64-win64\inftrees.o}

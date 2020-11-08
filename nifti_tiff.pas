@@ -737,6 +737,7 @@ begin
   //read all the IFDs
   nIFD := 0;
   while IFDstart > 0 do begin
+    //msgTIFF(format('IFD %d start %d filesize %d', [nIFD, IFDstart, fsz]));
     eStr := 'offset exceeds filesize';
     if IFDstart > fsz then goto 666;
     nIFD := nIFD + 1;
