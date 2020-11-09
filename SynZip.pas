@@ -162,8 +162,17 @@ unit SynZip;
    - unit fixed and tested with Delphi XE2 (and up) 64-bit compiler
 
 }
+{$ifdef DARWIN}
+//MacOS zlib sems VERY fast, probably has CloudFlare style enhancements...
+   {$define USEZLIBSSE}
+{$endif}
+{$ifdef LINUX}
+   {$define USEZLIBSSE}
+{$endif}
 
 {$I Synopse.inc} // define HASINLINE USETYPEINFO CPU32 CPU64
+
+
 
 {$ifdef MSWINDOWS}
    {$define USEZLIBSSE}
@@ -180,7 +189,7 @@ unit SynZip;
   {$ifdef MSWINDOWS} // avoid link to zlib1.dll
     {.$define USEPASZLIB} // paszlib makes Z_BUF_ERROR with bits = -MAX_WBITS
     {$ifdef Win32}
-      {.$define USEZLIBSSE} // SynZLibSSE static .o files for FPC + Win32 fails
+      {.$define libz} // SynZLibSSE static .o files for FPC + Win32 fails
     {$endif}
     {$ifdef Win64}
       {.$define USEEXTZLIB}  // use zlib-64.dll as in \fpc-win64 sub-folder
@@ -190,7 +199,11 @@ unit SynZip;
     {$ifdef ANDROID}
        {$define USEPASZLIB} // Alf: problem with external zlib.so under Android
     {$else}
+	   {$ifdef USEZLIBSSE}
+         {.$define USEEXTZLIB}
+	   {$ELSE}
        {$define USEEXTZLIB}
+	   {$ENDIF}
     {$endif}
   {$endif}
 {$else}
@@ -5034,6 +5047,36 @@ end;
     {$LINK static\i386-win32\crc32.o}
     {$linklib static\i386-win32\libmsvcrt.a}
   {$endif}
+  {$ifdef LINUX}{$ifndef DARWIN}
+   {$ifdef USEZLIBSSE}
+   {$L .\x86_64-linux\adler32.o}
+   {$L .\x86_64-linux\adler32_simd.o}
+   {$L .\x86_64-linux\crc32.o}
+   {$L .\x86_64-linux\crc32_simd.o}
+   {$L .\x86_64-linux\deflate.o}
+   {$L .\x86_64-linux\inffast.o}
+   {$L .\x86_64-linux\inffast_chunk.o}
+   {$L .\x86_64-linux\inflate.o}
+   {$L .\x86_64-linux\inftrees.o}
+   {$L .\x86_64-linux\trees.o}
+   {$L .\x86_64-linux\zutil.o}
+   {$ENDIF}
+  {$ENDIF}{$ENDIF}
+  {$ifdef DARWIN}
+   {$ifdef USEZLIBSSE}
+   {$L .\x86_64-darwin\adler32.o}
+   {$L .\x86_64-darwin\adler32_simd.o}
+   {$L .\x86_64-darwin\crc32.o}
+   {$L .\x86_64-darwin\crc32_simd.o}
+   {$L .\x86_64-darwin\deflate.o}
+   {$L .\x86_64-darwin\inffast.o}
+   {$L .\x86_64-darwin\inffast_chunk.o}
+   {$L .\x86_64-darwin\inflate.o}
+   {$L .\x86_64-darwin\inftrees.o}
+   {$L .\x86_64-darwin\trees.o}
+   {$L .\x86_64-darwin\zutil.o}
+   {$ENDIF}
+  {$ENDIF}
   {$ifdef WIN64}
     {$ifdef USEZLIBSSE}
     (*{$L ..\static\x86_64-win64\sse\inffast.o}
@@ -5044,8 +5087,10 @@ end;
     {$L ..\static\x86_64-win64\sse\adler32.o}
     {$L ..\static\x86_64-win64\sse\crc32.o}
     {$L ..\static\x86_64-win64\sse\zutil.o} *)
-
-        {$L .\x86_64-win64\inffast.o}
+    {$L .\x86_64-win64\adler32_simd.o}
+    {$L .\x86_64-win64\crc32_simd.o}
+    {$L .\x86_64-win64\inffast_chunk.o}
+    {$L .\x86_64-win64\inffast.o}
     {$L .\x86_64-win64\inftrees.o}
     {$L .\x86_64-win64\inflate.o}
     {$L .\x86_64-win64\deflate.o}
@@ -5053,6 +5098,7 @@ end;
     {$L .\x86_64-win64\adler32.o}
     {$L .\x86_64-win64\crc32.o}
     {$L .\x86_64-win64\zutil.o}
+
     {$else USEZLIBSSE}
     {$L static\x86_64-win64\inffast.o}
     {$L static\x86_64-win64\inftrees.o}

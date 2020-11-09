@@ -2610,7 +2610,6 @@ begin
      if lHdr.pixdim[1] = 0 then lHdr.pixdim[1] := 1;
      if lHdr.pixdim[2] = 0 then lHdr.pixdim[2] := 1;
      if lHdr.pixdim[3] = 0 then lHdr.pixdim[3] := 1;
-     printf('>>>>>>><<<<<<<<<');
      lHdr.srow_x[0] := lHdr.pixdim[1];
      lHdr.srow_x[1] := 0;
      lHdr.srow_x[2] := 0;
@@ -2979,6 +2978,14 @@ begin
             result := result * hdr.dim[i];
 end;
 
+procedure TNIfTI.DetectV1();
+begin
+  if (fVolumesLoaded <> 3) or (fHdr.intent_code = kNIFTI_INTENT_RGB_VECTOR) or (fHdr.datatype <> kDT_FLOAT32) then
+     exit;
+  if AnsiContainsText(fShortName,'_V1') then
+  	 fHdr.intent_code := kNIFTI_INTENT_RGB_VECTOR;
+end;
+
 {$IFDEF FASTGZ}
 function Nifti2to1(Stream:TMemoryStream; var isNativeEndian: boolean): TNIFTIhdr; overload;
 var
@@ -3048,7 +3055,7 @@ begin
   CloseFile(f);
   result := false;
   if (ret = 2)  then begin //zlib : no file size...
-      UnCompressStream(@src[0], size, mStream, nil, true);
+      UnCompressStream(@src[0], size, mStream, nil, true); //SynZip
       result := true;
   end else if (ret > skip) then begin
      if (usize < expected) and (expected > 0) then begin
@@ -3057,7 +3064,7 @@ begin
      end;
      mStream.setSize(usize);
      mStream.position := 0;
-     ret := UnCompressMem(@src[ret], mStream.memory, size-ret, usize);
+     ret := UnCompressMem(@src[ret], mStream.memory, size-ret, usize); //SynZip
      result := (ret = usize);
   end else if (skip < size) then begin //assume uncompressed
       mStream.Write(src[skip],size-skip);
@@ -3068,7 +3075,7 @@ end;
 
 function ExtractGz(fnm: string; var mStream : TMemoryStream): boolean;
 var
-  gz: TGZRead;
+  gz: TGZRead;  //SynZip
   F : File Of byte;
   src : array of byte;
   cSz : int64; //uncompressed, compressed size
@@ -3091,14 +3098,6 @@ begin
   gz.ZStreamDone;
 end;
 
-procedure TNIfTI.DetectV1();
-begin
-  if (fVolumesLoaded <> 3) or (fHdr.intent_code = kNIFTI_INTENT_RGB_VECTOR) or (fHdr.datatype <> kDT_FLOAT32) then
-     exit;
-  if AnsiContainsText(fShortName,'_V1') then
-  	 fHdr.intent_code := kNIFTI_INTENT_RGB_VECTOR;
-end;
-
 function TNIfTI.LoadFastGZ(FileName : AnsiString; out isNativeEndian: boolean): boolean;
 //FSL compressed nii.gz file
 var
@@ -3109,7 +3108,12 @@ begin
  isNativeEndian := true;
  result := false;
  Stream := TMemoryStream.Create;
+ {$DEFINE FASTERGZ} //IGNORE CRC
+ {$IFDEF FASTERGZ}
+ if not ExtractGzNoCrc(FileName,  Stream) then begin
+ {$ELSE}
  if not ExtractGz(FileName,  Stream) then begin
+ {$ENDIF}
    printf('Unable to extract image '+Filename);
    Stream.Free;
    exit;
@@ -3176,84 +3180,6 @@ begin
  result := true;
 end;
 {$ENDIF} //FastGZ()
-
-function TNIfTI.LoadGZ(FileName : AnsiString; out isNativeEndian: boolean): boolean;
-//FSL compressed nii.gz file
-var
-  {$IFDEF FASTGZ}
-  //F: File of byte;
-  {$ENDIF}
-  Stream: TGZFileStream;
-  volBytes: int64;
-  lSwappedReportedSz : LongInt;
-begin
- isNativeEndian := true;
- result := false;
- {$IFDEF FASTGZ}
- if not fileexists(FileName) then exit;
- volBytes := FSize(fFilename);
- if (volBytes < 104857600) then begin // < 100mb, unlikely to trigger LoadFewVolumes
-    //FastGz uncompresses entire volume in one step: much faster
-    // disadvantage: for very large files we might not want to decompress entire volume
-    result := LoadFastGz(FileName,isNativeEndian);
-    exit;
- end;
- {$ENDIF}
- Stream := TGZFileStream.Create (FileName, gzopenread);
- Try
-  {$warn 5058 off}Stream.ReadBuffer (fHdr, SizeOf (TNIFTIHdr));{$warn 5058 on}
-  lSwappedReportedSz := fHdr.HdrSz;
-  swap4(lSwappedReportedSz);
-  if (lSwappedReportedSz = SizeOf (TNIFTIHdr)) then begin
-    NIFTIhdr_SwapBytes(fHdr);
-     isNativeEndian := false;
-  end;
-  if fHdr.HdrSz <> SizeOf (TNIFTIHdr) then begin
-    fHdr := Nifti2to1(Stream, isNativeEndian);
-    if fHdr.HdrSz <> SizeOf (TNIFTIHdr) then begin
-       printf('Unable to read image '+Filename);
-       //Stream.Free; //Finally ALWAYS executed!
-       exit;
-    end;
-  end;
-  fixHdr(fHdr);
-  if (fHdr.bitpix <> 8) and (fHdr.bitpix <> 16) and (fHdr.bitpix <> 24) and (fHdr.bitpix <> 32) and (fHdr.bitpix <> 64) then begin
-   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
-   exit;
-  end;
-  Quat2Mat(fHdr);
-  //read the image data
-  volBytes := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3]* (fHdr.bitpix div 8);
-  fVolumesLoaded := max(HdrVolumes(fHdr),1);
-  fVolumesTotal :=  fVolumesLoaded;
-  DetectV1();
-  if (fVolumesLoaded = 3) and ((fHdr.intent_code = kNIFTI_INTENT_RGB_VECTOR) or (fHdr.intent_code = kNIFTI_INTENT_VECTOR)) and (fHdr.datatype = kDT_FLOAT32) then
-     volBytes := volBytes * fVolumesLoaded
-  else if (HdrVolumes(fHdr) > 1) and (not fIsOverlay) then begin
-     if LoadFewVolumes then
-       //fVolumesLoaded :=  trunc((16777216.0 * 4) /volBytes)
-        fVolumesLoaded :=  max(trunc((kLoadFewVolumesBytes) /volBytes), kLoadFewVolumesN)
-     else
-         fVolumesLoaded :=  trunc(2147483647.0 /volBytes);
-     if fVolumesLoaded < 1 then fVolumesLoaded := 1;
-     if fVolumesLoaded > HdrVolumes(fHdr) then fVolumesLoaded := HdrVolumes(fHdr);
-     volBytes := volBytes * fVolumesLoaded;
-  end;
-  if  (fVolumeDisplayed > 0) and (fVolumeDisplayed < HdrVolumes(fHdr)) and (fIsOverlay) then begin
-      Stream.Seek(round(fHdr.vox_offset)+(fVolumeDisplayed*volBytes),soFromBeginning);
-  end else begin
-      fVolumeDisplayed := 0;
-      Stream.Seek(round(fHdr.vox_offset),soFromBeginning);
-  end;
-  SetLength (fRawVolBytes, volBytes);
-  Stream.ReadBuffer (fRawVolBytes[0], volBytes);
-  if not isNativeEndian then
-   SwapImg(fRawVolBytes, fHdr.bitpix);
- Finally
-  Stream.Free;
- End; { Try }
- result := true;
-end;
 
 (*function SaveGz(niftiFileName: string; var hdr: TNIFTIhdr; var img8: TUInt8s): boolean;
 var
@@ -5355,7 +5281,90 @@ begin
    outStream.Free;
 end;
 
-{$ENDIF}
+function TNIfTI.LoadGZ(FileName : AnsiString; out isNativeEndian: boolean): boolean;
+//FSL compressed nii.gz file
+var
+  Stream: TGZFileStream;
+  volBytes: int64;
+  lSwappedReportedSz : LongInt;
+begin
+ isNativeEndian := true;
+ result := false;
+ if not fileexists(FileName) then exit;
+ {$IFDEF FASTGZ}
+ volBytes := FSize(fFilename);
+ if (volBytes < 104857600) then begin // < 100mb, unlikely to trigger LoadFewVolumes
+    //FastGz uncompresses entire volume in one step: much faster
+    // disadvantage: for very large files we might not want to decompress entire volume
+    result := LoadFastGz(FileName,isNativeEndian);
+    exit;
+ end;
+ {$ENDIF}
+ Stream := TGZFileStream.Create (FileName, gzopenread);
+ //Try
+  {$warn 5058 off}Stream.ReadBuffer (fHdr, SizeOf (TNIFTIHdr));{$warn 5058 on}
+  lSwappedReportedSz := fHdr.HdrSz;
+  swap4(lSwappedReportedSz);
+  if (lSwappedReportedSz = SizeOf (TNIFTIHdr)) then begin
+    NIFTIhdr_SwapBytes(fHdr);
+     isNativeEndian := false;
+  end;
+  if fHdr.HdrSz <> SizeOf (TNIFTIHdr) then begin
+    fHdr := Nifti2to1(Stream, isNativeEndian);
+    if fHdr.HdrSz <> SizeOf (TNIFTIHdr) then begin
+       printf('Unable to read image '+Filename);
+       //Stream.Free; //Finally ALWAYS executed!
+       exit;
+    end;
+  end;
+  fixHdr(fHdr);
+  if (fHdr.bitpix <> 8) and (fHdr.bitpix <> 16) and (fHdr.bitpix <> 24) and (fHdr.bitpix <> 32) and (fHdr.bitpix <> 64) then begin
+   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
+   exit;
+  end;
+  Quat2Mat(fHdr);
+  //read the image data
+  volBytes := fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3]* (fHdr.bitpix div 8);
+  fVolumesLoaded := max(HdrVolumes(fHdr),1);
+  fVolumesTotal :=  fVolumesLoaded;
+  DetectV1();
+  if (fVolumesLoaded = 3) and ((fHdr.intent_code = kNIFTI_INTENT_RGB_VECTOR) or (fHdr.intent_code = kNIFTI_INTENT_VECTOR)) and (fHdr.datatype = kDT_FLOAT32) then
+     volBytes := volBytes * fVolumesLoaded
+  else if (HdrVolumes(fHdr) > 1) and (not fIsOverlay) then begin
+     if LoadFewVolumes then
+       //fVolumesLoaded :=  trunc((16777216.0 * 4) /volBytes)
+        fVolumesLoaded :=  max(trunc((kLoadFewVolumesBytes) /volBytes), kLoadFewVolumesN)
+     else
+         fVolumesLoaded :=  trunc(2147483647.0 /volBytes);
+     if fVolumesLoaded < 1 then fVolumesLoaded := 1;
+     if fVolumesLoaded > HdrVolumes(fHdr) then fVolumesLoaded := HdrVolumes(fHdr);
+     volBytes := volBytes * fVolumesLoaded;
+  end;
+  {$IFDEF FASTGZ}
+  if (fVolumesLoaded = fVolumesTotal) then begin // did not trigger LoadFewVolumes
+     Stream.Free;
+     result := LoadFastGz(FileName,isNativeEndian);
+     exit;
+  end;
+  {$ENDIF}
+  if  (fVolumeDisplayed > 0) and (fVolumeDisplayed < HdrVolumes(fHdr)) and (fIsOverlay) then begin
+      Stream.Seek(round(fHdr.vox_offset)+(fVolumeDisplayed*volBytes),soFromBeginning);
+  end else begin
+      fVolumeDisplayed := 0;
+      Stream.Seek(round(fHdr.vox_offset),soFromBeginning);
+  end;
+  SetLength (fRawVolBytes, volBytes);
+  Stream.ReadBuffer (fRawVolBytes[0], volBytes);
+  if not isNativeEndian then
+   SwapImg(fRawVolBytes, fHdr.bitpix);
+ //Finally
+  Stream.Free;
+ //End; { Try }
+ result := true;
+end;
+
+{$ENDIF}// GZIP
+
 procedure DimPermute2341(var  rawData: TUInt8s; var lHdr: TNIFTIHdr);
 //NIfTI demands first three dimensions are spatial, NRRD often makes first dimension non-spatial (e.g. DWI direction)
 // This function converts NRRD TXYZ to NIfTI compatible XYZT
