@@ -163,8 +163,12 @@ unit SynZip;
 
 }
 {$ifdef DARWIN}
-//MacOS zlib sems VERY fast, probably has CloudFlare style enhancements...
+   {$ifdef CPUAARCH64}
+   //Apple's provided zlib just as fast as CloudFlare
+   //{$define USEZLIBSSE}
+   {$ELSE}
    {$define USEZLIBSSE}
+   {$ENDIF}
 {$endif}
 {$ifdef LINUX}
    {$define USEZLIBSSE}
@@ -5064,17 +5068,31 @@ end;
   {$ENDIF}{$ENDIF}
   {$ifdef DARWIN}
    {$ifdef USEZLIBSSE}
-   {$L .\x86_64-darwin\adler32.o}
-   {$L .\x86_64-darwin\adler32_simd.o}
-   {$L .\x86_64-darwin\crc32.o}
-   {$L .\x86_64-darwin\crc32_simd.o}
-   {$L .\x86_64-darwin\deflate.o}
-   {$L .\x86_64-darwin\inffast.o}
-   {$L .\x86_64-darwin\inffast_chunk.o}
-   {$L .\x86_64-darwin\inflate.o}
-   {$L .\x86_64-darwin\inftrees.o}
-   {$L .\x86_64-darwin\trees.o}
-   {$L .\x86_64-darwin\zutil.o}
+     {$ifdef CPUAARCH64}
+     {$L .\aarch64-darwin\adler32.o}
+     {$L .\aarch64-darwin\adler32_simd.o}
+     {$L .\aarch64-darwin\crc32.o}
+     //{$L .\aarch64-darwin\crc32_simd.o}
+     {$L .\aarch64-darwin\deflate.o}
+     {$L .\aarch64-darwin\inffast.o}
+     //{$L .\aarch64-darwin\inffast_chunk.o}
+     {$L .\aarch64-darwin\inflate.o}
+     {$L .\aarch64-darwin\inftrees.o}
+     {$L .\aarch64-darwin\trees.o}
+     {$L .\aarch64-darwin\zutil.o}
+     {$ELSE}
+     {$L .\x86_64-darwin\adler32.o}
+     {$L .\x86_64-darwin\adler32_simd.o}
+     {$L .\x86_64-darwin\crc32.o}
+     {$L .\x86_64-darwin\crc32_simd.o}
+     {$L .\x86_64-darwin\deflate.o}
+     {$L .\x86_64-darwin\inffast.o}
+     {$L .\x86_64-darwin\inffast_chunk.o}
+     {$L .\x86_64-darwin\inflate.o}
+     {$L .\x86_64-darwin\inftrees.o}
+     {$L .\x86_64-darwin\trees.o}
+     {$L .\x86_64-darwin\zutil.o}
+     {$ENDIF}
    {$ENDIF}
   {$ENDIF}
   {$ifdef WIN64}

@@ -2761,6 +2761,18 @@ begin
     end;
 end;
 
+function PyYOKE(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  isYoke: integer;
+begin
+  Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
+  with GetPythonEngine do
+    if Boolean(PyArg_ParseTuple(Args, 'i:yoke', @isYoke)) then begin
+       GLForm1.YokeMenu.Checked := (isYoke = 1);
+       GLForm1.YokeTimer.Enabled := (isYoke = 1);
+    end;
+end;
+
 function PyWAIT(Self, Args : PPyObject): PPyObject; cdecl;
 var
   waitTime: integer;
@@ -3032,6 +3044,7 @@ begin
     AddMethod('shaderquality1to10', @PySHADERQUALITY1TO10, ' shaderquality1to10(i) -> Renderings can be fast (1) or high quality (10), medium values (6) balance speed and quality.');
     AddMethod('shaderupdategradients', @PySHADERUPDATEGRADIENTS, ' shaderupdategradients() -> Recalculate volume properties.');
     AddMethod('sharpen', @PySHARPEN, ' sharpen() -> apply unsharp mask to background volume to enhance edges');
+    AddMethod('smooth', @PySMOOTH2D, ' smooth2D(s) -> make 2D images blurry (linear interpolation, 1) or jagged (nearest neightbor, 0).');
     AddMethod('version', @PyVERSION, ' version() -> Return the version of MRIcroGL.');
     AddMethod('view', @PyVIEW, ' view(v) -> Display Axial (1), Coronal (2), Sagittal (4), Flipped Sagittal (8), MPR (16), Mosaic (32) or Rendering (64)');
     AddMethod('viewaxial', @PyVIEWAXIAL, ' viewaxial(SI) -> Show rendering with camera superior (1) or inferior (0) of volume.');
@@ -3039,10 +3052,10 @@ begin
     AddMethod('viewsagittal', @PyVIEWSAGITTAL, ' viewsagittal(LR) -> Show rendering with camera left (1) or right (0) of volume.');
     AddMethod('volume', @PyVOLUME, ' volume(layer, vol) -> For 4D images, set displayed volume (layer 0 = background; volume 0 = first volume in layer).');
     AddMethod('wait', @PyWAIT, ' wait(ms) -> Pause script for (at least) the desired milliseconds.');
-    AddMethod('zoomscale', @PyZOOMSCALE2D, ' zoomscale2D(z) -> Enlarge 2D image (range 1..6).');
-    AddMethod('smooth', @PySMOOTH2D, ' smooth2D(s) -> make 2D images blurry (linear interpolation, 1) or jagged (nearest neightbor, 0).');
+    AddMethod('yoke', @PyYOKE, ' yoke(v) -> Yoke (1) instances so different instances show same view.');
     AddMethod('zerointensityinvisible', @PyZEROINTENSITYINVISIBLE, ' zerointensityinvisible(layer, bool) ->  For specified layer (0 = background) should voxels with intensity 0 be opaque (bool= 0) or transparent (bool = 1).');
     AddMethod('zoomcenter', @PyZOOMCENTER, ' zoomcenter(x,y,z) -> Set center of expansion for zoom scale (values in range 0..1 with 0.5 in volume center).');
+    AddMethod('zoomscale', @PyZOOMSCALE2D, ' zoomscale2D(z) -> Enlarge 2D image (range 1..6).');
     {$IFDEF PYOBSOLETE}
     AddMethod('azimuth', @PyAZIMUTH, ' azimuth(degrees) -> Rotates the rendering.');
     AddMethod('clip', @PyCLIP, ' clip(depth) -> Creates a clip plane that hides information close to the viewer.');
@@ -5609,7 +5622,8 @@ procedure TGLForm1.ReportPositionXYZ(isUpdateYoke: boolean = false);
 var
    str: string;
    niftiVol: TNIfTI;
-   sliceMM: TVec3;
+   sliceMM, endMM, diffMM: TVec3;
+   len: single;
    vox: TVec3i;
    i: integer;
    graphLine: TFloat32s;
@@ -5640,7 +5654,15 @@ begin
         SetShareFloats2D(sliceMM.X,sliceMM.Y,sliceMM.Z);
      end;
      {$ENDIF}
-     //AJAX
+     if (Vol1.Slices.distanceLineOrient <> 0) then begin
+       sliceMM := Vol1.Slices.FracMM(Vol1.Slices.distanceLineStart, niftivol.Mat, niftivol.Dim);
+       endMM := Vol1.Slices.FracMM(Vol1.Slices.distanceLineEnd, niftivol.Mat, niftivol.Dim);
+       diffMM := sliceMM - endMM;
+       len := diffMM.length;
+       str := str + format('%0.4g×%0.4g×%0.4g -> %0.4g×%0.4g×%0.4g  = %0.4g', [sliceMM.x, sliceMM.y, sliceMM.z, endMM.x, endMM.y, endMM.z, len]);
+       caption := str;
+       exit;
+     end;
      if (niftiVol.Header.xyzt_units and kNIFTI_UNITS_MM) = kNIFTI_UNITS_MM then
         str := str + format('%0.6g×%0.6g×%0.6gmm (%d×%d×%d) = ', [sliceMM.x, sliceMM.y, sliceMM.z, vox.x, vox.y, vox.z])
      else
@@ -7316,6 +7338,7 @@ begin
   ShaderDrop.ItemIndex := 0;
   ShaderDropChange(Sender);
   Vol1.Slices.ZoomCenter := Vec3(0.5,0.5,0.5);
+  Vol1.Slices.distanceLineOrient := 0;
   sliceZoom.position := 100;
   ss := getKeyshiftstate;
   {$IFDEF MATCAP}
@@ -8108,6 +8131,7 @@ begin
     +kEOLN+'  Control-Shift-Drag: Pan image'
     +kEOLN+'  Control-Double-Click: Pan to center clicked location'
     +kEOLN+'  Control-Shift-Double-Click: Reset pan and zoom'
+    +kEOLN+'  '+kAlt2+'-Drag: Measuring tool'
     +kEOLN+'Colorbar'
     +kEOLN+'  Double-Click: Change position'
     +kEOLN+'Color Editor'
@@ -8729,6 +8753,7 @@ begin
  xIn := X;
  yIn := Y;
  ViewGPU1.SetFocus;
+ Vol1.Slices.distanceLineOrient := 0;
  {$IFDEF isCocoaOpenGL}
  //LayerBox.Caption := inttostr(random(222));
  f := ViewGPU1.retinaScale;
@@ -8780,6 +8805,7 @@ begin
     end;
     exit;
  end;
+ if ssAlt in Shift then Vol1.Slices.distanceLineOrient := -1; // xxx
  ViewGPUMouseMove(Sender, Shift, xIn,Yin);
  if (ssShift in Shift) or  (ssRight in Shift) then
     gMouseDrag := true;
@@ -8889,6 +8915,16 @@ begin
        exit;
     end;
     Vol1.SetSlice2DFrac(Vol1.GetSlice2DFrac(X,Y,i)); //
+    if (Vol1.Slices.distanceLineOrient < 0) then begin
+       Vol1.Slices.distanceLineOrient:= i;
+       Vol1.Slices.distanceLineStart := Vol1.Slices.SliceFrac;
+       Vol1.Slices.distanceLineEnd := Vol1.Slices.SliceFrac;
+       //Vol1.Slices.distanceLineStart.position := Vec2(X,Y);
+    end else if (Vol1.Slices.distanceLineOrient > 0) then begin
+       if Vol1.Slices.distanceLineOrient <> i then
+       	  Vol1.Slices.distanceLineOrient := 0;
+       Vol1.Slices.distanceLineEnd := Vol1.Slices.SliceFrac;
+    end;
     if (Vols.Drawing.IsOpen) then //set crosshair to voxel center
        Vol1.SetSlice2DFrac(niftiVol.FracShiftSlice(vol1.Slices.SliceFrac, pti(0,0,0)));
     //sliceMM := Vol1.Slice2Dmm(niftiVol, vox);

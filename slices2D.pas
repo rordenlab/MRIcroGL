@@ -64,6 +64,8 @@ type
     procedure DrawTri(V1, V2, V3: TVec2; clr : TVec4);
     procedure DrawCropMask(L,B,W,H, tZ: single; orient: integer);
     procedure DrawArrow(L,B,W,H: single; orient: integer);
+    //function Frac2Pix(frac: TVec3; L,B,W,H: single; orient: integer): TVec2;
+    procedure DrawDistanceLine(L,B,W,H: single; orient: integer; tLT, tLB, tRB: TVec4);
     procedure DrawSagMirror(L,B, W,H, XFrac: single);
     procedure DrawLine(startX,startY,endX,endY: single);
     procedure DrawBar(left,bottom,width,height: single; clr : TVec4);
@@ -75,6 +77,8 @@ type
     procedure TextLabelTop(X,Y: single; Caption: string);
   public
     isOrientationTriangles: boolean;
+    distanceLineStart, distanceLineEnd: TVec3;//TVertex2D;
+    distanceLineOrient: integer;
     cropMask:TVec6;
     procedure DrawOutLine(L,T,R,B: single);
     property ZoomScale: single read fZoomScale write fZoomScale;
@@ -99,7 +103,9 @@ type
     function Update(volScale: TVec3; w,h: single; Orient: integer; actualH : integer = -1): single;
     function GetSlice2DFrac(mouseX, mouseY: integer; out Orient: integer): TVec3;
     function GetSlice2DMaxXY(mouseX, mouseY: integer; var Lo: TPoint): TPoint;
-    function FracMM(Mat: TMat4; Dim: TVec3i; out Vox: TVec3i): TVec3;
+    function FracMM(Mat: TMat4; Dim: TVec3i; out Vox: TVec3i): TVec3; overload;
+    function FracMM(inFrac: TVec3; Mat: TMat4; Dim: TVec3i): TVec3; overload;
+
     procedure SetFontColor(c: TVec4);
     {$IFDEF MOSAICS}
     procedure MosaicScale(lMosaicString: string; Mat, InvMat: TMat4; Dim: TVec3i; volScale: TVec3; out w, h: integer);
@@ -303,6 +309,7 @@ end;*)
 constructor TSlices2D.Create(sdffont: TSDFFont);
 //constructor TSlices2D.Create();
 begin
+  distanceLineOrient := 0;
   sliceFrac2D := Vec3(0.5, 0.5, 0.5);
   txt := sdffont;
   fontScale := 1;
@@ -544,14 +551,11 @@ begin
   x := (W * kFrac);
   y := (H * kFrac);
   if orient = kAxialOrient then begin
-     Tclr := Vec4(1.0, 0.0, 1.0, 1.0); //anterior = purplse
+     Tclr := Vec4(1.0, 0.0, 1.0, 1.0); //anterior = purple
      Bclr := Vec4(0.0, 0.0, 1.0, 1.0); //posterior=blue
   end else begin
       Tclr := Vec4(1.0, 1.0, 0.0, 1.0); //superior = yellow
       Bclr := Vec4(1.0, 0.65, 0.0, 1.0); //inferiro = orange
-
-
-
   end;
   if (orient = kAxialOrient) or (orient = kCoronalOrient) then begin
      Lclr := Vec4(1.0, 0.0, 0.0, 1.0);  //left=red
@@ -572,6 +576,33 @@ begin
   DrawTri(Vec2(L, midY), Vec2(L+x,midY+y), Vec2(L+X, midY-y),   Lclr);
   //right arrow
   DrawTri(Vec2(R, midY), Vec2(R-x,midY+y), Vec2(R-X, midY-y),   Rclr);
+end;
+
+function frac2pix(frac: TVec3; L,B,W,H: single; orient: integer; tLT, tLB, tRB: TVec4): TVec2;
+begin
+  if (orient <> kSagRightOrient) and (orient <> kSagLeftOrient) then
+  	 result.x := LerpZero(tLB.x, tRB.x, frac.x) //for axial and coronal images screen X is texture X
+  else
+      result.x := LerpZero(tLB.y, tRB.y, frac.y); //for sagitall screen x is texture y
+  if orient <> kAxialOrient then
+     result.y := LerpZero(tLB.z, tLT.z, frac.z)   //for sagittal and coronal screen y is texture z
+  else
+      result.y := LerpZero(tLB.y, tLT.y, frac.y); //for axial scans, screen y is texture y
+  result.x := L+result.x * W;
+  result.y := B+result.y * H;
+end;
+
+procedure TSlices2D.DrawDistanceLine(L,B,W,H: single; orient: integer; tLT, tLB, tRB: TVec4);
+var
+  st, en: TVec2;
+  wid: single;
+begin
+   wid := LineWid;
+  LineWid := max(LineWid, 1.0);
+  st := frac2pix(distanceLineStart, L,B,W,H, orient, tLT, tLB, tRB);
+  en := frac2pix(distanceLineEnd, L,B,W,H, orient, tLT, tLB, tRB);
+  DrawLine(st.x,st.y, en.x, en.y);
+  LineWid := wid;
 end;
 
 procedure TSlices2D.AddQuad(L,B, W,H, tZ: single; orient: integer; m: TMat4);
@@ -632,6 +663,7 @@ begin
      DrawCropMask(L,B,W,H,tZ, orient);
   if isOrientationTriangles then
       DrawArrow(L,B,W,H, orient);
+  DrawDistanceLine(L,B,W,H, orient, tLT, tLB, tRB);
   if lineWid <= 0 then exit;
   if (orient <> kSagRightOrient) and (orient <> kSagLeftOrient) then
    x := LerpZero(tLB.x, tRB.x, sliceFrac2D.x) //for axial and coronal images screen X is texture X
@@ -643,6 +675,8 @@ begin
       y := LerpZero(tLB.y, tLT.y, sliceFrac2D.y); //for axial scans, screen y is texture y
   //if (x < 0) or (x > 1) or (y < 0) or (y > 1) then exit;
   DrawCrossX(L,B,W,H,x, y);
+    if isOrientationTriangles then
+      DrawArrow(L,B,W,H, orient);
 end; //AddQuad()
 
 
@@ -755,6 +789,7 @@ var
 begin
   AddQuad(L,B, W, H, XFrac, kSagRightOrient, rot);
   //DrawCross(L,B,W,H,sliceFrac2D.y,sliceFrac2D.z);
+
   if FontScale <= 0.0 then exit;
   TextLabelLeft(L,B+(H * 0.5),'P');
   TextLabelTop(L+(W * 0.5),B+H,'S');
@@ -1004,7 +1039,19 @@ begin
   result := Vec3(v4.x, v4.y, v4.z);
 end;
 
-function TSlices2D.FracMM(Mat: TMat4; Dim: TVec3i; out vox: TVec3i): TVec3;
+function TSlices2D.FracMM(inFrac: TVec3; Mat: TMat4; Dim: TVec3i): TVec3; overload;
+var
+  vox0: TVec3;
+begin
+     //writeln(format('%gx%gx%g %dx%dx%d', [sliceFrac2D.x, sliceFrac2D.y, sliceFrac2D.z, Dim.x, Dim.y, Dim.z]));
+     vox0.x := (inFrac.x * Dim.x);
+     vox0.y := (inFrac.y * Dim.y);
+     vox0.z := (inFrac.z * Dim.z);
+     //result := vox0; exit;
+     result := SliceMM(vox0, Mat);
+end;
+
+function TSlices2D.FracMM(Mat: TMat4; Dim: TVec3i; out vox: TVec3i): TVec3; overload;
 var
   vox0: TVec3;
 begin
