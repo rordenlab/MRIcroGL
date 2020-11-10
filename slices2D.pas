@@ -597,7 +597,8 @@ var
   st, en: TVec2;
   wid: single;
 begin
-   wid := LineWid;
+  if distanceLineOrient <> orient then exit;
+  wid := LineWid;
   LineWid := max(LineWid, 1.0);
   st := frac2pix(distanceLineStart, L,B,W,H, orient, tLT, tLB, tRB);
   en := frac2pix(distanceLineEnd, L,B,W,H, orient, tLT, tLB, tRB);

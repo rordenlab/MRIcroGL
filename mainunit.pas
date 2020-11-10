@@ -3227,7 +3227,7 @@ begin
      LandmarkMenu.Visible := gPrefs.LandmarkPanel;
      LineBox.Visible := gPrefs.DisplayOrient <= kMosaicOrient;
      MosaicBox.Visible := gPrefs.DisplayOrient = kMosaicOrient;
-
+     if (Vol1.Slices <> nil) then Vol1.Slices.distanceLineOrient := 0;
 end;
 
 procedure TGLForm1.UpdateOpenRecent();
@@ -5617,7 +5617,6 @@ begin
   {$ENDIF}
 end;
 
-
 procedure TGLForm1.ReportPositionXYZ(isUpdateYoke: boolean = false);
 var
    str: string;
@@ -5654,7 +5653,7 @@ begin
         SetShareFloats2D(sliceMM.X,sliceMM.Y,sliceMM.Z);
      end;
      {$ENDIF}
-     if (Vol1.Slices.distanceLineOrient <> 0) then begin
+     if (Vol1.Slices <> nil) and (Vol1.Slices.distanceLineOrient <> 0) then begin
        sliceMM := Vol1.Slices.FracMM(Vol1.Slices.distanceLineStart, niftivol.Mat, niftivol.Dim);
        endMM := Vol1.Slices.FracMM(Vol1.Slices.distanceLineEnd, niftivol.Mat, niftivol.Dim);
        diffMM := sliceMM - endMM;
