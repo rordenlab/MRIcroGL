@@ -1,11 +1,11 @@
 unit tiff2nifti;
 
 {$mode objfpc}{$H+}
-
+//{$DEFINE TIMER}
 interface
 
 uses
-  nifti_save, Classes, SysUtils, StdCtrls, Controls, Dialogs, Forms, nifti_types, SimdUtils,
+  {$IFDEF TIMER}dateutils, {$ENDIF}nifti_save, Classes, SysUtils, StdCtrls, Controls, Dialogs, Forms, nifti_types, SimdUtils,
   nifti_foreign, nifti_tiff, Math; //, zstream;
 
   function convertTiffDir(initdir: string): boolean;
@@ -230,10 +230,12 @@ var
   lSearchRec: TSearchRec;
   lS : TStringList;
   fnm, tiffdir, outnm: string;
-  nOK, i, j, k : int64;
+  nOK, i, j: int64;
   sliceBytes : int64;
   hdr0, hdr: TNIFTIHdr;
   img0, img: TUInt8s;
+  errStr: string = '';
+  {$IFDEF TIMER}startTime : TDateTime;{$ENDIF}
 label
      666;
 begin
@@ -264,33 +266,49 @@ begin
      lS.sort;
      img0 := nil;
      img := nil;
+     {$IFDEF TIMER}startTime := Now;{$ENDIF}
+     errStr := 'Unable to load '+lS[0];
      if not LoadTIFFAsNifti(lS[0], img0, hdr0) then
         goto 666;
      hdr0.dim[3] := max(hdr0.dim[3], 1);
      sliceBytes := hdr0.dim[1] * hdr0.dim[2] * (hdr0.bitpix div 8);
      nOK := 1;
      if (lS.Count > 1) and (hdr0.dim[4] < 2) then begin
+        if hdr0.dim[3] > 1 then begin
+           {$IFDEF UNIX}writeln('All TIFFs should be 2D for stacking');{$ENDIF}
+           errStr := 'All TIFFs should be 2D for stacking. '+inttostr(hdr0.dim[3])+' slices in '+lS[0];
+           goto 666;
+        end;
+        setlength(img0, sliceBytes * lS.Count);
         for i := 1 to (lS.Count - 1) do begin
             if not LoadTIFFAsNifti(lS[i], img, hdr) then continue;
             if hdr.dim[1] <> hdr0.dim[1] then continue;
             if hdr.dim[2] <> hdr0.dim[2] then continue;
+            if hdr.dim[3] > 1 then begin
+               {$IFDEF UNIX}writeln('All TIFFs should be 2D for stacking');{$ENDIF}
+               errStr := 'All TIFFs should be 2D for stacking. '+inttostr(hdr0.dim[3])+' slices in '+lS[i];
+               goto 666;
+            end;
             hdr.dim[3] := max(hdr.dim[3], 1);
             if hdr.datatype <> hdr0.datatype then continue;
             if hdr.dim[4] > 1 then continue;
-            setlength(img0, sliceBytes * (hdr0.dim[3]+hdr.dim[3]));
             j := sliceBytes * hdr0.dim[3];
-            for k := 0 to ((sliceBytes * hdr.dim[3]) -1) do
-                img0[j+k] := img[k];
-
+            System.Move(img[0], img0[j],  sliceBytes);
+            //for k := 0 to ((sliceBytes * hdr.dim[3]) -1) do
+            //    img0[j+k] := img[k];
             hdr0.dim[3] := hdr0.dim[3] + hdr.dim[3];
-            img := nil;
             nOK := nOK + 1;
         end;
-
+        setlength(img0, sliceBytes * hdr0.dim[3]);
+        img := nil;
+        {$IFDEF UNIX}if (nOK <> lS.Count) then writeln('TIFF load '+  inttostr(nOK)+' of '+inttostr(lS.Count)+' files.');{$ENDIF}
      end;
+     {$IFDEF TIMER}{$IFDEF UNIX} writeln('TIFF load '+  inttostr(MilliSecondsBetween(Now,StartTime)));{$ENDIF} {$ENDIF}
+     errStr := 'Spatial resolution not provided.';
      if not GetPixDim(format('Confirm spatial resolution (in mm) for width, height and slices (voxels %dx%dx%d).',[hdr0.dim[1],hdr0.dim[2],hdr0.dim[3]]), hdr0.pixdim[1], hdr0.pixdim[2], hdr0.pixdim[3]) then
             goto 666;
      outnm := GLForm1.NiftiSaveDialogFilename();
+     errStr := 'Output name not provided.';
      //outnm := SaveDialogNIfTI(tiffdir);
      if outnm = '' then
         goto 666;
@@ -302,7 +320,7 @@ begin
      img0 := nil;
      img := nil;
      if not result then
-        showmessage('Fatal error: unable to convert TIFF files in '+tiffdir);
+        showmessage('Fatal error: unable to convert TIFF files in '+tiffdir+'  '+errStr);
 end;
 
 function convertTiff2NIfTI(fnm: string): boolean;

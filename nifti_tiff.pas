@@ -22,7 +22,7 @@ Type
   PtrInt = integer;
 {$endif}
 
-{$DEFINE VERBOSETIF}
+//{$DEFINE VERBOSETIF}
 procedure msgTIFF(s: string; forceShow: boolean = false);
 begin
   {$IFNDEF Windows}

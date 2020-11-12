@@ -1,6 +1,6 @@
 ### Functions
 
-Running the `help` menu item listed in the  ` Scripting` Menu's `Templates`  will generate a comprehensive list of the available functions:
+Running the `help` menu item listed in the `Scripting` Menu's `Templates` menu will generate a comprehensive list of the available functions:
 
  - atlashide (built-in function): 
  atlashide(layer, indices...) -> Hide all (e.g. "atlashide(1)") or some (e.g. "atlashide(1, (17, 22))") regions of an atlas.
