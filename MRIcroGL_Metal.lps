@@ -3,7 +3,7 @@
   <ProjectSession>
     <Version Value="12"/>
     <BuildModes Active="Default"/>
-    <Units Count="47">
+    <Units Count="48">
       <Unit0>
         <Filename Value="MRIcroGL.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -15,9 +15,8 @@
         <ComponentName Value="GLForm1"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
-        <IsVisibleTab Value="True"/>
-        <TopLine Value="3217"/>
-        <CursorPos X="35" Y="3230"/>
+        <TopLine Value="1550"/>
+        <CursorPos X="24" Y="1586"/>
         <UsageCount Value="226"/>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
@@ -107,7 +106,7 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="196"/>
         <CursorPos X="46" Y="196"/>
-        <UsageCount Value="119"/>
+        <UsageCount Value="125"/>
       </Unit11>
       <Unit12>
         <Filename Value="../Metal-Demos/common/mtlgraph.pas"/>
@@ -127,26 +126,26 @@
       <Unit14>
         <Filename Value="glvolume2.pas"/>
         <EditorIndex Value="3"/>
-        <TopLine Value="2329"/>
-        <CursorPos X="17" Y="2353"/>
+        <TopLine Value="1814"/>
+        <CursorPos X="65" Y="1842"/>
         <UsageCount Value="106"/>
         <Loaded Value="True"/>
       </Unit14>
       <Unit15>
         <Filename Value="mtlvolume2.pas"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="4"/>
-        <TopLine Value="1289"/>
-        <CursorPos X="19" Y="1308"/>
+        <TopLine Value="781"/>
+        <CursorPos X="34" Y="790"/>
         <UsageCount Value="100"/>
         <Loaded Value="True"/>
       </Unit15>
       <Unit16>
         <Filename Value="../Metal-Demos/common/SimdUtils.pas"/>
-        <EditorIndex Value="8"/>
+        <EditorIndex Value="-1"/>
         <TopLine Value="61"/>
         <CursorPos Y="78"/>
         <UsageCount Value="14"/>
-        <Loaded Value="True"/>
       </Unit16>
       <Unit17>
         <Filename Value="../lazarus/lcl/intfgraphics.pas"/>
@@ -165,18 +164,18 @@
       </Unit18>
       <Unit19>
         <Filename Value="nifti.pas"/>
-        <EditorIndex Value="7"/>
-        <TopLine Value="3088"/>
-        <CursorPos X="14" Y="3111"/>
+        <EditorIndex Value="6"/>
+        <TopLine Value="5839"/>
+        <CursorPos X="24" Y="5857"/>
         <UsageCount Value="100"/>
         <Loaded Value="True"/>
       </Unit19>
       <Unit20>
         <Filename Value="../Metal-Framework/lazarus/package/utils/MetalPipeline.pas"/>
         <EditorIndex Value="-1"/>
-        <TopLine Value="253"/>
-        <CursorPos X="36" Y="281"/>
-        <UsageCount Value="44"/>
+        <TopLine Value="65"/>
+        <CursorPos X="52" Y="77"/>
+        <UsageCount Value="46"/>
       </Unit20>
       <Unit21>
         <Filename Value="/usr/local/share/fpcsrc/packages/univint/src/CFBase.pas"/>
@@ -208,8 +207,7 @@
       <Unit25>
         <Filename Value="slices2D.pas"/>
         <EditorIndex Value="1"/>
-        <TopLine Value="589"/>
-        <CursorPos X="24" Y="600"/>
+        <CursorPos X="58" Y="7"/>
         <UsageCount Value="117"/>
         <Loaded Value="True"/>
       </Unit25>
@@ -251,9 +249,9 @@
       <Unit31>
         <Filename Value="../Metal-Demos/common/mtllines.pas"/>
         <EditorIndex Value="-1"/>
-        <TopLine Value="27"/>
-        <CursorPos X="10" Y="45"/>
-        <UsageCount Value="8"/>
+        <TopLine Value="64"/>
+        <CursorPos X="25" Y="75"/>
+        <UsageCount Value="12"/>
       </Unit31>
       <Unit32>
         <Filename Value="../Metal-Framework/lazarus/package/framework/metal/MTLLibrary.inc"/>
@@ -343,149 +341,76 @@
       </Unit43>
       <Unit44>
         <Filename Value="sse.pas"/>
-        <EditorIndex Value="6"/>
+        <EditorIndex Value="5"/>
         <TopLine Value="28"/>
         <CursorPos X="30" Y="32"/>
-        <UsageCount Value="14"/>
+        <UsageCount Value="16"/>
         <Loaded Value="True"/>
       </Unit44>
       <Unit45>
         <Filename Value="opts.inc"/>
         <EditorIndex Value="2"/>
         <CursorPos X="19" Y="6"/>
-        <UsageCount Value="14"/>
+        <UsageCount Value="16"/>
         <Loaded Value="True"/>
       </Unit45>
       <Unit46>
         <Filename Value="../Metal-Demos/common/mtlcube.pas"/>
-        <EditorIndex Value="5"/>
+        <EditorIndex Value="-1"/>
         <TopLine Value="522"/>
         <CursorPos X="53" Y="541"/>
         <UsageCount Value="11"/>
-        <Loaded Value="True"/>
       </Unit46>
+      <Unit47>
+        <Filename Value="../Python-for-Lazarus/python4lazarus/PythonEngine.pas"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="1385"/>
+        <CursorPos X="20" Y="1411"/>
+        <UsageCount Value="10"/>
+        <DefaultSyntaxHighlighter Value="Delphi"/>
+      </Unit47>
     </Units>
-    <JumpHistory Count="30" HistoryIndex="29">
+    <JumpHistory Count="10" HistoryIndex="9">
       <Position1>
-        <Filename Value="slices2D.pas"/>
-        <Caret Line="81" Column="23" TopLine="67"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="1572" Column="28" TopLine="1555"/>
       </Position1>
       <Position2>
-        <Filename Value="slices2D.pas"/>
-        <Caret Line="312" Column="21" TopLine="288"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="1766" Column="12" TopLine="1748"/>
       </Position2>
       <Position3>
-        <Filename Value="slices2D.pas"/>
-        <Caret Line="81" Column="23" TopLine="68"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="1782" Column="17" TopLine="1765"/>
       </Position3>
       <Position4>
-        <Filename Value="slices2D.pas"/>
-        <Caret Line="312" Column="21" TopLine="315"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="1793" Column="12" TopLine="1775"/>
       </Position4>
       <Position5>
-        <Filename Value="slices2D.pas"/>
-        <Caret Line="81" Column="23" TopLine="68"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="1811" Column="17" TopLine="1794"/>
       </Position5>
       <Position6>
-        <Filename Value="slices2D.pas"/>
-        <Caret Line="312" Column="15" TopLine="288"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="2150" Column="12" TopLine="2132"/>
       </Position6>
       <Position7>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="5619" TopLine="5616"/>
+        <Caret Line="383" Column="142" TopLine="379"/>
       </Position7>
       <Position8>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="5656" Column="59" TopLine="5633"/>
+        <Caret Line="1562" Column="55" TopLine="1553"/>
       </Position8>
       <Position9>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="5657" Column="62" TopLine="5634"/>
+        <Caret Line="1556" Column="54" TopLine="1537"/>
       </Position9>
       <Position10>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="5658" Column="60" TopLine="5635"/>
+        <Caret Line="1565" Column="64" TopLine="1550"/>
       </Position10>
-      <Position11>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="7340" Column="33" TopLine="7317"/>
-      </Position11>
-      <Position12>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="7370" Column="36" TopLine="7364"/>
-      </Position12>
-      <Position13>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="8757" Column="32" TopLine="8733"/>
-      </Position13>
-      <Position14>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="8809" Column="55" TopLine="8786"/>
-      </Position14>
-      <Position15>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="8919" Column="39" TopLine="8896"/>
-      </Position15>
-      <Position16>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="8920" Column="38" TopLine="8897"/>
-      </Position16>
-      <Position17>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="8924" Column="48" TopLine="8901"/>
-      </Position17>
-      <Position18>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="8925" Column="41" TopLine="8902"/>
-      </Position18>
-      <Position19>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="8926" Column="41" TopLine="8903"/>
-      </Position19>
-      <Position20>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="5656" Column="29" TopLine="5643"/>
-      </Position20>
-      <Position21>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="7369" Column="24" TopLine="7355"/>
-      </Position21>
-      <Position22>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="544" Column="15" TopLine="544"/>
-      </Position22>
-      <Position23>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="1887" Column="23" TopLine="1863"/>
-      </Position23>
-      <Position24>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="2077" Column="23" TopLine="2053"/>
-      </Position24>
-      <Position25>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="2480" Column="23" TopLine="2456"/>
-      </Position25>
-      <Position26>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="2708" Column="23" TopLine="2684"/>
-      </Position26>
-      <Position27>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="2721" Column="23" TopLine="2697"/>
-      </Position27>
-      <Position28>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="2738" Column="23" TopLine="2714"/>
-      </Position28>
-      <Position29>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="2755" Column="23" TopLine="2731"/>
-      </Position29>
-      <Position30>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="3230" Column="66" TopLine="3215"/>
-      </Position30>
     </JumpHistory>
     <RunParams>
       <FormatVersion Value="2"/>

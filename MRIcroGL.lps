@@ -7,9 +7,11 @@
       <Unit0>
         <Filename Value="MRIcroGL.lpr"/>
         <IsPartOfProject Value="True"/>
-        <EditorIndex Value="-1"/>
-        <CursorPos X="3" Y="8"/>
+        <EditorIndex Value="2"/>
+        <TopLine Value="13"/>
+        <CursorPos X="59" Y="40"/>
         <UsageCount Value="200"/>
+        <Loaded Value="True"/>
       </Unit0>
       <Unit1>
         <Filename Value="mainunit.pas"/>
@@ -17,8 +19,9 @@
         <ComponentName Value="GLForm1"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
-        <TopLine Value="1722"/>
-        <CursorPos X="35" Y="1737"/>
+        <IsVisibleTab Value="True"/>
+        <TopLine Value="7480"/>
+        <CursorPos X="17" Y="7504"/>
         <UsageCount Value="204"/>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
@@ -153,8 +156,9 @@
       </Unit14>
       <Unit15>
         <Filename Value="slices2D.pas"/>
-        <EditorIndex Value="7"/>
-        <CursorPos X="126" Y="5"/>
+        <EditorIndex Value="3"/>
+        <TopLine Value="17"/>
+        <CursorPos X="26" Y="18"/>
         <UsageCount Value="58"/>
         <Loaded Value="True"/>
       </Unit15>
@@ -166,7 +170,7 @@
       </Unit16>
       <Unit17>
         <Filename Value="nifti.pas"/>
-        <EditorIndex Value="9"/>
+        <EditorIndex Value="5"/>
         <TopLine Value="3098"/>
         <CursorPos X="10" Y="3125"/>
         <UsageCount Value="100"/>
@@ -181,9 +185,9 @@
       </Unit18>
       <Unit19>
         <Filename Value="glvolume2.pas"/>
-        <EditorIndex Value="5"/>
-        <TopLine Value="172"/>
-        <CursorPos X="154" Y="177"/>
+        <EditorIndex Value="4"/>
+        <TopLine Value="84"/>
+        <CursorPos X="20" Y="96"/>
         <UsageCount Value="102"/>
         <Loaded Value="True"/>
       </Unit19>
@@ -203,11 +207,10 @@
       </Unit21>
       <Unit22>
         <Filename Value="../Metal-Demos/common/VectorMath.pas"/>
-        <EditorIndex Value="4"/>
+        <EditorIndex Value="-1"/>
         <TopLine Value="42"/>
         <CursorPos X="28" Y="60"/>
         <UsageCount Value="111"/>
-        <Loaded Value="True"/>
       </Unit22>
       <Unit23>
         <Filename Value="../Metal-Demos/common/glgraph.pas"/>
@@ -223,10 +226,9 @@
       </Unit24>
       <Unit25>
         <Filename Value="nifti_tiff.pas"/>
-        <EditorIndex Value="3"/>
+        <EditorIndex Value="-1"/>
         <CursorPos X="13" Y="9"/>
         <UsageCount Value="83"/>
-        <Loaded Value="True"/>
       </Unit25>
       <Unit26>
         <Filename Value="sse2.pas"/>
@@ -237,11 +239,10 @@
       </Unit26>
       <Unit27>
         <Filename Value="/usr/local/share/fpcsrc/rtl/objpas/classes/classesh.inc"/>
-        <EditorIndex Value="6"/>
+        <EditorIndex Value="-1"/>
         <TopLine Value="98"/>
         <CursorPos X="22" Y="101"/>
         <UsageCount Value="26"/>
-        <Loaded Value="True"/>
       </Unit27>
       <Unit28>
         <Filename Value="sortu.pas"/>
@@ -258,18 +259,17 @@
       </Unit29>
       <Unit30>
         <Filename Value="opts.inc"/>
-        <EditorIndex Value="10"/>
-        <CursorPos X="13" Y="6"/>
+        <EditorIndex Value="6"/>
+        <CursorPos X="16" Y="7"/>
         <UsageCount Value="111"/>
         <Loaded Value="True"/>
       </Unit30>
       <Unit31>
         <Filename Value="tiff2nifti.pas"/>
-        <EditorIndex Value="2"/>
+        <EditorIndex Value="-1"/>
         <TopLine Value="288"/>
         <CursorPos X="43" Y="288"/>
         <UsageCount Value="100"/>
-        <Loaded Value="True"/>
       </Unit31>
       <Unit32>
         <Filename Value="/usr/local/share/fpcsrc/rtl/inc/systemh.inc"/>
@@ -287,10 +287,11 @@
       </Unit33>
       <Unit34>
         <Filename Value="sse.pas"/>
-        <EditorIndex Value="-1"/>
-        <TopLine Value="122"/>
-        <CursorPos X="19" Y="140"/>
+        <EditorIndex Value="1"/>
+        <TopLine Value="40"/>
+        <CursorPos X="41" Y="53"/>
         <UsageCount Value="58"/>
+        <Loaded Value="True"/>
       </Unit34>
       <Unit35>
         <Filename Value="mtlvolume2.pas"/>
@@ -315,11 +316,10 @@
       </Unit37>
       <Unit38>
         <Filename Value="SynZip.pas"/>
-        <EditorIndex Value="8"/>
+        <EditorIndex Value="-1"/>
         <TopLine Value="5046"/>
         <CursorPos X="28" Y="5047"/>
         <UsageCount Value="28"/>
-        <Loaded Value="True"/>
       </Unit38>
       <Unit39>
         <Filename Value="UserNotification.pas"/>
@@ -330,12 +330,10 @@
       </Unit39>
       <Unit40>
         <Filename Value="../Python-for-Lazarus/python4lazarus/Sources/Core/PythonEngine.pas"/>
-        <IsVisibleTab Value="True"/>
-        <EditorIndex Value="1"/>
+        <EditorIndex Value="-1"/>
         <TopLine Value="1723"/>
-        <CursorPos X="18" Y="1744"/>
+        <CursorPos X="91" Y="1725"/>
         <UsageCount Value="13"/>
-        <Loaded Value="True"/>
         <DefaultSyntaxHighlighter Value="Delphi"/>
       </Unit40>
     </Units>
@@ -344,124 +342,124 @@
     </Build>
     <JumpHistory Count="30" HistoryIndex="29">
       <Position1>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="192" Column="40" TopLine="164"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="7504" Column="14" TopLine="7480"/>
       </Position1>
       <Position2>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="193" Column="59" TopLine="165"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="9779" Column="13" TopLine="9756"/>
       </Position2>
       <Position3>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="229" Column="31" TopLine="201"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="7362" Column="53" TopLine="7358"/>
       </Position3>
       <Position4>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="234" Column="40" TopLine="206"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="7371" Column="19" TopLine="7357"/>
       </Position4>
       <Position5>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="235" Column="59" TopLine="207"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="7504" Column="14" TopLine="7480"/>
       </Position5>
       <Position6>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="246" Column="31" TopLine="218"/>
+        <Filename Value="slices2D.pas"/>
+        <Caret Column="69"/>
       </Position6>
       <Position7>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="250" Column="40" TopLine="222"/>
+        <Filename Value="slices2D.pas"/>
+        <Caret Line="31" Column="14" TopLine="7"/>
       </Position7>
       <Position8>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="251" Column="59" TopLine="223"/>
+        <Filename Value="slices2D.pas"/>
+        <Caret Line="42" Column="16" TopLine="18"/>
       </Position8>
       <Position9>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="300" Column="31" TopLine="272"/>
+        <Filename Value="slices2D.pas"/>
+        <Caret Line="98" Column="16" TopLine="75"/>
       </Position9>
       <Position10>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="305" Column="40" TopLine="277"/>
+        <Filename Value="slices2D.pas"/>
+        <Caret Line="111" Column="16" TopLine="89"/>
       </Position10>
       <Position11>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="306" Column="59" TopLine="278"/>
+        <Filename Value="slices2D.pas"/>
+        <Caret Line="348" Column="14" TopLine="324"/>
       </Position11>
       <Position12>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="1301" Column="90" TopLine="1274"/>
+        <Filename Value="slices2D.pas"/>
+        <Caret Line="1007" Column="12" TopLine="983"/>
       </Position12>
       <Position13>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="1340" Column="34" TopLine="1315"/>
+        <Filename Value="slices2D.pas"/>
+        <Caret Line="31" Column="14" TopLine="17"/>
       </Position13>
       <Position14>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="1342" Column="26" TopLine="1315"/>
+        <Filename Value="slices2D.pas"/>
+        <Caret Line="42" Column="16" TopLine="18"/>
       </Position14>
       <Position15>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="2078" Column="50" TopLine="2075"/>
+        <Filename Value="slices2D.pas"/>
+        <Caret Line="98" Column="16" TopLine="75"/>
       </Position15>
       <Position16>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="2478" Column="16" TopLine="2451"/>
+        <Filename Value="slices2D.pas"/>
+        <Caret Line="111" Column="19" TopLine="89"/>
       </Position16>
       <Position17>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="2486" Column="16" TopLine="2459"/>
+        <Filename Value="slices2D.pas"/>
+        <Caret Line="348" Column="14" TopLine="324"/>
       </Position17>
       <Position18>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="2487" Column="35" TopLine="2460"/>
+        <Filename Value="slices2D.pas"/>
+        <Caret Line="1007" Column="15" TopLine="983"/>
       </Position18>
       <Position19>
         <Filename Value="glvolume2.pas"/>
-        <Caret Line="2524" Column="20" TopLine="2497"/>
+        <Caret Line="73" Column="73" TopLine="72"/>
       </Position19>
       <Position20>
         <Filename Value="glvolume2.pas"/>
-        <Caret Line="6" Column="76"/>
+        <Caret Line="96" Column="23" TopLine="73"/>
       </Position20>
       <Position21>
         <Filename Value="glvolume2.pas"/>
-        <Caret Line="543" Column="66" TopLine="515"/>
+        <Caret Line="1854" Column="15" TopLine="1830"/>
       </Position21>
       <Position22>
         <Filename Value="glvolume2.pas"/>
-        <Caret Line="201" Column="64" TopLine="178"/>
+        <Caret Line="2045" Column="17" TopLine="2022"/>
       </Position22>
       <Position23>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="542" Column="22" TopLine="515"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="9756" Column="3" TopLine="9756"/>
       </Position23>
       <Position24>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="543" Column="41" TopLine="516"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="333" Column="15" TopLine="320"/>
       </Position24>
       <Position25>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="589" Column="22" TopLine="562"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="3211" Column="32" TopLine="3187"/>
       </Position25>
       <Position26>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="590" Column="41" TopLine="563"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="7307" Column="23" TopLine="7283"/>
       </Position26>
       <Position27>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="82" Column="81" TopLine="79"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="9453" Column="25" TopLine="9432"/>
       </Position27>
       <Position28>
-        <Filename Value="glvolume2.pas"/>
-        <Caret Line="175" TopLine="172"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="9454" Column="18" TopLine="9432"/>
       </Position28>
       <Position29>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="3901" Column="17" TopLine="3888"/>
+        <Caret Line="9779" Column="16" TopLine="9756"/>
       </Position29>
       <Position30>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="1737" Column="35" TopLine="1722"/>
+        <Caret Line="7371" Column="22" TopLine="7357"/>
       </Position30>
     </JumpHistory>
     <RunParams>

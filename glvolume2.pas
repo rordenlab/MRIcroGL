@@ -90,11 +90,13 @@ type
         property Slices: Tslices2D read slices2D;
         function Slice2Dmm(var vol: TNIfTI; out vox: TVec3i): TVec3;
         procedure SetSlice2DFrac(frac : TVec3);
-        function GetSlice2DFrac(mouseX, mouseY: integer; out Orient: integer): TVec3;
+        function GetSlice2DFrac(mouseX, mouseY: integer; var  oOrient: integer): TVec3;
         function GetSlice2DMaxXY(mouseX, mouseY: integer; var Lo: TPoint): TPoint;
         procedure Paint2D(var vol: TNIfTI; Drawing: TDraw; DisplayOrient: integer);
+        {$IFDEF MOSAIC}
         procedure PaintMosaicRender(var vol: TNIfTI; lRender: TMosaicRender);
         procedure PaintMosaic2D(var vol: TNIfTI; Drawing: TDraw; MosaicString: string);
+        {$ENDIF} //MOSAIC
         {$ENDIF}
         {$IFDEF MATCAP}procedure SetMatCap(lFilename: string);{$ENDIF}
         //procedure CreateOverlayTextures();
@@ -1835,14 +1837,21 @@ end;
 
 function TGPUVolume.GetSlice2DMaxXY(mouseX, mouseY: integer; var Lo: TPoint): TPoint;
 begin
-  result := slices2D.GetSlice2DMaxXY(mouseX, mouseY, lo);
+  result.x := 0;
+  result.y := 0;
+  if (slices2D <> nil) then result := slices2D.GetSlice2DMaxXY2D(mouseX, mouseY, lo);
 end;
 
-function TGPUVolume.GetSlice2DFrac(mouseX, mouseY: integer; out Orient: integer): TVec3;
+function TGPUVolume.GetSlice2DFrac(mouseX, mouseY: integer; var oOrient: integer): TVec3;
 begin
-    result := slices2D.GetSlice2DFrac(mouseX, mouseY, Orient);
+  result.x := 0;
+  result.y := 0;
+  result.z := 0;
+  oOrient := 0;
+  if (slices2D <> nil) then  result := slices2D.GetSlice2DFrac2D(mouseX, mouseY, oOrient);
 end;
 
+{$IFDEF MOSAIC}
 procedure TGPUVolume.PaintMosaicRender(var vol: TNIfTI; lRender: TMosaicRender);
 var
   //modelViewProjectionMatrixInverse,
@@ -2033,11 +2042,14 @@ begin
        end;
   end;
   {$ENDIF}
+  {$IFDEF MOSAIC}
   slices2D.UpdateMosaic(MosaicString, vol.Mat, vol.InvMat, vol.Dim, vol.Scale, w,h);
+  {$ENDIF}
   w := glControl.clientwidth;
   h := glControl.clientheight;
 
   if (slices2D.NumberOfVertices < 3) and (slices2D.NumberOfMosaicRenders < 1) then exit; //nothing to do
+
   //draw
   //glViewport(0, 0, glControl.ClientWidth, glControl.ClientHeight); //required for form resize
   glControl.SetViewport();
@@ -2149,6 +2161,7 @@ begin
    txt.DrawText();
   glControl.SwapBuffers;
 end;
+{$ENDIF}
 
 
 {$IFNDEF COREGL}

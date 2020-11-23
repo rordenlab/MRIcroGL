@@ -1,7 +1,7 @@
 object GLForm1: TGLForm1
-  Left = 51
+  Left = 392
   Height = 595
-  Top = 183
+  Top = 130
   Width = 914
   AllowDropFiles = True
   Caption = 'MRIcroGL'
@@ -45,13 +45,13 @@ object GLForm1: TGLForm1
       OnDblClick = ToolPanelDblClick
       object LayerBox: TGroupBox
         Left = 0
-        Height = 215
+        Height = 224
         Top = 0
         Width = 253
         Align = alTop
         AutoSize = True
         Caption = 'Layers'
-        ClientHeight = 196
+        ClientHeight = 205
         ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
@@ -82,7 +82,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 0
           Height = 16
-          Top = 103
+          Top = 102
           Width = 47
           Caption = 'Darkest'
           ParentColor = False
@@ -94,7 +94,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrBottom
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 22
+          Height = 21
           Top = 100
           Width = 116
           BorderSpacing.Left = 122
@@ -111,8 +111,8 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrBottom
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 22
-          Top = 124
+          Height = 21
+          Top = 123
           Width = 116
           BorderSpacing.Left = 122
           BorderSpacing.Top = 2
@@ -128,7 +128,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 0
           Height = 16
-          Top = 127
+          Top = 125
           Width = 55
           Caption = 'Brightest'
           ParentColor = False
@@ -160,7 +160,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 0
           Height = 16
-          Top = 149
+          Top = 153
           Width = 47
           Caption = 'Opacity'
           ParentColor = False
@@ -172,8 +172,8 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrBottom
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 19
-          Top = 148
+          Height = 30
+          Top = 146
           Width = 116
           Max = 100
           Position = 100
@@ -210,7 +210,7 @@ object GLForm1: TGLForm1
           AnchorSideRight.Side = asrBottom
           Left = 143
           Height = 25
-          Top = 171
+          Top = 180
           Width = 88
           BorderSpacing.Left = 6
           BorderSpacing.Top = 4
@@ -226,7 +226,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrBottom
           Left = 0
           Height = 20
-          Top = 173
+          Top = 182
           Width = 137
           BorderSpacing.Top = 6
           ItemHeight = 26
@@ -247,14 +247,14 @@ object GLForm1: TGLForm1
       end
       object ClipBox: TGroupBox
         Left = 0
-        Height = 101
+        Height = 145
         Hint = 'Set clip plane'
-        Top = 215
+        Top = 224
         Width = 253
         Align = alTop
         AutoSize = True
         Caption = 'Clipping'
-        ClientHeight = 82
+        ClientHeight = 126
         ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
@@ -267,7 +267,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 1
+          Top = 7
           Width = 37
           BorderSpacing.Left = 2
           Caption = 'Depth'
@@ -280,7 +280,7 @@ object GLForm1: TGLForm1
           AnchorSideRight.Control = ClipBox
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 19
+          Height = 30
           Top = 0
           Width = 116
           Max = 999
@@ -299,8 +299,8 @@ object GLForm1: TGLForm1
           AnchorSideRight.Control = ClipDepthTrack
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 19
-          Top = 21
+          Height = 30
+          Top = 32
           Width = 114
           Max = 360
           OnChange = UpdateShaderSettings
@@ -319,7 +319,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 22
+          Top = 39
           Width = 50
           BorderSpacing.Left = 2
           Caption = 'Azimuth'
@@ -334,8 +334,8 @@ object GLForm1: TGLForm1
           AnchorSideRight.Control = ClipDepthTrack
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 19
-          Top = 42
+          Height = 30
+          Top = 64
           Width = 114
           Max = 180
           Min = -180
@@ -355,7 +355,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 43
+          Top = 71
           Width = 55
           BorderSpacing.Left = 2
           Caption = 'Elevation'
@@ -370,8 +370,8 @@ object GLForm1: TGLForm1
           AnchorSideRight.Control = ClipDepthTrack
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 19
-          Top = 63
+          Height = 30
+          Top = 96
           Width = 114
           Max = 1000
           OnChange = UpdateShaderSettings
@@ -390,7 +390,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 64
+          Top = 103
           Width = 61
           BorderSpacing.Left = 2
           Caption = 'Thickness'
@@ -401,13 +401,13 @@ object GLForm1: TGLForm1
       end
       object ShaderBox: TGroupBox
         Left = 0
-        Height = 277
-        Top = 799
+        Height = 387
+        Top = 899
         Width = 253
         Align = alClient
         AutoSize = True
         Caption = 'Render'
-        ClientHeight = 258
+        ClientHeight = 368
         ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
@@ -436,7 +436,7 @@ object GLForm1: TGLForm1
           Left = 142
           Height = 16
           Hint = 'Render quality: higher values are slower but look better'
-          Top = 3
+          Top = 9
           Width = 10
           BorderSpacing.Left = 8
           BorderSpacing.Right = 4
@@ -452,7 +452,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Control = ShaderBox
           AnchorSideRight.Side = asrBottom
           Left = 156
-          Height = 19
+          Height = 30
           Hint = 'Render quality: higher values are slower but look better. Smallest value is dynamic: initially poor quality with high quality after pause.'
           Top = 2
           Width = 80
@@ -492,8 +492,8 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           AnchorSideRight.Control = LightAziTrack
           Left = 37
-          Height = 19
-          Top = 27
+          Height = 30
+          Top = 21
           Width = 80
           Max = 90
           Min = -90
@@ -513,8 +513,8 @@ object GLForm1: TGLForm1
           AnchorSideRight.Control = ShaderBox
           AnchorSideRight.Side = asrBottom
           Left = 123
-          Height = 19
-          Top = 27
+          Height = 30
+          Top = 21
           Width = 80
           Max = 180
           Min = -180
@@ -533,7 +533,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 51
+          Top = 57
           Width = 13
           BorderSpacing.Left = 2
           Caption = 'o1'
@@ -550,7 +550,7 @@ object GLForm1: TGLForm1
           AnchorSideRight.Control = ShaderBox
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 19
+          Height = 30
           Top = 50
           Width = 116
           Max = 100
@@ -571,7 +571,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 72
+          Top = 89
           Width = 15
           BorderSpacing.Left = 2
           Caption = 'o2'
@@ -588,8 +588,8 @@ object GLForm1: TGLForm1
           AnchorSideRight.Control = ShaderBox
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 19
-          Top = 71
+          Height = 30
+          Top = 82
           Width = 116
           Max = 100
           OnChange = PrefTrackChange
@@ -608,7 +608,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 93
+          Top = 121
           Width = 16
           BorderSpacing.Left = 2
           Caption = 'o3'
@@ -625,8 +625,8 @@ object GLForm1: TGLForm1
           AnchorSideRight.Control = ShaderBox
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 19
-          Top = 92
+          Height = 30
+          Top = 114
           Width = 118
           Max = 100
           OnChange = PrefTrackChange
@@ -645,7 +645,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 114
+          Top = 153
           Width = 16
           BorderSpacing.Left = 2
           Caption = 'o4'
@@ -662,8 +662,8 @@ object GLForm1: TGLForm1
           AnchorSideRight.Control = ShaderBox
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 19
-          Top = 113
+          Height = 30
+          Top = 146
           Width = 118
           Max = 100
           OnChange = PrefTrackChange
@@ -682,7 +682,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 135
+          Top = 185
           Width = 16
           BorderSpacing.Left = 2
           Caption = 'o5'
@@ -699,8 +699,8 @@ object GLForm1: TGLForm1
           AnchorSideRight.Control = ShaderBox
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 19
-          Top = 134
+          Height = 30
+          Top = 178
           Width = 118
           Max = 100
           OnChange = PrefTrackChange
@@ -719,7 +719,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 156
+          Top = 217
           Width = 16
           BorderSpacing.Left = 2
           Caption = 'o6'
@@ -736,8 +736,8 @@ object GLForm1: TGLForm1
           AnchorSideRight.Control = ShaderBox
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 19
-          Top = 155
+          Height = 30
+          Top = 210
           Width = 118
           Max = 100
           OnChange = PrefTrackChange
@@ -756,7 +756,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 177
+          Top = 249
           Width = 15
           BorderSpacing.Left = 2
           Caption = 'o7'
@@ -773,8 +773,8 @@ object GLForm1: TGLForm1
           AnchorSideRight.Control = ShaderBox
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 19
-          Top = 176
+          Height = 30
+          Top = 242
           Width = 118
           Max = 100
           OnChange = PrefTrackChange
@@ -793,7 +793,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 198
+          Top = 281
           Width = 16
           BorderSpacing.Left = 2
           Caption = 'o8'
@@ -810,8 +810,8 @@ object GLForm1: TGLForm1
           AnchorSideRight.Control = ShaderBox
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 19
-          Top = 197
+          Height = 30
+          Top = 274
           Width = 118
           Max = 100
           OnChange = PrefTrackChange
@@ -830,7 +830,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 219
+          Top = 313
           Width = 16
           BorderSpacing.Left = 2
           Caption = 'o9'
@@ -847,8 +847,8 @@ object GLForm1: TGLForm1
           AnchorSideRight.Control = ShaderBox
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 19
-          Top = 218
+          Height = 30
+          Top = 306
           Width = 118
           Max = 100
           OnChange = PrefTrackChange
@@ -867,7 +867,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 240
+          Top = 345
           Width = 21
           BorderSpacing.Left = 2
           Caption = 'o10'
@@ -884,8 +884,8 @@ object GLForm1: TGLForm1
           AnchorSideRight.Control = ShaderBox
           AnchorSideRight.Side = asrBottom
           Left = 122
-          Height = 19
-          Top = 239
+          Height = 30
+          Top = 338
           Width = 118
           Max = 100
           OnChange = PrefTrackChange
@@ -919,7 +919,7 @@ object GLForm1: TGLForm1
       object LineBox: TGroupBox
         Left = 0
         Height = 45
-        Top = 316
+        Top = 369
         Width = 253
         Align = alTop
         AutoSize = True
@@ -947,7 +947,7 @@ object GLForm1: TGLForm1
           AnchorSideLeft.Side = asrBottom
           AnchorSideTop.Control = LineBox
           Left = 40
-          Height = 21
+          Height = 20
           Top = 2
           Width = 82
           BorderSpacing.Left = 2
@@ -976,13 +976,13 @@ object GLForm1: TGLForm1
       end
       object SliceBox: TGroupBox
         Left = 0
-        Height = 182
-        Top = 617
+        Height = 192
+        Top = 707
         Width = 253
         Align = alTop
         AutoSize = True
         Caption = '2D Slice Selection'
-        ClientHeight = 163
+        ClientHeight = 173
         ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
@@ -1084,7 +1084,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Control = CoordLabel
           AnchorSideTop.Side = asrBottom
           Left = 2
-          Height = 22
+          Height = 21
           Top = 74
           Width = 76
           BorderSpacing.Left = 2
@@ -1115,7 +1115,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Control = XCoordEdit
           AnchorSideTop.Side = asrCenter
           Left = 80
-          Height = 22
+          Height = 21
           Top = 74
           Width = 76
           BorderSpacing.Left = 2
@@ -1131,7 +1131,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Control = XCoordEdit
           AnchorSideTop.Side = asrCenter
           Left = 158
-          Height = 22
+          Height = 21
           Top = 74
           Width = 76
           BorderSpacing.Left = 2
@@ -1147,7 +1147,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrBottom
           Left = 2
           Height = 20
-          Top = 98
+          Top = 97
           Width = 244
           BorderSpacing.Left = 2
           BorderSpacing.Top = 2
@@ -1163,8 +1163,8 @@ object GLForm1: TGLForm1
           AnchorSideTop.Control = AnatDrop
           AnchorSideTop.Side = asrBottom
           Left = 122
-          Height = 19
-          Top = 122
+          Height = 30
+          Top = 121
           Width = 116
           Max = 600
           Min = 100
@@ -1183,7 +1183,7 @@ object GLForm1: TGLForm1
           Left = 2
           Height = 25
           Hint = 'Slider adjusts scale factor. Control-drag to pan image. Click here to restore defaults.'
-          Top = 119
+          Top = 124
           Width = 80
           BorderSpacing.Left = 2
           Caption = 'Zoom'
@@ -1200,8 +1200,8 @@ object GLForm1: TGLForm1
           Left = 2
           Height = 18
           Hint = 'Do enlarged images appear blurry or jagged'
-          Top = 145
-          Width = 66
+          Top = 155
+          Width = 70
           BorderSpacing.Left = 2
           BorderSpacing.Top = 4
           Caption = 'Smooth'
@@ -1218,11 +1218,11 @@ object GLForm1: TGLForm1
           AnchorSideLeft.Side = asrBottom
           AnchorSideTop.Control = Smooth2DCheck
           AnchorSideTop.Side = asrCenter
-          Left = 74
+          Left = 78
           Height = 18
           Hint = 'Show Ruler (10 cm)'
-          Top = 145
-          Width = 52
+          Top = 155
+          Width = 56
           BorderSpacing.Left = 6
           BorderSpacing.Top = 4
           Caption = 'Ruler'
@@ -1237,13 +1237,13 @@ object GLForm1: TGLForm1
       end
       object CutoutBox: TGroupBox
         Left = 0
-        Height = 82
-        Top = 535
+        Height = 115
+        Top = 592
         Width = 253
         Align = alTop
         AutoSize = True
         Caption = 'Cutout'
-        ClientHeight = 63
+        ClientHeight = 96
         ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
@@ -1256,7 +1256,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 3
+          Top = 9
           Width = 9
           BorderSpacing.Left = 2
           Caption = 'X'
@@ -1268,7 +1268,7 @@ object GLForm1: TGLForm1
           AnchorSideLeft.Side = asrBottom
           AnchorSideTop.Control = CutoutBox
           Left = 13
-          Height = 19
+          Height = 30
           Top = 2
           Width = 76
           Max = 1000
@@ -1286,7 +1286,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Control = XTrackBar
           AnchorSideTop.Side = asrCenter
           Left = 91
-          Height = 19
+          Height = 30
           Top = 2
           Width = 76
           Max = 1000
@@ -1303,7 +1303,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 24
+          Top = 41
           Width = 8
           BorderSpacing.Left = 2
           Caption = 'Y'
@@ -1315,8 +1315,8 @@ object GLForm1: TGLForm1
           AnchorSideTop.Control = XTrackBar
           AnchorSideTop.Side = asrBottom
           Left = 13
-          Height = 19
-          Top = 23
+          Height = 30
+          Top = 34
           Width = 76
           Max = 1000
           Position = 1000
@@ -1332,8 +1332,8 @@ object GLForm1: TGLForm1
           AnchorSideTop.Control = YTrackBar
           AnchorSideTop.Side = asrCenter
           Left = 91
-          Height = 19
-          Top = 23
+          Height = 30
+          Top = 34
           Width = 76
           Max = 1000
           Position = 1000
@@ -1349,7 +1349,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 45
+          Top = 73
           Width = 9
           BorderSpacing.Left = 2
           Caption = 'Z'
@@ -1361,8 +1361,8 @@ object GLForm1: TGLForm1
           AnchorSideTop.Control = YTrackBar
           AnchorSideTop.Side = asrBottom
           Left = 13
-          Height = 19
-          Top = 44
+          Height = 30
+          Top = 66
           Width = 76
           Max = 1000
           Position = 1000
@@ -1378,8 +1378,8 @@ object GLForm1: TGLForm1
           AnchorSideTop.Control = ZTrackBar
           AnchorSideTop.Side = asrCenter
           Left = 91
-          Height = 19
-          Top = 44
+          Height = 30
+          Top = 66
           Width = 76
           Max = 1000
           Position = 1000
@@ -1423,13 +1423,13 @@ object GLForm1: TGLForm1
       end
       object MosaicBox: TGroupBox
         Left = 0
-        Height = 174
-        Top = 361
+        Height = 178
+        Top = 414
         Width = 253
         Align = alTop
         AutoSize = True
         Caption = 'Mosaic'
-        ClientHeight = 155
+        ClientHeight = 159
         ClientWidth = 243
         Constraints.MinWidth = 10
         ParentFont = False
@@ -1453,7 +1453,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 27
+          Top = 26
           Width = 32
           Caption = 'Rows'
           ParentColor = False
@@ -1464,7 +1464,7 @@ object GLForm1: TGLForm1
           AnchorSideLeft.Side = asrBottom
           AnchorSideTop.Control = MosaicBox
           Left = 57
-          Height = 21
+          Height = 20
           Top = 2
           Width = 80
           BorderSpacing.Left = 2
@@ -1479,8 +1479,8 @@ object GLForm1: TGLForm1
           AnchorSideTop.Control = MosColEdit
           AnchorSideTop.Side = asrBottom
           Left = 57
-          Height = 21
-          Top = 25
+          Height = 20
+          Top = 24
           Width = 80
           BorderSpacing.Top = 2
           OnChange = UpdateMosaic
@@ -1494,8 +1494,8 @@ object GLForm1: TGLForm1
           AnchorSideTop.Control = MosColEdit
           AnchorSideTop.Side = asrCenter
           Left = 139
-          Height = 19
-          Top = 3
+          Height = 30
+          Top = -3
           Width = 92
           Max = 9
           Min = -9
@@ -1512,8 +1512,8 @@ object GLForm1: TGLForm1
           AnchorSideTop.Control = MosRowEdit
           AnchorSideTop.Side = asrCenter
           Left = 139
-          Height = 19
-          Top = 26
+          Height = 30
+          Top = 19
           Width = 92
           Max = 9
           Min = -9
@@ -1530,7 +1530,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrCenter
           Left = 2
           Height = 16
-          Top = 49
+          Top = 53
           Width = 67
           Caption = 'Orientation'
           ParentColor = False
@@ -1543,7 +1543,7 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrBottom
           Left = 71
           Height = 20
-          Top = 47
+          Top = 51
           Width = 100
           BorderSpacing.Left = 2
           BorderSpacing.Top = 2
@@ -1567,8 +1567,8 @@ object GLForm1: TGLForm1
           AnchorSideTop.Side = asrBottom
           Left = 2
           Height = 18
-          Top = 69
-          Width = 86
+          Top = 73
+          Width = 90
           BorderSpacing.Top = 2
           Caption = 'Cross Slice'
           Checked = True
@@ -1582,10 +1582,10 @@ object GLForm1: TGLForm1
           AnchorSideLeft.Side = asrBottom
           AnchorSideTop.Control = MosCrossCheck
           AnchorSideTop.Side = asrCenter
-          Left = 98
+          Left = 102
           Height = 18
-          Top = 69
-          Width = 90
+          Top = 73
+          Width = 94
           BorderSpacing.Left = 10
           Caption = 'Label Slices'
           Checked = True
@@ -1602,7 +1602,7 @@ object GLForm1: TGLForm1
           AnchorSideRight.Side = asrBottom
           Left = 0
           Height = 66
-          Top = 89
+          Top = 93
           Width = 243
           Anchors = [akTop, akLeft, akRight]
           BorderSpacing.Top = 2

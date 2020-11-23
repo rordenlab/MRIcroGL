@@ -4,3 +4,4 @@
 //    https://github.com/synopse/mORMot
 //{$DEFINE PARALLEL}  //for parallel Unix also edit CThreads in LPR file - no benefit if used with DYNRGBA
 //{$DEFINE DYNRGBA}  //{$IFDEF DYNRGBA}
+{$DEFINE MOSAIC}

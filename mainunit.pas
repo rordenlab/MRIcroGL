@@ -25,7 +25,7 @@ unit mainunit;
 {$DEFINE MATT1}
 
 interface
-
+{$include opts.inc} //for  DEFINE MOSAICS
 uses
   {$IFDEF MATT1}umat, {$ENDIF}
   {$IFDEF COMPILEYOKE} yokesharemem, {$ENDIF}
@@ -1547,6 +1547,35 @@ begin
   ScriptOutputMemo.Lines.Add(ANSIString(Data));
 end;
 
+//{$DEFINE NEWPY}
+function PyString_AsAnsiString(obj : PPyObject): string;
+begin
+  {$IFDEF NEWPY}
+  result := GetPythonEngine.PyUnicode_AsWideString(obj);
+  {$ELSE}
+  result := GetPythonEngine.PyString_AsAnsiString(obj);
+  {$ENDIF}
+end;
+
+function PyString_FromString(s: PAnsiChar):PPyObject;
+begin
+  {$IFDEF NEWPY}
+  result := GetPythonEngine.PyUnicodeFromString(s);
+  {$ELSE}
+  result := GetPythonEngine.PyString_FromString(s);
+  {$ENDIF}
+end;
+
+function PyInt_FromLong(l: integer):PPyObject;
+begin
+  {$IFDEF NEWPY}
+  result:= GetPythonEngine.PyLong_FromLong(l);
+  {$ELSE}
+  result:= GetPythonEngine.PyInt_FromLong(l);
+  {$ENDIF}
+end;
+
+
 function PyGUI_INPUT(Self, Args : PPyObject): PPyObject; cdecl;
 var
  caption, prompt, default: string;
@@ -1557,13 +1586,13 @@ begin
  default := '';
  n := GetPythonEngine.PyTuple_Size(args);
  if n > 0 then
-    caption := GetPythonEngine.PyString_AsAnsiString(GetPythonEngine.PyTuple_GetItem(Args,0));
+    caption := PyString_AsAnsiString(GetPythonEngine.PyTuple_GetItem(Args,0));
  if n > 1 then
-    prompt := GetPythonEngine.PyString_AsAnsiString(GetPythonEngine.PyTuple_GetItem(Args,1));
+    prompt := PyString_AsAnsiString(GetPythonEngine.PyTuple_GetItem(Args,1));
  if n > 2 then
-    default := GetPythonEngine.PyString_AsAnsiString(GetPythonEngine.PyTuple_GetItem(Args,2));
+    default := PyString_AsAnsiString(GetPythonEngine.PyTuple_GetItem(Args,2));
  default := InputBox(caption,prompt,default);
- Result := GetPythonEngine.PyString_FromString(PAnsiChar(default+#0));
+ Result := PyString_FromString(PAnsiChar(default+#0));
 end;
 
 function PyATLASSHOWHIDE(Self, Args : PPyObject; isHide: boolean): PPyObject; cdecl;
@@ -1734,7 +1763,7 @@ var
  v: TNIfTI;
  layer: integer;
 begin
-  Result:= GetPythonEngine.PyInt_FromLong(-1);
+  Result:= PyInt_FromLong(-1);
   with GetPythonEngine do
     if Bool(PyArg_ParseTuple(Args, 'i:atlasmaxindex', @layer)) then begin
        if (layer < 0) or (layer >= vols.NumLayers) then begin
@@ -1750,7 +1779,7 @@ begin
           exit;
        end;
 
-       Result:= GetPythonEngine.PyInt_FromLong(v.fLabels.count-1);
+       Result:= PyInt_FromLong(v.fLabels.count-1);
     end;
 end;
 
@@ -1761,7 +1790,7 @@ var
  str: string;
 begin
   str := '';
-  Result:= GetPythonEngine.PyString_FromString(PAnsiChar(str+#0));
+  Result:= PyString_FromString(PAnsiChar(str+#0));
   with GetPythonEngine do
     if Bool(PyArg_ParseTuple(Args, 'i:atlaslabels', @layer)) then begin
        if (layer < 0) or (layer >= vols.NumLayers) then begin
@@ -1779,7 +1808,7 @@ begin
        for i := 1 to v.fLabels.count -1 do
        str := str + inttostr(i)+#9+v.fLabels[i]+ #10;
        //str := str + format('%d\t%s\n', [i, v.fLabels[i]]);//+ #10;
-       Result:= GetPythonEngine.PyString_FromString(PAnsiChar(str+#0));
+       Result:= PyString_FromString(PAnsiChar(str+#0));
     end;
 end;
 {$IFDEF PYOBSOLETE}
@@ -2118,7 +2147,7 @@ var
   StrName: string;
   Ret: boolean;
 begin
-  Result:= GetPythonEngine.PyInt_FromLong(-1);
+  Result:= PyInt_FromLong(-1);
   with GetPythonEngine do
     if Boolean(PyArg_ParseTuple(Args, 's:drawload', @PtrName)) then
     begin
@@ -2146,7 +2175,7 @@ var
   StrName: string;
   Ret: boolean;
 begin
-  Result:= GetPythonEngine.PyInt_FromLong(-1);
+  Result:= PyInt_FromLong(-1);
   with GetPythonEngine do
     if Boolean(PyArg_ParseTuple(Args, 's:overlayload', @PtrName)) then
     begin
@@ -7367,9 +7396,13 @@ begin
      gPrefs.DisplayOrient := (sender as TMenuItem).tag;
      //gPrefs.StartupDisplayOrient:= gPrefs.DisplayOrient; //set so program remembers preferred view
      UpdateVisibleBoxes();
-     if gPrefs.DisplayOrient = kMosaicOrient then
-       UpdateMosaic(Sender)
-     else
+     if gPrefs.DisplayOrient = kMosaicOrient then begin
+       {$IFDEF MOSAIC}
+       UpdateMosaic(Sender);
+       {$ELSE}
+       gPrefs.DisplayOrient := kRenderOrient;
+       {$ENDIF}
+     end else
          ViewGPU1.Invalidate;
 end;
 
@@ -7497,7 +7530,9 @@ begin
   h := ViewGPU1.ClientHeight;
   if (gPrefs.DisplayOrient <> kMosaicOrient) or (gPrefs.MosaicStr = '') then exit;
   if not vols.Layer(0,vol) then exit;
+  {$IFDEF MOSAIC}
   Vol1.Slices.MosaicScale(gPrefs.MosaicStr, vol.Mat, vol.InvMat, vol.Dim, vol.Scale, w,h);
+  {$ENDIF}
   {$IFDEF CLRBAR}
   if not gClrbar.isVisible then exit;
   f := gClrBar.PanelFraction;
@@ -9445,7 +9480,10 @@ begin
   ViewGPU1.OnMouseUp := @ViewGPUMouseUp;
   ViewGPU1.OnMouseWheel := @ViewGPUMouseWheel;
   ViewGPU1.OnPaint := @ViewGPUPaint;
-
+  {$IFNDEF MOSAIC}
+  MosaicMenu.Visible := false;
+  gPrefs.DisplayOrient := kRenderOrient;
+  {$ENDIF}
   {$IFDEF MATCAP}
   UpdateMatCapDrop(MatCapDrop);
   if (MatCapDrop.Items.Count > 0) then begin
@@ -9767,9 +9805,10 @@ begin
  glClearColor(gPrefs.ClearColor.R/255, gPrefs.ClearColor.G/255, gPrefs.ClearColor.B/255, gPrefs.ClearColor.A/255);
  //glClearColor(random(256)/255, gPrefs.ClearColor.G/255, gPrefs.ClearColor.B/255, gPrefs.ClearColor.A/255);
  {$ENDIF}
+ {$IFDEF MOSAIC}
   if gPrefs.DisplayOrient = kMosaicOrient then
        Vol1.PaintMosaic2D(niftiVol, vols.Drawing, gPrefs.MosaicStr)
-  else if (gPrefs.DisplayOrient = kRenderOrient) and (BetterRenderTimer.Tag <> 0) then begin //render view
+  else {$ENDIF} if (gPrefs.DisplayOrient = kRenderOrient) and (BetterRenderTimer.Tag <> 0) then begin //render view
       q := Vol1.Quality1to5;
       Vol1.Quality1to5 := 5;
       Vol1.Paint(niftiVol);

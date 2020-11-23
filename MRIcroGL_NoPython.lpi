@@ -119,7 +119,7 @@
       <TargetProcessor Value="ATHLON64"/>
       <TargetCPU Value="x86_64"/>
       <Optimizations>
-        <OptimizationLevel Value="3"/>
+        <OptimizationLevel Value="0"/>
       </Optimizations>
     </CodeGeneration>
     <Linking>
@@ -139,8 +139,8 @@
       <CompilerMessages>
         <IgnoredMessages idx5057="True"/>
       </CompilerMessages>
-      <CustomOptions Value="-dDisableLCLGIF 
--dDisableLCLPNM
+      <CustomOptions Value="-dxDisableLCLGIF 
+-dxDisableLCLPNM
 -dMY_NO_PYTHON"/>
     </Other>
   </CompilerOptions>

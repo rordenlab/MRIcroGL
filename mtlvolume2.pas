@@ -791,12 +791,12 @@ end; *)
 
 function TGPUVolume.GetSlice2DMaxXY(mouseX, mouseY: integer; var Lo: TPoint): TPoint;
 begin
-  result := slices2D.GetSlice2DMaxXY(mouseX, mouseY, lo);
+  result := slices2D.GetSlice2DMaxXY2D(mouseX, mouseY, lo);
 end;
 
 function TGPUVolume.GetSlice2DFrac(mouseX, mouseY: integer; out Orient: integer): TVec3;
 begin
-    result := slices2D.GetSlice2DFrac(mouseX, mouseY, Orient);
+    result := slices2D.GetSlice2DFrac2D(mouseX, mouseY, Orient);
 end;
 
 procedure TGPUVolume.Paint2D(var vol: TNIfTI; Drawing: TDraw; DisplayOrient: integer);
