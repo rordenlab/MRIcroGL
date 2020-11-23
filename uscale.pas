@@ -22,7 +22,7 @@ var
 begin
   if (Control is TTrackBar) then begin
      {$IFDEF Darwin}
-     (Control as TTrackBar).Constraints.MaxHeight := 22;
+     (Control as TTrackBar).Constraints.MaxHeight := 24;
      (Control as TTrackBar).Height := (Control as TTrackBar).Constraints.MaxHeight;
      {$ENDIF}
      {$IFDEF LCLQT5}

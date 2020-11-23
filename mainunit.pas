@@ -8640,6 +8640,9 @@ begin
   {$IFDEF CPUAARCH64}
   w := w + ' ARM64';
   {$ENDIF}
+  {$IFDEF CPULLVM}
+  w := w + ' LLVM';
+  {$ENDIF}
  w := w + chr(13)+chr(10);
  w := w + 'Author: Chris Rorden' +kEOLN;
  w := w + 'License: BSD 2-Clause' +kEOLN;

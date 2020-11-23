@@ -9,6 +9,7 @@ uses
   cmem, // <- http://wiki.freepascal.org/Parallel_procedures
   {$ENDIF}{$ENDIF}
   //{$IFDEF LCLGtk2}uscale,{$ENDIF}
+  {$IFDEF Darwin}uscale,{$ENDIF}
   //{$ifdef windows},udark, {$endif}
   {$ifdef windows}Windows, {$endif}
   Interfaces, // this includes the LCL widgetset
@@ -32,6 +33,7 @@ begin
   Application.CreateForm(TIntensityFilterForm, IntensityFilterForm);
   //{$ifdef windows} SetDarkTheme; {$endif}
   //{$IFDEF LCLGtk2}ConstrainTrackBars();{$ENDIF}  //if unpatched, see https://bugs.freepascal.org/view.php?id=35861
+  {$IFDEF Darwin}ConstrainTrackBars();{$ENDIF}  //if unpatched, see https://bugs.freepascal.org/view.php?id=35861
   Application.Run;
   //Windows: if you get an error "Can't find object file" you can copy the 'static' folder from
   //  https://github.com/synopse/mORMot
