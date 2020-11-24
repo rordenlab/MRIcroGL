@@ -36,10 +36,12 @@ It is generally recommended that download a pre-compiled executable (see previou
    - To build **without** faster GZip: Remove the text "{$DEFINE FASTGZ}" from the file opts.inc. Benefit: easier build, uses permissive BSD license.
    - To build **with** faster GZip. Preserve the text "{$DEFINE FASTGZ}" in the file opts.inc. Benefit: faster gzip decompression. However, this only supports CPUs that support SSE4 (2008 and later).
  - **Option** You you can decide to build with or without Python Scripting:
-   - To build **without** Python: Remove the text "-dMYPY" from the file MRIcroGL.lpi.
-   - To build **with** Python. You will need [python4lazarus_package](https://github.com/Alexey-T/Python-for-Lazarus), but hopefully Lazarus will detect and install this for you automatically.   * Get the [lazmetalcontrol repository](https://github.com/genericptr/Metal-Framework).
-   * Use the Lazarus Package menu to open and install the lazmetal control.
-   * Open and compile the MRIcroGL_Metal.lpi project instead of the MRIcroGL.lpi project with Lazarus.
+   - To build **without** Python: Open the project MRIcroGL_NoPython.lpi (or remove the text "-dMYPY" from the file MRIcroGL.lpi).
+   - To build **with** Python. You will need [python4lazarus_package](https://github.com/Alexey-T/Python-for-Lazarus), but hopefully Lazarus will detect and install this for you automatically. **[Note, there are issues with the latest python4lazarus](https://github.com/Alexey-T/Python-for-Lazarus/issues/25) release, you should consider compilining without Python support (MRIcroGL_NoPython.lpi) [or use and earlier (2020.07.31)](https://github.com/Alexey-T/Python-for-Lazarus/releases/tag/2020.07.31) release.
+ - **Option** macOS developers can build for the modern Metal API instead of the legacy OpenGL API:
+   - Get the [lazmetalcontrol repository](https://github.com/genericptr/Metal-Framework).
+   - Use the Lazarus Package menu to open and install the lazmetal control.
+   - Open and compile the MRIcroGL_Metal.lpi project instead of the MRIcroGL.lpi project with Lazarus (if you do not want Python, remove the text "-dMYPY" from the file MRIcroGL_Metal.lpi).
  - Use the `Run` command from the `Run` menu compile and run your project.
 
 Alternatively, Debian/Ubuntu Linux users may want to look at the [docker script](./DOCKER.md) that provides a line-by-line recipt for compiling MRIcroGL from the command line.
@@ -47,6 +49,8 @@ Alternatively, Debian/Ubuntu Linux users may want to look at the [docker script]
 ## Compiling with the Command Line
 
 It is generally recommended that download a pre-compiled executable (see previous section). However, you can compile your own copy from source code. Download and install [Lazarus 2.0.6 or later](https://www.lazarus-ide.org/), at which point the lazbuild command should be available from the command line.
+
+ **[Note, there are issues with the latest python4lazarus](https://github.com/Alexey-T/Python-for-Lazarus/issues/25) release, you should consider compilining without Python support (MRIcroGL_NoPython.lpi) [or use and earlier (2020.07.31)](https://github.com/Alexey-T/Python-for-Lazarus/releases/tag/2020.07.31) release.
 
 
 For Linux (GTK2) or Windows (though see notes above), the compilation will look like this :

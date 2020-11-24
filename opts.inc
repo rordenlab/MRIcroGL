@@ -5,3 +5,4 @@
 //{$DEFINE PARALLEL}  //for parallel Unix also edit CThreads in LPR file - no benefit if used with DYNRGBA
 //{$DEFINE DYNRGBA}  //{$IFDEF DYNRGBA}
 {$DEFINE MOSAIC}
+//{$DEFINE NEWPY} //It is suggested to use 2020.07.31 or earlier. This switch is for new versions https://github.com/Alexey-T/Python-for-Lazarus/issues/25

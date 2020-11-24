@@ -390,6 +390,7 @@ type
     procedure RulerVisible();
     procedure RulerCheckChange(Sender: TObject);
     procedure ScriptHaltMenuClick(Sender: TObject);
+    procedure ScriptingPyVersionClick(Sender: TObject);
     procedure ScriptingSepMenuClick(Sender: TObject);
     procedure UpdateCropMask(msk: TVec6);
     procedure CreateOverlapImageMenuClick(Sender: TObject);
@@ -484,7 +485,6 @@ type
     function NiftiSaveDialogFilename(isVOI: boolean = false; initialFilename: string = ''): string;
     procedure SaveNIfTIMenuClick(Sender: TObject);
     procedure ClipIntensity(Lo, Hi: single);
-    procedure ScriptingPyVersionClick(Sender: TObject);
     procedure ScriptMemoKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure ScriptPanelDblClick(Sender: TObject);
     procedure SetColorBarPosition;
@@ -1295,10 +1295,18 @@ var
    searchResult : TSearchRec;
 begin
     result := '';
-    {$IFDEF Darwin}
-    if FindFirst(IncludeTrailingPathDelimiter(pth)+'libpython*.dylib', faDirectory, searchResult) = 0 then
+    {$IFDEF NEWPY}
+      {$IFDEF Darwin}
+      if FindFirst(IncludeTrailingPathDelimiter(pth)+'libpython3*.dylib', faDirectory, searchResult) = 0 then
+      {$ELSE}
+      if FindFirst(IncludeTrailingPathDelimiter(pth)+'libpython3*.so', faDirectory, searchResult) = 0 then
+      {$ENDIF}
     {$ELSE}
-    if FindFirst(IncludeTrailingPathDelimiter(pth)+'libpython*.so', faDirectory, searchResult) = 0 then
+      {$IFDEF Darwin}
+      if FindFirst(IncludeTrailingPathDelimiter(pth)+'libpython*.dylib', faDirectory, searchResult) = 0 then
+      {$ELSE}
+      if FindFirst(IncludeTrailingPathDelimiter(pth)+'libpython*.so', faDirectory, searchResult) = 0 then
+      {$ENDIF}
     {$ENDIF}
     result := IncludeTrailingPathDelimiter(pth)+(searchResult.Name);
     FindClose(searchResult);
@@ -1306,7 +1314,8 @@ end;
 {$ENDIF}
 
 {$IFDEF Darwin}
-function findMacOSLibPython3: string;
+{$IFNDEF NEWPY}
+function findMacOSLibPython27: string;
 const
      kPth = '/System/Library/Frameworks/Python.framework/Versions/Current/lib/libpython2.7.dylib';
 begin
@@ -1314,29 +1323,8 @@ begin
  if not FileExists(kPth) then exit;
  result := kPth;
 end;
+{$ENDIF}
 
-//Catalina sandbox restrictions make do not allow this for Notarized apps:
-(*function findMacOSLibPython3(pthroot: string = '/Library/Frameworks/Python.framework/'): string;
-label
-  121;
-var
-  pths: TStringList;
-  i: integer;
-begin
-  result := '';
-  if not DirectoryExists(pthroot) then exit;
-  pths := TStringList.Create;
-  FindAllFiles(pths, pthroot, 'libpython3*dylib', true); //find e.g. all pascal sourcefiles
-  if pths.Count < 1 then goto 121;
-  for i := pths.Count -1 downto 0 do
-      if AnsiContainsText(pths[i],'loader') then
-         pths.Delete(i);
-  if pths.Count < 1 then goto 121;
-  result := pths[0];
-  //printf(pths);
-  121:
-  pths.Free;
-end;*)
 {$ENDIF}
 
 {$IFDEF LINUX}
@@ -1419,7 +1407,9 @@ end;
              if length(result) > 0 then exit;
         end;
         {$IFDEF Darwin}
-        result := findMacOSLibPython3();
+        {$IFNDEF NEWPY}
+        result := findMacOSLibPython27();
+        {$ENDIF}
         if length(result) > 0 then exit;
         {$ENDIF}
         {$IFDEF LINUX}
@@ -1493,7 +1483,12 @@ var
 begin
   result := false;
   //showmessage(gPrefs.PyLib);
-  //gPrefs.PyLib := '';
+  {$IFDEF NEWPY}
+  if PosEx('2.7',gPrefs.PyLib) > 0 then begin
+    gPrefs.PyLib := '';
+    printf('Python4Lazarus version requires Python3');
+  end;
+  {$ENDIF}
   if not fileexists(gPrefs.PyLib) then begin
      S:= findPythonLib('');
      if (S = '') then begin
@@ -1508,7 +1503,7 @@ begin
   if not fileexists(S) then begin
      {$IFDEF UNIX}
      if (S <> '') then
-        writeln('Unable to find %s');
+        writeln('Unable to find '+S);
      writeln('Unable to find Python. Install Python3 and reset this software (-R) or set the "PyLib" in the preferences.');
      {$ENDIF}
      exit;
@@ -1517,6 +1512,12 @@ begin
      showmessage('Old, unsupported version of Python '+S);
      exit;
   end;
+  {$IFDEF NEWPY}
+  if PosEx('2.7',S) > 0 then begin
+    gPrefs.PyLib := '';
+    printf('Python4Lazarus version requires Python3');
+  end;
+  {$ENDIF}
   //S := '/Users/chris/src/MRIcroGL12/MRIcroGL.app/Contents/Frameworks/python37/libpython3.7.dylib';
   gPrefs.PyLib := S;
   result := true;
@@ -1533,7 +1534,13 @@ begin
   PythonIO.OnSendUniData:= @PyIOSendUniData;
   PyEngine.DllPath:= ExtractFileDir(S);
   PyEngine.DllName:= ExtractFileName(S);
-  PyEngine.LoadDll
+  try
+     PyEngine.LoadDll;
+  except
+    printf('Unable to use Python library '+gPrefs.PyLib);
+    //gPrefs.PyLib := '';
+    result := false;
+  end;
 end;
 procedure TGLForm1.PyIOSendData(Sender: TObject;
   const Data: AnsiString);
@@ -1547,12 +1554,17 @@ begin
   ScriptOutputMemo.Lines.Add(ANSIString(Data));
 end;
 
-//{$DEFINE NEWPY}
+
 function PyString_AsAnsiString(obj : PPyObject): string;
 begin
   {$IFDEF NEWPY}
   result := GetPythonEngine.PyUnicode_AsWideString(obj);
   {$ELSE}
+  {$Message HINT The error 'no member "PyString_AsAnsiString"' suggests you are using a version of Python4Lazarus that requires Python3}
+  {$Message HINT  Solution 1: Use an older version of Python4Lazarus}
+  {$Message HINT  Solution 2: Uncomment 'DEFINE NEWPY' in mainunit.pas}
+  {$Message HINT  https://github.com/Alexey-T/Python-for-Lazarus/issues/25}
+
   result := GetPythonEngine.PyString_AsAnsiString(obj);
   {$ENDIF}
 end;
@@ -4283,6 +4295,11 @@ begin
   end;*)
 end;
 
+procedure TGLForm1.ScriptingPyVersionClick(Sender: TObject);
+begin
+ //Let user select python library
+end;
+
 procedure TGLForm1.ScriptingSepMenuClick(Sender: TObject);
 begin
 
@@ -5496,40 +5513,6 @@ begin
  end;
  dlg.Free;
 end; *)
-
-procedure TGLForm1.ScriptingPyVersionClick(Sender: TObject);
-(*const
-  {$IFDEF Darwin} kPyLib = 'libpython2.7.dylib'; {$ENDIF}
-  {$IFDEF Linux} kPyLib = 'libpython3.6.so'; {$ENDIF}
-  {$IFDEF Windows} kPyLib = 'python35.dll'; {$ENDIF}
-var
-  openDialog : TOpenDialog;
-begin
-  {$IFDEF MYPY}
-  if not fileexists(gPrefs.PyLib) then
-     gPrefs.PyLib := findPythonLib(gPrefs.PyLib);
-  if fileexists(gPrefs.PyLib) then begin
-     if messagedlg('Select a new library (e.g. '+kPyLib+') to replace '+gPrefs.PyLib+'?',mtConfirmation, mbOKCancel, 0) = mrCancel then exit;
-  end else
-      showmessage('Select a Python library (e.g. '+kPyLib+')');
-  openDialog := TOpenDialog.Create(self);
-  openDialog.InitialDir := GetCurrentDir;
-  openDialog.Options := [ofFileMustExist];
-  //{$IFDEF Darwin} openDialog.Filter := 'Python library|*.dylib|All files|*.*'; {$ENDIF}
-  //{$IFDEF Linux} openDialog.Filter := 'Python library|*.so|All files|*.*'; {$ENDIF}
-  //{$IFDEF Windows} openDialog.Filter := 'Python library|*.dll|All files|*.*'; {$ENDIF}
-  if not OpenDialog.execute then begin openDialog.free; exit; end;
-  if not fileexists(openDialog.FileName) then exit;
-  gPrefs.Pylib := openDialog.FileName;
-  openDialog.free;
-*)
-begin
- {$IFDEF MYPY}
- showmessage('not enabled');
-  {$ELSE}
-  showmessage('Recompile with scripting enabled');
-  {$ENDIF}
-end;
 
 procedure TGLForm1.ScriptMemoKeyUp(Sender: TObject; var Key: Word;
   Shift: TShiftState);

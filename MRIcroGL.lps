@@ -9,7 +9,7 @@
         <IsPartOfProject Value="True"/>
         <EditorIndex Value="2"/>
         <TopLine Value="13"/>
-        <CursorPos X="59" Y="40"/>
+        <CursorPos X="59" Y="39"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
       </Unit0>
@@ -260,7 +260,7 @@
       <Unit30>
         <Filename Value="opts.inc"/>
         <EditorIndex Value="6"/>
-        <CursorPos X="16" Y="7"/>
+        <CursorPos X="98" Y="8"/>
         <UsageCount Value="111"/>
         <Loaded Value="True"/>
       </Unit30>
