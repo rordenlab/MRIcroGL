@@ -1,7 +1,7 @@
 object GLForm1: TGLForm1
-  Left = 392
+  Left = 571
   Height = 595
-  Top = 129
+  Top = 154
   Width = 914
   AllowDropFiles = True
   Caption = 'MRIcroGL'
@@ -1089,7 +1089,6 @@ object GLForm1: TGLForm1
           Width = 76
           BorderSpacing.Left = 2
           BorderSpacing.Top = 2
-          NumbersOnly = True
           OnChange = CoordEditChange
           ParentFont = False
           TabOrder = 6
@@ -1119,7 +1118,6 @@ object GLForm1: TGLForm1
           Top = 74
           Width = 76
           BorderSpacing.Left = 2
-          NumbersOnly = True
           OnChange = CoordEditChange
           ParentFont = False
           TabOrder = 7
@@ -1135,7 +1133,6 @@ object GLForm1: TGLForm1
           Top = 74
           Width = 76
           BorderSpacing.Left = 2
-          NumbersOnly = True
           OnChange = CoordEditChange
           ParentFont = False
           TabOrder = 8

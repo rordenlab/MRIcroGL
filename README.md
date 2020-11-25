@@ -37,7 +37,7 @@ It is generally recommended that download a pre-compiled executable (see previou
    - To build **with** faster GZip. Preserve the text "{$DEFINE FASTGZ}" in the file opts.inc. Benefit: faster gzip decompression. However, this only supports CPUs that support SSE4 (2008 and later).
  - **Option** You you can decide to build with or without Python Scripting:
    - To build **without** Python: Open the project MRIcroGL_NoPython.lpi (or remove the text "-dMYPY" from the file MRIcroGL.lpi).
-   - To build **with** Python. You will need [python4lazarus_package](https://github.com/Alexey-T/Python-for-Lazarus), but hopefully Lazarus will detect and install this for you automatically. **[Note, there are issues with the latest python4lazarus](https://github.com/Alexey-T/Python-for-Lazarus/issues/25) release, you should consider compilining without Python support (MRIcroGL_NoPython.lpi) [or use and earlier (2020.07.31)](https://github.com/Alexey-T/Python-for-Lazarus/releases/tag/2020.07.31) release.
+   - To build **with** Python. You will need [python4lazarus_package](https://github.com/Alexey-T/Python-for-Lazarus), but hopefully Lazarus will detect and install this for you automatically. **[Note, there are issues with the latest python4lazarus](https://github.com/Alexey-T/Python-for-Lazarus/issues/25) release, you should consider compiling without Python support (MRIcroGL_NoPython.lpi) [or use and earlier (2020.07.31)](https://github.com/neurolabusc/Python27-for-Lazarus.git) release (this older release supports both Python 2.7 as well as Python 3.x).
  - **Option** macOS developers can build for the modern Metal API instead of the legacy OpenGL API:
    - Get the [lazmetalcontrol repository](https://github.com/genericptr/Metal-Framework).
    - Use the Lazarus Package menu to open and install the lazmetal control.
@@ -50,7 +50,7 @@ Alternatively, Debian/Ubuntu Linux users may want to look at the [docker script]
 
 It is generally recommended that download a pre-compiled executable (see previous section). However, you can compile your own copy from source code. Download and install [Lazarus 2.0.6 or later](https://www.lazarus-ide.org/), at which point the lazbuild command should be available from the command line.
 
- **[Note, there are issues with the latest python4lazarus](https://github.com/Alexey-T/Python-for-Lazarus/issues/25) release, you should consider compilining without Python support (MRIcroGL_NoPython.lpi) [or use and earlier (2020.07.31)](https://github.com/Alexey-T/Python-for-Lazarus/releases/tag/2020.07.31) release.
+ **[Note, there are issues with the latest python4lazarus](https://github.com/Alexey-T/Python-for-Lazarus/issues/25) release, you should consider compilining without Python support (MRIcroGL_NoPython.lpi) [or use and earlier (2020.07.31)](https://github.com/neurolabusc/Python27-for-Lazarus.git) release.
 
 
 For Linux (GTK2) or Windows (though see notes above), the compilation will look like this :
@@ -58,8 +58,8 @@ For Linux (GTK2) or Windows (though see notes above), the compilation will look 
 ```
 git clone https://github.com/rordenlab/MRIcroGL12.git
 git clone https://github.com/neurolabusc/Metal-Demos.git
-git clone https://github.com/Alexey-T/Python-for-Lazarus.git
-lazbuild --build-ide= --add-package lazopenglcontext ./Python-for-Lazarus/python4lazarus/python4lazarus_package.lpk
+git clone https://github.com/neurolabusc/Python27-for-Lazarus.git
+lazbuild --build-ide= --add-package lazopenglcontext ./Python27-for-Lazarus/python4lazarus/python4lazarus_package.lpk
 cd MRIcroGL12
 lazbuild  -B MRIcroGL.lpr
 ```
@@ -69,8 +69,8 @@ For MacOS, you will want to specify the modern Cocoa widgetset, rather than the 
 ```
 git clone https://github.com/rordenlab/MRIcroGL12.git
 git clone https://github.com/neurolabusc/Metal-Demos.git
-git clone https://github.com/Alexey-T/Python-for-Lazarus.git
-lazbuild --build-ide=  --ws=cocoa --add-package lazopenglcontext ./Python-for-Lazarus/python4lazarus/python4lazarus_package.lpk
+git clone https://github.com/neurolabusc/Python27-for-Lazarus.git
+lazbuild --build-ide=  --ws=cocoa --add-package lazopenglcontext ./Python27-for-Lazarus/python4lazarus/python4lazarus_package.lpk
 cd MRIcroGL12
 lazbuild  -B --ws=cocoa MRIcroGL.lpi
 ```
@@ -79,8 +79,8 @@ One can also compile for Linux (qt5). Users will need to install [libqt5pas 1.2.
 ```
 git clone https://github.com/rordenlab/MRIcroGL12.git
 git clone https://github.com/neurolabusc/Metal-Demos.git
-git clone https://github.com/Alexey-T/Python-for-Lazarus.git
-lazbuild --build-ide= --add-package lazopenglcontext ./Python-for-Lazarus/python4lazarus/python4lazarus_package.lpk
+git clone https://github.com/neurolabusc/Python27-for-Lazarus.git
+lazbuild --build-ide= --add-package lazopenglcontext ./Python27-for-Lazarus/python4lazarus/python4lazarus_package.lpk
 cd MRIcroGL12
 lazbuild  -B --ws=qt5 MRIcroGL.lpi
 ```

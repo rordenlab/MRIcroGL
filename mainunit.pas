@@ -42,7 +42,7 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
 
 const
-  kVers = '1.2.20201102';
+  kVers = '1.2.20201102+'; //+ numbersOnly for Windows
 type
 
   { TGLForm1 }
@@ -1314,7 +1314,24 @@ end;
 {$ENDIF}
 
 {$IFDEF Darwin}
-{$IFNDEF NEWPY}
+{$IFDEF NEWPY}
+{$ifdef darwin}
+function findMacOSLibPython3x: string;
+var
+ N: integer;
+ S: String;
+begin
+for N:= 5 to 8 do
+begin
+  S:= Format('/Library/Frameworks/Python.framework/Versions/3.%d/lib/libpython3.%d.dylib',
+    [N, N]);
+  if FileExists(S) then exit(S);
+end;
+exit('');
+end;
+{$endif}
+{$ELSE}
+
 function findMacOSLibPython27: string;
 const
      kPth = '/System/Library/Frameworks/Python.framework/Versions/Current/lib/libpython2.7.dylib';
@@ -1407,7 +1424,9 @@ end;
              if length(result) > 0 then exit;
         end;
         {$IFDEF Darwin}
-        {$IFNDEF NEWPY}
+        {$IFDEF NEWPY}
+        result := findMacOSLibPython3x();
+        {$ELSE}
         result := findMacOSLibPython27();
         {$ENDIF}
         if length(result) > 0 then exit;
