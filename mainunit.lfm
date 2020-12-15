@@ -1,12 +1,12 @@
 object GLForm1: TGLForm1
-  Left = 571
-  Height = 595
-  Top = 154
-  Width = 914
+  Left = 461
+  Height = 662
+  Top = 112
+  Width = 916
   AllowDropFiles = True
   Caption = 'MRIcroGL'
-  ClientHeight = 595
-  ClientWidth = 914
+  ClientHeight = 662
+  ClientWidth = 916
   Constraints.MinHeight = 20
   Constraints.MinWidth = 20
   Menu = MainMenu
@@ -20,25 +20,25 @@ object GLForm1: TGLForm1
   LCLVersion = '2.1.0.0'
   object TopPanel: TPanel
     Left = 0
-    Height = 509
+    Height = 576
     Top = 0
-    Width = 914
+    Width = 916
     Align = alClient
-    ClientHeight = 509
-    ClientWidth = 914
+    ClientHeight = 576
+    ClientWidth = 916
     ParentFont = False
     TabOrder = 0
     object ToolPanel: TScrollBox
       Left = 1
-      Height = 507
+      Height = 574
       Top = 1
       Width = 268
       HorzScrollBar.Page = 1
       HorzScrollBar.Visible = False
-      VertScrollBar.Page = 507
+      VertScrollBar.Page = 574
       Align = alLeft
       BorderStyle = bsNone
-      ClientHeight = 507
+      ClientHeight = 574
       ClientWidth = 253
       ParentFont = False
       TabOrder = 0
@@ -1611,13 +1611,13 @@ object GLForm1: TGLForm1
       end
     end
     object ScriptPanel: TPanel
-      Left = 911
-      Height = 507
+      Left = 913
+      Height = 574
       Top = 1
       Width = 2
       Align = alRight
       BevelOuter = bvNone
-      ClientHeight = 507
+      ClientHeight = 574
       ClientWidth = 2
       Constraints.MinWidth = 2
       ParentFont = False
@@ -1625,12 +1625,12 @@ object GLForm1: TGLForm1
       OnDblClick = ScriptPanelDblClick
       object ScriptBox: TGroupBox
         Left = -8
-        Height = 507
+        Height = 574
         Top = 0
         Width = 10
         Align = alClient
         Caption = 'Scripting'
-        ClientHeight = 488
+        ClientHeight = 555
         ClientWidth = 0
         Constraints.MinWidth = 10
         ParentFont = False
@@ -1638,7 +1638,7 @@ object GLForm1: TGLForm1
         OnDblClick = ScriptPanelDblClick
         object ScriptMemo: TMemo
           Left = 0
-          Height = 282
+          Height = 349
           Top = 0
           Width = 0
           Align = alClient
@@ -1662,7 +1662,7 @@ object GLForm1: TGLForm1
         object ScriptOutputMemo: TMemo
           Left = 0
           Height = 200
-          Top = 288
+          Top = 355
           Width = 0
           Align = alBottom
           BorderStyle = bsNone
@@ -1679,7 +1679,7 @@ object GLForm1: TGLForm1
           Cursor = crVSplit
           Left = 0
           Height = 6
-          Top = 282
+          Top = 349
           Width = 0
           Align = alBottom
           ResizeAnchor = akBottom
@@ -1688,13 +1688,13 @@ object GLForm1: TGLForm1
     end
     object LeftSplitter: TSplitter
       Left = 269
-      Height = 507
+      Height = 574
       Top = 1
       Width = 6
     end
     object RightSplitter: TSplitter
-      Left = 905
-      Height = 507
+      Left = 907
+      Height = 574
       Top = 1
       Width = 6
       Align = alRight
@@ -1702,9 +1702,9 @@ object GLForm1: TGLForm1
     end
     object CenterPanel: TPanel
       Left = 275
-      Height = 507
+      Height = 574
       Top = 1
-      Width = 630
+      Width = 632
       Align = alClient
       ParentFont = False
       TabOrder = 4
@@ -1715,8 +1715,8 @@ object GLForm1: TGLForm1
     Cursor = crVSplit
     Left = 0
     Height = 6
-    Top = 509
-    Width = 914
+    Top = 576
+    Width = 916
     Align = alBottom
     MinSize = 4
     ResizeAnchor = akBottom
@@ -1724,15 +1724,15 @@ object GLForm1: TGLForm1
   object BottomPanel: TPanel
     Left = 0
     Height = 80
-    Top = 515
-    Width = 914
+    Top = 582
+    Width = 916
     Align = alBottom
     ClientHeight = 80
-    ClientWidth = 914
+    ClientWidth = 916
     ParentFont = False
     TabOrder = 2
     object ClusterGraphSplitter: TSplitter
-      Left = 828
+      Left = 830
       Height = 78
       Top = 1
       Width = 5
@@ -1741,7 +1741,7 @@ object GLForm1: TGLForm1
       ResizeAnchor = akRight
     end
     object GraphPanel: TPanel
-      Left = 833
+      Left = 835
       Height = 78
       Top = 1
       Width = 80
@@ -1757,18 +1757,18 @@ object GLForm1: TGLForm1
       Left = 1
       Height = 78
       Top = 1
-      Width = 827
+      Width = 829
       Align = alClient
       Caption = 'Layer does not have clusters'
       ClientHeight = 78
-      ClientWidth = 827
+      ClientWidth = 829
       ParentFont = False
       TabOrder = 2
       object ClusterView: TListView
         Left = 1
         Height = 76
         Top = 1
-        Width = 825
+        Width = 827
         Align = alClient
         AutoSort = False
         AutoWidthLastColumn = True
@@ -1817,7 +1817,7 @@ object GLForm1: TGLForm1
           end        
           item
             Caption = 'Structure'
-            Width = 305
+            Width = 307
           end>
         Constraints.MinWidth = 2
         GridLines = True
