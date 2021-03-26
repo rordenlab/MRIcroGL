@@ -114,6 +114,7 @@ begin
             //LabelOrientCube := true;
             LoadFewVolumes := true;
             LandmarkPanel := false;
+            FlipYZ := false;
             ScreenCaptureTransparentBackground := false;
             BitmapZoom := 2;
             FlipLR_Radiological := true;
@@ -132,7 +133,6 @@ begin
     //ClearColor := setRGBA( 255, 255, 255, 255);
     ColorBarPosition := 3;
     SkipPrefWriting := false;
-    FlipYZ := false;
     Quality1to5 := 0;
     MosaicStr := 'H 0.2 S 0.5 0.3 A 0.5; S 0.2 C 0.3 A 0.4';
     if ScreenCaptureTransparentBackground then

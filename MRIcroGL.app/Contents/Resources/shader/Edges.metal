@@ -1,7 +1,7 @@
 //pref
 //brighten|float|0.5|2|3.5
 //surfaceColor|float|0.0|1.0|1.0
-//boundThresh|float|0.0|0.5|0.95
+//boundThresh|float|0.05|0.5|0.95
 //edgeBoundMix|float|0|0.9|1
 //overlayFuzzy|float|0.01|0.5|1
 //overlayDepth|float|0.0|0.15|0.99
@@ -236,6 +236,7 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 	samplePos += deltaDir * ran;
 	float3 defaultDiffuse = float3(0.5, 0.5, 0.5);
 	float boundAcc = 0.0;
+	const float kEarlyTermination = 0.95;
 	while (samplePos.a <= len) {
 		#ifdef CUBIC
 		colorSample = texture3Df(volTexture, samplePos.xyz);
@@ -251,25 +252,35 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 			gradSample = (gradTexture.sample(textureSampler, samplePos.xyz));
 			#endif	
 			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
-			if (gradSample.a > boundThresh) {
-				float lightNormDot = dot(gradSample.rgb, dir); //with respect to viewer
-				float boundAlpha = pow(1.0-abs(lightNormDot),6.0);
-				boundAlpha = 1.0-pow((1.0 - boundAlpha), opacityCorrection);
-				boundAcc += (1.0 - boundAcc) * boundAlpha;
-			}
-			//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
 			if (gradSample.a < prevGrad.a)
 				gradSample.rgb = prevGrad.rgb;
 			prevGrad = gradSample;
 			float3 n = normalize(normalMatrix * gradSample.rgb) * 0.5 + 0.5;
 			float3 d = (matCapTexture.sample(matCapSampler, n.xy)).rgb;
-			float3 surf = mix(defaultDiffuse, colorSample.rgb, surfaceColor);
-			colorSample.rgb = d * surf * brighten * colorSample.a;
+			colorSample.rgb = mix(defaultDiffuse, colorSample.rgb, surfaceColor);
+			colorSample.rgb *= d * brighten * colorSample.a;
 			colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
+			if (colAcc.a > kEarlyTermination) break;
 		}
 		samplePos += deltaDir;
 	} //while samplePos.a < len
 	colAcc.a = colAcc.a/0.95;
+	//look for edges below surface
+	while (samplePos.a <= len) {
+			#ifdef CUBIC
+			gradSample = texture3Df(gradTexture, samplePos.xyz);
+			#else
+			gradSample = (gradTexture.sample(textureSampler, samplePos.xyz));
+			#endif	
+			samplePos += deltaDir;
+			if (gradSample.a <= boundThresh) continue;
+			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
+			float lightNormDot = dot(gradSample.rgb, dir); //with respect to viewer
+			float boundAlpha = pow(1.0-abs(lightNormDot),6.0);
+			boundAlpha = 1.0-pow((1.0 - boundAlpha), opacityCorrection);
+			boundAcc += (1.0 - boundAcc) * boundAlpha;
+			if (boundAcc > kEarlyTermination) break;
+	}
 	if ((edgeBoundMix > 0.0) && ((colAcc.a + boundAcc) > 0.0)) {
 		colAcc.rgb = mix(colAcc.rgb, float3(0.0,0.0,0.0), (edgeBoundMix * boundAcc)/(colAcc.a+(edgeBoundMix * boundAcc)) );
 		colAcc.a = max(colAcc.a, boundAcc);

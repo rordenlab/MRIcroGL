@@ -1,7 +1,7 @@
 object GLForm1: TGLForm1
-  Left = 461
+  Left = 364
   Height = 662
-  Top = 112
+  Top = 50
   Width = 916
   AllowDropFiles = True
   Caption = 'MRIcroGL'
@@ -10,11 +10,14 @@ object GLForm1: TGLForm1
   Constraints.MinHeight = 20
   Constraints.MinWidth = 20
   Menu = MainMenu
+  OnChangeBounds = FormChangeBounds
   OnClose = FormClose
   OnCloseQuery = FormCloseQuery
   OnCreate = FormCreate
   OnDestroy = FormDestroy
   OnDropFiles = FormDropFiles
+  OnResize = FormResize
+  OnShortCut = FormShortCut
   OnShow = FormShow
   Position = poScreenCenter
   LCLVersion = '2.1.0.0'

@@ -812,7 +812,7 @@ kFragBase = '#version 330'
 +#10'uniform sampler3D intensityOverlay, gradientOverlay;'
 +#10'uniform vec3 lightPosition, rayDir;'
 +#10'uniform vec4 clipPlane;'
-+#10'uniform float clipThick;'
++#10'uniform float clipThick = 1.0;'
 +#10'uniform int overlays = 0;'
 +#10'uniform float backAlpha = 0.5;'
 +#10'vec3 GetBackPosition (vec3 startPosition) {'
@@ -1097,7 +1097,7 @@ kFragBase = '#version 120'
 +#10'uniform sampler3D intensityOverlay, gradientOverlay;'
 +#10'uniform vec3 lightPosition, rayDir;'
 +#10'uniform vec4 clipPlane;'
-+#10'uniform float clipThick;'
++#10'uniform float clipThick = 1.0;'
 +#10'uniform int overlays = 0;'
 +#10'uniform float backAlpha = 0.5;'
 +#10'uniform vec3 textureSz = vec3(3.0, 2.0, 1.0);'
@@ -1795,16 +1795,18 @@ end;//linear interpolation
 
 function ComputeStepSize (Quality1to5, Slices: integer): single;
 var
-  i : integer;
+  q : integer;
   f: single;
 begin
   //if (i = 0) then i := 2; //dynamic (1=0.4, 2=0.55 ... 5=1.0
-  i := Quality1to5 - 1;
-  i := max(i,0);
-  i := min(i,4); //quality 5 is same as 4 but adds cubic sampling
-  f := lerp(slices*0.4,slices*1.0, i/4); //0.4..1.0
+  q := Quality1to5 - 1;
+  q := max(q,0);
+  q := min(q,4); //quality 5 is same as 4 but adds cubic sampling
+  f := lerp(slices*0.4,slices*1.0, q/4); //0.4..1.0
+  //writeln(format('%g %g %g -> %g', [slices*0.4, slices*1.0, q/4.0, f]));
   if f < 10 then
     f := 10;
+  //writeln(format('%d %d-> %g', [Quality1to5, Slices, 1/f]));
   result := 1/f;
 end;
 (*function ComputeStepSize (Quality1to10, Slices: integer): single;
@@ -2356,6 +2358,16 @@ begin
 end;
 {$ENDIF}
 
+(*procedure printMat(m: TMat4);
+begin
+  printf(format('m = [%g %g %g %g,  %g %g %g %g,  %g %g %g %g,  %g %g %g %g]', [
+   m.m[0,0], m.m[0,1], m.m[0,2], m.m[0,3],
+   m.m[1,0], m.m[1,1], m.m[1,2], m.m[1,3],
+   m.m[2,0], m.m[2,1], m.m[2,2], m.m[2,3],
+   m.m[3,0], m.m[3,1], m.m[3,2], m.m[3,3]
+  ]));
+end;*)
+
 procedure TGPUVolume.Paint(var vol: TNIfTI);
 var
   //modelViewProjectionMatrixInverse,
@@ -2424,7 +2436,6 @@ begin
   {$ELSE}
   modelMatrix := TMat4.Identity;
   modelMatrix *= TMat4.Translate(0, 0, -fDistance);
-
   modelMatrix *= TMat4.RotateX(-DegToRad(90-fElevation));
   modelMatrix *= TMat4.RotateZ(DegToRad(fAzimuth));
   modelMatrix *= TMat4.RotateX(DegToRad(fPitch));
@@ -2478,6 +2489,9 @@ begin
   rayDir.w := 0;
   rayDir := rayDir.Normalize;
   addFuzz(rayDir);
+  //printf(format('%g %g %g', [vol.Scale.X, vol.Scale.Y, vol.Scale.Z]));
+  //printMat(modelMatrix);
+  //printf(format('a %d e %d = [%g %g %g]', [fAzimuth, fElevation, rayDir.x, rayDir.y, rayDir.z]));
   glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, @modelViewProjectionMatrix);
   //x modelViewProjectionMatrixInverse := modelViewProjectionMatrix.Inverse;
   //x glUniformMatrix4fv(imvLoc, 1, GL_FALSE, @modelViewProjectionMatrixInverse);

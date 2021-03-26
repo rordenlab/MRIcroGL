@@ -1260,6 +1260,16 @@ begin
   result.Z := voxelCenter(result.Z, fDim.Z);
 end;
 
+(*procedure ReportMat(s: string; m:TMat4);
+begin
+  printf(format('%s = [%g %g %g %g; %g %g %g %g; %g %g %g %g; %g %g %g %g]', [s,
+    m[0,0], m[0,1], m[0,2], m[0,3],
+    m[1,0], m[1,1], m[1,2], m[1,3],
+    m[2,0], m[2,1], m[2,2], m[2,3],
+    m[3,0], m[3,1], m[3,2], m[3,3]
+    ]));
+end; *)
+
 function TNIfTI.MMFrac(MM: TVec3): TVec3;
 var
    lV: TVec4;
@@ -1271,7 +1281,10 @@ begin
      result.X := (lV[0]+0.5)/fDim.X;
      result.Y := (lV[1]+0.5)/fDim.Y;
      result.Z := (lV[2]+0.5)/fDim.Z;
-
+     //printf(format('dim = [%d %d %d]', [fDim.X,fDim.Y,fDim.Z]));
+     //printf(format('mm = [%g %g %g 1]', [MM.X,MM.Y,MM.Z]));
+     //reportMat('inv', InvMat);
+     //printf(format('frac = [%g %g %g]', [result.X,result.Y,result.Z]));
      //result.X := (lV[0]+1)/fDim.X;
      //result.Y := (lV[1]+1)/fDim.Y;
      //result.Z := (lV[2]+1)/fDim.Z;
@@ -1565,6 +1578,16 @@ begin
 end;
 {$ENDIF} //CPU gradients
 
+procedure printMat(s: string; m: TMat4);
+begin
+  printf(format('%s = [%g %g %g %g,  %g %g %g %g,  %g %g %g %g,  %g %g %g %g]', [s,
+   m.m[0,0], m.m[0,1], m.m[0,2], m.m[0,3],
+   m.m[1,0], m.m[1,1], m.m[1,2], m.m[1,3],
+   m.m[2,0], m.m[2,1], m.m[2,2], m.m[2,3],
+   m.m[3,0], m.m[3,1], m.m[3,2], m.m[3,3]
+  ]));
+end;
+
 function EstimateReorient(dim : TVec3i; R: TMat4; out residualR: TMat4; out perm : TVec3i): boolean;
 //compute dimension permutations and flips to reorient volume to standard space
 //From Xiangrui Li's BSD 2-Clause Licensed code
@@ -1604,14 +1627,18 @@ begin
   end;
   //third column = z:constrained as x+y+z = 1+2+3 = 6
   ixyz.z := 6 - ixyz.y - ixyz.x;
+  //printf(format('perm ixyz %d %d %d', [ixyz.x, ixyz.y, ixyz.z]));
   perm.v[ixyz.x-1] := 1;
   perm.v[ixyz.y-1] := 2;
   perm.v[ixyz.z-1] := 3;
+  //printf(format('perm v %d %d %d', [perm.v[0], perm.v[1], perm.v[2]]));
   //sort columns  R(:,1:3) = R(:,perm);
   rotM := R;
+  //printMat('->inR', rotM);
   for i := 0 to 3 do
       for j := 0 to 2 do
           R[i,j] := rotM[i,perm.v[j]-1];
+  //printMat('->R', R);
   //compute if dimension is flipped
   if R[0,0] < 0 then flp.x := 1 else flp.x := 0;
   if R[1,1] < 0 then flp.y := 1 else flp.y := 0;
@@ -1626,9 +1653,13 @@ begin
   rotM[1,3] := ((dim.v[perm.y-1])-1) * flp.y;
   rotM[2,3] := ((dim.v[perm.z-1])-1) * flp.z;
   residualR := rotM.Inverse;
+  //printMat('R', residualR);
+  //printMat('inverse', residualR);
   residualR *= R;
+  //printMat('residual', residualR);
   for i := 0 to 2 do
       if (flp.v[i] <> 0) then perm.v[i] := -perm.v[i];
+  //printf(format('%d %d %d', [perm.x, perm.y, perm.z]));
 end;
 
 function SForm2Mat(hdr: TNIFTIhdr): TMat4;
@@ -7973,7 +8004,11 @@ begin
     SetDisplayMinMax();
     exit;
   end;
-  {$IFDEF TIMER}printf(format('Reorient time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+  {$IFDEF TIMER}
+  i := MilliSecondsBetween(Now,startTime);
+  if (i > 5) then
+     printf(format('Reorient time %d',[i]));
+  {$ENDIF}
   //printf(format('-->> %d', [length(fRawVolBytes)]));  //saveRotat
   fMat := SForm2Mat(fHdr);
   fInvMat := fMat.inverse;

@@ -1,7 +1,7 @@
 //pref
 brighten|float|0.5|2|3.5
 surfaceColor|float|0.0|1.0|1.0
-boundThresh|float|0.0|0.5|0.95
+boundThresh|float|0.05|0.5|0.95
 edgeBoundMix|float|0|0.9|1
 overlayFuzzy|float|0.01|0.5|1
 overlayDepth|float|0.0|0.15|0.99
@@ -70,35 +70,40 @@ void main() {
 	samplePos += deltaDir * ran;
 	float boundAcc = 0.0;
 	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
+	const float kEarlyTermination = 0.95;
 	while (samplePos.a <= len) {
-		gradSample = texture3Df(gradientVol,samplePos.xyz);
+		colorSample = texture3Df(intensityVol,samplePos.xyz);
 		samplePos += deltaDir;
-		//next: a hack. e.g. T1 deep white matter might be saturated, bright but no gradient
-		//  the stepSizeX2 previously attempts to make clip planes opque to hide this
-		if (gradSample.a == 0.0) continue;
-		gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
-		//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
-		//if (gradSample.a < prevGrad.a)
-		//	gradSample.rgb = prevGrad.rgb;
-		//prevGrad = gradSample;
-		if (gradSample.a > boundThresh) {
-			float lightNormDot = dot(gradSample.rgb, dir); //with respect to viewer
-			float boundAlpha = pow(1.0-abs(lightNormDot),6.0);
-			boundAlpha = 1.0-pow((1.0 - boundAlpha), opacityCorrection);
-			boundAcc += (1.0 - boundAcc) * boundAlpha;
-		}
-		if (colAcc.a > 0.95) continue;
-		colorSample = texture3Df(intensityVol,samplePos.xyz-deltaDir.xyz);
-		colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
+		if (colorSample.a < 0.001) continue;
 		bgNearest = min(samplePos.a,bgNearest);
+		colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
+		gradSample = texture3Df(gradientVol,samplePos.xyz);
+		gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
+		if (gradSample.a < prevGrad.a)
+			gradSample.rgb = prevGrad.rgb;
+		prevGrad = gradSample;
 		vec3 n = normalize(normalize(NormalMatrix * gradSample.rgb));
 		vec3 d = texture2D(matcap2D, n.xy * 0.5 + 0.5).rgb;
 		colorSample.rgb = mix(defaultDiffuse, colorSample.rgb, surfaceColor); //0.67 as default Brighten is 1.5
-			
 		colorSample.rgb *= d * brighten * colorSample.a;
 		colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
+		if (colAcc.a > kEarlyTermination) break;		
+	}	
+	colAcc.a = colAcc.a/kEarlyTermination;
+	//look for edges below surface
+	while (samplePos.a <= len) {
+		gradSample = texture3Df(gradientVol,samplePos.xyz);
+		samplePos += deltaDir;
+		if (gradSample.a <= boundThresh) continue;
+		gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
+        float lightNormDot = dot(gradSample.rgb, dir); //with respect to viewer
+        float boundAlpha = pow(1.0-abs(lightNormDot),6.0);
+        boundAlpha = 1.0-pow((1.0 - boundAlpha), opacityCorrection);
+        boundAcc += (1.0 - boundAcc) * boundAlpha;
+        if (boundAcc > kEarlyTermination) break;
 	} //while samplePos.a < len
-	colAcc.a = colAcc.a/0.95;
+	boundAcc = boundAcc/kEarlyTermination;
+
 	
 	if ((edgeBoundMix > 0.0) && ((colAcc.a + boundAcc) > 0.0)) {
 		colAcc.rgb = mix(colAcc.rgb, vec3(0.0,0.0,0.0), (edgeBoundMix * boundAcc)/(colAcc.a+(edgeBoundMix * boundAcc)) );

@@ -39,10 +39,10 @@ uses
   lcltype, GraphType, Graphics, dcm_load, crop, intensityfilter,
   LCLIntf, slices2D, StdCtrls, SimdUtils, Classes, SysUtils, Forms, Controls,clipbrd,
   Dialogs, Menus, ExtCtrls, CheckLst, ComCtrls, Spin, Types, fileutil, ulandmarks, nifti_types,
-  nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath;
+  nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath, LMessages;
 
 const
-  kVers = '1.2.20201102+'; //+ numbersOnly for Windows
+  kVers = '1.2.20210317'; //+ numbersOnly for Windows
 type
 
   { TGLForm1 }
@@ -354,6 +354,9 @@ type
     procedure AfniQMenuClick(Sender: TObject);
     procedure CenterPanelClick(Sender: TObject);
     procedure DrawIntensityFilterMenuClick(Sender: TObject);
+    procedure FormChangeBounds(Sender: TObject);
+    procedure FormResize(Sender: TObject);
+    procedure FormShortCut(var Msg: TLMKey; var Handled: Boolean);
     function HasLabelLayer: boolean;
     procedure ClusterSaveClick(Sender: TObject);
     procedure ClusterViewColumnClick(Sender: TObject; Column: TListColumn);
@@ -976,6 +979,11 @@ begin
   thresh := q2VoxelIntensity(v.afnis[i].FDRcurv, q, v.afnis[i].maxAbsVal, true);
   LayerChange(LayerList.ItemIndex, -1, -1, thresh, thresh);
 end;
+{$ELSE}
+begin
+     showmessage('Not compiled with AFNI support');
+end;
+{$ENDIF}
 
 procedure TGLForm1.CenterPanelClick(Sender: TObject);
 begin
@@ -987,12 +995,25 @@ begin
   IntensityFilterForm.Show;
 end;
 
-
-{$ELSE}
+procedure TGLForm1.FormChangeBounds(Sender: TObject);
 begin
-     showmessage('Not compiled with AFNI support');
+   //LayerBox.Caption := inttostr(random(888));
+  {$IFDEF LCLCocoa} {$IFNDEF METALAPI}
+  ViewGPU1.Invalidate;
+  {$ENDIF}{$ENDIF}
 end;
-{$ENDIF}
+
+procedure TGLForm1.FormResize(Sender: TObject);
+begin
+  //LayerBox.Caption := inttostr(random(888));
+end;
+
+procedure TGLForm1.FormShortCut(var Msg: TLMKey; var Handled: Boolean);
+begin
+
+end;
+
+
 
 function CompareFloatText(const S1, S2: string): integer;
 begin
@@ -7359,6 +7380,8 @@ begin
   Vol1.Azimuth := 110;
   Vol1.Elevation := 30;
   Vol1.Pitch := 0;
+  if gPrefs.FlipYZ then
+     Vol1.Pitch := -90;
   ClipDepthTrack.Position := 0;
   ClipAziTrack.Position := 180;
   ClipElevTrack.Position := 0;
@@ -9469,6 +9492,8 @@ begin
   ViewGPU1.ReleaseContext;
   Vol1.SetGradientMode(gPrefs.GradientMode);
   Vol1.Prepare(shaderName);
+  if gPrefs.FlipYZ then
+     Vol1.Pitch := -90;
   setShaderSliders;
   {$ENDIF} //if OpenGL
   vols := TNIfTIs.Create(s,  gPrefs.ClearColor, gPrefs.LoadFewVolumes, gPrefs.MaxTexMb, isOK); //to do: warning regarding multi-volume files?

@@ -1,76 +1,67 @@
 //pref
-ambient|float|0.0|1.0|1|Illuminate surface regardless of lighting
-diffuse|float|0.0|0.2|1|Illuminate surface based on light position
-specular|float|0.0|0.2|1|Glint from shiny surfaces
-shininess|float|0.01|10.0|30|Specular reflections can be rough or precise
-overlayFuzzy|float|0.01|0.5|1|Do overlay layers have blurry surfaces?
-overlayDepth|float|0.0|0.3|0.8|Can we see overlay layers deep beneath the background image?
-overlayClip|float|0|0|1|Does clipping also influence overlay layers?
+showGradient|float|0|0|1|Display surface angle
+doPoor|float|0|1|1|Poor quality reveals rendering strategy
+doJitter|float|0|0|1|Jitter hides wood-grain artifacts
+showStartEnd|float|0|0.5|1|Show background box
+
 //frag
-uniform float ambient = 1.0;
-uniform float diffuse = 0.3;
-uniform float specular = 0.25;
-uniform float shininess = 10.0;
-uniform float overlayFuzzy = 0.5;
-uniform float overlayDepth = 0.3;
-uniform float overlayClip = 0.0;
+uniform float showGradient = 0.0;
+uniform float doPoor = 0.0;
+uniform float doJitter = 0.0;
+uniform float showStartEnd = 0.2;
 
 void main() {
-	vec3 start = TexCoord1.xyz;
+	float ambient = 1.0;
+	float diffuse = 0.3;
+	float specular = 0.25;
+	float shininess = 10.0;
+    vec3 start = TexCoord1.xyz;
+gl_FragColor = vec4(start, 1.0); return;
 	vec3 backPosition = GetBackPosition(start);
 	vec3 dir = backPosition - start;
+	float ran = 0.0;
+	if (doJitter > 0.5)
+		ran = fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453);
 	float len = length(dir);
 	dir = normalize(dir);
-	vec4 deltaDir = vec4(dir.xyz * stepSize, stepSize);
+	float stepSizeX = stepSize;
+	if (doPoor > 0.5) stepSizeX *= 10.0;
+	vec4 deltaDir = vec4(dir.xyz * stepSizeX, stepSizeX);
 	vec4 gradSample, colorSample;
 	float bgNearest = len; //assume no hit
 	vec4 colAcc = vec4(0.0,0.0,0.0,0.0);
 	vec4 prevGrad = vec4(0.0,0.0,0.0,0.0);
-	vec4 samplePos;
 	//background pass
-	float noClipLen = len;
-	samplePos = vec4(start.xyz +deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)), 0.0);
+	vec4 samplePos = vec4(start.xyz, 0.0);
+	samplePos += deltaDir * ran;
 	vec4 clipPos = applyClip(dir, samplePos, len);
-	float stepSizeX2 = samplePos.a + (stepSize * 2.0);
-	//fast pass - optional
-	fastPass (len, dir, intensityVol, samplePos);
 	#if ( __VERSION__ > 300 )
-	if ((samplePos.a > len) && ( overlays < 1 )) { //no hit
+	if ( clipPos.a > len ) {
 		FragColor = colAcc;
 		return;
 	}
 	#else
-	if ((textureSz.x < 1) || ((samplePos.a > len) && ( overlays < 1 ))) { //no hit
+	if ((textureSz.x < 1) || ( clipPos.a > len )) {
 		gl_FragColor = colAcc;
-		return;		
-	}	
+		return;
+	}
 	#endif
-	if (samplePos.a < clipPos.a)
-		samplePos = clipPos;
-	//end fastpass - optional
+	//	float ran = fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453);
+	
 	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
-	vec3 lightPositionN = normalize(lightPosition);
+	//
+	if (doPoor <= 0.5)
+		fastPass (len, dir, intensityVol, samplePos);
+	//if (samplePos.a < clipPos.a)
+	//	samplePos = clipPos;
+		
 	while (samplePos.a <= len) {
 		colorSample = texture3Df(intensityVol,samplePos.xyz);
-		colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);
-		if (colorSample.a > 0.01) {
+		colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSizeX/sliceSize);
+		if (colorSample.a > 0.0) {
+			if (showGradient > 0.5)
+				colorSample.rgb = abs(texture3Df(gradientVol,samplePos.xyz).rgb *2.0 - 1.0);
 			bgNearest = min(samplePos.a,bgNearest);
-			if (samplePos.a > stepSizeX2) {
-				vec3 a = colorSample.rgb * ambient;
-				gradSample= texture3Df(gradientVol,samplePos.xyz);
-				gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
-				//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
-				if (gradSample.a < prevGrad.a)
-					gradSample.rgb = prevGrad.rgb;
-				prevGrad = gradSample;
-				
-				float lightNormDot = dot(gradSample.rgb, lightPositionN);
-				vec3 d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;
-				float s =   specular * pow(max(dot(reflect(lightPositionN, gradSample.rgb), dir), 0.0), shininess);
-				colorSample.rgb = a + d + s;
-
-			} else
-				colorSample.a = clamp(colorSample.a*3.0,0.0, 1.0);
 			colorSample.rgb *= colorSample.a;
 			colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
 			if ( colAcc.a > 0.95 )
@@ -79,7 +70,17 @@ void main() {
 		samplePos += deltaDir;
 	} //while samplePos.a < len
 	colAcc.a = colAcc.a/0.95;
-	colAcc.a *= backAlpha;	
+	colAcc.a *= backAlpha;
+	if (samplePos.a > (len +0.5)) {
+		//	
+	} else if (showStartEnd < 0.33) {
+		colAcc.rgb = mix(clipPos.xyz, colAcc.rgb, colAcc.a);
+		colAcc.a = 1.0;
+	} else if (showStartEnd < 0.66) {
+		colAcc.rgb = mix(clipPos.xyz + (dir * (len - clipPos.a)), colAcc.rgb, colAcc.a);
+		//colAcc.rgb = mix(clipPos.xyz + (dir * len), colAcc.rgb, colAcc.a);
+		colAcc.a = 1.0;
+	}			
 	if ( overlays < 1 ) {
 		#if ( __VERSION__ > 300 )
 		FragColor = colAcc;
@@ -91,15 +92,11 @@ void main() {
 	//overlay pass
 	vec4 overAcc = vec4(0.0,0.0,0.0,0.0);
 	prevGrad = vec4(0.0,0.0,0.0,0.0);
-	if (overlayClip > 0)
-		samplePos = clipPos;
-	else {
-		len = noClipLen;
-		samplePos = vec4(start.xyz +deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)), 0.0);
-	}
+	samplePos = clipPos;
 	//fast pass - optional
 	clipPos = samplePos;
-	fastPass (len, dir, intensityOverlay, samplePos);
+	if (doPoor <= 0.5)
+		fastPass (len, dir, intensityOverlay, samplePos);
 	if (samplePos.a < clipPos.a)
 		samplePos = clipPos;
 	//end fastpass - optional
@@ -109,8 +106,7 @@ void main() {
 		if (colorSample.a > 0.00) {
 			if (overAcc.a < 0.3)
 				overFarthest = samplePos.a;
-			colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);
-			colorSample.a *=  overlayFuzzy;
+			colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSizeX/sliceSize);
 			vec3 a = colorSample.rgb * ambient;
 			float s =  0;
 			vec3 d = vec3(0.0, 0.0, 0.0);
@@ -121,9 +117,9 @@ void main() {
 			if (gradSample.a < prevGrad.a)
 				gradSample.rgb = prevGrad.rgb;
 			prevGrad = gradSample;
-			float lightNormDot = dot(gradSample.rgb, lightPositionN);
+			float lightNormDot = dot(gradSample.rgb, lightPosition);
 			d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;
-			s =   specular * pow(max(dot(reflect(lightPositionN, gradSample.rgb), dir), 0.0), shininess);
+			s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
 
 			colorSample.rgb = a + d + s;
 			colorSample.rgb *= colorSample.a;
@@ -139,13 +135,14 @@ void main() {
 		float overMix = overAcc.a;
 		if (((overFarthest) > bgNearest) && (colAcc.a > 0.0)) { //background (partially) occludes overlay
 			float dx = (overFarthest - bgNearest)/1.73;
+			float overlayDepth = 0.3;
 			dx = colAcc.a * pow(dx, overlayDepth);
 			overMix *= 1.0 - dx;
 		}
 		colAcc.rgb = mix(colAcc.rgb, overAcc.rgb, overMix);
 		colAcc.a = max(colAcc.a, overAcc.a);
 	//}
-	#if ( __VERSION__ > 300 )
+    #if ( __VERSION__ > 300 )
 	FragColor = colAcc;
 	#else
 	gl_FragColor = colAcc;
