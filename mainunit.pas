@@ -42,7 +42,7 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath, LMessages;
 
 const
-  kVers = '1.2.20210317'; //+ numbersOnly for Windows
+  kVers = '1.2.20210317';
 type
 
   { TGLForm1 }
