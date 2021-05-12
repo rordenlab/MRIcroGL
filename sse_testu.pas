@@ -1,4 +1,4 @@
-unit sse;
+unit sse_testu;
 
 {$mode delphi}
 {$H+}
@@ -35,12 +35,12 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 interface
 
 uses
-  Classes, SysUtils, SimdUtils;
+  Classes, SysUtils;
 
-(*type
+type
     TUInt8s = array of uint8;
     TInt16s = array of int16;
-    TFloat32s = array of single;*)
+    TFloat32s = array of single;
 
 {$IFDEF CPUX86_64}
 	{$DEFINE USE_SSE}
@@ -61,7 +61,7 @@ const
   Negate: LongWord = $80008000;
   Single_Negate: Single = 32768.0;
 asm
-//volatile registers XMM0..XMM5, rax,rcx,rdx,r8,r9,r10,r11
+//volatile registers XMM0..XMM5, rax,rcx,rdx,r8,r9,r10,r11 
 //Unix rdi,rsi,rdx,r8,r9,r10,r11
 //Windows rcx,rdx,r8,r9
 {unix, win
@@ -70,13 +70,13 @@ asm
    rdi , r8            = pointer to ints
    rsi , r9            = pointer to byts
    rdx , [rsp+28]->rdx = skipvx
-   rcx,	 [rsp+30]->rcx = nvx
+   rcx,	 [rsp+30]->rcx = nvx     
    xmm0 = min
    xmm1 = initially max, later scale (255.0 / (mx-mn))
    xmm2 = zeros
    xmm3 = negate
    xmm4 = temp0
-   xmm5 = temp1
+   xmm5 = temp1 
 }
  {$ifdef win64}
   mov rdx, [rsp+$28]; //skipvx
@@ -91,7 +91,7 @@ asm
   add     r8,  rdx //skip ahead by skipvx bytes on the input pointer
   pxor xmm4, xmm4 //all int zeros
   movss   xmm4, [rip + single_255] //255
-  subss   xmm1, xmm0  // xmm1 now contains mx-mn = range
+  subss   xmm1, xmm0  // xmm1 now contains mx-mn = range 
   divss   xmm4, xmm1  //compute scale factor
   movdqa xmm1, xmm4 // xmm1, now contains the scale factor
   //
@@ -104,11 +104,11 @@ asm
   //broadcast
   shufps  xmm0, xmm0, $00 //mn (bias)
   shufps  xmm1, xmm1, $00 //scale
-  shufps  xmm3, xmm3, $00 //negate
-  //loop
+  shufps  xmm3, xmm3, $00 //negate  
+  //loop 
   @processloop:
   prefetchnta [r8+64] //cache input
-  prefetcht0 [r9+32] //cache output 8*uint8
+  prefetcht0 [r9+32] //cache output 8*uint8     
   //load 8*int16
   movdqa xmm4, [r8] //move 8*int16 to xmm4
   paddw xmm4, xmm3 //add 0x8000
@@ -123,11 +123,11 @@ asm
   //transform 4*float32
   subps   xmm5, xmm0 //subtract mn (bias)
   mulps   xmm5, xmm1 //multiply by scaling factor
-  //convert 8*float32->8*uint8
+  //convert 8*float32->8*uint8 
   cvtps2dq xmm4, xmm4 //float32->int32
   cvtps2dq xmm5, xmm5 //float32->int32
   packssdw xmm4, xmm5 //int32->int16 mm_packs_epi32
-  packuswb xmm4, xmm4 //int16->uint8 mm_packus_epi16 packed signed 16-bit integers from a and b to packed 8-bit integers
+  packuswb xmm4, xmm4 //int16->uint8 mm_packus_epi16 packed signed 16-bit integers from a and b to packed 8-bit integers 
   movq [r9],xmm4 //store
   add r9, 8  //r9= output 8*uint8
   add r8, 16  //r8 = input 8*uint16
@@ -137,7 +137,7 @@ asm
 end;
 
  {$IFNDEF WIN64}
-procedure flt2byteX(flts: TFloat32s; byts: TUInt8s; lMin, lMax: single; skipVx: int64); assembler; nostackframe;
+procedure flt2byte(flts: TFloat32s; byts: TUInt8s; lMin, lMax: single; skipVx: int64); assembler; nostackframe;
 const
   Single_255: Single = 255.0;
 asm
@@ -440,7 +440,7 @@ asm
   POP     RBP
 end;
 {$ELSE}
-procedure flt2byteX(flts: TFloat32s; byts: TUInt8s; lMin, lMax: single; skipVx: int64); assembler; nostackframe;
+procedure flt2byte(flts: TFloat32s; byts: TUInt8s; lMin, lMax: single; skipVx: int64); assembler; nostackframe;
 const
   Single_255: Single = 255.0;
 asm
@@ -758,8 +758,8 @@ var
    slope: single;
 begin
   slope := abs(lMax - lMin);
-  if slope > 0 then
-     slope := 255.0/slope;
+  if (slope > 0) then
+    slope := 255.0/slope;
   for i := 0 to (nVx - 1) do begin
     if (ints[skipVx+i] >= lMax) then
        byts[i] := 255
@@ -776,7 +776,7 @@ procedure int2byte(lMin, lMax: single; ints: TInt16s; byts: TUInt8s; skipVx: int
 const
   kAlign = 16; //SSE expects values aligned to 16-byte boundaries
   kInBytes = 2;
-  kVectorSize = 8; //SSE will retire 8 values at a time
+  kVectorSize = 8; //SSE will retire 8 values at a time 
 var
    inAlign: PtrUint;
    head: int64 = 0;
@@ -790,7 +790,7 @@ begin
 	inAlign := PtrUint(@byts[0]) mod kAlign;
 	if (lMin >= lMax) or (inAlign <> 0) or (nVox < (kVectorSize * 3)) then
 		SSE := false;
-	if (SSE) then begin //check input alignment, scalar required items to align
+	if (SSE) then begin //check input alignment, scalar required items to align 
 		inAlign := PtrUint(@ints[skipVx]) mod kAlign;
 		if (inAlign <> 0) and ((inAlign mod kInBytes) <> 0) then
 			SSE := false
@@ -812,18 +812,18 @@ begin
 		int2byteSSE(lMin,lMax,@ints[0],@byts[head],  skipVx, nVox)
 	else
 	{$ENDIF}
-	int2byteSISD(lMin,lMax, @ints[0],@byts[0], skipVx, length(byts));
+		int2byteSISD(lMin,lMax, @ints[0],@byts[0], skipVx, length(byts));	
 end;
 
 {$IFNDEF USE_SSE}
-procedure flt2byteX(flts: TFloat32s; byts: TUInt8s; lMin, lMax: single; skipVx: int64);
+procedure flt2byte(flts: TFloat32s; byts: TUInt8s; lMin, lMax: single; skipVx: int64);
 var
    i, nVx: int64;
    slope: single;
 begin
   slope := abs(lMax - lMin);
-  if slope > 0 then
-     slope := 255.0/slope;
+  if (slope > 0) then
+  	slope := 255.0/slope;
   nVx :=  length(byts);
   for i := 0 to (nVx - 1) do begin
     if (flts[skipVx+i] >= lMax) then
@@ -835,12 +835,5 @@ begin
   end;
 end;
 {$ENDIF}
-procedure flt2byte(flts: TFloat32s; byts: TUInt8s; lMin, lMax: single; skipVx: int64);
-begin
-     if (abs(lMin-lMax) = 0.0) then
-        flt2byteX(flts, byts, lMin - 1E-4, lMax, skipVx)
-     else
-         flt2byteX(flts, byts, lMin, lMax, skipVx);
-end;
-end.
 
+end.

@@ -1582,7 +1582,11 @@ begin
 	   SetLengthP (gradData, Dim.X*Dim.Y*Dim.Z);
        {$ENDIF}
        glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Dim.X, Dim.Y, Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@gradData[0]);
-       gradData := nil;
+       {$IFDEF DYNRGBA}
+	   gradData := nil;
+       {$ELSE}
+	   Freemem(gradData);
+       {$ENDIF}
        CreateGradientVolumeGPU (Dim.X, Dim.Y, Dim.Z, overlayIntensityTexture3D, overlayGradientTexture3D);
     end else begin
     {$ENDIF}
@@ -1590,7 +1594,11 @@ begin
       //Vol.CreateGradientVolume (volRGBA, Dim.X, Dim.Y, Dim.Z, gradData);
       CreateGradientVolumeX (TUInt8s(volRGBA), Dim.X, Dim.Y, Dim.Z, 1, gradData);
       glTexImage3D(GL_TEXTURE_3D, 0,GL_RGBA, Dim.X, Dim.Y, Dim.Z, 0, GL_RGBA, GL_UNSIGNED_BYTE,@gradData[0]);
-      gradData := nil;
+      {$IFDEF DYNRGBA}
+          gradData := nil;
+      {$ELSE}
+          Freemem(gradData);
+      {$ENDIF}
       //Form1.Caption := 'CPU gradients '+inttostr(MilliSecondsBetween(Now,startTime))+' ms ';
     {$IFDEF GPUGRADIENTS}
     end;

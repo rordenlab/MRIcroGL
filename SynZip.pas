@@ -164,8 +164,9 @@ unit SynZip;
 }
 {$ifdef DARWIN}
    {$ifdef CPUAARCH64}
-   //Apple's provided zlib just as fast as CloudFlare
+   //Apple's provided zlib just as fast as CloudFlare (as of 2021)
    //{$define USEZLIBSSE}
+
    {$ELSE}
    {$define USEZLIBSSE}
    {$ENDIF}
@@ -5075,7 +5076,7 @@ end;
      //{$L .\aarch64-darwin\crc32_simd.o}
      {$L .\aarch64-darwin\deflate.o}
      {$L .\aarch64-darwin\inffast.o}
-     //{$L .\aarch64-darwin\inffast_chunk.o}
+     {$L .\aarch64-darwin\inffast_chunk.o}
      {$L .\aarch64-darwin\inflate.o}
      {$L .\aarch64-darwin\inftrees.o}
      {$L .\aarch64-darwin\trees.o}

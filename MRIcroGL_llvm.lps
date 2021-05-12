@@ -1,47 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CONFIG>
-  <ProjectOptions>
+  <ProjectSession>
     <Version Value="12"/>
-    <General>
-      <Flags>
-        <CompatibilityMode Value="True"/>
-      </Flags>
-      <SessionStorage Value="InProjectDir"/>
-      <Title Value="MRIcroGL"/>
-      <Scaled Value="True"/>
-      <ResourceType Value="res"/>
-      <UseXPManifest Value="True"/>
-      <XPManifest>
-        <DpiAware Value="True"/>
-      </XPManifest>
-    </General>
-    <BuildModes Count="1">
-      <Item1 Name="Default" Default="True"/>
-      <SharedMatrixOptions Count="1">
-        <Item1 ID="111936818895" Type="IDEMacro" MacroName="LCLWidgetType" Value="cocoa"/>
-      </SharedMatrixOptions>
-    </BuildModes>
-    <PublishOptions>
-      <Version Value="2"/>
-    </PublishOptions>
-    <RunParams>
-      <FormatVersion Value="2"/>
-    </RunParams>
-    <RequiredPackages Count="3">
-      <Item1>
-        <PackageName Value="python4lazarus_package"/>
-      </Item1>
-      <Item2>
-        <PackageName Value="LazOpenGLContext"/>
-      </Item2>
-      <Item3>
-        <PackageName Value="LCL"/>
-      </Item3>
-    </RequiredPackages>
+    <BuildModes Active="Default"/>
     <Units Count="13">
       <Unit0>
         <Filename Value="MRIcroGL.lpr"/>
         <IsPartOfProject Value="True"/>
+        <UsageCount Value="20"/>
       </Unit0>
       <Unit1>
         <Filename Value="mainunit.pas"/>
@@ -49,6 +15,12 @@
         <ComponentName Value="GLForm1"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
+        <IsVisibleTab Value="True"/>
+        <TopLine Value="20"/>
+        <CursorPos X="50" Y="41"/>
+        <UsageCount Value="20"/>
+        <Loaded Value="True"/>
+        <LoadedDesigner Value="True"/>
       </Unit1>
       <Unit2>
         <Filename Value="dcm2nii.pas"/>
@@ -56,10 +28,12 @@
         <ComponentName Value="dcm2niiForm"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
+        <UsageCount Value="20"/>
       </Unit2>
       <Unit3>
         <Filename Value="drawvolume.pas"/>
         <IsPartOfProject Value="True"/>
+        <UsageCount Value="20"/>
       </Unit3>
       <Unit4>
         <Filename Value="autoroi.pas"/>
@@ -67,6 +41,7 @@
         <ComponentName Value="AutoROIForm"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
+        <UsageCount Value="20"/>
       </Unit4>
       <Unit5>
         <Filename Value="nifti_hdr_view.pas"/>
@@ -74,6 +49,7 @@
         <ComponentName Value="HdrForm"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
+        <UsageCount Value="20"/>
       </Unit5>
       <Unit6>
         <Filename Value="timeddialog.pas"/>
@@ -82,10 +58,12 @@
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="TimedDialog"/>
+        <UsageCount Value="20"/>
       </Unit6>
       <Unit7>
         <Filename Value="nifti_resize.pas"/>
         <IsPartOfProject Value="True"/>
+        <UsageCount Value="20"/>
       </Unit7>
       <Unit8>
         <Filename Value="resize.pas"/>
@@ -93,6 +71,7 @@
         <ComponentName Value="ResizeForm"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
+        <UsageCount Value="20"/>
       </Unit8>
       <Unit9>
         <Filename Value="crop.pas"/>
@@ -100,10 +79,12 @@
         <ComponentName Value="CropForm"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
+        <UsageCount Value="20"/>
       </Unit9>
       <Unit10>
         <Filename Value="afni_fdr.pas"/>
         <IsPartOfProject Value="True"/>
+        <UsageCount Value="20"/>
       </Unit10>
       <Unit11>
         <Filename Value="intensityfilter.pas"/>
@@ -111,66 +92,23 @@
         <ComponentName Value="IntensityFilterForm"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
+        <UsageCount Value="20"/>
       </Unit11>
       <Unit12>
         <Filename Value="nifti_save.pas"/>
         <IsPartOfProject Value="True"/>
+        <UsageCount Value="20"/>
       </Unit12>
     </Units>
-  </ProjectOptions>
-  <CompilerOptions>
-    <Version Value="11"/>
-    <Target>
-      <Filename Value="MRIcroGL"/>
-    </Target>
-    <SearchPaths>
-      <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="../Metal-Demos/common"/>
-      <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
-    </SearchPaths>
-    <CodeGeneration>
-      <SmartLinkUnit Value="True"/>
-      <Optimizations>
-        <OptimizationLevel Value="3"/>
-      </Optimizations>
-    </CodeGeneration>
-    <Linking>
-      <Debugging>
-        <GenerateDebugInfo Value="False"/>
-        <DebugInfoType Value="dsDwarf2"/>
-        <UseLineInfoUnit Value="False"/>
-        <StripSymbols Value="True"/>
-      </Debugging>
-      <LinkSmart Value="True"/>
-      <Options>
-        <Win32>
-          <GraphicApplication Value="True"/>
-        </Win32>
-      </Options>
-    </Linking>
-    <Other>
-      <WriteFPCLogo Value="False"/>
-      <CompilerMessages>
-        <IgnoredMessages idx5057="True"/>
-      </CompilerMessages>
-      <CustomOptions Value="-dDisableLCLGIF 
--dDisableLCLPNM
--dMYPY
--Clflto
--Clfltonosystem"/>
-    </Other>
-  </CompilerOptions>
-  <Debugging>
-    <Exceptions Count="3">
-      <Item1>
-        <Name Value="EAbort"/>
-      </Item1>
-      <Item2>
-        <Name Value="ECodetoolError"/>
-      </Item2>
-      <Item3>
-        <Name Value="EFOpenError"/>
-      </Item3>
-    </Exceptions>
-  </Debugging>
+    <JumpHistory Count="1">
+      <Position1>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="5" Column="57"/>
+      </Position1>
+    </JumpHistory>
+    <RunParams>
+      <FormatVersion Value="2"/>
+      <Modes ActiveMode=""/>
+    </RunParams>
+  </ProjectSession>
 </CONFIG>

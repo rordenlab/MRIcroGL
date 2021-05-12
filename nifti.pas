@@ -36,8 +36,11 @@ uses
   {$IFDEF GZIP}zstream, umat, GZIPUtils, {$ENDIF} //Freepascal includes the handy zstream function for decompressing GZip files
   {$IFDEF TIF} nifti_tiff, {$ENDIF}
   {$IFDEF SSE}
-  		  //sse2, ssei16,
-  		  sse,
+    {$IFDEF CPUAARCH64}
+       neon,
+    {$ELSE}
+  	sse,
+    {$ENDIF}
   {$ENDIF}
   nifti_save,
   sortu, strutils, dialogs, clipbrd, SimdUtils, sysutils,Classes, nifti_types, Math, VectorMath, otsuml;
@@ -4587,10 +4590,24 @@ begin
          {$ENDIF}
 end;
 
+function isContrastSame(fWindowMin, fWindowMinCache8, fWindowMax, fWindowMaxCache8: single):boolean;
+const //the min/max brightness labels have a rounding error
+ kTiny = 1e-4;
+var
+  mn, mx: single;
+begin
+  mn := abs(fWindowMin - fWindowMinCache8);
+  mx := abs(fWindowMax - fWindowMaxCache8);
+  if (mn < kTiny) and (mx < kTiny) then exit(true);
+  //writeln(format('++Set Min/Max Window %g..%g %g', [mn,mx, kTiny]));
+  exit(false);
+end;
+
 function TNIfTI.NeedsUpdate(): boolean;
 begin
      result := true;
-     if (not clut.NeedsUpdate) and (fHdr.datatype <> kDT_RGB) and (fCache8 <> nil) and (not specialsingle(fWindowMinCache8)) and (fOpacityPct = fOpacityPctCache8) and (fWindowMin = fWindowMinCache8) and (fWindowMax = fWindowMaxCache8) then
+     //if (not clut.NeedsUpdate) and (fHdr.datatype <> kDT_RGB) and (fCache8 <> nil) and (not specialsingle(fWindowMinCache8)) and (fOpacityPct = fOpacityPctCache8) and (fWindowMin = fWindowMinCache8) and (fWindowMax = fWindowMaxCache8) then
+     if (not clut.NeedsUpdate) and (fHdr.datatype <> kDT_RGB) and (fCache8 <> nil) and (not specialsingle(fWindowMinCache8)) and (fOpacityPct = fOpacityPctCache8) and isContrastSame(fWindowMin, fWindowMinCache8, fWindowMax, fWindowMaxCache8) then
         result := false;
 end;
 
@@ -4862,7 +4879,6 @@ begin
     {$ENDIF} //SSE
     end else if fHdr.datatype = kDT_FLOAT then begin
       {$IFDEF SSE} //54ms->29ms
-      //printf('---->SSE!!!');
       //float2byte(vol32, fCache8, lMin, lMax, skipVx);
       flt2byte(vol32, fCache8, lMin, lMax, skipVx);
       {$ELSE}
@@ -6344,6 +6360,8 @@ begin
                  end;
            end; //dataType = kDT_UNSIGNED_CHAR
           if (dataType = kDT_SIGNED_SHORT) then begin
+            minPosNotZero := 32767;
+            minNegNotZero := -32768;
             for i := 0 to (inVox-1) do
                 if (in16[i] > 0) and (in16[i] <  minPosNotZero) then
                    minPosNotZero := in16[i]; //closest positive to zero
@@ -6370,6 +6388,8 @@ begin
                 end;
           end; //dataType = kDT_SIGNED_SHORT
            if (dataType = kDT_SIGNED_INT) then begin
+             minPosNotZero := 2147483647;
+             minNegNotZero := -2147483648;
              for i := 0 to (inVox-1) do
                  if (in32[i] > 0) and (in32[i] <  minPosNotZero) then
                     minPosNotZero := in32[i]; //closest positive to zero

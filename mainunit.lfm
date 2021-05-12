@@ -1,7 +1,7 @@
 object GLForm1: TGLForm1
   Left = 364
   Height = 662
-  Top = 50
+  Top = 25
   Width = 916
   AllowDropFiles = True
   Caption = 'MRIcroGL'
@@ -1472,7 +1472,6 @@ object GLForm1: TGLForm1
           OnChange = UpdateMosaic
           ParentFont = False
           TabOrder = 0
-          Value = 4
         end
         object MosRowEdit: TSpinEdit
           AnchorSideLeft.Control = MosColEdit
@@ -1486,7 +1485,6 @@ object GLForm1: TGLForm1
           OnChange = UpdateMosaic
           ParentFont = False
           TabOrder = 2
-          Value = 2
         end
         object MosColOverlapTrack: TTrackBar
           AnchorSideLeft.Control = MosColEdit

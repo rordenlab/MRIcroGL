@@ -3,7 +3,8 @@ unit mainunit;
 {$IFDEF LCLCocoa}
  //MetalAPI supported on modern MacOS: disable for Linux, Windows and old MacOS
    //{$DEFINE METALAPI} //set in ProjectOptions/CompilerOptions/CustomOptions: -dMETALAPI
-   {$modeswitch objectivec1}
+   //{$modeswitch objectivec1}
+{$modeswitch objectivec1}
    {$DEFINE NewCocoa}
    //{$DEFINE DARKMODE}
 {$ENDIF}
@@ -32,8 +33,8 @@ uses
   {$IFDEF Linux} LazFileUtils, {$ENDIF}
   {$IFDEF AFNI} nifti_foreign, afni_fdr, {$ENDIF}
   {$IFDEF MYPY}PythonEngine,  {$ENDIF}
-  {$IFDEF Darwin} MacOSAll, {$ENDIF}
-  {$IFDEF LCLCocoa}SysCtl, dos, {$IFDEF DARKMODE}nsappkitext, {$ENDIF}{$IFDEF NewCocoa} UserNotification,{$ENDIF} {$ENDIF}
+  {$IFDEF Darwin} MacOSAll, CocoaAll,{$ENDIF}
+  {$IFDEF LCLCocoa}SysCtl, {$IFDEF DARKMODE}nsappkitext, {$ENDIF}{$IFDEF NewCocoa} UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
   ctypes, resize, ustat, LazVersion,  tiff2nifti, //LCLMessageGlue,
   lcltype, GraphType, Graphics, dcm_load, crop, intensityfilter,
@@ -42,7 +43,11 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath, LMessages;
 
 const
-  kVers = '1.2.20210317';
+  {$IFDEF FASTGZ}
+  kVers = '1.2.20210317+';
+  {$ELSE}
+  kVers = '1.2.20210317-';
+  {$ENDIF}
 type
 
   { TGLForm1 }
@@ -4217,6 +4222,7 @@ begin
         LayerColorDrop.Enabled := false;
      LayerDarkEdit.Text := format('%.6g', [v.DisplayMin]);
      LayerBrightEdit.Text := format('%.6g', [v.DisplayMax]);
+     //writeln(format('>Set Min/Max Window %g..%g', [v.DisplayMin,v.DisplayMax]));
      LayerColorDrop.ItemIndex := v.FullColorTable.Tag;
      LayerAlphaTrack.Position := v.OpacityPercent;
      LayerBox.Hint := format('image intensity range %.4g..%.4g',[DefuzzX(v.VolumeMin), DefuzzX(v.VolumeMax)]);
@@ -4288,6 +4294,7 @@ begin
      if layer = LayerList.ItemIndex then begin
         UpdateLayerBox(false);
      end;
+     //writeln(format('?Set Min/Max Window %g..%g', [displayMin,displayMax]));
      UpdateTimer.Enabled := true;
 end;
 
@@ -8666,8 +8673,9 @@ begin
  finally
    FreeMem(p);
  end;
+ {$IFNDEF CPULLVM}
  Result := Result + ' FPC:'+inttostr(FPC_FULLVERSION);
- Result := Result;
+ {$ENDIF}
 end;
 {$ENDIF}
 
@@ -8710,8 +8718,11 @@ begin
  w := w + 'Windows: ' + IntToStr(Win32MajorVersion) + '.' + IntToStr(Win32MinorVersion)+kEOLN;
  {$ENDIF}
  {$IFDEF LCLCocoa}
- w := w + 'MacOS: 10.' + IntToStr(Lo(DosVersion) - 4) + '.' + IntToStr(Hi(DosVersion))+' '+HWmodel+kEOLN;
-  {$IFNDEF METALAPI}
+ //w := w + 'MacOS: 10.' + IntToStr(Lo(DosVersion) - 4) + '.' + IntToStr(Hi(DosVersion))+' '+HWmodel+kEOLN;
+  w := w + NSProcessInfo.ProcessInfo.operatingSystemVersionString.UTF8String+' '+HWmodel+kEOLN;
+
+
+ {$IFNDEF METALAPI}
   w := w + format('Retina Scale: %g', [ViewGPU1.retinaScale])+kEOLN;
   {$ENDIF}
  {$ENDIF}
@@ -9868,6 +9879,7 @@ begin
   {$ENDIF}
   AnimateTimer.Enabled := false;
   UpdateTimer.Enabled := false;
+  gGraph.Destroy;
   vols.CloseAllLayers;
   vols.Free;
   gLandmark.Free;
