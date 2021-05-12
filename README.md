@@ -15,9 +15,9 @@ You can get MRIcroGL using three methods:
  - Download from [NITRC](https://www.nitrc.org/projects/mricrogl/).
  - Download from [Github](https://github.com/neurolabusc/MRIcroGL/releases).
  - Run the following command to get the latest version for Linux, Macintosh or Windows: 
-   * `curl -fLO https://github.com/rordenlab/MRIcroGL12/releases/latest/download/MRIcroGL_linux.zip`
-   * `curl -fLO https://github.com/rordenlab/MRIcroGL12/releases/latest/download/MRIcroGL_macOS.dmg`
-   * `curl -fLO https://github.com/rordenlab/MRIcroGL12/releases/latest/download/MRIcroGL_windows.zip`
+   * `curl -fLO https://github.com/rordenlab/MRIcroGL/releases/latest/download/MRIcroGL_linux.zip`
+   * `curl -fLO https://github.com/rordenlab/MRIcroGL/releases/latest/download/MRIcroGL_macOS.dmg`
+   * `curl -fLO https://github.com/rordenlab/MRIcroGL/releases/latest/download/MRIcroGL_windows.zip`
 
   
 Once you have downloaded the software, extract the archive and run the executable. Visit the [wiki](https://www.nitrc.org/plugins/mwiki/index.php/mricrogl:MainPage) for a full manual that includes troubleshooting.
@@ -30,8 +30,8 @@ It is generally recommended that download a pre-compiled executable (see previou
 
  - Download and install [Lazarus 2.0.6 or later](https://www.lazarus-ide.org/).
  - Get the [Metal-Demos repository](https://github.com/neurolabusc/Metal-Demos), for example: `git clone https://github.com/neurolabusc/Metal-Demos`.
- - Get the [MRIcroGL12 repository]( https://github.com/rordenlab/MRIcroGL12.git), for example: `git clone https://github.com/neurolabusc/MRIcroGL12`.
- - The Metal-Demos and MRIcroGL12 folders should share the same parent folder, e.g. `~/src/MRIcroGL12` and `~/src/Metal-Demos`.
+ - Get the [MRIcroGL repository]( https://github.com/rordenlab/MRIcroGL.git), for example: `git clone https://github.com/neurolabusc/MRIcroGL`.
+ - The Metal-Demos and MRIcroGL folders should share the same parent folder, e.g. `~/src/MRIcroGL` and `~/src/Metal-Demos`.
   - **Option for Windows** You you can decide to build with or without faster gzip decompression:
    - To build **without** faster GZip: Remove the text "{$DEFINE FASTGZ}" from the file opts.inc. Benefit: easier build, uses permissive BSD license.
    - To build **with** faster GZip. Preserve the text "{$DEFINE FASTGZ}" in the file opts.inc. Benefit: faster gzip decompression. However, this only supports CPUs that support SSE4 (2008 and later).
@@ -56,32 +56,32 @@ It is generally recommended that download a pre-compiled executable (see previou
 For Linux (GTK2) or Windows (though see notes above), the compilation will look like this :
 
 ```
-git clone https://github.com/rordenlab/MRIcroGL12.git
+git clone https://github.com/rordenlab/MRIcroGL.git
 git clone https://github.com/neurolabusc/Metal-Demos.git
 git clone https://github.com/neurolabusc/Python27-for-Lazarus.git
 lazbuild --build-ide= --add-package lazopenglcontext ./Python27-for-Lazarus/python4lazarus/python4lazarus_package.lpk
-cd MRIcroGL12
+cd MRIcroGL
 lazbuild  -B MRIcroGL.lpr
 ```
 
 For MacOS, you will want to specify the modern Cocoa widgetset, rather than the legacy Cocoa widgetset:
 
 ```
-git clone https://github.com/rordenlab/MRIcroGL12.git
+git clone https://github.com/rordenlab/MRIcroGL.git
 git clone https://github.com/neurolabusc/Metal-Demos.git
 git clone https://github.com/neurolabusc/Python27-for-Lazarus.git
 lazbuild --build-ide=  --ws=cocoa --add-package lazopenglcontext ./Python27-for-Lazarus/python4lazarus/python4lazarus_package.lpk
-cd MRIcroGL12
+cd MRIcroGL
 lazbuild  -B --ws=cocoa MRIcroGL.lpi
 ```
 
 One can also compile for Linux (qt5). Users will need to install [libqt5pas 1.2.8 or later](https://github.com/davidbannon/libqt5pas/releases). This version is more recent than the version provided with Ubuntu 18.04 and Mageia 7.1, so users of many operating systems will have to download the library from Github rather than the conventional install (e.g. `sudo apt install libqt5pas`):
 ```
-git clone https://github.com/rordenlab/MRIcroGL12.git
+git clone https://github.com/rordenlab/MRIcroGL.git
 git clone https://github.com/neurolabusc/Metal-Demos.git
 git clone https://github.com/neurolabusc/Python27-for-Lazarus.git
 lazbuild --build-ide= --add-package lazopenglcontext ./Python27-for-Lazarus/python4lazarus/python4lazarus_package.lpk
-cd MRIcroGL12
+cd MRIcroGL
 lazbuild  -B --ws=qt5 MRIcroGL.lpi
 ```
 
