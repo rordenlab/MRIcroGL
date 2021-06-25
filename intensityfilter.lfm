@@ -1,7 +1,7 @@
 object IntensityFilterForm: TIntensityFilterForm
   Left = 410
   Height = 240
-  Top = 134
+  Top = 414
   Width = 320
   AutoSize = True
   BorderWidth = 8
@@ -9,7 +9,7 @@ object IntensityFilterForm: TIntensityFilterForm
   ClientHeight = 240
   ClientWidth = 320
   OnShow = FormShow
-  LCLVersion = '2.1.0.0'
+  LCLVersion = '2.3.0.0'
   object RampAbove: TTrackBar
     AnchorSideLeft.Control = Owner
     AnchorSideTop.Control = Owner

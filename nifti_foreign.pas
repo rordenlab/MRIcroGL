@@ -3022,6 +3022,7 @@ begin
         until bytescopied < kGzSz;
         dStream.Free;
         zStream.Free;
+		bytes := nil;
      end;
      {$ELSE}
      showmessage('Unable to decompress .MIF.GZ');

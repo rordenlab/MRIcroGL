@@ -44,9 +44,9 @@ uses
 
 const
   {$IFDEF FASTGZ}
-  kVers = '1.2.20210317+';
+  kVers = '1.2.20210624';
   {$ELSE}
-  kVers = '1.2.20210317-';
+  kVers = '1.2.20210624-';
   {$ENDIF}
 type
 
@@ -102,6 +102,7 @@ type
     DrawIntensityFilterMenu: TMenuItem;
     DrawDilateMenu: TMenuItem;
     LayerExport8BitMenu: TMenuItem;
+    MPR4Menu: TMenuItem;
     ScriptHaltMenu: TMenuItem;
     NimlMenu: TMenuItem;
     OpenAFNIMenu: TMenuItem;
@@ -574,6 +575,7 @@ type
     procedure OpenMenuClick(Sender: TObject);
     //procedure ShaderMenuClick(Sender: TObject);
     //procedure LayerColorDropChange(Sender: TObject);
+    procedure PickRenderDepth( X, Y: Integer);
     procedure ViewGPUMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
     procedure ParamStr2Script();
     procedure ViewGPUPrepare(Sender: TObject);
@@ -2562,7 +2564,7 @@ begin
   Result:= GetPythonEngine.PyBool_FromLong(Ord(True));
   with GetPythonEngine do
     if Boolean(PyArg_ParseTuple(Args, 'fff:orthoviewmm', @X,@Y,@Z)) then begin
-      gPrefs.DisplayOrient := kAxCorSagOrient;
+      gPrefs.DisplayOrient := kAxCorSagOrient3;
       GLForm1.UpdateVisibleBoxes();
       GLForm1.SetXHairPosition(X,Y,Z);
       GLForm1.MPRMenu.checked := true;
@@ -3293,12 +3295,14 @@ begin
       kCoronalOrient: CoronalMenu.Checked := true;
       kSagRightOrient: SagittalMenu.Checked := true;
       kSagLeftOrient: SagittalLMenu.Checked := true;
-      kAxCorSagOrient: MPRMenu.Checked := true;
+      kAxCorSagOrient3: MPRMenu.Checked := true;
+      kAxCorSagOrient4: MPR4Menu.Checked := true;
       kMosaicOrient: MosaicMenu.Checked := true;
   end;
 end;
 
 procedure TGLForm1.UpdateVisibleBoxes(setMenuChecked: boolean = false);
+var Ht: integer;
 begin
      if (setMenuChecked) then
         SetDisplayCheck();
@@ -3306,7 +3310,16 @@ begin
      ClipBox.Visible := gPrefs.DisplayOrient = kRenderOrient;
      CutoutBox.Visible := gPrefs.DisplayOrient = kRenderOrient;
      ShaderBox.Visible := gPrefs.DisplayOrient = kRenderOrient;
-     SliceBox.Visible := gPrefs.DisplayOrient <= kAxCorSagOrient;
+     SliceBox.Visible := gPrefs.DisplayOrient <= kAxCorSagOrient3;
+     if (gPrefs.DisplayOrient = kAxCorSagOrient4) then begin
+        Ht := LayerBox.Height + LineBox.Height+ SliceBox.Height+ClipBox.Height;
+        //LayerBox.Caption := inttostr(Ht) +':'+inttostr(ToolPanel.ClientHeight);
+     	ClipBox.Visible := (ToolPanel.ClientHeight) > Ht;
+        Ht += CutoutBox.Height;
+        CutoutBox.Visible := (ToolPanel.ClientHeight) > Ht;
+        Ht += 100;//ShaderBox.Height;
+        ShaderBox.Visible := (ToolPanel.ClientHeight) > Ht;
+     end;
      //ClusterView.Visible := gPrefs.DisplayOrient <= kAxCorSagOrient;
      //ViewGPUg.Visible := not ClusterView.Visible;
      AnatDrop.Visible := length(gLandmark.Landmarks) > 0;
@@ -5526,41 +5539,6 @@ begin
  niftiVol.SaveFormatBasedOnExt(fnm);
 end;
 
-
-(*procedure TGLForm1.SaveNIfTIMenuClick(Sender: TObject);
-var
-niftiVol: TNIfTI;
-dlg : TSaveDialog;
-begin
-
- if not vols.Layer(0,niftiVol) then exit;
- dlg := TSaveDialog.Create(self);
- dlg.Title := 'Save NIfTI volume';
- dlg.InitialDir := extractfiledir(gPrefs.PrevBackgroundImage);
- {$IFDEF Darwin}
- if PosEx('.app', dlg.InitialDir) > 0  then
-       dlg.InitialDir := HomeDir(false);
- {$ENDIF}
- dlg.Filter := 'NIfTI|*.nii|Compressed NIfTI|*.nii.gz|Blender Volume|*.bvox|OSPRay Volume|*.osp';
- if gPrefs.VolumeSaveFormat = 1 then
-    dlg.DefaultExt := '*.nii.gz'
- else if gPrefs.VolumeSaveFormat = 2 then
-    dlg.DefaultExt := '*.bvox'
- else if gPrefs.VolumeSaveFormat = 3 then
-    dlg.DefaultExt := '*.osp'
- else begin
-    dlg.DefaultExt := '*.nii';
-    gPrefs.VolumeSaveFormat := 0;
- end;
- dlg.FilterIndex := gPrefs.VolumeSaveFormat;
- //niftiVol.SaveBVox('/Users/rorden/tmp/v.bvox'); exit;
- if dlg.Execute then begin
-     niftiVol.SaveFormatBasedOnExt(dlg.FileName);
-    gPrefs.VolumeSaveFormat :=  dlg.FilterIndex;
- end;
- dlg.Free;
-end; *)
-
 procedure TGLForm1.ScriptMemoKeyUp(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 begin
@@ -5596,6 +5574,7 @@ end;
 procedure TGLForm1.SliceZoomChange(Sender: TObject);
 begin
   if Vol1 = nil then exit;
+  {$IFDEF LCLgtk3} if not GLForm1.Visible then exit; {$ENDIF}
   Vol1.Slices.ZoomScale := SliceZoom.position/100;
   ViewGPU1.Invalidate;
 end;
@@ -7096,7 +7075,7 @@ var
    //dlg : TSaveDialog;
 begin
  if not vols.Layer(0, nii) then exit;
- if gPrefs.DisplayOrient <> kAxCorSagOrient then
+ if gPrefs.DisplayOrient <> kAxCorSagOrient3 then
     MPRMenu.click;
  dim4.x := nii.Dim.x;
  dim4.y := nii.Dim.y;
@@ -7152,7 +7131,7 @@ begin
 
  Vol1.Slices.isOrientationTriangles := true;
  ViewGPU1.Invalidate;
- if gPrefs.DisplayOrient <> kAxCorSagOrient then
+ if gPrefs.DisplayOrient <> kAxCorSagOrient3 then
     MPRMenu.click;
  btnR := QuestionDlg ('Reorient image','Which arrow is pointing toward participant’s RIGHT?',
       mtInformation,[ 11,btn[1], 12,btn[2], 13,btn[3], 14,btn[4], 15,btn[5], 16,btn[6] ],'');
@@ -8812,6 +8791,41 @@ var
 gIsMouseDown: boolean = false;      // https://bugs.freepascal.org/view.php?id=35480
 {$ENDIF}
 
+procedure TGLForm1.PickRenderDepth( X, Y: Integer);
+{$IFDEF DEPTHPICKER}
+var
+ c: TVec4;
+ sum: single;
+ sliceMM : TVec3;
+ niftiVol: TNIfTI;
+begin
+  if not vols.Layer(0,niftiVol) then exit;
+  Vol1.PaintDepth(niftiVol, gPrefs.DisplayOrient = kAxCorSagOrient4);
+  glReadBuffer(GL_BACK);
+  glReadPixels(X, Y, 1, 1, GL_RGBA, GL_FLOAT, @c); //OSX-Darwin   GL_BGRA = $80E1;  GL_UNSIGNED_INT_8_8_8_8_EXT = $8035;
+  //LayerBox.caption := format('%0.2g %0.2g %0.2g %0.2g', [c.X, c.Y, c.Z, c.A]);
+  sliceMM := niftiVol.FracMM(Vec3(c.X, c.Y, c.Z));
+  sum := c.r + c.g + c.b; //a click outside the rendering will return background color. No good solution...
+  if (sum < 0.001) or (sum > 2.99) then begin
+     Caption := '';
+     exit;
+  end;
+  Caption := format('%0.4g×%0.4g×%0.4g', [sliceMM.x, sliceMM.y, sliceMM.z]);
+  vol1.SetSlice2DFrac(Vec3(c.X, c.Y, c.Z));
+  gSliceMM := Vec3(sliceMM.X, sliceMM.Y, sliceMM.Z);
+  {$IFDEF COMPILEYOKE}
+  SetShareFloats2D(sliceMM.X,sliceMM.Y,sliceMM.Z);
+  {$ENDIF}
+  if (gPrefs.DisplayOrient = kAxCorSagOrient4) then
+  	ViewGPU1.Invalidate
+  else
+  	Vol1.Paint(niftiVol);
+{$ELSE}
+begin
+   //
+{$ENDIF}
+end;
+
 
 procedure TGLForm1.ViewGPUMouseDown(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
@@ -8821,17 +8835,21 @@ var
    {$IFDEF isCocoaOpenGL}
    f: single;
    {$ENDIF}
+   Yrev :integer;
    fracXYZ: TVec3;
 begin
  xIn := X;
  yIn := Y;
  ViewGPU1.SetFocus;
  Vol1.Slices.distanceLineOrient := 0;
+ Yrev := ViewGPU1.ClientHeight - Y;
  {$IFDEF isCocoaOpenGL}
  //LayerBox.Caption := inttostr(random(222));
  f := ViewGPU1.retinaScale;
  X := round(X * f);
  Y := round(Y * f);
+ Yrev := ViewGPU1.ClientHeight - Y;
+
  //ss := getKeyshiftstate;
  //if  (ssShift in ss) then
  {$ENDIF}
@@ -8850,21 +8868,12 @@ begin
         UpdateTimer.Enabled := true;
      exit;
   end;
+ if gPrefs.DisplayOrient = kRenderOrient then PickRenderDepth(X,Yrev);
  if gPrefs.DisplayOrient > kMax2DOrient then exit;
  if  (Vols.Drawing.ActivePenColor >= 0) and (not AutoROIForm.Visible) and (not (ssCtrl in Shift)) and (not (ssAlt in Shift)) and (not (ssMeta in Shift))  then begin
     EnsureOpenVoi();
     fracXYZ := Vol1.GetSlice2DFrac(X,Y,i);
     gMouseLimitHi := Vol1.GetSlice2DMaxXY(X,Y, gMouseLimitLo);
-    //if (ssShift in Shift) then
-    //     SliceBox.Caption := 'SHIFT:'+inttostr(Vols.Drawing.ActivePenColor)
-    //else
-    //    SliceBox.Caption := 'no shift:'+inttostr(Vols.Drawing.ActivePenColor);
-    (*if (ssShift in Shift) then begin
-       if Vols.Drawing.ActivePenColor <> 0 then
-           Vols.Drawing.ActivePenColor := 0
-        else
-          Vols.Drawing.ActivePenColor := 1;
-     end; *) // https://bugs.freepascal.org/view.php?id=35480
     if (i > 0) then begin
        if (ssAlt in Shift) then begin
           {$IFDEF isCocoaOpenGL}
@@ -8879,6 +8888,14 @@ begin
     exit;
  end;
  if ssAlt in Shift then Vol1.Slices.distanceLineOrient := -1; // xxx
+ if (gPrefs.DisplayOrient = kAxCorSagOrient4) then begin
+ 	Vol1.SetSlice2DFrac(Vol1.GetSlice2DFrac(X,Y,i)); //
+ 	if (i < 0) then begin
+          PickRenderDepth(X,Yrev);
+          //LayerBox.Caption := inttostr(random(888));
+          exit;
+        end; //okra
+ end;
  ViewGPUMouseMove(Sender, Shift, xIn,Yin);
  if (ssShift in Shift) or  (ssRight in Shift) then
     gMouseDrag := true;
@@ -8923,6 +8940,8 @@ end;
 
 procedure TGLForm1.ViewGPUMouseMove(Sender: TObject; Shift: TShiftState; X,
   Y: Integer);
+label
+  222;
 var
  fracXYZdown, fracXYZ, diff: TVec3;
  i, j: integer;
@@ -8988,6 +9007,7 @@ begin
        exit;
     end;
     Vol1.SetSlice2DFrac(Vol1.GetSlice2DFrac(X,Y,i)); //
+    if (i < 0) and (gPrefs.DisplayOrient = kAxCorSagOrient4) then goto 222; //okra
     if (Vol1.Slices.distanceLineOrient < 0) then begin
        Vol1.Slices.distanceLineOrient:= i;
        Vol1.Slices.distanceLineStart := Vol1.Slices.SliceFrac;
@@ -9006,6 +9026,7 @@ begin
     exit;
   end;
   if gPrefs.DisplayOrient <> kRenderOrient then exit; //e.g. mosaics
+222:
   if (ssCtrl in Shift)  then begin  //adjust pitch
      //
      Vol1.Pitch := Vol1.Pitch - (Y - gMouse.Y);
@@ -9083,6 +9104,8 @@ end;
 
 procedure TGLForm1.ViewGPUMouseWheel(Sender: TObject; Shift: TShiftState;
   WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
+label
+  222;
 var
    niftiVol: TNIfTI;
    isUp: boolean;
@@ -9110,7 +9133,7 @@ var
            exit;
         end;
         orient := gPrefs.DisplayOrient;
-        if orient = kAxCorSagOrient then begin
+        if (orient = kAxCorSagOrient3) or (orient = kAxCorSagOrient4) then begin
            f := 1;
            {$IFDEF LCLCocoa}{$IFNDEF METALAPI}
            f := ViewGPU1.retinaScale;
@@ -9118,7 +9141,8 @@ var
            X := round(MousePos.X * f);
            Y := round(MousePos.Y * f);
            Vol1.GetSlice2DFrac(X,Y,orient);
-           //LayerBox.Caption := format('%f %f %d', [MousePos.X,MousePos.Y, orient]);
+           //LayerBox.Caption := format('%d %d %d %d %g', [MousePos.X,MousePos.Y, orient, WheelDelta, Vol1.Distance]);
+           if (orient < 0) and (gPrefs.DisplayOrient = kAxCorSagOrient4) then goto 222;
         end;
         if orient = kCoronalOrient then begin
              if (isUp) then
@@ -9147,6 +9171,7 @@ var
      UpdateTimer.Enabled := true;
      exit;
   end;
+ 222:
   if WheelDelta = 0 then exit;
   if Wheeldelta < 0 then
      Vol1.Distance := Vol1.Distance - 0.1
@@ -9372,7 +9397,7 @@ begin
       gPrefs.DisplayOrient := gPrefs.StartupDisplayOrient;
       dcm2niiForm.setCustomDcm2niix(gPrefs.CustomDcm2niix);
       if (gPrefs.DisplayOrient = kMosaicOrient) then
-         gPrefs.DisplayOrient := kAxCorSagOrient;//kRenderOrient;
+         gPrefs.DisplayOrient := kAxCorSagOrient3;//kRenderOrient;
   end;
   {$ifdef windows}
   if gPrefs.DebugMode then begin
@@ -9766,7 +9791,7 @@ begin
   end else
       generateClustersCore(v, thresh, smallestClusterMM3, NeighborMethod, isDarkAndBright);
   UpdateLayerBox(false);
-  if gPrefs.DisplayOrient > kAxCorSagOrient then
+  if gPrefs.DisplayOrient > kAxCorSagOrient3 then
      MPRMenu.Click;
   GLForm1.UpdateLayerBox(false, true);
   if (length(v.clusters) < 1) then

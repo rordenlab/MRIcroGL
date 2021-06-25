@@ -4,8 +4,8 @@ unit uscale;
 interface
 
 uses
-    {$IFDEF LCLGtk2} FileUtil, Process, Gtk2Def, gtk2, Gtk2Proc, strutils,{$ENDIF}
-  Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ExtCtrls, ComCtrls,
+    {$IFDEF LCLGtk2} strutils, FileUtil, Process, Gtk2Def, gtk2, Gtk2Proc, {$ENDIF}
+   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ExtCtrls, ComCtrls,
     StdCtrls, Buttons, Menus;
 
 procedure ConstrainTrackBars;
@@ -21,15 +21,7 @@ var
   {$ENDIF}
 begin
   if (Control is TTrackBar) then begin
-     {$IFDEF Darwin}
-     (Control as TTrackBar).Constraints.MaxHeight := 24;
-     (Control as TTrackBar).Height := (Control as TTrackBar).Constraints.MaxHeight;
-     {$ENDIF}
-     {$IFDEF LCLQT5}
-      (Control as TTrackBar).Constraints.MaxHeight := 32;
-      (Control as TTrackBar).Height := (Control as TTrackBar).Constraints.MaxHeight;
-     {$ENDIF}
-     {$IFDEF LCLGtk2}
+     {$IFDEF LCLgtk2}
      if ((Control as TTrackBar).TickStyle = tsNone) then begin
         Widget:=GetStyleWidget(lgsHScale);
         gtk_scale_set_draw_value(GTK_SCALE(Widget), false);
@@ -38,6 +30,18 @@ begin
         (Control as TTrackBar).Height := (Control as TTrackBar).Constraints.MaxHeight;
      end;
      (Control as TTrackBar).Width := round((Control as TTrackBar).Width * scale);
+     {$ENDIF}
+     {$IFDEF Darwin}
+     (Control as TTrackBar).Constraints.MaxHeight := 24;
+     (Control as TTrackBar).Height := (Control as TTrackBar).Constraints.MaxHeight;
+     {$ENDIF}
+     {$IFDEF LCLQT5}
+      (Control as TTrackBar).Constraints.MaxHeight := 32;
+      (Control as TTrackBar).Height := (Control as TTrackBar).Constraints.MaxHeight;
+     {$ENDIF}
+     {$IFDEF LCLGtk3}
+      (Control as TTrackBar).Constraints.MaxHeight := 32;
+      (Control as TTrackBar).Height := (Control as TTrackBar).Constraints.MaxHeight;
      {$ENDIF}
   end;
   if not (Control is TWinControl) then exit;

@@ -43,7 +43,7 @@ procedure int2byte(lMin, lMax: single; ints: TInt16s; byts: TUInt8s; skipVx: int
 
 implementation
 
-{$L scale2uint8.o}
+{$L ./aarch64-darwin/scale2uint8.o}
 function f32_i8sse(in32: pointer; out8: pointer; n: int64; mn, mx: single): Integer; external name '__Z9f32_i8ssePfPhxff';
 function i16_i8sse(in16: pointer; out8: pointer; n: int64; mn, mx: single): Integer; external name '__Z9i16_i8ssePsPhxff';
 

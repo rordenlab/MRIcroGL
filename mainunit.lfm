@@ -1,5 +1,5 @@
 object GLForm1: TGLForm1
-  Left = 364
+  Left = 764
   Height = 662
   Top = 25
   Width = 916
@@ -20,7 +20,7 @@ object GLForm1: TGLForm1
   OnShortCut = FormShortCut
   OnShow = FormShow
   Position = poScreenCenter
-  LCLVersion = '2.1.0.0'
+  LCLVersion = '2.3.0.0'
   object TopPanel: TPanel
     Left = 0
     Height = 576
@@ -88,7 +88,6 @@ object GLForm1: TGLForm1
           Top = 102
           Width = 47
           Caption = 'Darkest'
-          ParentColor = False
           ParentFont = False
         end
         object LayerDarkEdit: TEdit
@@ -134,7 +133,6 @@ object GLForm1: TGLForm1
           Top = 125
           Width = 55
           Caption = 'Brightest'
-          ParentColor = False
           ParentFont = False
         end
         object LayerColorDrop: TComboBox
@@ -166,7 +164,6 @@ object GLForm1: TGLForm1
           Top = 153
           Width = 47
           Caption = 'Opacity'
-          ParentColor = False
           ParentFont = False
         end
         object LayerAlphaTrack: TTrackBar
@@ -274,7 +271,6 @@ object GLForm1: TGLForm1
           Width = 37
           BorderSpacing.Left = 2
           Caption = 'Depth'
-          ParentColor = False
           ParentFont = False
           OnClick = ClipLabelClick
         end
@@ -326,7 +322,6 @@ object GLForm1: TGLForm1
           Width = 50
           BorderSpacing.Left = 2
           Caption = 'Azimuth'
-          ParentColor = False
           ParentFont = False
           OnClick = ClipLabelClick
         end
@@ -362,7 +357,6 @@ object GLForm1: TGLForm1
           Width = 55
           BorderSpacing.Left = 2
           Caption = 'Elevation'
-          ParentColor = False
           ParentFont = False
           OnClick = ClipLabelClick
         end
@@ -397,7 +391,6 @@ object GLForm1: TGLForm1
           Width = 61
           BorderSpacing.Left = 2
           Caption = 'Thickness'
-          ParentColor = False
           ParentFont = False
           OnClick = ClipLabelClick
         end
@@ -444,7 +437,6 @@ object GLForm1: TGLForm1
           BorderSpacing.Left = 8
           BorderSpacing.Right = 4
           Caption = 'Q'
-          ParentColor = False
           ParentFont = False
           ParentShowHint = False
           ShowHint = True
@@ -483,7 +475,6 @@ object GLForm1: TGLForm1
           BorderSpacing.Left = 2
           BorderSpacing.Top = 6
           Caption = 'Light'
-          ParentColor = False
           ParentFont = False
           ParentShowHint = False
           ShowHint = True
@@ -540,7 +531,6 @@ object GLForm1: TGLForm1
           Width = 13
           BorderSpacing.Left = 2
           Caption = 'o1'
-          ParentColor = False
           ParentFont = False
           ParentShowHint = False
           ShowHint = True
@@ -578,7 +568,6 @@ object GLForm1: TGLForm1
           Width = 15
           BorderSpacing.Left = 2
           Caption = 'o2'
-          ParentColor = False
           ParentFont = False
           ParentShowHint = False
           ShowHint = True
@@ -615,7 +604,6 @@ object GLForm1: TGLForm1
           Width = 16
           BorderSpacing.Left = 2
           Caption = 'o3'
-          ParentColor = False
           ParentFont = False
           ParentShowHint = False
           ShowHint = True
@@ -652,7 +640,6 @@ object GLForm1: TGLForm1
           Width = 16
           BorderSpacing.Left = 2
           Caption = 'o4'
-          ParentColor = False
           ParentFont = False
           ParentShowHint = False
           ShowHint = True
@@ -689,7 +676,6 @@ object GLForm1: TGLForm1
           Width = 16
           BorderSpacing.Left = 2
           Caption = 'o5'
-          ParentColor = False
           ParentFont = False
           ParentShowHint = False
           ShowHint = True
@@ -726,7 +712,6 @@ object GLForm1: TGLForm1
           Width = 16
           BorderSpacing.Left = 2
           Caption = 'o6'
-          ParentColor = False
           ParentFont = False
           ParentShowHint = False
           ShowHint = True
@@ -763,7 +748,6 @@ object GLForm1: TGLForm1
           Width = 15
           BorderSpacing.Left = 2
           Caption = 'o7'
-          ParentColor = False
           ParentFont = False
           ParentShowHint = False
           ShowHint = True
@@ -800,7 +784,6 @@ object GLForm1: TGLForm1
           Width = 16
           BorderSpacing.Left = 2
           Caption = 'o8'
-          ParentColor = False
           ParentFont = False
           ParentShowHint = False
           ShowHint = True
@@ -837,7 +820,6 @@ object GLForm1: TGLForm1
           Width = 16
           BorderSpacing.Left = 2
           Caption = 'o9'
-          ParentColor = False
           ParentFont = False
           ParentShowHint = False
           ShowHint = True
@@ -874,7 +856,6 @@ object GLForm1: TGLForm1
           Width = 21
           BorderSpacing.Left = 2
           Caption = 'o10'
-          ParentColor = False
           ParentFont = False
           ParentShowHint = False
           ShowHint = True
@@ -942,7 +923,6 @@ object GLForm1: TGLForm1
           Width = 36
           BorderSpacing.Left = 2
           Caption = 'Width'
-          ParentColor = False
           ParentFont = False
         end
         object LineWidthEdit: TSpinEdit
@@ -1108,7 +1088,6 @@ object GLForm1: TGLForm1
           BorderSpacing.Left = 2
           BorderSpacing.Top = 2
           Caption = 'Coordinates (X,Y,Z)'
-          ParentColor = False
           ParentFont = False
         end
         object YCoordEdit: TEdit
@@ -1260,7 +1239,6 @@ object GLForm1: TGLForm1
           Width = 9
           BorderSpacing.Left = 2
           Caption = 'X'
-          ParentColor = False
           ParentFont = False
         end
         object XTrackBar: TTrackBar
@@ -1307,7 +1285,6 @@ object GLForm1: TGLForm1
           Width = 8
           BorderSpacing.Left = 2
           Caption = 'Y'
-          ParentColor = False
           ParentFont = False
         end
         object YTrackBar: TTrackBar
@@ -1353,7 +1330,6 @@ object GLForm1: TGLForm1
           Width = 9
           BorderSpacing.Left = 2
           Caption = 'Z'
-          ParentColor = False
           ParentFont = False
         end
         object ZTrackBar: TTrackBar
@@ -1444,7 +1420,6 @@ object GLForm1: TGLForm1
           Width = 53
           BorderSpacing.Left = 2
           Caption = 'Columns'
-          ParentColor = False
           ParentFont = False
         end
         object MosRowLabel: TLabel
@@ -1456,7 +1431,6 @@ object GLForm1: TGLForm1
           Top = 26
           Width = 32
           Caption = 'Rows'
-          ParentColor = False
           ParentFont = False
         end
         object MosColEdit: TSpinEdit
@@ -1469,9 +1443,12 @@ object GLForm1: TGLForm1
           Width = 80
           BorderSpacing.Left = 2
           BorderSpacing.Top = 2
+          MaxValue = 12
+          MinValue = 2
           OnChange = UpdateMosaic
           ParentFont = False
           TabOrder = 0
+          Value = 4
         end
         object MosRowEdit: TSpinEdit
           AnchorSideLeft.Control = MosColEdit
@@ -1482,9 +1459,12 @@ object GLForm1: TGLForm1
           Top = 24
           Width = 80
           BorderSpacing.Top = 2
+          MaxValue = 12
+          MinValue = 1
           OnChange = UpdateMosaic
           ParentFont = False
           TabOrder = 2
+          Value = 2
         end
         object MosColOverlapTrack: TTrackBar
           AnchorSideLeft.Control = MosColEdit
@@ -1531,7 +1511,6 @@ object GLForm1: TGLForm1
           Top = 53
           Width = 67
           Caption = 'Orientation'
-          ParentColor = False
           ParentFont = False
         end
         object MosOrientDrop: TComboBox
@@ -2315,6 +2294,14 @@ object GLForm1: TGLForm1
         Tag = 16
         AutoCheck = True
         Caption = 'Multi-Planar (A+C+S)'
+        GroupIndex = 234
+        RadioItem = True
+        OnClick = DisplayMenuClick
+      end
+      object MPR4Menu: TMenuItem
+        Tag = 12
+        AutoCheck = True
+        Caption = 'Multi-Planar (A+C+S+R)'
         GroupIndex = 234
         RadioItem = True
         OnClick = DisplayMenuClick

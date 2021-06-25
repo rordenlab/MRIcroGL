@@ -5325,7 +5325,7 @@ begin
   result := strm.total_out;
 end;
 
-function UnCompressStream(src: pointer; srcLen: integer; tmp: TStream;
+function uNcOMPRESSsTREAM(src: pointer; srcLen: integer; tmp: TStream;
   checkCRC: PCardinal; ZlibFormat: Boolean; TempBufSize: integer): cardinal;
 var strm: TZStream;
     code, Bits: integer;

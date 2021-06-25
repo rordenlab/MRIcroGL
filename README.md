@@ -6,7 +6,7 @@ MRIcroGL is a cross-platform tool for viewing DICOM and NIfTI format images. It 
 
 ## Requirements
 
-By default, MRIcroGL 1.2 is compiled to require OpenGL 2.1 (from 2006). It can also be compiled to require OpenGL 3.3 Core (released in 2009). From the user perspective, there should be no difference between these choices. If your computer does not support OpenGL 2.1, you can try [MRIcron](https://www.nitrc.org/projects/mricron).
+By default, MRIcroGL 1.2 is compiled to require OpenGL 2.1 (from 2006). It can also be compiled to require OpenGL 3.3 Core (released in 2009). Alternatively, macOS users can also compile the tool for the [Metal](https://developer.apple.com/metal/). From the user perspective, there should be no difference between these choices. If your computer does not support OpenGL 2.1, you can try [MRIcron](https://www.nitrc.org/projects/mricron). The code can be compiled for the macOS, Linux or Windows operating system. For macOS, both ARM-based Apple Silicon and Intel-based computers are natively supported.
 
 ## Installation
 
@@ -50,7 +50,7 @@ Alternatively, Debian/Ubuntu Linux users may want to look at the [docker script]
 
 It is generally recommended that download a pre-compiled executable (see previous section). However, you can compile your own copy from source code. Download and install [Lazarus 2.0.6 or later](https://www.lazarus-ide.org/), at which point the lazbuild command should be available from the command line.
 
- **[Note, there are issues with the latest python4lazarus](https://github.com/Alexey-T/Python-for-Lazarus/issues/25) release, you should consider compilining without Python support (MRIcroGL_NoPython.lpi) [or use and earlier (2020.07.31)](https://github.com/neurolabusc/Python27-for-Lazarus.git) release.
+ **[Note, there are issues with the latest python4lazarus](https://github.com/Alexey-T/Python-for-Lazarus/issues/25) release, you should consider compiling without Python support (MRIcroGL_NoPython.lpi) [or use and earlier (2020.07.31)](https://github.com/neurolabusc/Python27-for-Lazarus.git) release.
 
 
 For Linux (GTK2) or Windows (though see notes above), the compilation will look like this :

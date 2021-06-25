@@ -102,7 +102,7 @@ begin
             MultiSample124 := 4;
             VolumeSaveFormat := 1;
             VoiSaveFormat := 3;
-            DisplayOrient:= kAxCorSagOrient; //kRenderOrient;
+            DisplayOrient:= kAxCorSagOrient3; //kRenderOrient;
             //DisplayOrient:= kRenderOrient;
             StartupDisplayOrient := DisplayOrient;
             DarkMode := false;

@@ -16,6 +16,7 @@ interface
 {$DEFINE CPUGRADIENTS} //Computing volume gradients on the GPU is much faster than using the CPU
 {$DEFINE CACHEUINT8} //save 8-bit data: faster requires RAM
 {$DEFINE SSE}
+
 {$DEFINE TIF} //load bitmaps, e.g. PNG, BMP, TIFFs not handled by NIfTI_TIFF
 {$DEFINE BMP} //load bitmaps, e.g. PNG, BMP, TIFFs not handled by NIfTI_TIFF
 {$DEFINE BZIP2}
@@ -30,7 +31,13 @@ uses
   {$IFDEF BMP} Graphics, GraphType,{$ENDIF}
   {$IFDEF PARALLEL}mtprocs,mtpcpu,{$ENDIF}
   {$IFDEF TIMER} DateUtils,{$ENDIF}
-  {$IFDEF FASTGZ} SynZip, {$ENDIF}
+  {$IFDEF FASTGZ}
+    {$IFDEF LIBDEFLATE}
+    libdeflate,
+    {$ENDIF}
+    SynZip,
+
+  {$ENDIF}
   {$IFDEF OPENFOREIGN} nifti_foreign, {$ENDIF}
   {$IFDEF CUSTOMCOLORS} colorTable,  {$ENDIF}
   {$IFDEF GZIP}zstream, umat, GZIPUtils, {$ENDIF} //Freepascal includes the handy zstream function for decompressing GZip files
@@ -313,7 +320,7 @@ begin
 end;
 {$ENDIF}
 
-FUNCTION specialsingle (var s:single): boolean;
+FUNCTION specialsingle (var s:single): boolean; inline;
 //returns true if s is Infinity, NAN or Indeterminate
 CONST kSpecialExponent = 255 shl 23;
 VAR Overlay: LongInt ABSOLUTE s;
@@ -3043,7 +3050,7 @@ begin
   result := Nifti2to1(h2);
 end;
 
-function ExtractGzNoCrc(fnm: string; var mStream : TMemoryStream; skip: int64 = 0; expected: int64 = 0): boolean;
+function ExtractGzNoCrcX(fnm: string; var mStream : TMemoryStream; skip: int64 = 0; expected: int64 = 0): boolean;
 //a bit faster: do not compute CRC check
 {$DEFINE ROBUST} //handle ImageJ/Fiji MHA compression without GZ header : see cpts.mha
 var
@@ -3084,6 +3091,11 @@ begin
      CloseFile(f);
      exit;
   end;
+  if (size+ret+10) > usize then begin
+  	printf('Concatenated zstream? https://bugs.freepascal.org/view.php?id=36822');
+        CloseFile(f);
+        exit;
+  end;
   setlength(src, size);
   blockread(f, src[0], size );
   CloseFile(f);
@@ -3107,6 +3119,116 @@ begin
   src := nil;
 end;
 
+{$IFNDEF LIBDEFLATE}
+function UnCompressMemX(src, dst: pointer; srcLen, dstLen: integer;
+  out cmpBytes: integer; ZlibFormat: Boolean = false) : integer;
+var strm: TZStream;
+    Bits: integer;
+begin
+  StreamInit(strm);
+  strm.next_in := src;
+  strm.avail_in := srcLen;
+  strm.next_out := dst;
+  strm.avail_out := dstLen;
+  if ZlibFormat then
+    Bits := MAX_WBITS else
+    Bits := -MAX_WBITS; // -MAX_WBITS -> no zLib header => .zip compatible !
+  if inflateInit2_(strm, Bits, ZLIB_VERSION, sizeof(strm))>=0 then
+  try
+    Check(inflate(strm, Z_FINISH),[Z_OK,Z_STREAM_END],'UnCompressMem');
+  finally
+    inflateEnd(strm);
+  end;
+  cmpBytes := strm.next_in - src;
+  result := strm.total_out;
+end;
+{$ENDIF}
+
+function ExtractGzNoCrc(fnm: string; var mStream : TMemoryStream; skip: int64 = 0; expected: int64 = 0): boolean;
+//a bit faster: do not compute CRC check
+{$DEFINE ROBUST} //handle ImageJ/Fiji MHA compression without GZ header : see cpts.mha
+var
+   {$IFDEF ROBUST}
+   fStream : TFileStream;
+   inStream : TMemoryStream;
+   {$ENDIF}
+   cmpBytes: integer;
+   outBytes, newBytes, hdrBytes, size, usize, usizePart: int64;
+   crc32: dword;
+   src : array of byte;
+   f: file of byte;
+begin
+  result := false;
+  hdrBytes := GetCompressedFileInfo(fnm, usize, crc32, skip);
+  if hdrBytes < 0 then exit;
+  {$IFDEF ROBUST}
+  if (hdrBytes = 2)  then begin //zlib : no file size...
+      src := nil;
+      fStream := TFileStream.Create(fnm, fmOpenRead);
+      fStream.seek(skip, soFromBeginning);
+      inStream := TMemoryStream.Create();
+      inStream.CopyFrom(fStream, fStream.Size - skip);
+      result := unzipStream(inStream, mStream);
+      fStream.Free;
+      inStream.Free;
+      if (not result) and (expected >= mStream.size) then begin
+         printf('unzipStream error but sufficient bytes extracted (perhaps GZ without length in footer)');
+         result := true;
+      end;
+      exit;
+  end;
+  {$ENDIF}//ROBUST
+  AssignFile(f, fnm);
+  FileMode := fmOpenRead;
+  Reset(f,1);
+  size := FileSize(f);
+  if size < 1 then begin
+     CloseFile(f);
+     exit;
+  end;
+  //printf(format('A %d %d',[hdrBytes, skip]));
+  if (expected = 0) and ((size+hdrBytes+10) > usize) then begin
+  	printf('Concatenated zstream?');
+        CloseFile(f);
+        exit;
+  end;
+  setlength(src, size);
+  blockread(f, src[0], size );
+  CloseFile(f);
+  result := false;
+  if (hdrBytes = 2)  then begin //zlib : no file size...
+      UnCompressStream(@src[0], size, mStream, nil, true); //SynZip
+      result := true;
+  end else if (hdrBytes > skip) then begin
+    if (usize < expected) and (expected > 0) then begin
+    	printf(format('GZ footer reports %d bytes but expected %d (corrupt or concatenated GZ)', [usize, expected]));
+    	usize := expected;
+    end;
+    mStream.setSize(usize);
+    outBytes := 0;
+    while outBytes < usize do begin //handle concatenated GZip files
+      mStream.position := outBytes;
+      newBytes := UnCompressMemX(@src[hdrBytes], mStream.memory, size-hdrBytes, usize, cmpBytes); //SynZip
+      outBytes += newBytes;
+      //showDebug(format('%s: read %d total %d hdrOffset %d', [fnm, newBytes, outBytes, hdrBytes]));
+      if (outBytes >= usize) then break;
+      hdrBytes := GetCompressedFileInfo(fnm, usizePart, crc32, hdrBytes + cmpBytes + 8);
+    end;
+    result := (outBytes = usize);
+  end else if (skip < size) then begin //assume uncompressed
+      mStream.Write(src[skip],size-skip);
+      result := true;
+  end;
+  src := nil;
+end;
+
+{$IFDEF LIBDEFLATE}
+function ExtractGz(fnm: string; var mStream : TMemoryStream): boolean;
+begin
+result := ExtractGzNoCrc(fnm, mStream);
+end;
+
+{$ELSE}
 function ExtractGz(fnm: string; var mStream : TMemoryStream): boolean;
 var
   gz: TGZRead;  //SynZip
@@ -3131,6 +3253,7 @@ begin
   src := nil;
   gz.ZStreamDone;
 end;
+{$ENDIF}
 
 function TNIfTI.LoadFastGZ(FileName : AnsiString; out isNativeEndian: boolean): boolean;
 //FSL compressed nii.gz file
@@ -3145,13 +3268,15 @@ begin
  {$DEFINE FASTERGZ} //IGNORE CRC
  {$IFDEF FASTERGZ}
  if not ExtractGzNoCrc(FileName,  Stream) then begin
- {$ELSE}
- if not ExtractGz(FileName,  Stream) then begin
- {$ENDIF}
-   printf('Unable to extract image '+Filename);
-   Stream.Free;
-   exit;
- end;
+  {$ELSE}
+  if not ExtractGz(FileName,  Stream) then begin
+  {$ENDIF}
+
+    printf('Unable to extract image '+Filename);
+    Stream.Free;
+    exit;
+   end;
+
  Stream.Position:=0;
  Try
   {$warn 5058 off}Stream.ReadBuffer (fHdr, SizeOf (TNIFTIHdr));{$warn 5058 on}
@@ -3914,7 +4039,7 @@ const
 function boundFloat(v: single): integer; inline;
 begin
      if v <= 0 then exit(0);
-     if v >= 4095 then exit(4095);
+     if v >= kMaxBin then exit(kMaxBin);
      result := round(v);
 end;
 var
@@ -3925,6 +4050,7 @@ var
   mx : Single = (- 1.0) / (0.0);
   v, slope: single;
   histo: TUInt32s;
+  //{$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
 begin
   vol32 := TFloat32s(fRawVolBytes);
   //vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]*fVolumesLoaded);
@@ -3935,7 +4061,6 @@ begin
   {$IFDEF RESCALE32}
   for i := 0 to (vx-1) do begin
      if (specialsingle(vol32[i])) then vol32[i] := 0.0;
-     //if (vol32[i] = 0) then n0 := n0 + 1;
      vol32[i] := (vol32[i] * fHdr.scl_slope) + fHdr.scl_inter;
      if vol32[i] < mn then
         mn := vol32[i];
@@ -3949,10 +4074,10 @@ begin
   fHdr.scl_inter := 0;
   fHdr.scl_slope := 1;
   {$ELSE}
+  // {$IFDEF TIMER}startTime := now;{$ENDIF}
   for i := 0 to (vx-1) do begin
      if (specialsingle(vol32[i])) then vol32[i] := 0.0;
      v := (vol32[i] * fHdr.scl_slope) + fHdr.scl_inter;
-     //if (vol32[i] = 0) then n0 := n0 + 1;
      if v < mn then
         mn := v;
      if v > mx then
@@ -3960,6 +4085,7 @@ begin
      if v = 0 then
         nZero := nZero + 1;
   end;
+  // {$IFDEF TIMER}printf(format('>Init time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
   {$ENDIF}
   //robustMinMax(mn,mx);
   fMin := mn;
@@ -3979,6 +4105,7 @@ begin
       histo[i] := 0;
   for i := 0 to (vx-1) do
       inc(histo[ boundFloat((vol32[i]-mn) * slope)]);
+
   thresh := round(0.01 * vx);
   sum := 0;
   for i := 0 to kMaxBin do begin
@@ -4727,7 +4854,7 @@ end;
 {$ENDIF}
 procedure TNIfTI.DisplayRGB();
 var
-   vx, i: integer;
+   vx: integer;
 begin
  vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
  if (vx < 1) then exit;
@@ -5344,7 +5471,7 @@ begin
     //FastGz uncompresses entire volume in one step: much faster
     // disadvantage: for very large files we might not want to decompress entire volume
     result := LoadFastGz(FileName,isNativeEndian);
-    exit;
+    if result then exit;
  end;
  {$ENDIF}
  Stream := TGZFileStream.Create (FileName, gzopenread);
@@ -5391,7 +5518,8 @@ begin
   if (fVolumesLoaded = fVolumesTotal) then begin // did not trigger LoadFewVolumes
      Stream.Free;
      result := LoadFastGz(FileName,isNativeEndian);
-     exit;
+     if result then exit;
+     Stream := TGZFileStream.Create (FileName, gzopenread);
   end;
   {$ENDIF}
   if  (fVolumeDisplayed > 0) and (fVolumeDisplayed < HdrVolumes(fHdr)) and (fIsOverlay) then begin
@@ -6704,7 +6832,7 @@ begin
           fAutoBalMax := fHdr.cal_max;
      end;
   end;
-  {$IFDEF TIMER}printf(format('Init time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
+  {$IFDEF TIMER}printf(format('Load Init time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
   {$IFDEF TIMER}startTime := now;{$ENDIF}
   fWindowMin := fAutoBalMin;
   fWindowMax := fAutoBalMax;
@@ -8047,7 +8175,7 @@ begin
   else if fHdr.datatype = kDT_INT16 then
        initInt16()
   else if fHdr.datatype = kDT_FLOAT then
-       initFloat32()
+  	initFloat32()
   else if fHdr.datatype = kDT_RGB then begin
        fAutoBalMin := 0;
        fAutoBalMax := 255;

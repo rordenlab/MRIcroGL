@@ -27,7 +27,7 @@ implementation
 {$include opts.inc} //for  DEFINE FASTGZ
 uses
   {$IFDEF FASTGZ}
-  SynZip,
+    SynZip,
   {$ELSE}
   gziputils,
   {$ENDIF}
@@ -252,10 +252,16 @@ begin
             if tagname = '' then continue;
             if CompareText(namStr,tagname) <> 0 then continue;
             {$IFDEF FASTGZ}
-            outStream.SetSize(0);
-            inStream.Position := 0; // goto start of input stream
-            outStream.Position := 0; // goto start of output stream
-            UnCompressStream(inStream.Memory, tagBytes, outStream, nil, true);
+              inStream.Position := 0; // goto start of input stream
+              {$IFDEF XLIBDEFLATE}
+              outStream.SetSize(tagBytes);
+              outStream.Position := 0; // goto start of output stream
+              UncompressMemX(inStream.Memory, outStream.Memory, tagBytes, dstLen, cmpBytes);
+              {$ELSE}
+              outStream.SetSize(0);
+              outStream.Position := 0; // goto start of output stream
+              UnCompressStream(inStream.Memory, tagBytes, outStream, nil, true);
+              {$ENDIF}
             {$ENDIF}
             //at this stage we have found our desired header and image
             //read header

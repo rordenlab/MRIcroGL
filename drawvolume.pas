@@ -262,8 +262,7 @@ var
   f: FloatRAp;
   d,z, img2D : TFloat32s;
   v: TInt32s;
-  zeros: boolean;
-
+  //zeros: boolean;
 begin
 	cols := dim.y;
 	rows := dim.x;
@@ -1337,7 +1336,7 @@ end;
 procedure TDraw.voiMouseDown(Color, Orient: int64; Xfrac, Yfrac, Zfrac:  single);
 //Orient: Ax(1), Cor(2), Sag(3)
 var
-  nPix, nSlices, volOffset: int64;
+  nPix, nSlices: int64;
 begin
      if (view3d = nil) then exit;
      if ((dim3d[1] * dim3d[2]*dim3d[3]) < 1) then exit;
@@ -1713,7 +1712,7 @@ end;
 
 procedure TDraw.voiMorphologyFill(intenVol: TUInt8s; Color: int64; Xmm, Ymm, Zmm, Xfrac, Yfrac, Zfrac:  single; dxOrigin, radiusMM: int64; drawMode: int64);
 var
-  nPix,  i, x, y, z: int64;
+  nPix,  x, y, z: int64;
   inVol: TUInt8s;
 begin
      if (Color < 0) then exit;

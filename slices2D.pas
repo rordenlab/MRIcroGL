@@ -14,8 +14,9 @@ const //slice displays
   kCoronalOrient = 2;
   kSagRightOrient = 4;
   kSagLeftOrient = 8;
-  kAxCorSagOrient = 16;
-  kMax2DOrient = kAxCorSagOrient;
+  kAxCorSagOrient4 = 12;
+  kAxCorSagOrient3 = 16;
+  kMax2DOrient = kAxCorSagOrient3;
   kMosaicOrient = 32;
   kRenderOrient = 64;
 type
@@ -75,6 +76,7 @@ type
     procedure TextLabelLeft(X,Y: single; Caption: string);
     procedure TextLabelTop(X,Y: single; Caption: string);
   public
+    axCorSagOrient4XY: TVec3i;
     distanceLineStart, distanceLineEnd: TVec3;//TVertex2D;
     distanceLineOrient: integer;
     cropMask:TVec6;
@@ -116,7 +118,7 @@ type
 
 implementation
 
-uses mainunit;
+//uses mainunit;
 const
   //kBlockSzQ = 256; //expand "quad2Ds" buffer by chunks of 256 quads
   kBlockSz = 256 * 6; //expand "sliceVerts" and "lineVerts" by chunks
@@ -872,48 +874,21 @@ begin
     //GLForm1.Caption := format('%g %g', [w,h]);
     //GLForm1.Caption := format('%g %g %g', [scale1row,scale2row,scale3row]);
     //GLForm1.Caption := format('%g %g %g', [volScale.x, volScale.y, volScale.z]);
-    if (scale3row > scale1row) and (scale3row > scale2row) then begin
+    if (orient = kAxCorSagOrient4) then begin //OKRA force a 2*2 ROW*COL display
+     scale1row := 0;
+     scale3row := 0;
+    end else if (scale3row > scale1row) and (scale3row > scale2row) then begin // 3*1 ROW*COL
        scale1row := 0;
        scale2row := 0;
-    end else if (scale1row > scale2row) then begin
+    end else if (scale1row > scale2row) then begin // 1*3 ROW*COL display
        scale2row := 0;
        scale3row := 0;
-    end else begin
+    end else begin  //default a 2*2 ROW*COL display
         scale1row := 0;
         scale3row := 0;
     end;
     //GLForm1.Caption := format('%g %g %g', [scale1row,scale2row,scale3row]);
     scale := max(max(scale1row, scale2row), scale3row);
-    (*
-    texwhratio := (volScale.x+volScale.y) / (volScale.y+volScale.z);
-    texwhratio1 := max(volScale.x,volScale.y) / (volScale.y+volScale.z+volScale.z);
-    scale1row := 0;
-    scale1col := 0;
-    if texwhratio > whratio then begin
-      scale := (texw)/(volScale.x+volScale.y);
-      //check for one-column display
-      texwhratio := (max(volScale.x,volScale.y)) /(volScale.y+volScale.z+volScale.z);
-      if texwhratio > whratio then
-         scale1col := (texw)/max(volScale.y,volScale.z)
-      else
-          scale1col := (texh)/(volScale.y+volScale.z+volScale.z);
-      if (scale1col > scale) then
-         scale := scale1col
-      else
-          scale1col := 0;
-    end else begin
-       scale := (texh)/ (volScale.y+volScale.z);
-       //next: check one-row display scaling
-       texwhratio := (volScale.x+volScale.x+volScale.y) / max(volScale.y,volScale.z);
-       if texwhratio > whratio then
-          scale1row := (texw)/(volScale.x+volScale.x+volScale.y)
-       else
-           scale1row := (texh)/ max(volScale.y,volScale.z);
-       if (scale1row > scale) then
-          scale := scale1row
-       else
-           scale1row := 0;
-    end;  *)
     //axial
     texH := volScale.y * scale;
     texW := volScale.x * scale;
@@ -932,7 +907,11 @@ begin
     else
         texL := texL+texW;
     texW := volScale.y * scale;
-    DrawSag(texL,texB, texW,texH, sliceFrac2D.x);
+    DrawSag(texL,texB, texW,texH, sliceFrac2D.x); //L,B, W,H, XFrac
+    axCorSagOrient4XY.x := round(texW); //embedded rendering height
+    axCorSagOrient4XY.y := round(texW); //embedded rendering width
+    axCorSagOrient4XY.z := round(texL); //embedded rendering left offset
+    //GLForm1.Caption := format('%g %g %g', [texL,texB,texH]); //OKRA
   end;
 end;
 

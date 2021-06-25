@@ -10,6 +10,7 @@ uses
   {$ENDIF}{$ENDIF}
   //{$IFDEF LCLGtk2}uscale,{$ENDIF}
   {$IFDEF Darwin}uscale,{$ENDIF}
+  {$IFDEF LCLGtk3}uscale,{$ENDIF}
   //{$ifdef windows},udark, {$endif}
   {$ifdef windows}Windows, {$endif}
   Interfaces, // this includes the LCL widgetset
@@ -31,7 +32,7 @@ begin
   Application.CreateForm(TCropForm, CropForm);
   Application.CreateForm(TIntensityFilterForm, IntensityFilterForm);
   //{$ifdef windows} SetDarkTheme; {$endif}
-  //{$IFDEF LCLGtk2}ConstrainTrackBars();{$ENDIF}  //if unpatched, see https://bugs.freepascal.org/view.php?id=35861
+  {$IFDEF LCLGtk3}ConstrainTrackBars();{$ENDIF}  //if unpatched, see https://bugs.freepascal.org/view.php?id=35861
   {$IFDEF Darwin}ConstrainTrackBars();{$ENDIF}  //if unpatched, see https://bugs.freepascal.org/view.php?id=35861
   Application.Run;
   //Windows: if you get an error "Can't find object file" you can copy the 'static' folder from
