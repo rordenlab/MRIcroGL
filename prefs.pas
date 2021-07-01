@@ -17,8 +17,8 @@ type
          MaxTexMb, MultiSample124, ClusterNeighborMethod, VolumeSaveFormat, VoiSaveFormat: integer;
          ScreenCaptureTransparentBackground, LandmarkPanel, LoadFewVolumes,
          DebugMode, LoadSmooth, LabelOrient, RulerVisible, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay,
-         FlipYZ, FlipLR_Radiological, SkipPrefWriting, AutoClusterizeAtlases: boolean;
-         AfniDir, CustomDcm2niix, PyLib, MosaicStr, InitScript, PrevScript, PrevBackgroundImage: string;
+         FlipYZ, FlipLR_Radiological, SkipPrefWriting, AutoClusterizeAtlases, RenderDepthPicker: boolean;
+         AfniDir, CustomDcm2niix, PyLib, MosaicStr, InitScript, PrevScript, PrevBackgroundImage, DicomDir: string;
          ClearColor: TRGBA;
          PrevFilename: TMRU;
 
@@ -96,6 +96,7 @@ begin
             //if not DirectoryExists(AfniDir) then AfniDir := '';
             ClusterNeighborMethod := 1; //1=faces only,2=faces+edges,3=faces+edges+corners
             PrevBackgroundImage := '';
+            DicomDir := '';
             CustomDcm2niix := '';
             RetinaDisplay := true;
             //MultiSample := true;
@@ -106,6 +107,7 @@ begin
             //DisplayOrient:= kRenderOrient;
             StartupDisplayOrient := DisplayOrient;
             DarkMode := false;
+            RenderDepthPicker := true;
             GradientMode := 2; //kGradientModeGPUSlow
             StartupWindowMode := 0;
             LineWidth := 1;
@@ -253,6 +255,9 @@ begin
   IniStr(lRead, lIniFile, 'PyLib', lPrefs.PyLib);
   IniStr(lRead, lIniFile, 'AfniDir', lPrefs.AfniDir);
   IniStr(lRead, lIniFile, 'PrevBackgroundImage', lPrefs.PrevBackgroundImage  );
+  IniStr(lRead, lIniFile, 'DicomDir', lPrefs.DicomDir  );
+  if (lRead) and (not DirectoryExists(lPrefs.DicomDir)) then
+  	lPrefs.DicomDir := '';
   IniStr(lRead, lIniFile, 'CustomDcm2niixExe', lPrefs.CustomDcm2niix);
   //Ints
   IniInt(lRead,lIniFile, 'ClusterNeighborMethod', lPrefs.ClusterNeighborMethod);
@@ -276,6 +281,7 @@ begin
         IniBool(lRead,lIniFile, 'RetinaDisplay',lPrefs.RetinaDisplay);
         IniBool(lRead,lIniFile, 'DarkMode',lPrefs.DarkMode);
     {$ENDIF}
+  IniBool(lRead,lIniFile, 'RenderDepthPicker',lPrefs.RenderDepthPicker);
   //IniBool(lRead,lIniFile, 'MultiSample',lPrefs.MultiSample);
   IniBool(lRead,lIniFile, 'ColorbarVisible',lPrefs.ColorbarVisible);
   IniBool(lRead,lIniFile, 'RulerVisible',lPrefs.RulerVisible);

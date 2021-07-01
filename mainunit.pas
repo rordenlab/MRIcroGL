@@ -9,6 +9,7 @@ unit mainunit;
    //{$DEFINE DARKMODE}
 {$ENDIF}
 {$IFNDEF METALAPI}
+{$WARN 5023 off : Unit "$1" not used in $2}
  {$include ../Metal-Demos/common/glopts.inc}
 {$ENDIF}
 {$IFDEF LCLCarbon}
@@ -29,6 +30,12 @@ interface
 {$include opts.inc} //for  DEFINE MOSAICS
 uses
   {$IFDEF MATT1}umat, {$ENDIF}
+  {$IFDEF METALAPI}
+  	//{$IFDEF DEPTHPICKER}MetalUtils,{$ENDIF}
+  	MetalPipeline,  Metal,MetalControl, mtlvolume2,
+  	{$IFDEF GRAPH}mtlgraph,{$ENDIF}
+  	{$IFDEF CLRBAR}mtlclrbar, {$ENDIF}
+  {$ENDIF}
   {$IFDEF COMPILEYOKE} yokesharemem, {$ENDIF}
   {$IFDEF Linux} LazFileUtils, {$ENDIF}
   {$IFDEF AFNI} nifti_foreign, afni_fdr, {$ENDIF}
@@ -36,7 +43,8 @@ uses
   {$IFDEF Darwin} MacOSAll, CocoaAll,{$ENDIF}
   {$IFDEF LCLCocoa}SysCtl, {$IFDEF DARKMODE}nsappkitext, {$ENDIF}{$IFDEF NewCocoa} UserNotification,{$ENDIF} {$ENDIF}
   {$IFDEF UNIX}Process,{$ELSE} Windows,{$ENDIF}
-  ctypes, resize, ustat, LazVersion,  tiff2nifti, //LCLMessageGlue,
+  {$WARN 5024 OFF}LazVersion,{$WARN 5024 ON}
+  ctypes, resize, ustat,  tiff2nifti, //LCLMessageGlue,
   lcltype, GraphType, Graphics, dcm_load, crop, intensityfilter,
   LCLIntf, slices2D, StdCtrls, SimdUtils, Classes, SysUtils, Forms, Controls,clipbrd,
   Dialogs, Menus, ExtCtrls, CheckLst, ComCtrls, Spin, Types, fileutil, ulandmarks, nifti_types,
@@ -102,6 +110,7 @@ type
     DrawIntensityFilterMenu: TMenuItem;
     DrawDilateMenu: TMenuItem;
     LayerExport8BitMenu: TMenuItem;
+    DicomDirMenu: TMenuItem;
     MPR4Menu: TMenuItem;
     ScriptHaltMenu: TMenuItem;
     NimlMenu: TMenuItem;
@@ -359,6 +368,7 @@ type
     procedure AfniPMenuClick(Sender: TObject);
     procedure AfniQMenuClick(Sender: TObject);
     procedure CenterPanelClick(Sender: TObject);
+    procedure DicomDirMenuClick(Sender: TObject);
     procedure DrawIntensityFilterMenuClick(Sender: TObject);
     procedure FormChangeBounds(Sender: TObject);
     procedure FormResize(Sender: TObject);
@@ -610,6 +620,9 @@ type
     procedure DrawIntensityFilter(rampAbove, rampBelow, drawMode: integer);
     procedure ForceOverlayUpdate();
     procedure ZoomBtnClick(Sender: TObject);
+    {$IFDEF DEPTHPICKER}{$IFDEF METALAPI}
+    //function MTLCopyLastFrameTextureX(texture: MTLTextureProtocol; hasAlpha: boolean): CGImageRef;
+    {$ENDIF}{$ENDIF}
   private
     //
   end;
@@ -622,9 +635,6 @@ implementation
 {$R *.lfm}
 
 {$IFDEF METALAPI}
-uses
-  {$IFDEF GRAPH}mtlgraph,{$ENDIF}
-  {$IFDEF CLRBAR}mtlclrbar, {$ENDIF} MetalPipeline,  Metal,MetalControl, mtlvolume2;
 const  kExt = '.metal';
 {$ELSE}
 uses
@@ -995,6 +1005,34 @@ end;
 procedure TGLForm1.CenterPanelClick(Sender: TObject);
 begin
 
+end;
+
+procedure TGLForm1.DicomDirMenuClick(Sender: TObject);
+var
+ Info : TSearchRec;
+ Dir: string;
+ mostRecent: TDateTime;
+ FileNames: array of String ;
+begin
+  mostRecent := -1;
+  Dir := '';
+    if not DirectoryExists(gPrefs.DicomDir) then exit;
+    If FindFirst (IncludeTrailingPathDelimiter(gPrefs.DicomDir)+'*',faDirectory,Info)=0 then begin
+      Repeat
+        if ((Info.Attr and faDirectory) = faDirectory)  and (Info.Name[1] <> '.') then begin
+          if (Info.TimeStamp < mostRecent) then continue;
+          mostRecent := Info.TimeStamp;
+          Dir := Info.Name;
+      	end;
+      Until FindNext(info)<>0;
+      FindClose(Info);
+   end;
+   if length(Dir) < 1 then exit;
+   Dir :=  IncludeTrailingPathDelimiter(gPrefs.DicomDir) + Dir;
+   setlength(Filenames, 1);
+   Filenames[0] := Dir;
+   FormDropFiles(nil, FileNames);
+   Filenames := nil;
 end;
 
 procedure TGLForm1.DrawIntensityFilterMenuClick(Sender: TObject);
@@ -8353,6 +8391,7 @@ bmp: TBitmap;
 png: TPortableNetworkGraphic;
 {$ENDIF}
 begin
+ result := false;
  while (isBusy) or (GLForm1.Updatetimer.enabled) do
        Application.ProcessMessages; //apply any time consuming updates
  if fnm <> '' then begin
@@ -8368,7 +8407,7 @@ begin
  if (gPrefs.DisplayOrient = kMosaicOrient) and (gPrefs.MosaicStr <> '') then begin
      SaveMosaicBmp(fnm);
     Vol1.Quality1to5 := q;
-    exit;
+    exit(false);
  end;
  ViewGPU1.Invalidate; //20200616
  Vol1.SaveBmp(fnm, gPrefs.ScreenCaptureTransparentBackground);
@@ -8791,6 +8830,68 @@ var
 gIsMouseDown: boolean = false;      // https://bugs.freepascal.org/view.php?id=35480
 {$ENDIF}
 
+{$IFDEF DEPTHPICKER}{$IFDEF METALAPI}
+
+(*function TGLForm1.MTLCopyLastFrameTextureX(texture: MTLTextureProtocol; hasAlpha: boolean): CGImageRef;
+var
+  wid, ht, bytesPerRow, bytesCount: integer;
+  bytes: pointer;
+  colorSpace: CGColorSpaceRef;
+  bitmapInfo: CGBitmapInfo;
+  provider: CGDataProviderRef;
+  imageRef: CGImageRef;
+  blitEncoder: MTLBlitCommandEncoderProtocol;
+  bitmapContext: CGContextRef;
+  decompressedImageRef: CGImageRef;
+begin
+ ViewGPU1.SharedContext;
+	Fatal(CurrentThreadContext = nil, kError_InvalidContext);
+	Fatal(texture.pixelFormat <> MTLPixelFormatBGRA8Unorm, 'texture must be MTLPixelFormatBGRA8Unorm pixel format.');
+
+	// read bytes
+	wid := texture.width;
+	ht := texture.height;
+  bytesPerRow := texture.width * 4;
+	bytesCount := wid * ht * 4;
+	bytes := GetMem(bytesCount);
+
+	// blit from last command buffer
+	with CurrentThreadContext do
+	begin
+		commandBuffer := commandQueue.commandBuffer;
+		blitEncoder := commandBuffer.blitCommandEncoder;
+		view.draw;
+		blitEncoder.synchronizeResource(texture);
+		blitEncoder.endEncoding;
+		commandBuffer.waitUntilCompleted;
+	end;
+
+	// get bytes from texture
+  texture.getBytes_bytesPerRow_fromRegion_mipmapLevel(bytes, bytesPerRow, MTLRegionMake2D(0, 0, wid, ht), 0);
+
+  // create CGImage from texture bytes
+  colorSpace := CGColorSpaceCreateDeviceRGB;
+	bitmapInfo := kCGImageAlphaFirst or kCGBitmapByteOrder32Little;
+	provider := CGDataProviderCreateWithData(nil, bytes, bytesCount, nil);
+	imageRef := CGImageCreate(wid, ht, 8, 32, bytesPerRow, colorSpace, bitmapInfo, provider, nil, 1, kCGRenderingIntentDefault);
+
+	if not hasAlpha then
+		begin
+		  bitmapInfo := kCGImageAlphaNoneSkipLast or kCGBitmapByteOrder32Little;
+		  bitmapContext := CGBitmapContextCreate(nil, CGImageGetWidth(imageRef), CGImageGetHeight(imageRef), CGImageGetBitsPerComponent(imageRef), CGImageGetBytesPerRow(imageRef),  colorSpace, bitmapInfo);
+		  CGContextDrawImage(bitmapContext, CGRectMake(0, 0, CGImageGetWidth(imageRef), CGImageGetHeight(imageRef)), imageRef);
+		  decompressedImageRef := CGBitmapContextCreateImage(bitmapContext);
+		  CFRelease(imageRef);
+		  CFRelease(bitmapContext);
+		  result := decompressedImageRef;
+	  end
+	else
+		result := imageRef;
+
+	CFRelease(provider);
+	CFRelease(colorSpace);
+end;      *)
+{$ENDIF}{$ENDIF}
 procedure TGLForm1.PickRenderDepth( X, Y: Integer);
 {$IFDEF DEPTHPICKER}
 var
@@ -8800,10 +8901,21 @@ var
  niftiVol: TNIfTI;
 begin
   if not vols.Layer(0,niftiVol) then exit;
+  {$IFNDEF METALAPI}
+  glDrawBuffer(GL_BACK);
+  {$ENDIF}
   Vol1.PaintDepth(niftiVol, gPrefs.DisplayOrient = kAxCorSagOrient4);
+  {$IFDEF METALAPI}
+  //todo
+  //LayerBox.caption := format('%0.2g %0.2g %0.2g %0.2g', [c.X, c.Y, c.Z, c.A]);
+  c := Vec4(0.5, 0.5, 0.5, 0.5);
+  //https://stackoverflow.com/questions/28424883/ios-metal-how-to-read-from-the-depth-buffer-at-a-point
+  {$ELSE}
+  //https://learnopengl.com/Advanced-OpenGL/Framebuffers
   glReadBuffer(GL_BACK);
   glReadPixels(X, Y, 1, 1, GL_RGBA, GL_FLOAT, @c); //OSX-Darwin   GL_BGRA = $80E1;  GL_UNSIGNED_INT_8_8_8_8_EXT = $8035;
-  //LayerBox.caption := format('%0.2g %0.2g %0.2g %0.2g', [c.X, c.Y, c.Z, c.A]);
+
+  {$ENDIF}
   sliceMM := niftiVol.FracMM(Vec3(c.X, c.Y, c.Z));
   sum := c.r + c.g + c.b; //a click outside the rendering will return background color. No good solution...
   if (sum < 0.001) or (sum > 2.99) then begin
@@ -8868,7 +8980,7 @@ begin
         UpdateTimer.Enabled := true;
      exit;
   end;
- if gPrefs.DisplayOrient = kRenderOrient then PickRenderDepth(X,Yrev);
+ //if gPrefs.DisplayOrient = kRenderOrient then PickRenderDepth(X,Yrev);
  if gPrefs.DisplayOrient > kMax2DOrient then exit;
  if  (Vols.Drawing.ActivePenColor >= 0) and (not AutoROIForm.Visible) and (not (ssCtrl in Shift)) and (not (ssAlt in Shift)) and (not (ssMeta in Shift))  then begin
     EnsureOpenVoi();
@@ -8890,7 +9002,7 @@ begin
  if ssAlt in Shift then Vol1.Slices.distanceLineOrient := -1; // xxx
  if (gPrefs.DisplayOrient = kAxCorSagOrient4) then begin
  	Vol1.SetSlice2DFrac(Vol1.GetSlice2DFrac(X,Y,i)); //
- 	if (i < 0) then begin
+ 	if (i < 0) and (gPrefs.RenderDepthPicker) then begin
           PickRenderDepth(X,Yrev);
           //LayerBox.Caption := inttostr(random(888));
           exit;
@@ -9417,6 +9529,9 @@ begin
      GLForm1.WindowState:= wsFullScreen;
      {$IFNDEF LCLCocoa}ExitFullScreenMenu.Visible:=true;{$ENDIF} //Linux has issues getting out of full screen
   end;
+
+  if DirectoryExists(gPrefs.DicomDir) then
+  	DicomDirMenu.Visible:= true;
   //auto generate shaders
   shaderPath := ShaderDir;
   if not DirectoryExists(shaderPath) then showmessage('Unable to find shaders "'+shaderPath+'"');

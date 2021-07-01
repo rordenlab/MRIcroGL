@@ -1,5 +1,5 @@
 object GLForm1: TGLForm1
-  Left = 764
+  Left = 613
   Height = 662
   Top = 25
   Width = 916
@@ -1859,6 +1859,11 @@ object GLForm1: TGLForm1
       object OpenFSLMenu: TMenuItem
         Caption = 'Open FSL'
         OnClick = OpenFSLMenuClick
+      end
+      object DicomDirMenu: TMenuItem
+        Caption = 'Open Recent DICOM'
+        Visible = False
+        OnClick = DicomDirMenuClick
       end
       object OpenAltasMenu: TMenuItem
         Tag = 1

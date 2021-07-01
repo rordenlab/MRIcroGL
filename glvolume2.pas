@@ -27,7 +27,7 @@ const
  kGradientModeGPUFast = 1; //low precision smooth
  kGradientModeGPUSlow = 2; //high precision smooth
  kGradientModeCPUSlowest = 3; //highest precision
-
+ kQualityMedium = 3;
  kQualityBest = 5;
 type
   TGPUVolume = class
@@ -2483,6 +2483,7 @@ end;
 procedure TGPUVolume.Paint2D(var vol: TNIfTI; Drawing: TDraw; DisplayOrient: integer);
 var
  w,h, scale, rulerPx: single;
+ i: integer;
  {$IFNDEF COREGL}
  i: integer;
  p: TVec2;
@@ -2635,7 +2636,13 @@ begin
    clrbar.Draw();
   {$ENDIF}
   if (DisplayOrient = kAxCorSagOrient4) then begin
-        PaintCore(vol, slices2D.axCorSagOrient4XY, false, false);
+    if (DisplayOrient = kAxCorSagOrient4) then begin
+          i := RayCastQuality1to5;
+          if (i < kQualityMedium) then
+           	RayCastQuality1to5 := kQualityMedium;
+          PaintCore(vol, slices2D.axCorSagOrient4XY, false, false);
+          RayCastQuality1to5 := i;
+    end;
   end;
   glControl.SwapBuffers;
   //reset linear interpolation - much better for rendering and mosaics
@@ -2651,7 +2658,7 @@ end;
 {$ENDIF}
 
 
-{$UNDEF DEPTH}
+
 procedure TGPUVolume.Paint(var vol: TNIfTI);
 var
 	widthHeightLeft: TVec3i;
