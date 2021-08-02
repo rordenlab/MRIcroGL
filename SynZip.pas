@@ -5098,14 +5098,6 @@ end;
   {$ENDIF}
   {$ifdef WIN64}
     {$ifdef USEZLIBSSE}
-    (*{$L ..\static\x86_64-win64\sse\inffast.o}
-    {$L ..\static\x86_64-win64\sse\inftrees.o}
-    {$L ..\static\x86_64-win64\sse\inflate.o}
-    {$L ..\static\x86_64-win64\sse\deflate.o}
-    {$L ..\static\x86_64-win64\sse\trees.o}
-    {$L ..\static\x86_64-win64\sse\adler32.o}
-    {$L ..\static\x86_64-win64\sse\crc32.o}
-    {$L ..\static\x86_64-win64\sse\zutil.o} *)
     {$L .\x86_64-win64\adler32_simd.o}
     {$L .\x86_64-win64\crc32_simd.o}
     {$L .\x86_64-win64\inffast_chunk.o}
@@ -5128,7 +5120,7 @@ end;
     {$L static\x86_64-win64\crc32.o}
     {$L static\x86_64-win64\zutil.o}
     {$endif USEZLIBSSE}
-    {$linklib ..\static\x86_64-win64\libmsvcrt.a}
+    {$linklib .\x86_64-win64\libmsvcrt.a}
   {$endif}
 
 function deflate(var strm: TZStream; flush: integer): integer; cdecl; external;

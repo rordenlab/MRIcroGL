@@ -10,6 +10,7 @@ interface
 {$DEFINE MATCAP}
 {$DEFINE CLRBAR}
 {$DEFINE TIMER} //reports GPU gradient time to stdout (Unix only)
+//{$DEFINE DEPTHPICKER_USEFRAMEBUFFER}
 {$include ../Metal-Demos/common/glopts.inc}
 uses
   {$IFDEF MATCAP} GraphType, FPImage, IntfGraphics, LCLType,{$ENDIF}
@@ -33,6 +34,9 @@ type
   TGPUVolume = class
       private
         {$IFDEF DEPTHPICKER}
+        {$IFDEF DEPTHPICKER_USEFRAMEBUFFER}
+        depthPickerFrameBuffer , depthPickerTex: GLuint;
+        {$ENDIF}
         depthProgram: GLuint;
         rayDirLocDepth, mvpLocDepth, textureSzLocDepth, overlaysLocDepth,lightPositionLocDepth,clipPlaneLocDepth,clipThickLocDepth,intensityVolLocDepth,sliceSizeLocDepth,overlayIntensityVolLocDepth,stepSizeLocDepth: GLint;
         {$ENDIF}
@@ -1557,13 +1561,24 @@ begin
   programLine2D := initVertFrag(kVertLine2D,kFragLine2D);
   //glUseProgram(programLine2D);
   uniform_viewportSizeLine := glGetUniformLocation(programLine2D, pAnsiChar('ViewportSize'));
-  {$IFDEF DEPTHPICKER}
+  {$IFDEF DEPTHPICKER}{$IFDEF DEPTHPICKER_USEFRAMEBUFFER}
   {$IFDEF COREGL}
-  //glGenFramebuffers(1, @depthFrameBuffer);
+  glGenFramebuffers(1, @depthPickerFrameBuffer);
+  glBindFramebuffer(GL_FRAMEBUFFER, depthPickerFrameBuffer);
   {$ELSE}
-  //glGenFramebuffersEXT(1, @depthFrameBuffer);
+  glGenFramebuffersEXT(1, @depthPickerFrameBuffer);
+  glBindFramebufferEXT(GL_FRAMEBUFFER, depthPickerFrameBuffer);
   {$ENDIF}
+  glGenTextures(1, @depthPickerTex);
+  glBindTexture(GL_TEXTURE_2D, depthPickerTex);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  {$IFDEF COREGL}
+  glBindFramebuffer(GL_FRAMEBUFFER_EXT, 0);
+  {$ELSE}
+  glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
   {$ENDIF}
+  {$ENDIF}{$ENDIF}
   {$IFDEF COREGL}
   //setup VAO for Tex
   vboTex2D := 0;
@@ -2485,7 +2500,6 @@ var
  w,h, scale, rulerPx: single;
  i: integer;
  {$IFNDEF COREGL}
- i: integer;
  p: TVec2;
  c: TVec4;
  {$ENDIF}
@@ -2673,12 +2687,26 @@ procedure TGPUVolume.PaintDepth(var vol: TNIfTI; isAxCorSagOrient4: boolean = fa
 var
 	widthHeightLeft: TVec3i;
 begin
-	widthHeightLeft.x := glControl.clientwidth;
-        widthHeightLeft.y := glControl.clientheight;
-        widthHeightLeft.z := 0;
-        if isAxCorSagOrient4 then
-        	widthHeightLeft := slices2D.axCorSagOrient4XY;
-        PaintCore(vol, widthHeightLeft, false, true);
+  widthHeightLeft.x := glControl.clientwidth;
+  widthHeightLeft.y := glControl.clientheight;
+  {$IFDEF DEPTHPICKER_USEFRAMEBUFFER}
+  {$IFDEF COREGL}
+  glBindFramebuffer(GL_FRAMEBUFFER, depthPickerFrameBuffer);
+  {$ELSE}
+  glBindFramebufferEXT(GL_FRAMEBUFFER, depthPickerFrameBuffer);
+  {$ENDIF}
+  glBindTexture(GL_TEXTURE_2D, depthPickerTex);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, widthHeightLeft.x, widthHeightLeft.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NIL);
+  {$IFDEF COREGL}
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, depthPickerTex, 0);
+  {$ELSE}
+  glFramebufferTexture2DExt(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, depthPickerTex, 0);
+  {$ENDIF}
+  {$ENDIF}
+  widthHeightLeft.z := 0;
+  if isAxCorSagOrient4 then
+          widthHeightLeft := slices2D.axCorSagOrient4XY;
+  PaintCore(vol, widthHeightLeft, false, true);
 end;
 
 procedure TGPUVolume.PaintCore(var vol: TNIfTI; widthHeightLeft: TVec3i; clearScreen: boolean = true; isDepthShader: boolean = false);
@@ -2708,15 +2736,25 @@ begin
     else
         glUseProgram(programRaycast);
   end;
+
   {$IFDEF COREGL}
   {$IFDEF LCLgtk3}
   glBindFramebuffer(GL_FRAMEBUFFER, 1);
   {$ELSE}
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   {$ENDIF}
-  {$ELSE}
   //2020 glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
   {$ENDIF}
+  {$IFDEF DEPTHPICKER}{$IFDEF DEPTHPICKER_USEFRAMEBUFFER}
+  {$IFDEF COREGL}
+  if isDepthShader then
+  	glBindFramebuffer(GL_FRAMEBUFFER, depthPickerFrameBuffer);
+  {$ELSE}
+  if isDepthShader then
+  	glBindFramebufferExt(GL_FRAMEBUFFER, depthPickerFrameBuffer);
+  {$ENDIF}
+  {$ENDIF}{$ENDIF}
+
   //bind background intensity (color)
   glActiveTexture(GL_TEXTURE2);
   glBindTexture(GL_TEXTURE_3D, intensityTexture3D);

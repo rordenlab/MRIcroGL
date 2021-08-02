@@ -27,16 +27,13 @@
     <RunParams>
       <FormatVersion Value="2"/>
     </RunParams>
-    <RequiredPackages Count="3">
+    <RequiredPackages Count="2">
       <Item1>
         <PackageName Value="lazmetalcontrol"/>
       </Item1>
       <Item2>
-        <PackageName Value="python4lazarus_package"/>
-      </Item2>
-      <Item3>
         <PackageName Value="LCL"/>
-      </Item3>
+      </Item2>
     </RequiredPackages>
     <Units Count="12">
       <Unit0>
@@ -118,7 +115,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="../Metal-Demos/common;../static/x86_64-win64"/>
+      <OtherUnitFiles Value="../Metal-Demos/common;PythonBridge"/>
       <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <CodeGeneration>

@@ -7703,6 +7703,7 @@ begin
         c[i] := c[0];
     if (fHdr.datatype = kDT_INT16) then begin
        vol16 := TInt16s(fRawVolBytes);
+       printf(format('<><><> %d %d %d', [dim.x, dim.y, dim.z]));
        for v := 0 to (fVolumesLoaded-1) do begin //n.b. TTatlas+tlrc.HEAD has two volumes, scan both
           vx := (v * (dim.x * dim.y * dim.z)) -1;
           for z := 0 to (dim.z-1) do
@@ -7718,6 +7719,7 @@ begin
                   c[o].CogXYZ.z := c[o].CogXYZ.z + z;
               end;
       end;
+      writeln(vx);
     end else begin
       for v := 0 to (fVolumesLoaded-1) do begin //n.b. TTatlas+tlrc.HEAD has two volumes, scan both
           vx := (v * (dim.x * dim.y * dim.z)) -1;
@@ -7746,6 +7748,7 @@ begin
         if c[i].SzMM3 > 0 then begin
           c[i].Structure := fLabels[i];
           //c[i].Structure := '>>>>>>'+inttostr(length(fLabels[i]));
+          //printf(format('%d %s %g', [i, c[i].Structure, c[i].SzMM3]));
           c[i].PeakStructure := '-';
           //result in voxels 0..Dim-1
           c[i].CogXYZ.x := c[i].CogXYZ.x / c[i].SzMM3;

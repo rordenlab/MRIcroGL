@@ -877,6 +877,7 @@ begin
     if (orient = kAxCorSagOrient4) then begin //OKRA force a 2*2 ROW*COL display
      scale1row := 0;
      scale3row := 0;
+     //writeln(format('>>%g %g %g', [sliceFrac2D.x, sliceFrac2D.y, sliceFrac2D.z]));
     end else if (scale3row > scale1row) and (scale3row > scale2row) then begin // 3*1 ROW*COL
        scale1row := 0;
        scale2row := 0;

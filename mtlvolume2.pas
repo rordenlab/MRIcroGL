@@ -97,6 +97,8 @@ type
         procedure SetShader(shaderName: string; isUpdatePrefs: boolean = true);
         procedure SetShaderSlider(idx: integer; newVal: single);
         procedure SaveBmp(filename: string; hasAlpha: boolean);
+        function DrawableWidth: integer;
+        function ReadPixel(x, y: integer): UInt32;
         {$IFDEF CLRBAR} procedure SetColorBar(fromColorbar: TGPUClrbar); {$ENDIF}
         procedure  SetTextContrast(clearclr: TRGBA);
         {$IFDEF MATCAP} function SetMatCap(fnm: string): boolean; {$ENDIF}
@@ -300,6 +302,16 @@ begin
     prefValues[idx] :=newVal;
 end;
 
+function TGPUVolume.DrawableWidth: integer;
+begin
+  result := MTLCurrentDrawableTextureWidth;
+end;
+
+function TGPUVolume.ReadPixel(x, y: integer): UInt32;
+begin
+	result := MTLReadPixel(x, y);
+end;
+
 procedure TGPUVolume.SaveBmp(filename: string; hasAlpha: boolean);
 begin
   if filename = '' then
@@ -398,7 +410,6 @@ begin
  if not fileexists(shaderName) then
   writeln('Unable to find ' + shaderName);
  shaderDepth  := MTLCreatePipeline(options);
-
  {$ENDIF}
  //
  options := TMetalPipelineOptions.Default;
@@ -918,7 +929,7 @@ begin
           PaintCore(vol, slices2D.axCorSagOrient4XY, false, false);
           RayCastQuality1to5 := i;
     end;
-  MTLEndFrame;
+  MTLEndFrame();
   //GLForm1.caption := inttostr(slices2D.NumberOfLineVertices) +' '+inttostr(random(888));
 end; //paint2D
 
@@ -1245,10 +1256,12 @@ begin
         PaintCore(vol, widthHeightLeft, true, true);
 end;
 
-procedure printf(s: string);
+(*procedure printf(s: string);
 begin
+  {$IFDEF UNIX}
   writeln(s);
-end;
+  {$ENDIF}
+end;*)
 
 procedure TGPUVolume.PaintCore(var vol: TNIfTI; widthHeightLeft: TVec3i; clearScreen: boolean = true; isDepthShader: boolean = false);
 //procedure TGPUVolume.Paint(var vol: TNIfTI);
@@ -1317,14 +1330,14 @@ begin
   fragUniforms.stepSize := ComputeStepSize (RayCastQuality1to5, maxDim);
   if (clearScreen) then
   	MTLBeginFrame();
-  if (isDepthShader) then begin
-     MTLSetShader(shaderDepth);
-  end else begin
+  {$IFDEF DEPTHPICKER}
+  if (isDepthShader) then
+     MTLSetShader(shaderDepth)
+  else {$ENDIF}
     if RayCastQuality1to5 = kQualityBest then
        MTLSetShader(shader3Dbetter)
     else
         MTLSetShader(shader3D);
-  end;
     MTLSetVertexBytes(@vertUniforms, sizeof(vertUniforms), 1);
     MTLSetFragmentTexture(volTex, 0);
     MTLSetFragmentTexture(gradTex, 1);
@@ -1375,7 +1388,7 @@ begin
       end;
     end;
     {$ENDIF}
-  if (clearScreen) then MTLEndFrame;
+  if (clearScreen) then MTLEndFrame();
 end;
 
 
