@@ -5874,6 +5874,67 @@ begin
 	mArray.Free;
 end; //readOSP()
 
+function readDat (var fname: string; var nhdr: TNIFTIhdr; var swapEndian: boolean): boolean;
+//https://www.wolfgang-knecht.com/computer-graphics/advanced-volume-rendering/
+//https://www.cg.tuwien.ac.at/courses/Visualisierung/Angaben/Bsp1.html#Volums%20Datensätze
+Type
+  Tbv_header = packed record //Next: BVox Format Header structure
+        nx, ny, nz: UINT16;
+  end; // Tbv_header;
+var
+   bhdr : Tbv_header;
+   lHdrFile: file;
+   nvox, nvoxswap, FSz : integer;
+begin
+  result := false;
+  {$I-}
+  AssignFile(lHdrFile, fname);
+  FileMode := fmOpenRead;  //Set file access to read only
+  Reset(lHdrFile, 1);
+  {$I+}
+  if ioresult <> 0 then begin
+        NSLog('Error in reading BVox header.'+inttostr(IOResult));
+        FileMode := 2;
+        exit;
+  end;
+  FSz := Filesize(lHdrFile);
+  bhdr.nx :=  0; //BlockRead should be out not var: https://fpc-pascal.freepascal.narkive.com/M2rzyAkf/blockread-and-buffers
+  BlockRead(lHdrFile, bhdr, sizeof(Tbv_header));
+  CloseFile(lHdrFile);
+  swapEndian := false;
+  nVox := bhdr.nx * bhdr.ny * bhdr.nz * 2; //*2 as 16-bpp
+  if (nVox + sizeof(Tbv_header) ) <> FSz then begin
+    swapEndian := true;
+    bhdr.nx := Swap(bhdr.nx);
+    bhdr.ny := Swap(bhdr.ny);
+    bhdr.nz := Swap(bhdr.nz);
+    nVoxSwap := bhdr.nx * bhdr.ny * bhdr.nz * 2; //*2 as 16-bpp
+    if (2 * nVoxSwap + sizeof(Tbv_header) ) <> FSz then begin
+       NSLog(format('Not a valid DAT file: expected filesize of %d or %d bytes (%dx%dx%d)',[nVoxSwap,nVox, bhdr.nx, bhdr.ny, bhdr.nz]));
+       exit;
+    end;
+
+  end;
+  nhdr.dim[0]:=3;//3D
+  nhdr.dim[1]:=bhdr.nx;
+  nhdr.dim[2]:=bhdr.ny;
+  nhdr.dim[3]:=bhdr.nz;
+  nhdr.dim[4]:=1;
+  nhdr.pixdim[1]:=1.0;
+  nhdr.pixdim[2]:=1.0;
+  nhdr.pixdim[3]:=1.0;
+  nhdr.datatype := kDT_INT16;
+  nhdr.vox_offset := sizeof(Tbv_header);
+  nhdr.sform_code := 1;
+  //nhdr.srow_x[0]:=nhdr.pixdim[1];nhdr.srow_x[1]:=0.0;nhdr.srow_x[2]:=0.0;nhdr.srow_x[3]:=0.0;
+  //nhdr.srow_y[0]:=0.0;nhdr.srow_y[1]:=nhdr.pixdim[2];nhdr.srow_y[2]:=0.0;nhdr.srow_y[3]:=0.0;
+  //nhdr.srow_z[0]:=0.0;nhdr.srow_z[1]:=0.0;nhdr.srow_z[2]:=-nhdr.pixdim[3];nhdr.srow_z[3]:=0.0;
+  SetSForm(nhdr);
+  convertForeignToNifti(nhdr);
+  nhdr.descrip := 'DAT'+kIVers;
+  result := true;
+end; //readDAT
+
 function readForeignHeader(var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean; out xDim64: int64): boolean; overload;
 var
   lExt, lExt2GZ: string;
@@ -5898,6 +5959,8 @@ begin
   end;
   if (PosEx('.AIM',lExt) = 1) then
        result := readAim(lFilename, lHdr, gzBytes, swapEndian)
+  else if (lExt = '.DAT') then
+     result := readDat(lFilename, lHdr, swapEndian)
   else if (lExt = '.DV') then
      result := readDeltaVision(lFilename, lHdr, swapEndian)
   else if (lExt = '.V') then

@@ -38,6 +38,7 @@ void main() {
 	vec4 samplePos = vec4(start.xyz, 0.0);
 	vec4 clipPos = applyClip(dir, samplePos, len);
 	float opacityCorrection = stepSize/sliceSize;
+	gl_FragDepth = 1.0;
 	//fast pass - optional
 	fastPass (len, dir, intensityVol, samplePos);
 	#if ( __VERSION__ > 300 )
@@ -71,11 +72,16 @@ void main() {
 	float boundAcc = 0.0;
 	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
 	const float kEarlyTermination = 0.95;
+	int nHit = 0;
 	while (samplePos.a <= len) {
 		colorSample = texture3Df(intensityVol,samplePos.xyz);
 		samplePos += deltaDir;
 		if (colorSample.a < 0.001) continue;
-		bgNearest = min(samplePos.a,bgNearest);
+		if (nHit < 1) {
+				nHit ++;
+				bgNearest = samplePos.a;
+				setDepthBuffer(samplePos.xyz);
+		}
 		colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
 		gradSample = texture3Df(gradientVol,samplePos.xyz);
 		gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);

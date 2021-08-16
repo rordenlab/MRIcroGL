@@ -151,6 +151,14 @@ begin
 
 end;
 
+procedure sform2pixdim(var hdr: TNIFTIHdr);
+begin //SPM does not save pixdim, so we infer it from the SForm
+     hdr.pixdim[1] := sqrt(sqr(hdr.srow_x[0])+sqr(hdr.srow_y[0])+sqr(hdr.srow_z[0]));
+     hdr.pixdim[2] := sqrt(sqr(hdr.srow_x[1])+sqr(hdr.srow_y[1])+sqr(hdr.srow_z[1]));
+     hdr.pixdim[3] := sqrt(sqr(hdr.srow_x[2])+sqr(hdr.srow_y[2])+sqr(hdr.srow_z[2]));
+     //writeln(format('%g %g %g',  [hdr.pixdim[1], hdr.pixdim[2], hdr.pixdim[3] ]));
+end;
+
 function MatLoad(fnm, tagname: string; var strs: TStringList; out hdr: TNIFTIHdr; var img: TUInt8s): boolean;
 const
   miCOMPRESSED = 15;
@@ -319,6 +327,7 @@ begin
            hdr.srow_y[3] := mat[13];
            hdr.srow_z[3] := mat[14];
            hdr.sform_code := kNIFTI_XFORM_SCANNER_ANAT;
+           sform2pixdim(hdr);
            (*showmessage(format('%g %g %g %g; %g %g %g %g; %g %g %g %g; 0 0 0 1',
              [lHdr.srow_x[0],lHdr.srow_x[1],lHdr.srow_x[2],lHdr.srow_x[3],
               lHdr.srow_y[0],lHdr.srow_y[1],lHdr.srow_y[2],lHdr.srow_y[3],

@@ -6,6 +6,7 @@ interface
 {$DEFINE STRIP} //we can define cube as either a triangle or triangle strip - no implications on performance
 {$DEFINE GPUGRADIENTS} //Computing volume gradients on the GPU is much faster than using the CPU
 {$DEFINE VIEW2D}
+//{$DEFINE LINE3D}
 {$DEFINE CUBE}
 {$DEFINE MATCAP}
 {$DEFINE CLRBAR}
@@ -34,23 +35,29 @@ type
   TGPUVolume = class
       private
         {$IFDEF DEPTHPICKER}
-        {$IFDEF DEPTHPICKER_USEFRAMEBUFFER}
-        depthPickerFrameBuffer , depthPickerTex: GLuint;
+        {$IFNDEF DEPTHPICKER2}depthProgram: GLuint;
+        rayDirLocDepth, mvpLocDepth, textureSzLocDepth, overlaysLocDepth,lightPositionLocDepth,
+         clipPlaneLocDepth,clipThickLocDepth,intensityVolLocDepth,sliceSizeLocDepth,
+         overlayIntensityVolLocDepth,stepSizeLocDepth: GLint;
         {$ENDIF}
-        depthProgram: GLuint;
-        rayDirLocDepth, mvpLocDepth, textureSzLocDepth, overlaysLocDepth,lightPositionLocDepth,clipPlaneLocDepth,clipThickLocDepth,intensityVolLocDepth,sliceSizeLocDepth,overlayIntensityVolLocDepth,stepSizeLocDepth: GLint;
         {$ENDIF}
         {$IFDEF VIEW2D}
         {$IFDEF COREGL}
         vao, vaoTex2D, vboTex2D, vaoLine2D, vboLine2D,
+         {$IFDEF LINE3D}vaoLine3D, vboLine3D,{$ENDIF}
         {$ELSE}
         textureSzLoc : GLint;
         dlTex2D, dlLine2D,  dlBox3D, dlColorEditor,
         {$ENDIF}
+        {$IFDEF LINE3D}
+        programLine3D,
+        {$ENDIF}
         programLine2D, programTex2D: GLuint;
         slices2D: TSlices2D;
+        {$IFDEF LINE3D} mvpLine3DLoc, colorLine3DLoc, {$ENDIF}
         uniform_drawTex, uniform_drawLUT, uniform_drawAlpha,
-        uniform_texVox, uniform_viewportSizeLine, uniform_viewportSizeTex, uniform_backAlpha, uniform_tex, uniform_overlay, uniform_overlaysLoc: GLint;
+        uniform_texVox, uniform_viewportSizeLine, uniform_viewportSizeTex, uniform_backAlpha,
+        uniform_tex, uniform_overlay, uniform_overlaysLoc: GLint;
         colorEditor: TColorEditor;
         isSmooth2D, colorEditorVisible: boolean;
         txt: TGPUFont;
@@ -71,6 +78,10 @@ type
         overlayGradientTexture3D, overlayIntensityTexture3D,
         drawTexture1D, drawTexture3D,
         gradientTexture3D, intensityTexture3D, programRaycast, programRaycastBetter: GLuint;
+        {$IFDEF DEPTHPICKER2}
+        mvp: TMat4;
+        viewportXYWH: TVec4;
+        {$ENDIF}
         {$IFDEF MATCAP}
         matcap2D: GLuint;
         {$ENDIF}
@@ -99,6 +110,7 @@ type
         function Slice2Dmm(var vol: TNIfTI; out vox: TVec3i): TVec3;
         procedure SetSlice2DFrac(frac : TVec3);
         function GetSlice2DFrac(mouseX, mouseY: integer; var  oOrient: integer): TVec3;
+        function Unproject(mouseX, mouseY, depth: single): TVec3;
         function GetSlice2DMaxXY(mouseX, mouseY: integer; var Lo: TPoint): TPoint;
         procedure Paint2D(var vol: TNIfTI; Drawing: TDraw; DisplayOrient: integer);
         {$IFDEF MOSAIC}
@@ -122,6 +134,7 @@ type
         procedure Prepare(shaderName: string);
         procedure SetGradientMode(newMode: integer);
         constructor Create(fromView: TOpenGLControl);
+        procedure PaintCrosshair3D(rgba: TVec4);
         procedure PaintCore(var vol: TNIfTI; widthHeightLeft: TVec3i; clearScreen: boolean = true; isDepthShader: boolean = false);
         procedure Paint(var vol: TNIfTI);
         procedure PaintDepth(var vol: TNIfTI; isAxCorSagOrient4: boolean = false);
@@ -137,11 +150,57 @@ implementation
 {$IFNDEF COREGL}{$IFDEF LINUX}
   {$DEFINE MESA_HACKS}
 {$ENDIF}{$ENDIF}
+{$IFDEF LINE3D}{$IFDEF COREGL}
+var gLines3D: array of TVec3;
+{$ENDIF}{$ENDIF}
 
 procedure printf (lS: AnsiString);
 begin
 {$IFNDEF WINDOWS} writeln(lS); {$ENDIF}
 end;
+
+{$IFDEF DEPTHPICKER2}
+function gluUnProject(winXYZ: TVec3; mvp: TMat4; viewportXYWH: TVec4): TVec3;
+//viewport[0]=x, viewport[1]=y, viewport[2]=width, viewport[3]=height
+//return coordinates in object space
+(*vec4 v = vec4(2.0*(gl_FragCoord.x-view.x)/view.z-1.0,
+              2.0*(gl_FragCoord.y-view.y)/view.w-1.0,
+              2.0*texture2DRect(DepthTex,gl_FragCoord.xy).z-1.0,
+              1.0 );
+v = gl_ModelViewProjectionMatrixInverse * v;
+v /= v.w;*)
+//https://community.khronos.org/t/converting-gl-fragcoord-to-model-space/57397
+//https://www.khronos.org/registry/OpenGL-Refpages/gl2.1/xhtml/gluUnProject.xml
+//http://nehe.gamedev.net/article/using_gluunproject/16013/
+var
+	v: TVec4;
+    mvpInv: TMat4;
+begin
+	v := vec4(2.0*(winXYZ.x-viewportXYWH.x)/viewportXYWH.z-1.0,
+    	2.0*(winXYZ.y-viewportXYWH.y)/viewportXYWH.w-1.0,
+        2.0*winXYZ.z-1.0,
+        1.0);
+    mvpInv := mvp.inverse;
+    v := mvpInv * v;
+    v := v / v.w;
+    result := vec3(v.x, v.y, v.z);
+end;
+
+function TGPUVolume.Unproject(mouseX, mouseY, depth: single): TVec3;
+var
+	winXYZ: TVec3;
+begin
+    winXYZ := vec3(mouseX, mouseY, depth);
+    result := gluUnProject(winXYZ, mvp, viewportXYWH);
+    //printf(format('windowXYZ %g %g %g', [winXYZ.x, winXYZ.y, winXYZ.z]));
+    //printf(format('objXYZ %g %g %g', [result.x, result.y, result.z]));
+end;
+{$ELSE}
+function TGPUVolume.Unproject(mouseX, mouseY, depth: single): TVec3;
+begin
+    result := vec3(2.0, 2.0, 2.0);
+end;
+{$ENDIF}
 
 destructor TGPUVolume.Destroy;
 begin
@@ -150,6 +209,9 @@ begin
   colorEditor.free;
   txt.free;
   {$ENDIF}
+  {$IFDEF LINE3D}{$IFDEF COREGL}
+  gLines3D := nil;
+  {$ENDIF}{$ENDIF}
   {$IFDEF CUBE} gCube.free; {$ENDIF}
   {$IFDEF CLRBAR} clrbar.free; {$ENDIF}
   inherited;
@@ -698,6 +760,24 @@ kVert = '#version 330 core'
 +#10'  gl_Position = ModelViewProjectionMatrix * vec4(vPos, 1.0);'
 +#10'  vPosition = gl_Position;'
 +#10'}';
+
+{$IFDEF LINE3D}
+kVertLine3D = '#version 330 core'
++#10'layout(location = 0) in vec3 vPos;'
++#10'uniform mat4 ModelViewProjectionMatrix;'
++#10'void main() {'
++#10'    gl_Position = ModelViewProjectionMatrix * vec4(vPos, 1.0);'
++#10'}';
+
+ kFragLine3D = '#version 330 core'
++#10'uniform vec4 Color;'
++#10'out vec4 FragColor;'
++#10'void main() {'
++#10'    FragColor = Color;'
++#10'}';
+{$ENDIF}//line3D
+
+
 {$ELSE}
 kVert = '#version 120'
 +#10'varying vec3 TexCoord1;'
@@ -708,6 +788,20 @@ kVert = '#version 120'
 +#10'    TexCoord1 = gl_Vertex.rgb;'
 +#10'    vPosition = gl_Position;'
 +#10'}';
+
+{$IFDEF LINE3D}
+kVertLine3D = '#version 120'
++#10'uniform mat4 ModelViewProjectionMatrix;'
++#10'void main() {'
++#10'    gl_Position = ModelViewProjectionMatrix * vec4(gl_Vertex.xyz, 1.0);'
++#10'}';
+
+ kFragLine3D = '#version 120'
++#10'uniform vec4 Color;'
++#10'void main() {'
++#10'    gl_FragColor = Color;'
++#10'}';
+{$ENDIF}//line3D
 
 {$ENDIF}
 
@@ -825,6 +919,10 @@ kFragBase = '#version 330'
 +#10'uniform float clipThick = 1.0;'
 +#10'uniform int overlays = 0;'
 +#10'uniform float backAlpha = 0.5;'
++#10'uniform mat4 ModelViewProjectionMatrix;'
++#10'void setDepthBuffer(vec3 pos) {'
++#10'	gl_FragDepth = ((ModelViewProjectionMatrix * vec4(pos, 1.0)).z + 1.0) * 0.5;'
++#10'}'
 +#10'vec3 GetBackPosition (vec3 startPosition) {'
 +#10' vec3 invR = 1.0 / rayDir;'
 +#10' vec3 tbot = invR * (vec3(0.0)-startPosition);'
@@ -1098,6 +1196,7 @@ kFrag = kFragFaster
 +#10'	FragColor = colAcc;'
 +#10'}';
 
+{$IFNDEF DEPTHPICKER2}
 kFragDepth = kFragFaster
 +#10'uniform float ambient = 1.0;'
 +#10'uniform float diffuse = 0.3;'
@@ -1199,6 +1298,7 @@ kFragDepth = kFragFaster
 +#10'	} //while samplePos.a < len'
 +#10'	FragColor = colAcc;'
 +#10'}';
+{$ENDIF} //DepthPicker2 does not need a custom shader
 {$ELSE}
 kFragBase = '#version 120'
 +#10'varying vec3 TexCoord1;'
@@ -1212,6 +1312,10 @@ kFragBase = '#version 120'
 +#10'uniform int overlays = 0;'
 +#10'uniform float backAlpha = 0.5;'
 +#10'uniform vec3 textureSz = vec3(3.0, 2.0, 1.0);'
++#10'uniform mat4 ModelViewProjectionMatrix;'
++#10'void setDepthBuffer(vec3 pos) {'
++#10'	gl_FragDepth = ((ModelViewProjectionMatrix * vec4(pos, 1.0)).z + 1.0) * 0.5;'
++#10'}'
 +#10'vec3 GetBackPosition (vec3 startPosition) {'
 +#10' vec3 invR = 1.0 / rayDir;'
 +#10' vec3 tbot = invR * (vec3(0.0)-startPosition);'
@@ -1381,6 +1485,7 @@ kFrag = kFragFaster
 +#10'	#endif'
 +#10'}';
 
+{$IFNDEF DEPTHPICKER2}
 kFragDepth = kFragFaster
 +#10'uniform float overlayClip = 0.0;'
 +#10'void main() {'
@@ -1441,6 +1546,7 @@ kFragDepth = kFragFaster
 +#10'	} //while samplePos.a < len'
 +#10'	gl_FragColor = colAcc;'
 +#10'}';
+{$ENDIF}//not required for depthpicker2
 {$ENDIF}
 procedure TGPUVolume.SetShader(shaderName: string);
 var
@@ -1561,24 +1667,15 @@ begin
   programLine2D := initVertFrag(kVertLine2D,kFragLine2D);
   //glUseProgram(programLine2D);
   uniform_viewportSizeLine := glGetUniformLocation(programLine2D, pAnsiChar('ViewportSize'));
-  {$IFDEF DEPTHPICKER}{$IFDEF DEPTHPICKER_USEFRAMEBUFFER}
+  {$IFDEF LINE3D}
+  programLine3D := initVertFrag(kVertLine3D,kFragLine3D);
+  mvpLine3DLoc := glGetUniformLocation(programLine3D, pAnsiChar('ModelViewProjectionMatrix'));
+  colorLine3DLoc := glGetUniformLocation(programLine3D, pAnsiChar('Color'));
   {$IFDEF COREGL}
-  glGenFramebuffers(1, @depthPickerFrameBuffer);
-  glBindFramebuffer(GL_FRAMEBUFFER, depthPickerFrameBuffer);
-  {$ELSE}
-  glGenFramebuffersEXT(1, @depthPickerFrameBuffer);
-  glBindFramebufferEXT(GL_FRAMEBUFFER, depthPickerFrameBuffer);
-  {$ENDIF}
-  glGenTextures(1, @depthPickerTex);
-  glBindTexture(GL_TEXTURE_2D, depthPickerTex);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  {$IFDEF COREGL}
-  glBindFramebuffer(GL_FRAMEBUFFER_EXT, 0);
-  {$ELSE}
-  glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
-  {$ENDIF}
-  {$ENDIF}{$ENDIF}
+  setlength(gLines3D,6); //3D crosshair is six lines
+  {$ENDIF} //COREGL
+
+  {$ENDIF} //LINE3D
   {$IFDEF COREGL}
   //setup VAO for Tex
   vboTex2D := 0;
@@ -1604,6 +1701,7 @@ begin
   {$ENDIF}
   //Depth Program
   {$IFDEF DEPTHPICKER}
+  {$IFNDEF DEPTHPICKER2}
   depthProgram := initVertFrag(kVert, kFragDepth);
   overlaysLocDepth := glGetUniformLocation(depthProgram, pAnsiChar('overlays'));
   lightPositionLocDepth := glGetUniformLocation(depthProgram, pAnsiChar('lightPosition'));
@@ -1616,6 +1714,7 @@ begin
   textureSzLocDepth := glGetUniformLocation(depthProgram, pAnsiChar('textureSz'));
   mvpLocDepth := glGetUniformLocation(depthProgram, pAnsiChar('ModelViewProjectionMatrix'));
   rayDirLocDepth := glGetUniformLocation(depthProgram, pAnsiChar('rayDir'));
+  {$ENDIF}
   {$ENDIF}
   //2D program
   {$IFDEF FX}
@@ -1659,6 +1758,22 @@ begin
   glEnableVertexAttribArray(4);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
   glBindVertexArray(0);  //required, even if we will bind it next
+  {$IFDEF LINE3D}
+  //setup VAO for lines
+  vboLine3D := 0;
+  vaoLine3D := 0;
+  glGenVertexArrays(1, @vaoLine3D);
+  glGenBuffers(1, @vboLine3D);
+  // Prepare vertrex array object (VAO)
+  glBindVertexArray(vaoLine3D);
+  glBindBuffer(GL_ARRAY_BUFFER, vboLine3D);
+  //Vertices
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(TVec3), PChar(0));
+  glEnableVertexAttribArray(0);
+  glBindBuffer(GL_ARRAY_BUFFER, 0);
+  glBindVertexArray(0);  //required, even if we will bind it next
+
+  {$ENDIF}//LINE3D
   {$ELSE}
   dlLine2D := 0;
   {$ENDIF}
@@ -2671,8 +2786,6 @@ begin
 end;
 {$ENDIF}
 
-
-
 procedure TGPUVolume.Paint(var vol: TNIfTI);
 var
 	widthHeightLeft: TVec3i;
@@ -2683,30 +2796,61 @@ begin
         PaintCore(vol, widthHeightLeft);
 end;
 
+{$IFDEF DEPTHPICKER2}
 procedure TGPUVolume.PaintDepth(var vol: TNIfTI; isAxCorSagOrient4: boolean = false);
 var
 	widthHeightLeft: TVec3i;
 begin
   widthHeightLeft.x := glControl.clientwidth;
   widthHeightLeft.y := glControl.clientheight;
-  {$IFDEF DEPTHPICKER_USEFRAMEBUFFER}
-  {$IFDEF COREGL}
-  glBindFramebuffer(GL_FRAMEBUFFER, depthPickerFrameBuffer);
-  {$ELSE}
-  glBindFramebufferEXT(GL_FRAMEBUFFER, depthPickerFrameBuffer);
-  {$ENDIF}
-  glBindTexture(GL_TEXTURE_2D, depthPickerTex);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, widthHeightLeft.x, widthHeightLeft.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NIL);
-  {$IFDEF COREGL}
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, depthPickerTex, 0);
-  {$ELSE}
-  glFramebufferTexture2DExt(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, depthPickerTex, 0);
-  {$ENDIF}
-  {$ENDIF}
+  widthHeightLeft.z := 0;
+  if isAxCorSagOrient4 then
+          widthHeightLeft := slices2D.axCorSagOrient4XY;
+  PaintCore(vol, widthHeightLeft, false, false);
+end;
+
+{$ELSE}
+procedure TGPUVolume.PaintDepth(var vol: TNIfTI; isAxCorSagOrient4: boolean = false);
+var
+	widthHeightLeft: TVec3i;
+begin
+  widthHeightLeft.x := glControl.clientwidth;
+  widthHeightLeft.y := glControl.clientheight;
   widthHeightLeft.z := 0;
   if isAxCorSagOrient4 then
           widthHeightLeft := slices2D.axCorSagOrient4XY;
   PaintCore(vol, widthHeightLeft, false, true);
+end;
+{$ENDIF}
+
+//def __drawCursor(self):
+//    """Draws three lines at the current
+procedure TGPUVolume.PaintCrosshair3D(rgba: TVec4);
+begin
+  glUniform4f(colorLine3DLoc, rgba.r, rgba.g, rgba.b, rgba.a);
+  {$IFDEF COREGL}
+  gLines3D[0] := Vec3(slices2D.sliceFrac.x, slices2D.sliceFrac.y, -0.1);
+  gLines3D[1] := Vec3(slices2D.sliceFrac.x, slices2D.sliceFrac.y, 1.1);
+  gLines3D[2] := Vec3(slices2D.sliceFrac.x, -0.1, slices2D.sliceFrac.z);
+  gLines3D[3] := Vec3(slices2D.sliceFrac.x, 1.1, slices2D.sliceFrac.z);
+  gLines3D[4] := Vec3(-0.1, slices2D.sliceFrac.y, slices2D.sliceFrac.z);
+  gLines3D[5] := Vec3(1.1, slices2D.sliceFrac.y, slices2D.sliceFrac.z);
+  glBindBuffer(GL_ARRAY_BUFFER, vboLine3D);
+  glBufferData(GL_ARRAY_BUFFER, 6*SizeOf(TVec3), @gLines3D[0], GL_STATIC_DRAW);
+  glBindVertexArray(vaoLine3D);
+  glDrawArrays(GL_LINES, 0, 6);
+  glBindVertexArray(0);
+  {$ELSE}
+  glLineWidth( slices2D.LineWidth);
+  glBegin(GL_LINES);
+  glVertex3f(slices2D.sliceFrac.x, slices2D.sliceFrac.y, -0.1);
+  glVertex3f(slices2D.sliceFrac.x, slices2D.sliceFrac.y, 1.1);
+  glVertex3f(slices2D.sliceFrac.x, -0.1, slices2D.sliceFrac.z);
+  glVertex3f(slices2D.sliceFrac.x, 1.1, slices2D.sliceFrac.z);
+  glVertex3f(-0.1, slices2D.sliceFrac.y, slices2D.sliceFrac.z);
+  glVertex3f(1.1, slices2D.sliceFrac.y, slices2D.sliceFrac.z);
+  glEnd;
+  {$ENDIF}
 end;
 
 procedure TGPUVolume.PaintCore(var vol: TNIfTI; widthHeightLeft: TVec3i; clearScreen: boolean = true; isDepthShader: boolean = false);
@@ -2727,10 +2871,42 @@ begin
   LoadTexture(vol, false);
   if (intensityTexture3D = 0) then
     exit;
-  {$IFDEF DEPTHPICKER}
+  {$IFDEF MTX}
+  modelMatrix := fModelMatrix;
+  {$ELSE}
+  modelMatrix := TMat4.Identity;
+  modelMatrix *= TMat4.Translate(0, 0, -fDistance);
+  modelMatrix *= TMat4.RotateX(-DegToRad(90-fElevation));
+  modelMatrix *= TMat4.RotateZ(DegToRad(fAzimuth));
+  modelMatrix *= TMat4.RotateX(DegToRad(fPitch));
+  {$ENDIF}
+  modelMatrix *= TMat4.Translate(-vol.Scale.X/2, -vol.Scale.Y/2, -vol.Scale.Z/2);
+  modelLightPos := (modelMatrix.Transpose * fLightPos);
+  modelLightPos := modelLightPos.Normalize;
+  modelMatrix *= TMat4.Scale(vol.Scale.X, vol.Scale.Y, vol.Scale.Z); //for volumes that are rectangular not square
+  if fDistance = 0 then
+          scale := 1
+  else
+      scale := 0.5 * 1/abs(kDefaultDistance/(fDistance+1.0));
+  glViewport(widthHeightLeft.z, 0, widthHeightLeft.x, widthHeightLeft.y);
+  whratio := widthHeightLeft.x /widthHeightLeft.y;
+  if (whratio > 1) or (whratio = 0) then //Wide window
+     projectionMatrix := TMat4.OrthoGL (-scale * whratio, scale * whratio, -scale, scale, fDistance-1, fDistance+1)
+  else
+      projectionMatrix := TMat4.OrthoGL (-scale, scale, -scale/whratio, scale/whratio, fDistance-1, fDistance+1);
+  modelViewProjectionMatrix := ( projectionMatrix * modelMatrix);
+  {$IFDEF DEPTHPICKER2}
+  //widthHeightLeftX: TVec3i;
+  mvp := modelViewProjectionMatrix;
+  viewportXYWH := vec4(widthHeightLeft.z, 0, widthHeightLeft.x, widthHeightLeft.y);
+  //printf(format('viewport %g %g %g %g', [viewportXYWH.x, viewportXYWH.y, viewportXYWH.z, viewportXYWH.w]));
+  //viewportXYWH: TVec4;
+  {$ENDIF}
+  glEnable(GL_DEPTH_TEST);
+  {$IFDEF DEPTHPICKER} {$IFNDEF DEPTHPICKER2}
   if isDepthShader then
   	glUseProgram(depthProgram)
-  else {$ENDIF} begin
+  else {$ENDIF}{$ENDIF} begin
     if Quality1to5 = kQualityBest then
          glUseProgram(programRaycastBetter)
     else
@@ -2767,32 +2943,6 @@ begin
   glBindTexture(GL_TEXTURE_3D, overlayGradientTexture3D);
   //glUniform1i(loopsLoc,round(maxDim*2.2));
   //glUniform3f(clearColorLoc, fClearColor.r/255, fClearColor.g/255, fClearColor.b/255);
-  {$IFDEF MTX}
-  modelMatrix := fModelMatrix;
-  {$ELSE}
-  modelMatrix := TMat4.Identity;
-  modelMatrix *= TMat4.Translate(0, 0, -fDistance);
-  modelMatrix *= TMat4.RotateX(-DegToRad(90-fElevation));
-  modelMatrix *= TMat4.RotateZ(DegToRad(fAzimuth));
-  modelMatrix *= TMat4.RotateX(DegToRad(fPitch));
-  {$ENDIF}
-  modelMatrix *= TMat4.Translate(-vol.Scale.X/2, -vol.Scale.Y/2, -vol.Scale.Z/2);
-  modelLightPos := (modelMatrix.Transpose * fLightPos);
-  modelLightPos := modelLightPos.Normalize;
-  modelMatrix *= TMat4.Scale(vol.Scale.X, vol.Scale.Y, vol.Scale.Z); //for volumes that are rectangular not square
-  if fDistance = 0 then
-          scale := 1
-  else
-      scale := 0.5 * 1/abs(kDefaultDistance/(fDistance+1.0));
-  glViewport(widthHeightLeft.z, 0, widthHeightLeft.x, widthHeightLeft.y);
-  //writeln(format('OKRA>%d %d %d', [widthHeightLeft.x, widthHeightLeft.y, widthHeightLeft.z])); //okra
-  whratio := widthHeightLeft.x /widthHeightLeft.y;
-  //whratio := glControl.clientwidth /glControl.clientheight;
-  if (whratio > 1) or (whratio = 0) then //Wide window
-     projectionMatrix := TMat4.OrthoGL (-scale * whratio, scale * whratio, -scale, scale, fDistance-1, fDistance+1)
-  else
-      projectionMatrix := TMat4.OrthoGL (-scale, scale, -scale/whratio, scale/whratio, fDistance-1, fDistance+1);
-  modelViewProjectionMatrix := ( projectionMatrix * modelMatrix);
   rayDir.x := 0; RayDir.y := 0; rayDir.z := 1; RayDir.w := 0;
   v := rayDir;
   rayDir := (modelViewProjectionMatrix.Inverse * v);
@@ -2802,7 +2952,7 @@ begin
   //printf(format('%g %g %g', [vol.Scale.X, vol.Scale.Y, vol.Scale.Z]));
   //printMat(modelMatrix);
   //printf(format('a %d e %d = [%g %g %g]', [fAzimuth, fElevation, rayDir.x, rayDir.y, rayDir.z]));
-  {$IFDEF DEPTHPICKER} if isDepthShader then begin
+  {$IFDEF DEPTHPICKER}{$IFNDEF DEPTHPICKER2} if isDepthShader then begin
     glUniform1i(intensityVolLocDepth, 2);
     glUniform1i(overlaysLocDepth, overlayNum); //0 if no overlays
     glUniform1i(overlayIntensityVolLocDepth, 4);
@@ -2816,7 +2966,7 @@ begin
     {$ENDIF}
     glUniformMatrix4fv(mvpLocDepth, 1, GL_FALSE, @modelViewProjectionMatrix);
     glUniform3f(rayDirLocDepth,rayDir.x,rayDir.y,rayDir.z);
-  end else {$ENDIF} begin
+  end else {$ENDIF}{$ENDIF} begin
     glUniform1i(intensityVolLoc, 2);
     //bind background gradient (edges)
     glActiveTexture(GL_TEXTURE3);
@@ -2886,8 +3036,23 @@ begin
   //Legacy OpenGL
   glCallList(dlBox3D);
   {$ENDIF}
-  glDisable(GL_CULL_FACE);
   //draw color editor
+  {$IFDEF VIEW2D}{$IFDEF LINE3D}
+  if ((not isDepthShader) and (widthHeightLeft.z <> 0) and (slices2D.LineWidth > 0.0)) then begin
+    glUseProgram(programLine3D);
+    glUniformMatrix4fv(mvpLine3DLoc, 1, GL_FALSE, @modelViewProjectionMatrix);
+
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL); //GL_LESS);
+    //draw opaque line occluded by volume render
+    PaintCrosshair3D( slices2D.LineColor);
+    glDisable(GL_DEPTH_TEST);
+    //draw translucent line regardless of volume render
+    PaintCrosshair3D(Vec4(slices2D.LineColor.r,slices2D.LineColor.g,slices2D.LineColor.b,slices2D.LineColor.a * 0.225));
+    //glDepthFunc(GL_ALWAYS); //always pass test
+  end;
+  {$ENDIF}{$ENDIF} //IFDEF VIEW2D, LINE3D
+  glDisable(GL_CULL_FACE);
   {$IFDEF CLRBAR}
   if (colorEditorVisible) and (widthHeightLeft.z = 0) then begin
     clrbar.RulerPixels:= 0;

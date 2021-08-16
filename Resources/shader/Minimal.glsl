@@ -13,6 +13,8 @@ void main() {
 	vec3 dir = backPosition - start;
 	float len = length(dir);
 	dir = normalize(dir);
+	gl_FragDepth = 1.0;
+	int nHit = 0;	
 	vec4 deltaDir = vec4(dir.xyz * stepSize, stepSize);
 	vec4 colorSample;
 	float bgNearest = len; //assume no hit
@@ -28,7 +30,11 @@ void main() {
 		colorSample = texture3Df(intensityVol,samplePos.xyz);
 		if (colorSample.a > 0.0) {
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);
-			bgNearest = min(samplePos.a,bgNearest);
+			if (nHit < 1) {
+				nHit ++;
+				bgNearest = samplePos.a;
+				setDepthBuffer(samplePos.xyz);
+			}
 			if (samplePos.a < stepSizeX2)
 				colorSample.a = clamp(colorSample.a*3.0,0.0, 1.0);
 			colorSample.rgb *= colorSample.a;

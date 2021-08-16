@@ -21,6 +21,8 @@ void main() {
 	vec3 dir = backPosition - start;
 	float len = length(dir);
 	dir = normalize(dir);
+	gl_FragDepth = 1.0;
+	int nHit = 0;	
 	vec4 deltaDir = vec4(dir.xyz * stepSize, stepSize);
 	vec4 gradSample, colorSample;
 	float bgNearest = len; //assume no hit
@@ -66,7 +68,11 @@ void main() {
 		colorSample = texture3Df(intensityVol,samplePos.xyz);
 		if (colorSample.a > 0.0) {
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
-			bgNearest = min(samplePos.a,bgNearest);
+			if (nHit < 1) {
+				nHit ++;
+				bgNearest = samplePos.a;
+				setDepthBuffer(samplePos.xyz);
+			}
 			gradSample= texture3Df(gradientVol,samplePos.xyz);
 			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
 			//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html

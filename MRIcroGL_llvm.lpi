@@ -35,7 +35,7 @@
         <PackageName Value="LCL"/>
       </Item2>
     </RequiredPackages>
-    <Units Count="13">
+    <Units Count="11">
       <Unit0>
         <Filename Value="MRIcroGL.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -102,17 +102,6 @@
         <Filename Value="afni_fdr.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit10>
-      <Unit11>
-        <Filename Value="intensityfilter.pas"/>
-        <IsPartOfProject Value="True"/>
-        <ComponentName Value="IntensityFilterForm"/>
-        <HasResources Value="True"/>
-        <ResourceBaseClass Value="Form"/>
-      </Unit11>
-      <Unit12>
-        <Filename Value="nifti_save.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit12>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -128,14 +117,12 @@
     <CodeGeneration>
       <SmartLinkUnit Value="True"/>
       <Optimizations>
-        <OptimizationLevel Value="3"/>
+        <OptimizationLevel Value="0"/>
       </Optimizations>
     </CodeGeneration>
     <Linking>
       <Debugging>
-        <GenerateDebugInfo Value="False"/>
         <DebugInfoType Value="dsDwarf2"/>
-        <UseLineInfoUnit Value="False"/>
         <StripSymbols Value="True"/>
       </Debugging>
       <LinkSmart Value="True"/>
@@ -150,9 +137,9 @@
       <CompilerMessages>
         <IgnoredMessages idx5057="True"/>
       </CompilerMessages>
-      <CustomOptions Value="-dDisableLCLGIF 
--dDisableLCLPNM
--dMYPY
+      <CustomOptions Value="-dxDisableLCLGIF 
+-dxDisableLCLPNM
+-dNoMYPY
 -Clflto
 -Clfltonosystem"/>
     </Other>

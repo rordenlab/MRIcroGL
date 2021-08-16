@@ -19,7 +19,7 @@ type
          DebugMode, LoadSmooth, LabelOrient, RulerVisible, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay,
          FlipYZ, FlipLR_Radiological, SkipPrefWriting, AutoClusterizeAtlases, RenderDepthPicker: boolean;
          AfniDir, CustomDcm2niix, PyLib, MosaicStr, InitScript, PrevScript, PrevBackgroundImage, DicomDir: string;
-         ClearColor: TRGBA;
+         LineColor, ClearColor: TRGBA;
          PrevFilename: TMRU;
 
   end;
@@ -103,6 +103,10 @@ begin
             MultiSample124 := 4;
             VolumeSaveFormat := 1;
             VoiSaveFormat := 3;
+            LineColor.R := 128;
+            LineColor.G := 128;
+            LineColor.B := 179;
+            LineColor.A := 255;
             DisplayOrient:= kAxCorSagOrient3; //kRenderOrient;
             //DisplayOrient:= kRenderOrient;
             StartupDisplayOrient := DisplayOrient;
@@ -172,7 +176,43 @@ begin
 		lValue := Char2Bool(lStr[1]);
 end; //IniBool
 
+const
+  kStrSep = '|';
 
+function RGBAToStr (lU: tRGBA) : string;
+begin
+  result := Inttostr(lU.r)+ kStrSep+Inttostr(lU.g)+ kStrSep+Inttostr(lU.b)+ kStrSep+Inttostr(lU.a);
+end;
+
+function StrToRGBA(lS: string; var lU: TRGBA): boolean;
+var
+ strlst:TStringList;
+begin
+  result := false;
+  strlst:=TStringList.Create;
+  strlst.Delimiter:=kStrSep;
+  strlst.DelimitedText := lS;
+  if strlst.Count > 3 then begin
+     lU := SetRGBA( strtoint(strlst[0]), strtoint(strlst[1]), strtoint(strlst[2]), strtoint(strlst[3])) ;
+     result := true;
+  end;
+  strlst.free;
+end;
+
+procedure IniRGBA(lRead: boolean; lIniFile: TIniFile; lIdent: string;  var lValue: TRGBA);
+//read or write an integer value to the initialization file
+var
+	lStr: string;
+begin
+  if not lRead then begin
+    //lI64 := lValue.rgbred + lValue.rgbGreen shl 8 + lValue.rgbBlue shl 16 + lValue.rgbReserved shl 24;
+    //lIniFile.WriteString('RGBA',lIdent,InttoStr(lI64));
+    lIniFile.WriteString('RGBA255',lIdent,RGBAToStr(lValue));
+    exit;
+  end;
+	lStr := lIniFile.ReadString('RGBA255',lIdent, '');
+  StrToRGBA(lStr,lValue);
+end; //IniRGBA
 
 procedure IniStr(lRead: boolean; lIniFile: TIniFile; lIdent: string; var lValue: string);
 //read or write a string value to the initialization file
@@ -297,6 +337,8 @@ begin
   IniBool(lRead,lIniFile, 'LandmarkPanel',lPrefs.LandmarkPanel);
   IniBool(lRead,lIniFile, 'FlipYZ',lPrefs.FlipYZ);
   IniBool(lRead,lIniFile, 'FlipLR_Radiological',lPrefs.FlipLR_Radiological);
+  IniRGBA(lRead,lIniFile, 'LineColor',lPrefs.LineColor);
+
   IniBool(lRead,lIniFile, 'AutoClusterizeAtlases', lPrefs.AutoClusterizeAtlases);
   lIniFile.Free;
 end;

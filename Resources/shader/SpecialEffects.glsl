@@ -23,6 +23,8 @@ void main() {
 		ran = fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453);
 	float len = length(dir);
 	dir = normalize(dir);
+	gl_FragDepth = 1.0;
+	int nHit = 0;	
 	float stepSizeX = stepSize;
 	if (doPoor > 0.5) stepSizeX *= 10.0;
 	vec4 deltaDir = vec4(dir.xyz * stepSizeX, stepSizeX);
@@ -60,7 +62,11 @@ void main() {
 		if (colorSample.a > 0.0) {
 			if (showGradient > 0.5)
 				colorSample.rgb = abs(texture3Df(gradientVol,samplePos.xyz).rgb *2.0 - 1.0);
-			bgNearest = min(samplePos.a,bgNearest);
+			if (nHit < 1) {
+				nHit ++;
+				bgNearest = samplePos.a;
+				setDepthBuffer(samplePos.xyz);
+			}
 			colorSample.rgb *= colorSample.a;
 			colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
 			if ( colAcc.a > 0.95 )

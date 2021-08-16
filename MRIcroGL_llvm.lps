@@ -17,7 +17,7 @@
         <ResourceBaseClass Value="Form"/>
         <IsVisibleTab Value="True"/>
         <TopLine Value="20"/>
-        <CursorPos X="50" Y="41"/>
+        <CursorPos X="102" Y="45"/>
         <UsageCount Value="20"/>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
@@ -88,7 +88,6 @@
       </Unit10>
       <Unit11>
         <Filename Value="intensityfilter.pas"/>
-        <IsPartOfProject Value="True"/>
         <ComponentName Value="IntensityFilterForm"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
@@ -96,7 +95,6 @@
       </Unit11>
       <Unit12>
         <Filename Value="nifti_save.pas"/>
-        <IsPartOfProject Value="True"/>
         <UsageCount Value="20"/>
       </Unit12>
     </Units>

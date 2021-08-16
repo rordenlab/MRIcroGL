@@ -77,9 +77,9 @@ uses
 
 const
   {$IFDEF FASTGZ}
-  kVers = '1.2.20210801';
+  kVers = '1.2.20210816';
   {$ELSE}
-  kVers = '1.2.20210801-';
+  kVers = '1.2.20210816+';
   {$ENDIF}
 type
 
@@ -670,7 +670,9 @@ const  kExt = '.metal';
 uses
  {$IFDEF GRAPH}glgraph,{$ENDIF}
  {$IFDEF COREGL}glcorearb,{$ELSE}gl,glext,{$ENDIF}
- {$IFDEF LCLCocoa}glcocoanscontext,{$ENDIF}{$IFDEF CLRBAR}glclrbar, {$ENDIF} retinahelper,  OpenGLContext,  glvolume2, gl_core_utils {$IFDEF MYPY}{$IFDEF PY4LAZ}{$IFNDEF UNIX}, proc_py {$ENDIF}{$ENDIF}{$ENDIF};
+ {$IFDEF LCLCocoa}glcocoanscontext,{$ENDIF}{$IFDEF CLRBAR}glclrbar, {$ENDIF}
+ {$IFDEF RETINA}retinahelper,{$ENDIF}
+ OpenGLContext,  glvolume2, gl_core_utils {$IFDEF MYPY}{$IFDEF PY4LAZ}{$IFNDEF UNIX}, proc_py {$ENDIF}{$ENDIF}{$ENDIF};
 const kExt = '.glsl';
 {$ENDIF}
 const
@@ -1072,7 +1074,6 @@ end;
 
 procedure TGLForm1.FormChangeBounds(Sender: TObject);
 begin
-   //LayerBox.Caption := inttostr(random(888));
   {$IFDEF LCLCocoa} {$IFNDEF METALAPI}
   ViewGPU1.Invalidate;
   {$ENDIF}{$ENDIF}
@@ -2876,6 +2877,7 @@ begin
     if Boolean(PyArg_ParseTuple(Args, 'iii:linecolor', @R,@G,@B)) then begin
       clr := Vol1.Slices.LineColor;
       clr := Vec4(R/255.0, G/255.0, B/255.0, clr.a);
+      //gPrefs.LineColor := clr;
       Vol1.Slices.LineColor := clr;
       gClrbar.RulerColor := SetRGBA(Vol1.Slices.LineColor);
       GLFOrm1.RulerVisible();
@@ -4360,6 +4362,10 @@ begin
  clr *= 255;
  ColorDialog1.Color:= RGBToColor(round(clr.r), round(clr.g), round(clr.b));
  if not ColorDialog1.Execute then exit;
+ gPrefs.LineColor.R := Red(ColorDialog1.Color);
+ gPrefs.LineColor.G := Green(ColorDialog1.Color);
+ gPrefs.LineColor.B := Blue(ColorDialog1.Color);
+
  clr := Vec4(Red(ColorDialog1.Color)/255.0, Green(ColorDialog1.Color)/255.0, Blue(ColorDialog1.Color)/255.0, clr.a/255.0);
  Vol1.Slices.LineColor := clr;
  {$IFDEF CLRBAR}
@@ -5211,7 +5217,8 @@ begin
   LandmarkCheck.Parent:=PrefForm;
   {$IFDEF LCLCocoa}
   //Retina Check
-  RetinaCheck:=TCheckBox.create(PrefForm);
+  RetinaCheck :=TCheckBox.create(PrefForm);
+  {$IFNDEF RETINA} RetinaCheck.Enabled := false;{$ENDIF}
   RetinaCheck.Checked := gPrefs.RetinaDisplay;
   RetinaCheck.Caption:='Retina display (better but slower)';
   RetinaCheck.AnchorSide[akTop].Side := asrBottom;
@@ -7363,15 +7370,15 @@ begin
   {$ENDIF}
   if (Sender <> nil) and (ssShift in ss) then begin
     LineWidthEdit.value := 1;
-    gPrefs.DisplayOrient := kRenderOrient;
-    gPrefs.LineWidth := 1;
-    Vol1.Slices.LineWidth := 1;
-    Vol1.Slices.LineColor := Vec4(0.5, 0.5, 0.7, 1.0);
+    //gPrefs.DisplayOrient := kRenderOrient;
+    //gPrefs.LineWidth := 1;
     {$IFDEF CLRBAR}
     gClrbar.RulerColor := SetRGBA(Vol1.Slices.LineColor);
     {$ENDIF}
     RulerVisible();
     SetDefaultPrefs(gPrefs,true);
+    Vol1.Slices.LineColor := Vec4(gPrefs.LineColor.R/255.0, gPrefs.LineColor.G/255.0, gPrefs.LineColor.B/255.0, gPrefs.LineColor.A/255.0);
+    Vol1.Slices.LineWidth := gPrefs.LineWidth;
     UpdateOpenRecent();
   end;
   UpdateVisibleBoxes();
@@ -7723,7 +7730,9 @@ begin
  setlength(p, w4 * h);
  for TileH := 0 to  (nTileH-1) do begin
      for TileW := 0 to (nTileW-1) do begin
+        {$IFDEF RETINA}
         GLBox.enableTiledScreenShot(-TileW*w, -h*TileH,wOut, hOut); //tileLeft, tileBottom,totalWidth, totalHeight
+        {$ENDIF}
         GLForm1.ViewGPUPaint(nil);
         glFlush;
         glFinish;//<-this would pause until all jobs finished: generally a bad idea! required here
@@ -7778,7 +7787,9 @@ begin
      DestPtr[z] := DestPtr[z] and $FFFFFF00;
  end;
  {$ENDIF}
+ {$IFDEF RETINA}
  GLBox.disableTiledScreenShot();
+ {$ENDIF}
  GLbox.ReleaseContext;
  Vol1.Quality1to5 := q;
  setlength(p, 0);
@@ -7946,7 +7957,6 @@ begin
   if i >= 0 then begin
      vols.Layer(i,v);
      v.SetDisplayVolume(v.VolumeDisplayed + 1);
-     //LayerBox.caption := format('%d %d/%d ',[i,v.VolumeDisplayed+1, v.VolumesTotal]); //+1 as indexed from 1
      UpdateLayerBox(false, true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
      //UpdateTimer.Enabled := true;
      UpdateTimerTimer(Sender);
@@ -7975,7 +7985,6 @@ begin
         v.SetDisplayVolume(v.VolumeDisplayed + 1)
      else
          v.SetDisplayVolume(v.VolumeDisplayed - 1);
-     //LayerBox.caption := format('%d %d/%d ',[i,v.VolumeDisplayed+1, v.VolumesTotal]); //+1 as indexed from 1
      UpdateLayerBox(false, true);
      //UpdateLayerBox(true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
      UpdateTimer.Enabled := true;
@@ -8003,7 +8012,6 @@ begin
       v.SetDisplayVolume(v.VolumeDisplayed + 1)
    else
        v.SetDisplayVolume(v.VolumeDisplayed - 1);
-   //LayerBox.caption := format('%d %d/%d ',[i,v.VolumeDisplayed+1, v.VolumesTotal]); //+1 as indexed from 1
    UpdateLayerBox(false, true);
    //UpdateLayerBox(true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
    UpdateTimer.Enabled := true;
@@ -8677,9 +8685,9 @@ begin
   w := w + NSProcessInfo.ProcessInfo.operatingSystemVersionString.UTF8String+' '+HWmodel+kEOLN;
 
 
- {$IFNDEF METALAPI}
+ {$IFNDEF METALAPI}{$IFDEF RETINA}
   w := w + format('Retina Scale: %g', [ViewGPU1.retinaScale])+kEOLN;
-  {$ENDIF}
+  {$ENDIF}{$ENDIF}
  {$ENDIF}
  {$IFDEF Linux}
  w := w + 'Linux'+kEOLN;
@@ -8721,7 +8729,7 @@ begin
  v := v+'Apple Metal multisample=' + inttostr(ViewGPU1.renderView.sampleCount);
  {$ELSE}
  ViewGPU1.MakeCurrent(false);
- {$IFDEF MYPY}{$IFDEF PY4LAZ}v := v + 'PythonForLazarus' + kEOLN;{$ELSE}v := v+ 'PythonBridge ' + kEOLN;{$ENDIF}{$ENDIF}
+ //{$IFDEF MYPY}{$IFDEF PY4LAZ}v := v + 'PythonForLazarus' + kEOLN;{$ELSE}v := v+ 'PythonBridge ' + kEOLN;{$ENDIF}{$ENDIF}
  v := v + glGetString(GL_VENDOR)+'; OpenGL= '+glGetString(GL_VERSION)+'; Shader='+glGetString(GL_SHADING_LANGUAGE_VERSION);
  glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, @maxVox);  //For 3D textures, no dimension can be greater than GL_MAX_3D_TEXTURE_SIZ
  {$IFDEF COREGL}
@@ -8830,6 +8838,45 @@ begin
 	CFRelease(colorSpace);
 end;      *)
 {$ENDIF}{$ENDIF}
+{$IFDEF DEPTHPICKER2}
+procedure TGLForm1.PickRenderDepth( X, Y: Integer);
+var
+ c3: TVec3;
+ niftiVol: TNIfTI;
+ depth: single;
+begin
+  if not vols.Layer(0,niftiVol) then exit;
+  glDrawBuffer(GL_BACK);
+  Vol1.PaintDepth(niftiVol, gPrefs.DisplayOrient = kAxCorSagOrient4);
+  glFinish;
+  glReadBuffer(GL_BACK);
+  glReadPixels( X, Y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, @depth);
+  c3 := Vol1.Unproject(X,Y, depth);
+  //Vol1.PaintDepth(niftiVol, gPrefs.DisplayOrient = kAxCorSagOrient4);
+  //Vol1.PaintDepth(niftiVol, false);
+  //LineBox.caption := format('xyz %0.3g %0.3g %0.3g len %g', [c3.X, c3.Y, c3.Z, c3.Length]);
+  if (min(c3.X, min(c3.Y, c3.z)) < 0.0) or  (max(c3.X, max(c3.Y, c3.z)) > 1.0) then begin
+  	//Caption := '';
+    exit;
+  end;
+  gSliceMM := niftiVol.FracMM(Vec3(c3.X, c3.Y, c3.Z));
+  Caption := format('%0.4g×%0.4g×%0.4g', [gSliceMM.x, gSliceMM.y, gSliceMM.z]);
+  vol1.SetSlice2DFrac(Vec3(c3.X, c3.Y, c3.Z));
+  //gSliceMM := Vec3(sliceMM.X, sliceMM.Y, sliceMM.Z);
+  {$IFDEF COMPILEYOKE}
+  SetShareFloats2D(gSliceMM.X,gSliceMM.Y,gSliceMM.Z);
+  {$ENDIF}
+  //if (gPrefs.DisplayOrient = kAxCorSagOrient4) then
+  	ViewGPU1.Invalidate
+  //else
+  //	Vol1.Paint(niftiVol);
+  {$IFDEF METALAPI}
+  UpdateTimer.Enabled := true;//OKRA
+  {$ENDIF}
+  //ViewGPU1.Invalidate;
+end;
+
+{$ELSE}
 procedure TGLForm1.PickRenderDepth( X, Y: Integer);
 {$IFDEF DEPTHPICKER}
 var
@@ -8837,23 +8884,35 @@ var
  sum: single;
  sliceMM : TVec3;
  niftiVol: TNIfTI;
- u: uint32;
+ //u: uint32;
+ depth: single;
 begin
   if not vols.Layer(0,niftiVol) then exit;
   {$IFNDEF METALAPI}
   glDrawBuffer(GL_BACK);
   {$ENDIF}
+  glReadPixels( X, Y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, @depth);
 
+  Vol1.Unproject(X,Y, depth);
+  //https://www.khronos.org/opengl/wiki/Compute_eye_space_from_window_space
+  //https://community.khronos.org/t/depth-buffer-how-do-i-get-the-pixels-z-coord/35318/3
+  //https://stackoverflow.com/questions/30340558/how-to-get-object-coordinates-from-screen-coordinates
+  //glm::vec3 result  = glm::unProject(a, viewMatrix, proj, viewport);
+  //https://community.khronos.org/t/converting-gl-fragcoord-to-model-space/57397
+ (*vec4 v = vec4(2.0*(gl_FragCoord.x-view.x)/view.z-1.0,
+              2.0*(gl_FragCoord.y-view.y)/view.w-1.0,
+              2.0*texture2DRect(DepthTex,gl_FragCoord.xy).z-1.0,
+              1.0 );
+v = gl_ModelViewProjectionMatrixInverse * v;
+v /= v.w;*)
   Vol1.PaintDepth(niftiVol, gPrefs.DisplayOrient = kAxCorSagOrient4);
   {$IFDEF METALAPI}
   //ViewGPU1.Invalidate;
   //xxx
   //todo
-  //LayerBox.caption := format('%0.2g %0.2g %0.2g %0.2g', [c.X, c.Y, c.Z, c.A]);
   c := Vec4(0.5, 0.5, 0.5, 0.5);
   u := Vol1.ReadPixel(X,Y);
   c := Vec4(((u shr 16) and $FF) / 255, ((u shr 8) and $FF) / 255, ((u shr 0) and $FF) / 255, ((u shr 24) and $FF) / 255);
-  layerBox.Caption := format('%d %d %g %g %g', [X, Y, c.x * 255, c.y * 255, c.z * 255]);
   //https://stackoverflow.com/questions/28424883/ios-metal-how-to-read-from-the-depth-buffer-at-a-point
   {$ELSE}
   //https://learnopengl.com/Advanced-OpenGL/Framebuffers
@@ -8869,6 +8928,7 @@ begin
   glBindFramebufferExt(GL_FRAMEBUFFER, 0);
   {$ENDIF}
   {$ENDIF}
+  LayerBox.caption := format('%0.3g %0.3g %0.3g', [c.X, c.Y, c.Z]);
   sliceMM := niftiVol.FracMM(Vec3(c.X, c.Y, c.Z));
   sum := c.r + c.g + c.b; //a click outside the rendering will return background color. No good solution...
   if (sum < 0.001) or (sum > 2.99) then begin
@@ -8894,7 +8954,9 @@ begin
    //
 {$ENDIF}
 end;
-
+{$ENDIF}
+var
+	gAxCorSagOrient4MouseDownOrient: integer = 222;
 
 procedure TGLForm1.ViewGPUMouseDown(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
@@ -8902,7 +8964,7 @@ var
    niftiVol: TNIfTI;
    xIn, yIn, i: integer;
    //{$IFDEF isCocoaOpenGL}
-   f: single;
+   f: single = 1.0;
    //{$ENDIF}
    Yrev :integer;
    fracXYZ: TVec3;
@@ -8914,8 +8976,9 @@ begin
  Vol1.Slices.distanceLineOrient := 0;
  Yrev := ViewGPU1.ClientHeight - Y;
  {$IFDEF isCocoaOpenGL}
- //LayerBox.Caption := inttostr(random(222));
+ {$IFDEF RETINA}
  f := ViewGPU1.retinaScale;
+ {$ENDIF}
  X := round(X * f);
  Y := round(Y * f);
  Yrev := ViewGPU1.ClientHeight - Y;
@@ -8960,8 +9023,11 @@ begin
  if ssAlt in Shift then Vol1.Slices.distanceLineOrient := -1; // xxx
  if (gPrefs.DisplayOrient = kAxCorSagOrient4) then begin
  	Vol1.SetSlice2DFrac(Vol1.GetSlice2DFrac(X,Y,i)); //
+    //LineBox.caption := inttostr(i);
+    gAxCorSagOrient4MouseDownOrient := i;
  	if (i < 0) and (gPrefs.RenderDepthPicker) then begin
-        {$IFDEF METALAPI}
+       if (ssShift in Shift) then exit;
+       {$IFDEF METALAPI}
         {TODO
         f := Vol1.DrawableWidth();
         if (f > 0) and (ViewGPU1.width > 0) then
@@ -8972,9 +9038,8 @@ begin
         {$ELSE}
        	PickRenderDepth(X,Yrev);
         {$ENDIF}
-          //LayerBox.Caption := inttostr(random(888));
           exit;
-        end; //okra
+        end;
  end;
  ViewGPUMouseMove(Sender, Shift, xIn,Yin);
  if (ssShift in Shift) or  (ssRight in Shift) then
@@ -8985,12 +9050,14 @@ procedure TGLForm1.ViewGPUMouseUp(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
 {$IFDEF isCocoaOpenGL}
 var
- f: single;
+ f: single = 1.0;
  {$ENDIF}
 begin
  {$IFDEF isCocoaOpenGL}
  gIsMouseDown := false;
+ {$IFDEF RETINA}
  f := ViewGPU1.retinaScale;
+ {$ENDIF}
  X := round(X * f);
  Y := round(Y * f);
  {$ENDIF}
@@ -9023,16 +9090,15 @@ procedure TGLForm1.ViewGPUMouseMove(Sender: TObject; Shift: TShiftState; X,
 label
   222;
 var
- fracXYZdown, fracXYZ, diff: TVec3;
+ fracXYZdown, fracXYZ, diff, frac: TVec3;
  i, j: integer;
  niftiVol: TNIfTI;
  {$IFDEF LCLCocoa}{$IFNDEF METALAPI}
- f:single;
+ f:single = 1.0;
  {$ENDIF}{$ENDIF}
 begin
- //LayerBox.Caption := inttostr(random(888)); //On OpenGL MacOS 10.13.6 no MouseMove generated when shift is down!
  {$IFDEF LCLCocoa}{$IFNDEF METALAPI}
- f := ViewGPU1.retinaScale;
+ {$IFDEF RETINA} f := ViewGPU1.retinaScale;{$ENDIF}
  X := round(X * f);
  Y := round(Y * f);
  {$ENDIF}{$ENDIF}
@@ -9058,7 +9124,6 @@ begin
        if (X > gMouseLimitHi.X) then X := gMouseLimitHi.X;
        if (Y > gMouseLimitHi.Y) then Y := gMouseLimitHi.Y;
        fracXYZ := Vol1.GetSlice2DFrac(X,Y,i);
-       //LayerBox.Caption := format('lo %d %d  hi %d %d xy %d %d', [gMouseLimitLo.X, gMouseLimitLo.Y, gMouseLimitHi.X, gMouseLimitHi.Y, X, Y]);
        //SliceBox.Caption := format('%.2f %.2f %.2f',[fracXYZ.x, fracXYZ.y, fracXYZ.z]);
        if (fracXYZ.x > 1) or (fracXYZ.x < 0) or (fracXYZ.y > 1) or (fracXYZ.y < 0) or (fracXYZ.z > 1) or (fracXYZ.z < 0) then
           exit;
@@ -9086,8 +9151,14 @@ begin
        gMouse.Y := Y;
        exit;
     end;
-    Vol1.SetSlice2DFrac(Vol1.GetSlice2DFrac(X,Y,i)); //
-    if (i < 0) and (gPrefs.DisplayOrient = kAxCorSagOrient4) then goto 222; //okra
+    //Vol1.SetSlice2DFrac(Vol1.GetSlice2DFrac(X,Y,i)); //
+    frac := Vol1.GetSlice2DFrac(X,Y,i); //
+    if (i < 0) and (i = gAxCorSagOrient4MouseDownOrient) and (gPrefs.DisplayOrient = kAxCorSagOrient4) then goto 222; //okra
+    if (i <> gAxCorSagOrient4MouseDownOrient) and (gPrefs.DisplayOrient = kAxCorSagOrient4) then exit;
+    //SliceBox.Caption := format('%d:%d %d,%d',[i, gAxCorSagOrient4MouseDownOrient,x ,y]);
+    Vol1.SetSlice2DFrac(frac); //
+
+    //if (i < 0) and (gPrefs.DisplayOrient = kAxCorSagOrient4) then goto 222; //okra
     if (Vol1.Slices.distanceLineOrient < 0) then begin
        Vol1.Slices.distanceLineOrient:= i;
        Vol1.Slices.distanceLineStart := Vol1.Slices.SliceFrac;
@@ -9191,9 +9262,11 @@ var
    isUp: boolean;
    ss: TShiftState;
    x,y,orient: integer;
-   f: single;
+   f: single = 1.0;
  begin
-  f := ViewGPU1.retinaScale; LayerBox.Caption := floattostr(f)+':'+inttostr(random(888));
+  {$IFDEF RETINA}
+  f := ViewGPU1.retinaScale;
+  {$ENDIF}
   if gPrefs.DisplayOrient = kMosaicOrient then exit;
   if gPrefs.DisplayOrient <> kRenderOrient then begin
      if not vols.Layer(0,niftiVol) then exit;
@@ -9215,9 +9288,9 @@ var
         orient := gPrefs.DisplayOrient;
         if (orient = kAxCorSagOrient3) or (orient = kAxCorSagOrient4) then begin
            f := 1;
-           {$IFDEF LCLCocoa}{$IFNDEF METALAPI}
+           {$IFDEF LCLCocoa}{$IFNDEF METALAPI} {$IFDEF RETINA}
            f := ViewGPU1.retinaScale;
-           {$ENDIF}{$ENDIF}
+           {$ENDIF}{$ENDIF}{$ENDIF}
            X := round(MousePos.X * f);
            Y := round(MousePos.Y * f);
            Vol1.GetSlice2DFrac(X,Y,orient);
@@ -9381,7 +9454,11 @@ begin
  ViewGPU1.OpenGLMajorVersion:= 2;
  ViewGPU1.OpenGLMinorVersion:= 1;
  {$ENDIF}
+ {$IFDEF LINE3D}
+ ViewGPU1.DepthBits:= 24;
+ {$ELSE}
  ViewGPU1.DepthBits:= 0;
+ {$ENDIF}
  Vol1 := TGPUVolume.Create(ViewGPU1);
  {$ENDIF}
 end;
@@ -9578,9 +9655,9 @@ begin
   //for Metal, Must be done at FormCreate, not FormShow! Vol1 := TGPUVolume.Create(ViewGPU1);
   //Vol1.Slices.RadiologicalConvention := gPrefs.FlipLR_Radiological;
   {$IFNDEF METALAPI}
-  {$IFDEF LCLCocoa}
+  {$IFDEF LCLCocoa}{$IFDEF RETINA}
   ViewGPU1.setRetina(gPrefs.RetinaDisplay);
-  {$ENDIF}
+  {$ENDIF}{$ENDIF}
   ViewGPU1.MakeCurrent(false);
   {$IFDEF COREGL}
   if (not  Load_GL_version_3_3_CORE) then begin
@@ -9781,6 +9858,7 @@ begin
   Vol1.Slices.LabelOrient := gPrefs.LabelOrient;
   Vol1.Quality1to5 := gPrefs.Quality1to5;
   Vol1.Slices.LineWidth := gPrefs.LineWidth;
+  Vol1.Slices.LineColor := Vec4(gPrefs.LineColor.R/255.0, gPrefs.LineColor.G/255.0, gPrefs.LineColor.B/255.0, gPrefs.LineColor.A/255.0);
   LineWidthEdit.Value := gPrefs.LineWidth;
 end;
 
@@ -9807,7 +9885,6 @@ begin
  v.SetDisplayVolume(i);
  UpdateLayerBox(false, true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
  UpdateTimer.Enabled := true;
- //LayerBox.Caption := inttostr(random(888))+' '+inttostr(i);
 end;
 
 function TGLForm1.HasLabelLayer: boolean;
@@ -9983,7 +10060,9 @@ begin
   {$ENDIF}
   AnimateTimer.Enabled := false;
   UpdateTimer.Enabled := false;
+  {$IFDEF GRAPH}
   gGraph.Destroy;
+  {$ENDIF}
   vols.CloseAllLayers;
   vols.Free;
   gLandmark.Free;

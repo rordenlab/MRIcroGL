@@ -10,5 +10,7 @@
 //{$DEFINE PARALLEL}  //for parallel Unix also edit CThreads in LPR file - no benefit if used with DYNRGBA
 //{$DEFINE DYNRGBA}  //{$IFDEF DYNRGBA}
 {$DEFINE MOSAIC}
-{$DEFINE DEPTHPICKER} //
+{$DEFINE LINE3D}
+{$DEFINE DEPTHPICKER} //use a separate shader
+{$DEFINE DEPTHPICKER2}
 //{$DEFINE NEWPY} //It is suggested to use 2020.07.31 or earlier. This switch is for new versions https://github.com/Alexey-T/Python-for-Lazarus/issues/25

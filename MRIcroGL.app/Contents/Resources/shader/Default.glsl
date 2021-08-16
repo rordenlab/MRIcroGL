@@ -29,6 +29,7 @@ void main() {
 	vec4 samplePos = vec4(start.xyz, 0.0);
 	vec4 clipPos = applyClip(dir, samplePos, len);
 	float opacityCorrection = stepSize/sliceSize;
+	gl_FragDepth = 1.0;
 	//fast pass - optional
 	fastPass (len, dir, intensityVol, samplePos);
 	#if ( __VERSION__ > 300 )
@@ -59,12 +60,17 @@ void main() {
 	//end fastpass - optional
 	float ran = fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453);
 	samplePos += deltaDir * ran;
+	int nHit = 0;
 	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
 	while (samplePos.a <= len) {
 		colorSample = texture3Df(intensityVol,samplePos.xyz);
 		if (colorSample.a > 0.0) {
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
-			bgNearest = min(samplePos.a,bgNearest);
+			if (nHit < 1) {
+				nHit ++;
+				bgNearest = samplePos.a;
+				setDepthBuffer(samplePos.xyz);
+			}
 			gradSample= texture3Df(gradientVol,samplePos.xyz);
 			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
 			//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
@@ -82,6 +88,7 @@ void main() {
 		samplePos += deltaDir;
 	} //while samplePos.a < len
 	colAcc.a = colAcc.a/0.95;
+
 	colAcc.a *= backAlpha;
 	if ( overlays< 1 ) {
 		#if ( __VERSION__ > 300 )
@@ -147,6 +154,7 @@ void main() {
 	}
 	colAcc.rgb = mix(colAcc.rgb, overAcc.rgb, overMix);
 	colAcc.a = max(colAcc.a, overAcc.a);
+	//if (nHit < 1 ) discard;
 	#if ( __VERSION__ > 300 )
 	FragColor = colAcc;
 	#else
