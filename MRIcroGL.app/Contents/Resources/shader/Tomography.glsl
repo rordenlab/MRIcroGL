@@ -53,7 +53,12 @@ void main() {
 	vec4 colorMax = vec4(0.0, 0.0, 0.0, 0.0);
 	if (samplePos.a < clipPos.a) {
 		samplePos = clipPos;
-		bgNearest = clipPos.a;
+		if (nHit < 1) {
+			nHit ++;
+			bgNearest = clipPos.a;
+			setDepthBuffer(samplePos.xyz);
+		}
+		
 		float stepSizeX2 = samplePos.a + (stepSize * 2.0);
 		while (samplePos.a <= stepSizeX2) {
 			colorSample = texture3Df(intensityVol,samplePos.xyz);
@@ -106,7 +111,6 @@ void main() {
 		}
 		samplePos += deltaDir;
 	} //while samplePos.a < len
-	
 	//start tomography
 	float alphaThresh = 0.95;
 	gradSample = mix(gradAcc, gradMax, gradientMix);
@@ -159,6 +163,10 @@ void main() {
 	while (samplePos.a <= len) {
 		colorSample = texture3Df(intensityOverlay,samplePos.xyz);
 		if (colorSample.a > 0.00) {
+			if (nHit < 1) {
+				nHit ++;
+				setDepthBuffer(samplePos.xyz);
+			}
 			if (overAcc.a < 0.3)
 				overFarthest = samplePos.a;
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);

@@ -30,6 +30,7 @@ Type
         property AdditiveOverlayBlending: boolean read fAdditiveOverlayBlending write fAdditiveOverlayBlending;
         function AddLayer(niftiFileName: string; backColor: TRGBA): boolean;
         function AddCorrelLayer(vox: TVec3i; backColor: TRGBA; isZ: boolean): boolean;
+        function AddEdgeLayer(backColor: TRGBA): boolean;
         function OpenDrawing(niftiFileName: string): boolean;
         function OverlaysNeedsUpdate: boolean;
         function Layer(idx: integer; out vol: TNIfTI): boolean;
@@ -380,29 +381,44 @@ begin
 end;
 
 
+function TNIfTIs.AddEdgeLayer(backColor: TRGBA): boolean;
+var
+  rs: TFloat32s;
+  hdr: TNIFTIhdr;
+  prefix: string;
+begin
+     result := false;
+     if (fNumLayers > kMaxOverlay) or (fNumLayers < 1) then exit;
+     rs := niis[0].EdgeMap(false);
+     if length(rs) < 1 then exit;
+     hdr := niis[0].Header;
+     hdr.intent_code := kNIFTI_INTENT_NONE;
+     hdr.cal_min := 0.1;
+     hdr.cal_max := 1.0;
+     prefix := 'edge_';
+     niis[fNumLayers] := TNIfTI.Create(prefix+niis[0].shortname, backColor, niis[0].Mat, niis[0].Dim, fInterpolateOverlays, hdr, rs);
+     fNumLayers := fNumLayers + 1;
+     setlength(rs,0);
+     result := true;
+
+end;
+
 
 function TNIfTIs.AddCorrelLayer(vox: TVec3i; backColor: TRGBA; isZ: boolean): boolean;
 var
   rs: TFloat32s;
   hdr: TNIFTIhdr;
-  //i,n: integer;
   posStr, prefix,s: string;
 begin
-
-
      result := false;
      if (fNumLayers > kMaxOverlay) or (fNumLayers < 1) then exit;
      if Drawing.IsOpen then begin
         posStr := '_roi';
-
         rs := niis[0].SeedCorrelationMap(Drawing.VolRawBytes, isZ);
      end else begin
-
          posStr := inttostr(vox.x)+'x'+inttostr(vox.y)+'x'+inttostr(vox.z);
          rs := niis[0].SeedCorrelationMap(vox, isZ);
      end;
-
-
      if length(rs) < 1 then exit;
      //n := length(rs);
      //for i := 0 to (n-1) do
@@ -421,7 +437,7 @@ begin
      niis[fNumLayers] := TNIfTI.Create(prefix+PosStr+'_'+s+niis[0].shortname, backColor, niis[0].Mat, niis[0].Dim, fInterpolateOverlays, hdr, rs);
      //!TOBO niis[fNumLayers].SetDisplayColorScheme('8RedYell', 8);
      fNumLayers := fNumLayers + 1;
-     setlength(rs,1);
+     setlength(rs,0);
 end;
 
 constructor TNIfTIs.Create(niftiFileName: string; backColor: TRGBA; lLoadFewVolumes: boolean; lMaxVox: integer; out isOK: boolean); overload;

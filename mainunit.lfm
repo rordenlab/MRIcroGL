@@ -1,7 +1,7 @@
 object GLForm1: TGLForm1
-  Left = 343
+  Left = 332
   Height = 662
-  Top = 156
+  Top = 95
   Width = 916
   AllowDropFiles = True
   Caption = 'MRIcroGL'
@@ -2691,6 +2691,10 @@ object GLForm1: TGLForm1
       AutoCheck = True
       Caption = 'Invert Color Map'
       OnClick = LayerInvertColorMapMenuClick
+    end
+    object EdgeMenu2: TMenuItem
+      Caption = 'Find Edges'
+      OnClick = EdgeMenuClick
     end
     object LayerNextVolumeMenu: TMenuItem
       Tag = 1

@@ -21,7 +21,6 @@ intensityfilter, nifti_save;
 {$R *.res}
 begin
   RequireDerivedFormResource:=True;
-  Application.Title:='MRIcroGL';
   Application.Scaled:=True;
   Application.Initialize;
   Application.CreateForm(TGLForm1, GLForm1);

@@ -136,6 +136,7 @@ type
     DrawDilateMenu: TMenuItem;
     LayerExport8BitMenu: TMenuItem;
     DicomDirMenu: TMenuItem;
+    EdgeMenu2: TMenuItem;
     MPR4Menu: TMenuItem;
     ScriptHaltMenu: TMenuItem;
     NimlMenu: TMenuItem;
@@ -395,6 +396,7 @@ type
     procedure CenterPanelClick(Sender: TObject);
     procedure DicomDirMenuClick(Sender: TObject);
     procedure DrawIntensityFilterMenuClick(Sender: TObject);
+    procedure EdgeMenuClick(Sender: TObject);
     procedure FormChangeBounds(Sender: TObject);
     procedure FormResize(Sender: TObject);
     procedure FormShortCut(var Msg: TLMKey; var Handled: Boolean);
@@ -1070,6 +1072,25 @@ end;
 procedure TGLForm1.DrawIntensityFilterMenuClick(Sender: TObject);
 begin
   IntensityFilterForm.Show;
+end;
+
+procedure TGLForm1.EdgeMenuClick(Sender: TObject);
+var
+ niftiVol: TNIfTI;
+ i: integer;
+begin
+  if not vols.Layer(0,niftiVol) then exit;
+
+  if not vols.AddEdgeLayer(gPrefs.ClearColor) then exit;
+  i := GLForm1.LayerColorDrop.Items.IndexOf('8RedYell'); //search is case-insensitive!
+ if i > 0 then
+    LayerChange(vols.NumLayers-1, i, -1, 0.1, 1.0)
+ else
+     LayerChange(vols.NumLayers-1, vols.NumLayers-1, -1, 0.1, 1.0);
+ UpdateLayerBox(true);
+ UpdateColorbar();
+ //Vol1.UpdateOverlays(vols);
+ UpdateTimer.Enabled:= true;
 end;
 
 procedure TGLForm1.FormChangeBounds(Sender: TObject);
@@ -2821,6 +2842,23 @@ begin
     {$IFDEF PY4LAZ}end;{$ENDIF}
 end;
 
+//(name: 'windowposition'; callback: @PyWINDOWPOSITION; help: ' windowposition(l,t,w,h) -> Set the left, top, width and height for the executable window.'),
+function PyWINDOWPOSITION(Self, Args : PPyObject): PPyObject; cdecl;
+var
+  l,t,w,h: integer;
+begin
+{$IFDEF PY4LAZ}with GetPythonEngine do begin  {$ENDIF}
+  Result:= PyBool_FromLong(Ord(True));
+    if Boolean(PyArg_ParseTuple(Args, 'iiii:windowposition', @l, @t, @w, @h)) then begin
+       GLForm1.Left := l;
+       GLForm1.Top := t;
+       GLForm1.Width := w;
+       GLForm1.Height := h;
+    end;
+    {$IFDEF PY4LAZ}end;{$ENDIF}
+end;
+
+
 function PyZOOMSCALE2D(Self, Args : PPyObject): PPyObject; cdecl;
 var
   zoom: integer;
@@ -3037,7 +3075,7 @@ type
   end;
 {$ENDIF}
 var
-  methods: array[0..68] of TPythonBridgeMethod = (
+  methods: array[0..69] of TPythonBridgeMethod = (
 (name: 'atlashide'; callback: @PyATLASHIDE; help: ' atlashide(layer, indices...) -> Hide all (e.g. "atlashide(1)") or some (e.g. "atlashide(1, (17, 22))") regions of an atlas.'),
 (name: 'atlaslabels'; callback: @PyATLASLABELS; help: ' atlasmaxindex(layer) -> Returns string listing all regions in an atlas'),
 (name: 'atlasmaxindex'; callback: @PyATLASMAXINDEX; help: ' atlasmaxindex(layer) -> Returns maximum region humber in specified atlas. For example, if you load the CIT168 atlas (which has 15 regions) as your background image, then atlasmaxindex(0) will return 15.'),
@@ -3103,6 +3141,7 @@ var
 (name: 'viewsagittal'; callback: @PyVIEWSAGITTAL; help: ' viewsagittal(LR) -> Show rendering with camera left (1) or right (0) of volume.'),
 (name: 'volume'; callback: @PyVOLUME; help: ' volume(layer, vol) -> For 4D images, set displayed volume (layer 0 = background; volume 0 = first volume in layer).'),
 (name: 'wait'; callback: @PyWAIT; help: ' wait(ms) -> Pause script for (at least) the desired milliseconds.'),
+(name: 'windowposition'; callback: @PyWINDOWPOSITION; help: ' windowposition(l,t,w,h) -> Set the left, top, width and height for the executable window.'),
 (name: 'yoke'; callback: @PyYOKE; help: ' yoke(v) -> Yoke (1) instances so different instances show same view.'),
 (name: 'zerointensityinvisible'; callback: @PyZEROINTENSITYINVISIBLE; help: ' zerointensityinvisible(layer, bool) ->  For specified layer (0 = background) should voxels with intensity 0 be opaque (bool= 0) or transparent (bool = 1).'),
 (name: 'zoomcenter'; callback: @PyZOOMCENTER; help: ' zoomcenter(x,y,z) -> Set center of expansion for zoom scale (values in range 0..1 with 0.5 in volume center).'),
@@ -3722,8 +3761,6 @@ begin
  UpdateColorbar();
  //Vol1.UpdateOverlays(vols);
  UpdateTimer.Enabled:= true;
-
-
 end;
 
 procedure TGLForm1.AnatOpenBtnClick(Sender: TObject);

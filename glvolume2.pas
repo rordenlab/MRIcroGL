@@ -3016,6 +3016,7 @@ begin
   end;
   //glControl.SetViewport(); //OKRA
   if (clearScreen) then glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT);
+  //glDisable(GL_DEPTH_TEST);
   glEnable (GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glEnable(GL_CULL_FACE);
@@ -3050,11 +3051,15 @@ begin
     //draw translucent line regardless of volume render
     PaintCrosshair3D(Vec4(slices2D.LineColor.r,slices2D.LineColor.g,slices2D.LineColor.b,slices2D.LineColor.a * 0.225));
     //glDepthFunc(GL_ALWAYS); //always pass test
+  end else begin
+  	glDepthFunc(GL_LEQUAL); //GL_LESS);
+  	glDisable(GL_DEPTH_TEST);
   end;
   {$ENDIF}{$ENDIF} //IFDEF VIEW2D, LINE3D
   glDisable(GL_CULL_FACE);
   {$IFDEF CLRBAR}
-  if (colorEditorVisible) and (widthHeightLeft.z = 0) then begin
+  //if (colorEditorVisible) and (widthHeightLeft.z = 0) then begin
+  if  (widthHeightLeft.z = 0) then begin
     clrbar.RulerPixels:= 0;
     if clrbar <> nil then
      clrbar.Draw();

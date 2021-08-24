@@ -219,6 +219,7 @@ Type
         function VoxIntensity(vox: TVec3i): single; overload; //return intensity of voxel at coordinate
         function VoxIntensityArray(vox: TVec3i): TFloat32s; overload;
         function VoxIntensityArray(roi: TUInt8s): TFloat32s; overload;
+        function EdgeMap(isSmooth: boolean): TFloat32s;
         function SeedCorrelationMap(vox: TVec3i; isZ: boolean): TFloat32s; overload;
         function SeedCorrelationMap(roi: TUInt8s; isZ: boolean): TFloat32s; overload;
         function SeedCorrelationMap(vSeed: TFloat32s; isZ: boolean): TFloat32s; overload;
@@ -800,10 +801,108 @@ begin
   exit(r);
 end;
 {$ENDIF} //FASTCORREL2
+function TNIfTI.EdgeMap(isSmooth: boolean): TFloat32s;
+//https://afni.nimh.nih.gov/pub/dist/doc/htmldoc/programs/3dedge3_sphx.html
+//https://en.wikipedia.org/wiki/Sobel_operator#Extension_to_other_dimensions
+var
+  x, y, z, vx, nXYZ, nXY, nX, nY, nZ: int64;
+  llh, mlh, hlh, lmh, mmh, hmh,  lhh, mhh, hhh, //voxel neighbors: slice above (high)
+  llm, mlm, hlm, lmm,      hmm,  lhm, mhm, hhm, //voxel neighbors: same slice (middle)
+  lll, mll, hll, lml, mml, hml,  lhl, mhl, hhl, //voxel neighbors: slice below (low)
+  gx, gy, gz, mn, mx, unityScale: single;
+  vol8: TUInt8s;
+  vol16: TInt16s;
+  v, vol32: TFloat32s;
+begin
+ setlength(result, 0);
+ if IsLabels then exit;
+ if fHdr.bitpix = 24 then exit;
+ nX := fHdr.Dim[1];
+ nY := fHdr.Dim[2];
+ nZ := fHdr.Dim[3];
+ if (nX < 3) or (nY < 3) or (nZ < 3) then exit;
+ nXY := nX * nY;
+ nXYZ := nXY * nZ;
+ setlength(result, nXYZ);
+ setlength(v, nXYZ);
+ vol8 := fRawVolBytes;
+ vol16 := TInt16s(vol8);
+ vol32 := TFloat32s(vol8);
+ if fHdr.datatype = kDT_UINT8 then begin
+    for vx := 0 to (nXYZ - 1) do
+        v[vx] := vol8[vx];
+ end else if fHdr.datatype = kDT_INT16 then begin
+   for vx := 0 to (nXYZ - 1) do
+       v[vx] := vol16[vx];
+ end else if fHdr.datatype = kDT_FLOAT then begin
+   for vx := 0 to (nXYZ - 1) do
+       v[vx] := vol32[vx];
+ end;
+ vx := -1;
+ for z := 1 to nZ do
+     for y := 1 to nY do
+         for x := 1 to nX do begin
+            vx += 1;
+            if (z = 1) or (z = nZ) or (y = 1) or (y = nY) or (x = 1) or (x = nX) then begin
+              result[vx] := 0.0;
+              continue;
+            end;
+            //slice above (high)
+            llh := v[vx - 1 - nX + nXY];
+            mlh := v[vx - 0 - nX + nXY] * 2;
+            hlh := v[vx + 1 - nX + nXY];
+            lmh := v[vx - 1 - 0 + nXY] * 2;
+            mmh := v[vx - 0 - 0 + nXY] * 4;
+            hmh := v[vx + 1 - 0 + nXY] * 2;
+            lhh := v[vx - 1 + nX + nXY];
+            mhh := v[vx - 0 + nX + nXY] * 2;
+            hhh := v[vx + 1 + nX + nXY];
+            //same slice (middle)
+            llm := v[vx - 1 - nX + 0] * 2;
+            mlm := v[vx - 0 - nX + 0] * 4;
+            hlm := v[vx + 1 - nX + 0] * 2;
+            lmm := v[vx - 1 - 0 + 0] * 4;
+            //mmm := v[vx - 0 - 0 + 0];
+            hmm := v[vx + 1 - 0 + 0] * 4;
+            lhm := v[vx - 1 + nX + 0] * 2;
+            mhm := v[vx - 0 + nX + 0] * 4;
+            hhm := v[vx + 1 + nX + 0] * 2;
+            //slice below (low)
+            lll := v[vx - 1 - nX - nXY];
+            mll := v[vx - 0 - nX - nXY] * 2;
+            hll := v[vx + 1 - nX - nXY];
+            lml := v[vx - 1 - 0 - nXY] * 2;
+            mml := v[vx - 0 - 0 - nXY] * 4;
+            hml := v[vx + 1 - 0 - nXY] * 2;
+            lhl := v[vx - 1 + nX - nXY];
+            mhl := v[vx - 0 + nX - nXY] * 2;
+            hhl := v[vx + 1 + nX - nXY];
+            gx := (hlh + hmh + hhh + hlm + hmm + hhm + hll + hml + hhl) - (llh + lmh + lhh + llm + lmm + lhm + lll + lml + lhl);
+            gy := (lhh + mhh + hhh + lhm + mhm + hhm + lhl + mhl + hhl) - (llh + mlh + hlh + llm + mlm + hlm + lll + mll + hll);
+            gz := (llh + mlh + hlh + lmh + mmh + hmh +  lhh + mhh + hhh) - (lll + mll + hll + lml + mml + hml +  lhl + mhl + hhl);
+            result[vx] += sqrt( sqr(gx) + sqr(gy) + sqr(gz));
+         end;
+ setlength(v, 0); //free memory
+ //scale 0..1
+ mn := infinity;
+ mx := -infinity;
+ for vx := 0 to (nXYZ - 1) do begin
+     if specialsingle(result[vx]) then continue;
+     mn := min(mn, result[vx]);
+     mx := max(mx, result[vx]);
+ end;
+ if (mn >= mx) then begin
+   setlength(result, 0);
+   exit;
+ end;
+ unityScale := 1.0 / (mx - mn);
+ for vx := 0 to (nXYZ - 1) do
+     result[vx] := unityScale * (result[vx] - mn);
+end;
+
 function TNIfTI.SeedCorrelationMap(vSeed: TFloat32s; isZ: boolean): TFloat32s; overload;
 //https://www.johndcook.com/blog/2008/11/05/how-to-calculate-pearson-correlation-accurately/
 var
-  //vx1,
   vx, nVx, vol, nVol, volBytes: int64;
   vol8: TUInt8s;
   vol16: TInt16s;
@@ -2571,6 +2670,9 @@ begin
  end;
 end;
 begin
+  checkSingle(h.scl_slope); //https://github.com/nipreps/fmriprep/issues/2507
+  if specialSingle(h.scl_inter) then
+  	h.scl_inter := 0.0;
   checkSingle(h.PixDim[1]);
   checkSingle(h.PixDim[2]);
   checkSingle(h.PixDim[3]);
@@ -3968,6 +4070,7 @@ var
   ui16in,ui16temp: TUInt16s;
   ui32in,ui32temp: TUInt32s;
   i32in,i32temp: TInt32s;
+  i64in,i64temp: TInt64s;
   f64in,f64temp: TFloat64s;
   f32out: TFloat32s;
   i,vx: int64;
@@ -4005,7 +4108,19 @@ begin
      f32out := TFloat32s(fRawVolBytes);
      for i := 0 to (vx-1) do
          f32out[i] := ui32temp[i];
-      ui16temp := nil;
+      ui32temp := nil;
+
+  end else if (fHdr.datatype = kDT_INT64) then begin
+     i64in := TInt64s(fRawVolBytes);
+     setlength(i64temp, vx);
+     for i := 0 to (vx-1) do
+         i64temp[i] := i64in[i];
+     fRawVolBytes := nil; //release
+     setlength(fRawVolBytes, 4 * vx);
+     f32out := TFloat32s(fRawVolBytes);
+     for i := 0 to (vx-1) do
+         f32out[i] := i64temp[i];
+      i64temp := nil;
   end else if (fHdr.datatype = kDT_DOUBLE) then begin
    f64in := TFloat64s(fRawVolBytes);
    setlength(f64temp, vx);
@@ -8141,7 +8256,7 @@ begin
   LoadRGBVector();
   Convert2RGB();
   Convert2UInt8();
-  if (fHdr.datatype = kDT_UINT16) or (fHdr.datatype = kDT_INT32) or (fHdr.datatype = kDT_UINT32) or (fHdr.datatype = kDT_DOUBLE)  then
+  if (fHdr.datatype = kDT_UINT16) or (fHdr.datatype = kDT_INT32) or (fHdr.datatype = kDT_UINT32) or (fHdr.datatype = kDT_DOUBLE) or (fHdr.datatype = kDT_INT64)  then
      Convert2Float();
   //printf(format('->> %d', [length(fRawVolBytes)]));  //saveRotat
   if prod(tarDim) > 0 then begin

@@ -142,6 +142,10 @@ void main() {
 			vec4 ocolorSample = texture3Df(intensityOverlay,samplePos.xyz);
 			ocolorSample.a = 1.0-pow((1.0 - ocolorSample.a), opacityCorrection);
 			if (ocolorSample.a > 0.0) {
+				if (nHit < 1) {
+					nHit ++;
+					setDepthBuffer(samplePos.xyz);
+				}
 				gradSample = texture3Df(gradientOverlay,samplePos.xyz); //interpolate gradient direction and magnitude
 				gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
 				if (gradSample.a < oprevGrad.a)

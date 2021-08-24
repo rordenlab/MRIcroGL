@@ -142,6 +142,10 @@ void main() {
 			samplePos += deltaDir;
 			if (colorSample.a < 0.01)
 				continue;
+			if (nHit < 1) {
+				nHit ++;
+				setDepthBuffer(samplePos.xyz);
+			}
 			if (overAcc.a < 0.3)
 				overFarthest = samplePos.a;
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);

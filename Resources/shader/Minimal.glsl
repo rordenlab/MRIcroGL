@@ -69,6 +69,10 @@ void main() {
 	while (samplePos.a <= len) {
 		colorSample = texture3Df(intensityOverlay,samplePos.xyz);
 		if (colorSample.a > 0.00) {
+			if (nHit < 1) {
+				nHit ++;
+				setDepthBuffer(samplePos.xyz);
+			}
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);
 			colorSample.a *=  overlayFuzzy;
 			overFarthest = samplePos.a;

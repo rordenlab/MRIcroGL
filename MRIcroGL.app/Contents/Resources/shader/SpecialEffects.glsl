@@ -2,7 +2,7 @@
 showGradient|float|0|0|1|Display surface angle
 doPoor|float|0|1|1|Poor quality reveals rendering strategy
 doJitter|float|0|0|1|Jitter hides wood-grain artifacts
-showStartEnd|float|0|0.5|1|Show background box
+showStartEnd|float|0|0.35|1|Show background box
 
 //frag
 uniform float showGradient = 0.0;
@@ -78,13 +78,16 @@ void main() {
 	colAcc.a *= backAlpha;
 	if (samplePos.a > (len +0.5)) {
 		//	
-	} else if (showStartEnd < 0.33) {
+	} else if (showStartEnd < 0.2) {
 		colAcc.rgb = mix(clipPos.xyz, colAcc.rgb, colAcc.a);
 		colAcc.a = 1.0;
-	} else if (showStartEnd < 0.66) {
+	} else if (showStartEnd < 0.4) {
 		colAcc.rgb = mix(clipPos.xyz + (dir * (len - clipPos.a)), colAcc.rgb, colAcc.a);
-		//colAcc.rgb = mix(clipPos.xyz + (dir * len), colAcc.rgb, colAcc.a);
 		colAcc.a = 1.0;
+	} else if (showStartEnd < 0.6) {
+		colAcc = vec4(clipPos.xyz, 1.0);
+	} else if (showStartEnd < 0.8) {
+		colAcc = vec4(clipPos.xyz + (dir * (len - clipPos.a)), 1.0);
 	}			
 	if ( overlays < 1 ) {
 		#if ( __VERSION__ > 300 )

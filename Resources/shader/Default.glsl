@@ -88,9 +88,8 @@ void main() {
 		samplePos += deltaDir;
 	} //while samplePos.a < len
 	colAcc.a = colAcc.a/0.95;
-
 	colAcc.a *= backAlpha;
-	if ( overlays< 1 ) {
+	if ( overlays < 1 ) {
 		#if ( __VERSION__ > 300 )
 		FragColor = colAcc;
 		#else
@@ -122,6 +121,10 @@ void main() {
 	while (samplePos.a <= len) {
 		colorSample = texture3Df(intensityOverlay,samplePos.xyz);
 		if (colorSample.a > 0.00) {
+			if (nHit < 1) {
+				nHit ++;
+				setDepthBuffer(samplePos.xyz);
+			}
 			if (overAcc.a < 0.3)
 				overFarthest = samplePos.a;
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);

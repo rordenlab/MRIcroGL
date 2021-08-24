@@ -1,4 +1,4 @@
-//pref
+\\\//pref
 overAlpha|float|0.0|0.8|2.0|Ability to see overlay images added to background
 //frag
 uniform  float overAlpha = 0.8;
@@ -14,6 +14,7 @@ void main() {
 	vec3 dir = backPosition - start;
 	float len = length(dir);
 	dir = normalize(dir);
+	gl_FragDepth = 1.0;
 	vec4 deltaDir = vec4(dir.xyz * stepSize, stepSize);
 	vec4 gradSample, colorSample;
 	float bgNearest = len; //assume no hit
@@ -44,10 +45,10 @@ void main() {
 	if ( overlays < 1 ) { //pass without overlays
 		while (samplePos.a <= len) {
 			colorSample = texture3Df(intensityVol,samplePos.xyz);
-			//if (colorSample.a > colAcc.a) //ties generate errors for TT_desai_dd_mpm
-			//	colAcc = colorSample;
-			if (colorSample.a > colAcc.a) //ties generate errors for TT_desai_dd_mpm
+			if (colorSample.a > colAcc.a) {//ties generate errors for TT_desai_dd_mpm
 				colAcc = colorSample+0.00001;
+				setDepthBuffer(samplePos.xyz);
+			}
 			samplePos += deltaDir;
 		} //while samplePos.a < len
 		//colAcc.a = step(0.001, colAcc.a); //good for templates...
