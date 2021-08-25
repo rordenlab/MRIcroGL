@@ -77,9 +77,9 @@ uses
 
 const
   {$IFDEF FASTGZ}
-  kVers = '1.2.20210816';
+  kVers = '1.2.20210824';
   {$ELSE}
-  kVers = '1.2.20210816+';
+  kVers = '1.2.20210824-';
   {$ENDIF}
 type
 
@@ -396,6 +396,7 @@ type
     procedure CenterPanelClick(Sender: TObject);
     procedure DicomDirMenuClick(Sender: TObject);
     procedure DrawIntensityFilterMenuClick(Sender: TObject);
+    function Sobel(layer: integer): boolean;
     procedure EdgeMenuClick(Sender: TObject);
     procedure FormChangeBounds(Sender: TObject);
     procedure FormResize(Sender: TObject);
@@ -1074,14 +1075,38 @@ begin
   IntensityFilterForm.Show;
 end;
 
-procedure TGLForm1.EdgeMenuClick(Sender: TObject);
+function TGLForm1.Sobel(layer: integer): boolean;
 var
- niftiVol: TNIfTI;
  i: integer;
 begin
-  if not vols.Layer(0,niftiVol) then exit;
+   result := false;
+   if (layer < 0) or (layer >= LayerList.Count) then exit;
+   //if not vols.Layer(i,niftiVol) then exit;
+   if not vols.AddEdgeLayer(layer, gPrefs.ClearColor) then exit;
+   i := GLForm1.LayerColorDrop.Items.IndexOf('8RedYell'); //search is case-insensitive!
+  if i > 0 then
+     LayerChange(vols.NumLayers-1, i, -1, 0.2, 1.0)
+  else
+      LayerChange(vols.NumLayers-1, vols.NumLayers-1, -1, 0.2, 1.0);
+  UpdateLayerBox(true);
+  UpdateColorbar();
+  //Vol1.UpdateOverlays(vols);
+  UpdateTimer.Enabled:= true;
+  result := true;
+end;
 
-  if not vols.AddEdgeLayer(gPrefs.ClearColor) then exit;
+procedure TGLForm1.EdgeMenuClick(Sender: TObject);
+var
+    i: integer;
+    //niftiVol: TNIfTI;
+begin
+  Sobel(LayerList.ItemIndex);
+  //   i := LayerList.ItemIndex;
+  // if (i < 0) or (i >= LayerList.Count) then exit;
+  (*i := LayerList.Count-1;
+  if (i < 0) then exit;
+  //if not vols.Layer(i,niftiVol) then exit;
+  if not vols.AddEdgeLayer(i, gPrefs.ClearColor) then exit;
   i := GLForm1.LayerColorDrop.Items.IndexOf('8RedYell'); //search is case-insensitive!
  if i > 0 then
     LayerChange(vols.NumLayers-1, i, -1, 0.1, 1.0)
@@ -1090,7 +1115,7 @@ begin
  UpdateLayerBox(true);
  UpdateColorbar();
  //Vol1.UpdateOverlays(vols);
- UpdateTimer.Enabled:= true;
+ UpdateTimer.Enabled:= true;   *)
 end;
 
 procedure TGLForm1.FormChangeBounds(Sender: TObject);
@@ -1352,7 +1377,7 @@ begin
         if (Fileexists(result)) then exit;
      end;
      result := Filename; //failed to find a match!
-     writeln('Unable to find image: "', result,'"');
+     printf('Unable to find image: "'+ result +'"');
 end;
 
 function GetFullPath( Filename: string; changeExt: boolean = true): string;
@@ -1864,6 +1889,24 @@ function PyATLASSHOW(Self, Args : PPyObject): PPyObject; cdecl;
 begin
      result := PyATLASSHOWHIDE(Self, Args, false);
 end; //PyAtlasHide
+
+function PySOBEL(Self, Args : PPyObject): PPyObject; cdecl;
+var
+ v: TNIfTI;
+ layer: integer;
+begin
+  Result:= PyInt_FromLong(-1);
+  {$IFDEF PY4LAZ}with GetPythonEngine do begin {$ENDIF}
+    if Bool(PyArg_ParseTuple(Args, 'i:sobel', @layer)) then begin
+       if (layer < 0) or (layer >= vols.NumLayers) then begin
+          GLForm1.ScriptOutputMemo.lines.add('atlasmaxindex: layer should be in range 0..'+inttostr(vols.NumLayers-1));
+          exit;
+       end;
+       GLForm1.Sobel(layer);
+       Result:= PyInt_FromLong(1);
+    end;
+    {$IFDEF PY4LAZ}end; {$ENDIF}
+end;
 
 function PyATLASMAXINDEX(Self, Args : PPyObject): PPyObject; cdecl;
 var
@@ -3075,7 +3118,7 @@ type
   end;
 {$ENDIF}
 var
-  methods: array[0..69] of TPythonBridgeMethod = (
+  methods: array[0..70] of TPythonBridgeMethod = (
 (name: 'atlashide'; callback: @PyATLASHIDE; help: ' atlashide(layer, indices...) -> Hide all (e.g. "atlashide(1)") or some (e.g. "atlashide(1, (17, 22))") regions of an atlas.'),
 (name: 'atlaslabels'; callback: @PyATLASLABELS; help: ' atlasmaxindex(layer) -> Returns string listing all regions in an atlas'),
 (name: 'atlasmaxindex'; callback: @PyATLASMAXINDEX; help: ' atlasmaxindex(layer) -> Returns maximum region humber in specified atlas. For example, if you load the CIT168 atlas (which has 15 regions) as your background image, then atlasmaxindex(0) will return 15.'),
@@ -3133,6 +3176,7 @@ var
 (name: 'shaderupdategradients'; callback: @PySHADERUPDATEGRADIENTS; help: ' shaderupdategradients() -> Recalculate volume properties.'),
 (name: 'sharpen'; callback: @PySHARPEN; help: ' sharpen() -> apply unsharp mask to background volume to enhance edges'),
 (name: 'smooth'; callback: @PySMOOTH2D; help: ' smooth2D(s) -> make 2D images blurry (linear interpolation, 1) or jagged (nearest neightbor, 0).'),
+(name: 'sobel'; callback: @PySOBEL; help: ' sobel(layer) -> Creates new layer based on Sobel edge map of selected layer.'),
 (name: 'toolformvisible'; callback: @PyTOOLFORMVISIBLE; help: ' toolformvisible(visible) -> Show (1) or hide (0) the tool panel.'),
 (name: 'version'; callback: @PyVERSION; help: ' version() -> Return the version of MRIcroGL.'),
 (name: 'view'; callback: @PyVIEW; help: ' view(v) -> Display Axial (1), Coronal (2), Sagittal (4), Flipped Sagittal (8), MPR (16), Mosaic (32) or Rendering (64)'),

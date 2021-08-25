@@ -219,7 +219,7 @@ Type
         function VoxIntensity(vox: TVec3i): single; overload; //return intensity of voxel at coordinate
         function VoxIntensityArray(vox: TVec3i): TFloat32s; overload;
         function VoxIntensityArray(roi: TUInt8s): TFloat32s; overload;
-        function EdgeMap(isSmooth: boolean): TFloat32s;
+        function EdgeMap(isSmooth: boolean): TUInt8s;
         function SeedCorrelationMap(vox: TVec3i; isZ: boolean): TFloat32s; overload;
         function SeedCorrelationMap(roi: TUInt8s; isZ: boolean): TFloat32s; overload;
         function SeedCorrelationMap(vSeed: TFloat32s; isZ: boolean): TFloat32s; overload;
@@ -261,7 +261,7 @@ Type
         procedure GPULoadDone();
         function SaveFormatBasedOnExt(fnm: string): boolean; overload; //filename determines format.nii, .tif, .bvox, .nrrd, .nhdr etc...
         function Load(niftiFileName: string): boolean; overload;
-        function Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s): boolean; overload;
+        function Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s; isUINT8: boolean = false): boolean; overload;
         function Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; volumeNumber: integer = 0; isKeepContrast: boolean = false): boolean; overload;
         procedure SetDisplayMinMax(newMin, newMax: single); overload;
         procedure SetDisplayMinMax(isForceRefresh: boolean = false); overload;
@@ -278,7 +278,7 @@ Type
         procedure ForceUpdate;
         procedure SetClusters(c: TClusters; notes: string);
         constructor Create(); overload; //empty volume
-        constructor Create(niftiFileName: string; backColor: TRGBA;  tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s); overload;
+        constructor Create(niftiFileName: string; backColor: TRGBA;  tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s; isUINT8: boolean = false); overload;
         constructor Create(niftiFileName: string; backColor: TRGBA; lLoadFewVolumes: boolean; lMaxTexMb: integer; out isOK: boolean); overload; //background
         constructor Create(niftiFileName: string; backColor: TRGBA; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; out isOK: boolean; lLoadFewVolumes: boolean = true; lMaxTexMb: integer = 640); overload; //overlay
         constructor Create(tarMat: TMat4; tarDim: TVec3i); overload; //blank drawing
@@ -801,7 +801,7 @@ begin
   exit(r);
 end;
 {$ENDIF} //FASTCORREL2
-function TNIfTI.EdgeMap(isSmooth: boolean): TFloat32s;
+function TNIfTI.EdgeMap(isSmooth: boolean): TUInt8s;
 //https://afni.nimh.nih.gov/pub/dist/doc/htmldoc/programs/3dedge3_sphx.html
 //https://en.wikipedia.org/wiki/Sobel_operator#Extension_to_other_dimensions
 var
@@ -809,10 +809,9 @@ var
   llh, mlh, hlh, lmh, mmh, hmh,  lhh, mhh, hhh, //voxel neighbors: slice above (high)
   llm, mlm, hlm, lmm,      hmm,  lhm, mhm, hhm, //voxel neighbors: same slice (middle)
   lll, mll, hll, lml, mml, hml,  lhl, mhl, hhl, //voxel neighbors: slice below (low)
-  gx, gy, gz, mn, mx, unityScale: single;
+  gx, gy, gz, mn, mx, scale255: single;
   vol8: TUInt8s;
-  vol16: TInt16s;
-  v, vol32: TFloat32s;
+  vol32: TFloat32s;
 begin
  setlength(result, 0);
  if IsLabels then exit;
@@ -823,81 +822,69 @@ begin
  if (nX < 3) or (nY < 3) or (nZ < 3) then exit;
  nXY := nX * nY;
  nXYZ := nXY * nZ;
- setlength(result, nXYZ);
- setlength(v, nXYZ);
- vol8 := fRawVolBytes;
- vol16 := TInt16s(vol8);
- vol32 := TFloat32s(vol8);
- if fHdr.datatype = kDT_UINT8 then begin
-    for vx := 0 to (nXYZ - 1) do
-        v[vx] := vol8[vx];
- end else if fHdr.datatype = kDT_INT16 then begin
-   for vx := 0 to (nXYZ - 1) do
-       v[vx] := vol16[vx];
- end else if fHdr.datatype = kDT_FLOAT then begin
-   for vx := 0 to (nXYZ - 1) do
-       v[vx] := vol32[vx];
- end;
+ setlength(vol32, nXYZ);
+ vol8 := fCache8;
  vx := -1;
  for z := 1 to nZ do
      for y := 1 to nY do
          for x := 1 to nX do begin
             vx += 1;
             if (z = 1) or (z = nZ) or (y = 1) or (y = nY) or (x = 1) or (x = nX) then begin
-              result[vx] := 0.0;
+              vol32[vx] := 0.0;
               continue;
             end;
             //slice above (high)
-            llh := v[vx - 1 - nX + nXY];
-            mlh := v[vx - 0 - nX + nXY] * 2;
-            hlh := v[vx + 1 - nX + nXY];
-            lmh := v[vx - 1 - 0 + nXY] * 2;
-            mmh := v[vx - 0 - 0 + nXY] * 4;
-            hmh := v[vx + 1 - 0 + nXY] * 2;
-            lhh := v[vx - 1 + nX + nXY];
-            mhh := v[vx - 0 + nX + nXY] * 2;
-            hhh := v[vx + 1 + nX + nXY];
+            llh := vol8[vx - 1 - nX + nXY];
+            mlh := vol8[vx - 0 - nX + nXY] * 2;
+            hlh := vol8[vx + 1 - nX + nXY];
+            lmh := vol8[vx - 1 - 0 + nXY] * 2;
+            mmh := vol8[vx - 0 - 0 + nXY] * 4;
+            hmh := vol8[vx + 1 - 0 + nXY] * 2;
+            lhh := vol8[vx - 1 + nX + nXY];
+            mhh := vol8[vx - 0 + nX + nXY] * 2;
+            hhh := vol8[vx + 1 + nX + nXY];
             //same slice (middle)
-            llm := v[vx - 1 - nX + 0] * 2;
-            mlm := v[vx - 0 - nX + 0] * 4;
-            hlm := v[vx + 1 - nX + 0] * 2;
-            lmm := v[vx - 1 - 0 + 0] * 4;
-            //mmm := v[vx - 0 - 0 + 0];
-            hmm := v[vx + 1 - 0 + 0] * 4;
-            lhm := v[vx - 1 + nX + 0] * 2;
-            mhm := v[vx - 0 + nX + 0] * 4;
-            hhm := v[vx + 1 + nX + 0] * 2;
+            llm := vol8[vx - 1 - nX + 0] * 2;
+            mlm := vol8[vx - 0 - nX + 0] * 4;
+            hlm := vol8[vx + 1 - nX + 0] * 2;
+            lmm := vol8[vx - 1 - 0 + 0] * 4;
+            //mmm := vol8[vx - 0 - 0 + 0];
+            hmm := vol8[vx + 1 - 0 + 0] * 4;
+            lhm := vol8[vx - 1 + nX + 0] * 2;
+            mhm := vol8[vx - 0 + nX + 0] * 4;
+            hhm := vol8[vx + 1 + nX + 0] * 2;
             //slice below (low)
-            lll := v[vx - 1 - nX - nXY];
-            mll := v[vx - 0 - nX - nXY] * 2;
-            hll := v[vx + 1 - nX - nXY];
-            lml := v[vx - 1 - 0 - nXY] * 2;
-            mml := v[vx - 0 - 0 - nXY] * 4;
-            hml := v[vx + 1 - 0 - nXY] * 2;
-            lhl := v[vx - 1 + nX - nXY];
-            mhl := v[vx - 0 + nX - nXY] * 2;
-            hhl := v[vx + 1 + nX - nXY];
+            lll := vol8[vx - 1 - nX - nXY];
+            mll := vol8[vx - 0 - nX - nXY] * 2;
+            hll := vol8[vx + 1 - nX - nXY];
+            lml := vol8[vx - 1 - 0 - nXY] * 2;
+            mml := vol8[vx - 0 - 0 - nXY] * 4;
+            hml := vol8[vx + 1 - 0 - nXY] * 2;
+            lhl := vol8[vx - 1 + nX - nXY];
+            mhl := vol8[vx - 0 + nX - nXY] * 2;
+            hhl := vol8[vx + 1 + nX - nXY];
             gx := (hlh + hmh + hhh + hlm + hmm + hhm + hll + hml + hhl) - (llh + lmh + lhh + llm + lmm + lhm + lll + lml + lhl);
             gy := (lhh + mhh + hhh + lhm + mhm + hhm + lhl + mhl + hhl) - (llh + mlh + hlh + llm + mlm + hlm + lll + mll + hll);
             gz := (llh + mlh + hlh + lmh + mmh + hmh +  lhh + mhh + hhh) - (lll + mll + hll + lml + mml + hml +  lhl + mhl + hhl);
-            result[vx] += sqrt( sqr(gx) + sqr(gy) + sqr(gz));
+            vol32[vx] += sqrt( sqr(gx) + sqr(gy) + sqr(gz));
          end;
- setlength(v, 0); //free memory
  //scale 0..1
  mn := infinity;
  mx := -infinity;
  for vx := 0 to (nXYZ - 1) do begin
-     if specialsingle(result[vx]) then continue;
-     mn := min(mn, result[vx]);
-     mx := max(mx, result[vx]);
+     if specialsingle(vol32[vx]) then continue;
+     mn := min(mn, vol32[vx]);
+     mx := max(mx, vol32[vx]);
  end;
  if (mn >= mx) then begin
-   setlength(result, 0);
+   setlength(vol32, 0);
    exit;
  end;
- unityScale := 1.0 / (mx - mn);
+ scale255 := 255.0 / (mx - mn);
+ setlength(result, nXYZ);
  for vx := 0 to (nXYZ - 1) do
-     result[vx] := unityScale * (result[vx] - mn);
+     result[vx] := round(scale255 * (vol32[vx] - mn));
+ setlength(vol32, 0);
 end;
 
 function TNIfTI.SeedCorrelationMap(vSeed: TFloat32s; isZ: boolean): TFloat32s; overload;
@@ -6846,9 +6833,10 @@ begin
      LoadLabels(lLUTname, lLabels,0,-1);
 end;
 
-function TNIfTI.Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s): boolean; overload;
+function TNIfTI.Load(niftiFileName: string; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s; isUINT8: boolean = false): boolean; overload;
 var
    scaleMx: single;
+   vol8: TUInt8s;
    vol32: TFloat32s;
    i: int64;
    {$IFDEF TIMER}StartTime: TDateTime;{$ENDIF}
@@ -6870,10 +6858,6 @@ begin
   fShortName := changefileextX(extractfilename(fFilename),'');
   result := true;
   fHdr := Hdr;
-  fHdr.datatype:= kDT_FLOAT32;
-  fHdr.bitpix := 32;
-  fHdr.scl_inter:= 0;
-  fHdr.scl_slope:= 1;
   fHdr.cal_max := 0;
   fHdr.cal_min := 0;
   fHdr.dim[0] := 3;
@@ -6885,13 +6869,26 @@ begin
     fHdr.cal_min := 0.05;
     fHdr.cal_max := 1;
   end;
-  setlength(fRawVolBytes, length(img)*4);
-  //vol32 := TFloat32s(fRawVolBytes);
-  //vol32 := copy(img, low(img), high(img));
-  vol32 := TFloat32s(fRawVolBytes);
-  //fRawVolBytes
-  for i := 0 to (length(img)-1) do
-        vol32[i] := img[i];
+  if (isUINT8) then begin
+	fHdr.datatype:= kDT_UINT8;
+	fHdr.bitpix := 8;
+    fHdr.scl_inter:= 0;
+    fHdr.scl_slope:= 1.0 / 255.0;
+    vol8 := TUInt8s(img);
+    setlength(fRawVolBytes, length(vol8));
+    for i := 0 to (length(vol8)-1) do
+          fRawVolBytes[i] := vol8[i];
+  end else begin
+  	fHdr.datatype:= kDT_FLOAT32;
+  	fHdr.bitpix := 32;
+    fHdr.scl_inter:= 0;
+    fHdr.scl_slope:= 1;
+    setlength(fRawVolBytes, length(img)*4);
+    vol32 := TFloat32s(fRawVolBytes);
+    for i := 0 to (length(img)-1) do
+          vol32[i] := img[i];
+
+  end;
   fixBogusHeaders(fHdr);
   fHdrNoRotation := fHdr; //raw header without reslicing or orthogonal rotation
   fVolumesLoaded := max(HdrVolumes(fHdr),1);
@@ -6929,7 +6926,10 @@ begin
   fMat := SForm2Mat(fHdr);
   fInvMat := fMat.inverse;
   {$IFDEF TIMER}startTime := now;{$ENDIF}
-  initFloat32();
+  if (isUINT8) then
+    initUInt8()
+  else
+  	initFloat32();
   if fAutoBalMin = fAutoBalMax then begin //e.g. thresholded data
      fAutoBalMin := fMin;
      fAutoBalMax := fMax;
@@ -8891,7 +8891,7 @@ begin
  {$ENDIF}
 end;
 
-constructor TNIfTI.Create(niftiFileName: string; backColor: TRGBA;  tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s); overload;
+constructor TNIfTI.Create(niftiFileName: string; backColor: TRGBA;  tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; hdr: TNIFTIhdr; img: TFloat32s; isUINT8: boolean = false); overload;
 {$IFNDEF CUSTOMCOLORS}
 var
    i: integer;
@@ -8939,7 +8939,7 @@ begin
      fLUT[i] := setRGBA(i,i,i,i); //grayscale default
  {$ENDIF}
  // isOK :=
-  Load(niftiFileName, tarMat, tarDim, isInterpolate, hdr, img);
+  Load(niftiFileName, tarMat, tarDim, isInterpolate, hdr, img, isUINT8);
 end;
 
 constructor TNIfTI.Create(niftiFileName: string;  backColor: TRGBA; tarMat: TMat4; tarDim: TVec3i; isInterpolate: boolean; out isOK: boolean; lLoadFewVolumes: boolean = true; lMaxTexMb: integer = 640); overload;

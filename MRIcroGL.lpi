@@ -153,7 +153,7 @@
       </CompilerMessages>
       <CustomOptions Value="-dDisableLCLGIF 
 -dDisableLCLPNM
--dXMYPY"/>
+-dMYPY"/>
     </Other>
   </CompilerOptions>
   <Debugging>

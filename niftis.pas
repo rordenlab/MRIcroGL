@@ -30,7 +30,7 @@ Type
         property AdditiveOverlayBlending: boolean read fAdditiveOverlayBlending write fAdditiveOverlayBlending;
         function AddLayer(niftiFileName: string; backColor: TRGBA): boolean;
         function AddCorrelLayer(vox: TVec3i; backColor: TRGBA; isZ: boolean): boolean;
-        function AddEdgeLayer(backColor: TRGBA): boolean;
+        function AddEdgeLayer(Idx: integer; backColor: TRGBA): boolean;
         function OpenDrawing(niftiFileName: string): boolean;
         function OverlaysNeedsUpdate: boolean;
         function Layer(idx: integer; out vol: TNIfTI): boolean;
@@ -381,28 +381,24 @@ begin
 end;
 
 
-function TNIfTIs.AddEdgeLayer(backColor: TRGBA): boolean;
+function TNIfTIs.AddEdgeLayer(Idx: integer; backColor: TRGBA): boolean;
 var
-  rs: TFloat32s;
+  img8: TUInt8s;
   hdr: TNIFTIhdr;
   prefix: string;
 begin
      result := false;
      if (fNumLayers > kMaxOverlay) or (fNumLayers < 1) then exit;
-     rs := niis[0].EdgeMap(false);
-     if length(rs) < 1 then exit;
-     hdr := niis[0].Header;
+     img8 := niis[Idx].EdgeMap(false);
+     if length(img8) < 1 then exit;
+     hdr := niis[Idx].Header;
      hdr.intent_code := kNIFTI_INTENT_NONE;
-     hdr.cal_min := 0.1;
-     hdr.cal_max := 1.0;
      prefix := 'edge_';
-     niis[fNumLayers] := TNIfTI.Create(prefix+niis[0].shortname, backColor, niis[0].Mat, niis[0].Dim, fInterpolateOverlays, hdr, rs);
+     niis[fNumLayers] := TNIfTI.Create(prefix+niis[Idx].shortname, backColor, niis[Idx].Mat, niis[Idx].Dim, fInterpolateOverlays, hdr, TFloat32s(img8), true);
      fNumLayers := fNumLayers + 1;
-     setlength(rs,0);
+     setlength(img8,0);
      result := true;
-
 end;
-
 
 function TNIfTIs.AddCorrelLayer(vox: TVec3i; backColor: TRGBA; isZ: boolean): boolean;
 var

@@ -41,17 +41,17 @@ void main() {
 	if (samplePos.a < clipPos.a)
 		samplePos = clipPos;
 	//end fastpass - optional	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);
-	
 	if ( overlays < 1 ) { //pass without overlays
 		while (samplePos.a <= len) {
 			colorSample = texture3Df(intensityVol,samplePos.xyz);
 			if (colorSample.a > colAcc.a) {//ties generate errors for TT_desai_dd_mpm
-				colAcc = colorSample+0.00001;
+				colAcc = vec4(colorSample.rgb, colorSample.a+0.00001);
 				setDepthBuffer(samplePos.xyz);
 			}
+			//colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
 			samplePos += deltaDir;
 		} //while samplePos.a < len
-		//colAcc.a = step(0.001, colAcc.a); //good for templates...
+		colAcc.a = max(colAcc.a, 1.0);
 		colAcc.a *= backAlpha;
 		#if ( __VERSION__ > 300 )
 		FragColor = colAcc;
@@ -91,6 +91,7 @@ void main() {
 			ocolAcc= (1.0 - ocolAcc.a) * colorSample + ocolAcc;
 			samplePos += deltaDir;
 	} //while samplePos.a < len
+		colAcc.a = max(colAcc.a, 1.0);
 	colAcc.a *= backAlpha;
 	if (ocolAcc.a > 0.01)  {
 		ocolAcc.a = ocolAcc.a * (overAlpha);
