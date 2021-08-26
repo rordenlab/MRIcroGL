@@ -393,6 +393,7 @@ begin
      if length(img8) < 1 then exit;
      hdr := niis[Idx].Header;
      hdr.intent_code := kNIFTI_INTENT_NONE;
+     hdr.descrip := 'Sobel MRIcroGL'+kVers;
      prefix := 'edge_';
      niis[fNumLayers] := TNIfTI.Create(prefix+niis[Idx].shortname, backColor, niis[Idx].Mat, niis[Idx].Dim, fInterpolateOverlays, hdr, TFloat32s(img8), true);
      fNumLayers := fNumLayers + 1;

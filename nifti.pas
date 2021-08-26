@@ -803,13 +803,18 @@ end;
 {$ENDIF} //FASTCORREL2
 function TNIfTI.EdgeMap(isSmooth: boolean): TUInt8s;
 //https://afni.nimh.nih.gov/pub/dist/doc/htmldoc/programs/3dedge3_sphx.html
+// 2dedge3 uses R. Deriche formula https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.476.5736&rep=rep1&type=pdf
 //https://en.wikipedia.org/wiki/Sobel_operator#Extension_to_other_dimensions
+//optional compile:
+// Asjad and M. Deriche: https://www.researchgate.net/publication/283280465_A_new_approach_for_salt_dome_detection_using_a_3D_multidirectional_edge_detector
+//{$DEFINE ASJAD}
 var
   x, y, z, vx, nXYZ, nXY, nX, nY, nZ: int64;
   llh, mlh, hlh, lmh, mmh, hmh,  lhh, mhh, hhh, //voxel neighbors: slice above (high)
   llm, mlm, hlm, lmm,      hmm,  lhm, mhm, hhm, //voxel neighbors: same slice (middle)
   lll, mll, hll, lml, mml, hml,  lhl, mhl, hhl, //voxel neighbors: slice below (low)
   gx, gy, gz, mn, mx, scale255: single;
+  {$IFDEF ASJAD}g45, g135: single;  {$ENDIF}
   vol8: TUInt8s;
   vol32: TFloat32s;
 begin
@@ -866,7 +871,47 @@ begin
             gx := (hlh + hmh + hhh + hlm + hmm + hhm + hll + hml + hhl) - (llh + lmh + lhh + llm + lmm + lhm + lll + lml + lhl);
             gy := (lhh + mhh + hhh + lhm + mhm + hhm + lhl + mhl + hhl) - (llh + mlh + hlh + llm + mlm + hlm + lll + mll + hll);
             gz := (llh + mlh + hlh + lmh + mmh + hmh +  lhh + mhh + hhh) - (lll + mll + hll + lml + mml + hml +  lhl + mhl + hhl);
+            {$IFDEF ASJAD}
+            //slice above (high)
+            llh := vol8[vx - 1 - nX + nXY] * 2;
+            mlh := vol8[vx - 0 - nX + nXY];
+            hlh := vol8[vx + 1 - nX + nXY] * 2;
+            lmh := vol8[vx - 1 - 0 + nXY];
+            //mmh := vol8[vx - 0 - 0 + nXY] * 0;
+            hmh := vol8[vx + 1 - 0 + nXY];
+            lhh := vol8[vx - 1 + nX + nXY] * 2;
+            mhh := vol8[vx - 0 + nX + nXY];
+            hhh := vol8[vx + 1 + nX + nXY] * 2;
+            //same slice (middle)
+            llm := vol8[vx - 1 - nX + 0] * 4;
+            mlm := vol8[vx - 0 - nX + 0] * 2;
+            hlm := vol8[vx + 1 - nX + 0] * 4;
+            lmm := vol8[vx - 1 - 0 + 0] * 2;
+            //mmm := vol8[vx - 0 - 0 + 0];
+            hmm := vol8[vx + 1 - 0 + 0] * 2;
+            lhm := vol8[vx - 1 + nX + 0] * 4;
+            mhm := vol8[vx - 0 + nX + 0] * 2;
+            hhm := vol8[vx + 1 + nX + 0] * 4;
+            //slice below (low)
+            lll := vol8[vx - 1 - nX - nXY] * 2;
+            mll := vol8[vx - 0 - nX - nXY];
+            hll := vol8[vx + 1 - nX - nXY] * 2;
+            lml := vol8[vx - 1 - 0 - nXY];
+            //mml := vol8[vx - 0 - 0 - nXY] * 0;
+            hml := vol8[vx + 1 - 0 - nXY];
+            lhl := vol8[vx - 1 + nX - nXY] * 2;
+            mhl := vol8[vx - 0 + nX - nXY];
+            hhl := vol8[vx + 1 + nX - nXY] * 2;
+
+            g45 := (hmh + mlh + hlh + hmm + mlm + hlm + hml + mll + hll) - (lhh + mhh + lmh + lhm + mhm + lmm + lhl + mhl + lml);
+            g135 := (lmh + llh + mlh + lmm + llm + mlm + lml + lll +mll) - (mhh + hhh + hmh + mhm + hhm + hmm + mhl + hhl + hml);
+
+
+            vol32[vx] += sqrt( sqr(gx) + sqr(gy) + sqr(gz)  + sqr(g45) + sqr(g135));
+            {$ELSE}
             vol32[vx] += sqrt( sqr(gx) + sqr(gy) + sqr(gz));
+            {$ENDIF}
+
          end;
  //scale 0..1
  mn := infinity;

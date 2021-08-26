@@ -5602,7 +5602,8 @@ var
    niftiVol: TNIfTI;
    fnm : string;
 begin
- if not vols.Layer(0,niftiVol) then exit;
+ //if not vols.Layer(0,niftiVol) then exit; //save background layer
+ if not vols.Layer(LayerList.ItemIndex,niftiVol) then exit; //save selected layer
  fnm := NiftiSaveDialogFilename(false, niftiVol.Filename);
  if fnm = '' then exit;
  niftiVol.SaveFormatBasedOnExt(fnm);
@@ -8754,6 +8755,8 @@ begin
   {$ENDIF}
   {$IFDEF CPULLVM}
   w := w + ' LLVM';
+  {$ELSE}
+  w := w + ' FPC';
   {$ENDIF}
  w := w + chr(13)+chr(10);
  w := w + 'Author: Chris Rorden' +kEOLN;

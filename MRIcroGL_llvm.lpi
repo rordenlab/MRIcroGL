@@ -139,7 +139,7 @@
       </CompilerMessages>
       <CustomOptions Value="-dxDisableLCLGIF 
 -dxDisableLCLPNM
--dNoMYPY
+-dMYPY
 -Clflto
 -Clfltonosystem"/>
     </Other>
