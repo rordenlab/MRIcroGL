@@ -649,6 +649,7 @@ type
     procedure YokeMenuClick(Sender: TObject);
     procedure YokeTimerTimer(Sender: TObject);
     procedure voiUndo(isRefresh: boolean = false);
+    procedure SampleAlongLine(startMM, endMM: TVec3);
     procedure MorphologyFill(Origin: TVec3; dxOrigin, radiusMM: int64; drawMode: int64);
     procedure DrawIntensityFilter(rampAbove, rampBelow, drawMode: integer);
     procedure ForceOverlayUpdate();
@@ -1082,12 +1083,14 @@ begin
    result := false;
    if (layer < 0) or (layer >= LayerList.Count) then exit;
    //if not vols.Layer(i,niftiVol) then exit;
+   while (isBusy) or (GLForm1.Updatetimer.enabled) do
+         Application.ProcessMessages;
    if not vols.AddEdgeLayer(layer, gPrefs.ClearColor) then exit;
    i := GLForm1.LayerColorDrop.Items.IndexOf('8RedYell'); //search is case-insensitive!
   if i > 0 then
-     LayerChange(vols.NumLayers-1, i, -1, 0.2, 1.0)
+     LayerChange(vols.NumLayers-1, i, -1, 0.15, 1.0)
   else
-      LayerChange(vols.NumLayers-1, vols.NumLayers-1, -1, 0.2, 1.0);
+      LayerChange(vols.NumLayers-1, vols.NumLayers-1, -1, 0.15, 1.0);
   UpdateLayerBox(true);
   UpdateColorbar();
   //Vol1.UpdateOverlays(vols);
@@ -1899,7 +1902,7 @@ begin
   {$IFDEF PY4LAZ}with GetPythonEngine do begin {$ENDIF}
     if Bool(PyArg_ParseTuple(Args, 'i:sobel', @layer)) then begin
        if (layer < 0) or (layer >= vols.NumLayers) then begin
-          GLForm1.ScriptOutputMemo.lines.add('atlasmaxindex: layer should be in range 0..'+inttostr(vols.NumLayers-1));
+          GLForm1.ScriptOutputMemo.lines.add('sobel: layer should be in range 0..'+inttostr(vols.NumLayers-1));
           exit;
        end;
        GLForm1.Sobel(layer);
@@ -2501,7 +2504,7 @@ begin
        {$IFDEF PY4LAZ}end;  {$ENDIF}
 end;
 
-function PyOPACITY(Self, Args : PPyObject): PPyObject; cdecl;
+(*function PyOPACITY(Self, Args : PPyObject): PPyObject; cdecl;
 var
   PCT: integer;
 begin
@@ -2510,7 +2513,7 @@ begin
     if Bool(PyArg_ParseTuple(Args, 'i:opacity', @PCT)) then
        GLForm1.LayerChange(0, -1, PCT, kNaNsingle, kNaNsingle); //kNaNsingle
        {$IFDEF PY4LAZ}end;  {$ENDIF}
-end;
+end;*)
 
 function PyCOLORBARPOSITION(Self, Args : PPyObject): PPyObject; cdecl;
 var
@@ -2535,15 +2538,16 @@ begin
        {$IFDEF PY4LAZ}end;  {$ENDIF}
 end;
 
-function PyOVERLAYOPACITY(Self, Args : PPyObject): PPyObject; cdecl;
+function PyOPACITY(Self, Args : PPyObject): PPyObject; cdecl;
 var
   A,B: integer;
 begin
 {$IFDEF PY4LAZ}with GetPythonEngine do begin  {$ENDIF}
   Result:= PyBool_FromLong(Ord(True));
-    if Bool(PyArg_ParseTuple(Args, 'ii:overlayopacity', @A, @B)) then
+    if Bool(PyArg_ParseTuple(Args, 'ii:opacity', @A, @B)) then
        GLForm1.LayerChange(A, -1, B, kNaNsingle, kNaNsingle); //kNaNsingle
-       {$IFDEF PY4LAZ}end;  {$ENDIF}
+ {$IFDEF PY4LAZ}end;  {$ENDIF}
+ GLForm1.UpdateLayerBox(false);
 end;
 
 function PyORTHOVIEWMM(Self, Args : PPyObject): PPyObject; cdecl;
@@ -3118,7 +3122,7 @@ type
   end;
 {$ENDIF}
 var
-  methods: array[0..70] of TPythonBridgeMethod = (
+  methods: array[0..69] of TPythonBridgeMethod = (
 (name: 'atlashide'; callback: @PyATLASHIDE; help: ' atlashide(layer, indices...) -> Hide all (e.g. "atlashide(1)") or some (e.g. "atlashide(1, (17, 22))") regions of an atlas.'),
 (name: 'atlaslabels'; callback: @PyATLASLABELS; help: ' atlasmaxindex(layer) -> Returns string listing all regions in an atlas'),
 (name: 'atlasmaxindex'; callback: @PyATLASMAXINDEX; help: ' atlasmaxindex(layer) -> Returns maximum region humber in specified atlas. For example, if you load the CIT168 atlas (which has 15 regions) as your background image, then atlasmaxindex(0) will return 15.'),
@@ -3152,8 +3156,7 @@ var
 (name: 'minmax'; callback: @PyOVERLAYMINMAX; help: ' minmax(layer, min, max) -> Sets the color range for the overlay (layer 0 = background).'),
 (name: 'modalmessage'; callback: @PyMODALMESSAGE; help: ' modalmessage(msg) -> Show a message in a dialog box, pause script until user presses "OK" button.'),
 (name: 'mosaic'; callback: @PyMOSAIC; help: ' mosaic(mosString) -> Create a series of 2D slices.'),
-(name: 'opacity'; callback: @PyOPACITY; help: ' opacity(opacityPct) -> Is the background image transparent (0), translucent (~50) or opaque (100)?'),
-(name: 'opacity'; callback: @PyOVERLAYOPACITY; help: ' opacity(layer, opacityPct) -> Make the layer (0 for background, 1 for 1st overlay) transparent(0), translucent (~50) or opaque (100).'),
+(name: 'opacity'; callback: @PyOPACITY; help: ' opacity(layer, opacityPct) -> Make the layer (0 for background, 1 for 1st overlay) transparent(0), translucent (~50) or opaque (100).'),
 (name: 'orthoviewmm'; callback: @PyORTHOVIEWMM; help: ' orthoviewmm(x,y,z) -> Show 3 orthogonal slices of the brain, specified in millimeters.'),
 (name: 'overlayadditiveblending'; callback: @PyOVERLAYADDITIVEBLENDING; help: ' overlayadditiveblending(v) -> Merge overlays using additive (1) or multiplicative (0) blending.'),
 (name: 'overlaycloseall'; callback: @PyOVERLAYCLOSEALL; help: ' overlaycloseall() -> Close all open overlays.'),
@@ -4218,6 +4221,7 @@ begin
      isMultiVol := false;
      hasClusters := false;
      isMultiVolLabel := false;
+     //printf(format('>>%d/%d', [i, v.OpacityPercent]));
      if (not NewLayers) and (NewVolumes) and (vols.NumLayers > 0) then begin
         for i := 1 to vols.NumLayers do begin
             vols.Layer(i-1,v);
@@ -4291,6 +4295,12 @@ begin
         LayerList.ItemIndex := LayerList.Items.Count -1;
      if (vols.NumLayers < 0) or (vols.NumLayers < LayerList.Items.Count) then exit;
      if (LayerList.ItemIndex < 0) then exit;
+     if  (vols.NumLayers > 0) then //TONAL
+     	for i := 1 to vols.NumLayers do begin
+            vols.Layer(i-1,v);
+            LayerList.Checked[i-1] := v.OpacityPercent > 0;
+
+        end;
      vols.Layer(LayerList.ItemIndex,v);
      LayerDarkEdit.Enabled := not v.Drawing;
      LayerBrightEdit.Enabled := not v.Drawing;
@@ -4369,7 +4379,7 @@ begin
      end;
      if not isChanged then exit;
      if layer = LayerList.ItemIndex then begin
-        UpdateLayerBox(false);
+        UpdateLayerBox(false);//TONAL
      end;
      //writeln(format('?Set Min/Max Window %g..%g', [displayMin,displayMax]));
      UpdateTimer.Enabled := true;
@@ -5768,6 +5778,8 @@ begin
        len := diffMM.length;
        str := str + format('%0.4g×%0.4g×%0.4g -> %0.4g×%0.4g×%0.4g  = %0.4g', [sliceMM.x, sliceMM.y, sliceMM.z, endMM.x, endMM.y, endMM.z, len]);
        caption := str;
+       if (niftiVol.volumesLoaded = 1) then
+       		SampleAlongLine(sliceMM, endMM);
        exit;
      end;
      if (niftiVol.Header.xyzt_units and kNIFTI_UNITS_MM) = kNIFTI_UNITS_MM then
@@ -5781,6 +5793,45 @@ begin
             str := str + '; ' + niftiVol.VoxIntensityString(vox);
         end;
      caption := str;
+end;
+
+procedure TGLForm1.SampleAlongLine (startMM, endMM: TVec3);
+//https://open.win.ox.ac.uk/pages/fsl/fsleyes/fsleyes/userdoc/tools.html#sample-along-line
+var
+  len, minPixDim : single;
+  vec, pos: TVec3;
+  n: TNIfTI;
+  v, i, samples: integer;
+  newVals: TFloat32s;
+begin
+	{$IFDEF GRAPH}
+	vec := startMM - endMM;
+	len := vec.length;
+    if (len < 0.01) then exit;
+    if not vols.Layer(0,n) then exit;
+    minPixDim := min(min(n.Header.pixdim[1], n.Header.pixdim[2]), n.Header.pixdim[3]);
+    if (minPixDim <= 0.01) then exit;
+    if minPixDim >= 0.5 then minPixDim := 1.0; //default, sample every mm, unless very high resolution image
+    samples := floor(len /  minPixDim);
+    if (samples < 2) then exit;
+    gGraph.ClearLines();
+  	setlength(newVals, samples);
+    vec := (Vol1.Slices.distanceLineEnd - Vol1.Slices.distanceLineStart) / (samples - 1); //direction
+    for v := 0 to (vols.NumLayers-1) do begin
+        if not vols.Layer(v,n) then exit;
+
+        for i := 0 to samples-1 do begin
+          pos := Vol1.Slices.distanceLineStart + (i * vec);
+          newVals[i] := n.VoxIntensity(pos);
+        end;
+        //VoxIntensity
+  	    gGraph.AddLine(newVals, n.ShortName);
+
+    end;
+    newVals := nil;
+  	ViewGPUg.Invalidate;
+    {$ENDIF}
+    //xxx
 end;
 
 procedure TGLForm1.SetXHairPosition (lXmm,lYmm,lZmm: single; isUpdateYoke: boolean = false);
@@ -6560,6 +6611,12 @@ end;
 procedure TGLForm1.GraphClearMenuClick(Sender: TObject);
 const
   k = 3;
+const
+  {$IFDEF Darwin}
+  kAlt2 = 'Option';
+  {$ELSE}
+  kAlt2 = 'Alt';
+  {$ENDIF}
 var
    newVals: TFloat32s;
    i: integer;
@@ -6569,7 +6626,7 @@ begin
   setlength(newVals, k);
   for i := 0 to k-1 do
       newVals[i] := 0;//(3 * sin(i/(k/12))) + 6;
-  gGraph.AddLine(newVals, 'No Graph Loaded: Use Graph Open Menu or open 4D Image as background');
+  gGraph.AddLine(newVals, 'No graph: use measuring tool ('+kAlt2+'-drag) or open a 4D Image as background');
   newVals := nil;
   ViewGPUg.Invalidate;
  {$ENDIF}
@@ -8287,9 +8344,15 @@ var
   i: integer;
   niftiVol: TNIfTI;
 begin
-  UpdateLayerBox(false);
   i := LayerList.ItemIndex;
   if not vols.Layer(LayerList.ItemIndex,niftiVol) then exit;
+  if (not LayerList.Checked[i]) then
+  	niftiVol.OpacityPercent := 0
+  else
+	niftiVol.OpacityPercent := 100;
+  UpdateLayerBox(false);
+  //if (LayerList.Checked[i]) and (LayerAlphaTrack.Position = 100) then exit;
+  //if (not LayerList.Checked[i]) and (LayerAlphaTrack.Position = 0) then exit;
   if LayerList.Checked[i] then
      LayerAlphaTrack.Position := 100
   else

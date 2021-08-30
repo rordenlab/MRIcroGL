@@ -217,6 +217,7 @@ Type
         function VoxIntensityString(vox: TVec3i): string; overload;
         function VoxIntensity(vox: int64): single; overload; //return intensity of voxel at coordinate
         function VoxIntensity(vox: TVec3i): single; overload; //return intensity of voxel at coordinate
+        function VoxIntensity(frac: TVec3): single; overload;//return intensity of voxel fraction
         function VoxIntensityArray(vox: TVec3i): TFloat32s; overload;
         function VoxIntensityArray(roi: TUInt8s): TFloat32s; overload;
         function EdgeMap(isSmooth: boolean): TUInt8s;
@@ -622,6 +623,10 @@ begin
      result := VoxIntensityString(i);
 end;
 
+function TNIfTI.VoxIntensity(frac: TVec3): single; overload;//return intensity of voxel fraction
+begin
+     result := VoxIntensity(FracToSlice(Frac));
+end;
 
 procedure printf (str: AnsiString);
 begin
@@ -3984,6 +3989,9 @@ begin
       if (sum > thresh) then break;
   end;
   fAutoBalMin := (i * fHdr.scl_slope) + fHdr.scl_inter;
+  //find high thresh
+  if (histo[mn] > thresh) then
+  	thresh := round(0.01 * (vx-histo[mn])); //<- preserve dynamic range for thresholded images
   sum := 0;
   for i := 255 downto 0 do begin
       sum := sum + histo[i];
@@ -4192,7 +4200,7 @@ end;
 var
   vol32: TFloat32s;
   //n0: int64;//masked images have huge numbers of zeros!
-  thresh, sum, i,vx, nZero: int64;
+  thresh, sum, i,vx, nZero, mni: int64;
   mn : Single = 1.0 / 0.0;
   mx : Single = (- 1.0) / (0.0);
   v, slope: single;
@@ -4265,6 +4273,13 @@ begin
   fAutoBalMin := (i/slope) + mn;
   fAutoBalMin := (fAutoBalMin * fHdr.scl_slope) + fHdr.scl_inter;
   {$ENDIF}
+  //find high thresh
+  for i := 0 to kMaxBin do begin
+      mni := i;
+      if (histo[i] > 0) then break;
+  end;
+  if (histo[mni] > thresh) then
+  	thresh := round(0.01 * (vx-histo[mni])); //<- preserve dynamic range for thresholded images
   sum := 0;
   //printf(format('bins %d min %g max %g', [kMaxBin, mn, mx]));
   for i := kMaxBin downto 0 do begin
@@ -4337,6 +4352,8 @@ begin
   fAutoBalMin := i - kMin16;
   fAutoBalMin := (fAutoBalMin * fHdr.scl_slope) + fHdr.scl_inter;
   //find high thresh
+  if (histo[mn] > thresh) then
+  	thresh := round(0.01 * (vx-histo[mn])); //<- preserve dynamic range for thresholded images
   sum := 0;
   for i := kMaxWord downto 0 do begin
     sum := sum + histo[i];
@@ -6145,11 +6162,29 @@ begin
      result := true;
 end;
 
+procedure mnmx(nVox: int64; var lBuffer: TUInt8s);
+var
+   in16: TInt16s;
+   mn, mx: integer;
+   i: Int64;
+begin
+     in16 := TInt16s(lBuffer);
+     mx := in16[0];
+     mn := in16[0];
+     for i := 0 to (nVox-1) do begin
+         mn := min(in16[i],mn);
+         mx := max(in16[i],mx);
+     end;
+     writeln('?? ', nVox, '   ',mn, '...', mx);
+end;
+
 function TNIfTI.loadForeign(FileName : AnsiString; var  rawData: TUInt8s; var lHdr: TNIFTIHdr): boolean;// Load 3D data
 //Uncompressed .nii or .hdr/.img pair
+const
+ kChunkBytes = 1073741824; //2^30;
 var
    Stream : TFileStream;
-   gzBytes, volBytes, FSz: int64;
+   copied, gzBytes, volBytes, FSz: int64;
    swapEndian: boolean;
    tmpData: TUInt8s;
    isDimPermute2341: boolean = false;
@@ -6226,7 +6261,19 @@ begin
            volBytes := volBytes * lHdr.dim[4];
     end;
     SetLength (rawData, volBytes);
-    Stream.ReadBuffer (rawData[0], volBytes);
+    if volBytes < 2147483647 then
+      Stream.ReadBuffer (rawData[0], volBytes)
+    else begin
+       copied := 0;
+       while copied < volBytes do begin
+             if (copied+kChunkBytes) <  volBytes then
+                Stream.ReadBuffer (rawData[copied], kChunkBytes)
+             else
+                 Stream.ReadBuffer (rawData[copied], volBytes-copied);
+             copied := copied + kChunkBytes;
+             //printf(format('> copied %d', [copied]));
+       end;
+    end;
    Finally
     Stream.Free;
    End;
@@ -6294,7 +6341,7 @@ begin
  end;
  {$ENDIF}
  if ((lExt = '.HDR') and (isINTERFILE(F_Filename))) or ((lExt <> '.IMG') and (lExt <> '.NII') and (lExt <> '.NII.GZ') and (lExt <> '.VOI') and  (lExt <> '.HDR') and (lExt <> '.GZ')) then begin
-    result := loadForeign(F_FileName, fRawVolBytes, fHdr);
+   result := loadForeign(F_FileName, fRawVolBytes, fHdr);
     if result then begin
        fVolumesLoaded := length(fRawVolBytes) div (fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3] * (fHdr.bitpix div 8));
     end;
@@ -6941,7 +6988,7 @@ begin
   //showmessage(format('%d', [prod(tarDim)]));
   //IsLabels := true;
   if (prod(tarDim) = 0) and (fHdr.dim[3] > 1) and (MaxTexMb > 0) then //reduce size of huge background images
-     if ShrinkLargeMb(fHdr,fRawVolBytes, MaxTexMb, isAntiAliasHugeTexMb, true) then begin
+    if ShrinkLargeMb(fHdr,fRawVolBytes, MaxTexMb, isAntiAliasHugeTexMb, true) then begin
         fVolumesLoaded := 1;
         IsShrunken := true;
      end;
@@ -8279,7 +8326,7 @@ begin
   end;
   fHdrNoRotation := fHdr; //raw header without reslicing or orthogonal rotation
   if (prod(tarDim) = 0) and (fHdr.dim[3] > 1) and (MaxTexMb > 0) then //reduce size of huge background images
-  if ShrinkLargeMb(fHdr,fRawVolBytes, MaxTexMb, isAntiAliasHugeTexMb, IsLabels) then begin
+	if ShrinkLargeMb(fHdr,fRawVolBytes, MaxTexMb, isAntiAliasHugeTexMb, IsLabels) then begin
         fVolumesLoaded := 1;
         IsShrunken := true;
   end;

@@ -4132,7 +4132,11 @@ begin
           AnsiContainsText(mArray.Strings[0], 'uint8') or
           AnsiContainsText(mArray.Strings[0], 'uint8_t')  then
           nhdr.datatype := KDT_UINT8 //DT_UINT8 DT_UNSIGNED_CHAR
-      else if AnsiContainsText(mArray.Strings[0], 'short') or //specific so
+       else if AnsiContainsText(mArray.Strings[0], 'ushort') or
+               (AnsiContainsText(mArray.Strings[0], 'unsigned') and AnsiContainsText(mArray.Strings[1], 'short')) or
+               AnsiContainsText(mArray.Strings[0], 'uint16') then //specific so
+         	nhdr.datatype := KDT_UINT16
+       else if AnsiContainsText(mArray.Strings[0], 'short') or //specific so
                AnsiContainsText(mArray.Strings[0], 'int16') or
                AnsiContainsText(mArray.Strings[0], 'int16_t') then
           nhdr.datatype :=kDT_INT16 //DT_INT16

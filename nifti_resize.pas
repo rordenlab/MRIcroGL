@@ -1441,6 +1441,8 @@ begin
      lBuffer := out8;
 end;
 
+
+
 procedure ShrinkFastLinear(var lHdr: TNIFTIhdr; var lBuffer: TUInt8s; lScale: single);
 begin
 	 if lHdr.datatype = kDT_UINT8 then
