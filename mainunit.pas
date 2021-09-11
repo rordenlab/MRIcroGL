@@ -77,9 +77,9 @@ uses
 
 const
   {$IFDEF FASTGZ}
-  kVers = '1.2.20210824';
+  kVers = '1.2.20210831';
   {$ELSE}
-  kVers = '1.2.20210824-';
+  kVers = '1.2.20210831-';
   {$ENDIF}
 type
 
@@ -137,6 +137,11 @@ type
     LayerExport8BitMenu: TMenuItem;
     DicomDirMenu: TMenuItem;
     EdgeMenu2: TMenuItem;
+    IntensityHistogamMenu: TMenuItem;
+    GraphSqrtMenu: TMenuItem;
+    IntensityHistogamOptionsMenu: TMenuItem;
+    GraphLognMenu: TMenuItem;
+    GraphLog10Menu: TMenuItem;
     MPR4Menu: TMenuItem;
     ScriptHaltMenu: TMenuItem;
     NimlMenu: TMenuItem;
@@ -396,6 +401,8 @@ type
     procedure CenterPanelClick(Sender: TObject);
     procedure DicomDirMenuClick(Sender: TObject);
     procedure DrawIntensityFilterMenuClick(Sender: TObject);
+    procedure GetHistogramPrefs(var bins: integer; var mn, mx: single; var isClampExtremeValues, isIgnoreZeros: boolean);
+    procedure IntensityHistogamMenuClick(Sender: TObject);
     function Sobel(layer: integer): boolean;
     procedure EdgeMenuClick(Sender: TObject);
     procedure FormChangeBounds(Sender: TObject);
@@ -419,6 +426,7 @@ type
     function DefaultImage():string;
     procedure FormCreate(Sender: TObject);
     procedure GraphPanelResize(Sender: TObject);
+    procedure GraphPanelShow();
     procedure ImportTIFFFolderMenuClick(Sender: TObject);
     procedure InvalidateTImerTimer(Sender: TObject);
     procedure LayerAfniBtnClick(Sender: TObject);
@@ -1076,6 +1084,231 @@ begin
   IntensityFilterForm.Show;
 end;
 
+procedure TGLForm1.GetHistogramPrefs(var bins: integer; var mn, mx: single; var isClampExtremeValues, isIgnoreZeros: boolean);
+var
+    PrefForm: TForm;
+    CancelBtn,OkBtn: TButton;
+    binLabel, minLabel, maxLabel: TLabel;
+    binEdit, minEdit, maxEdit: TEdit;
+    clampCheck, zeroCheck: TCheckBox;
+begin
+  PrefForm:=TForm.Create(nil);
+  //PrefForm.SetBounds(100, 100, 512, 212);
+  PrefForm.AutoSize := True;
+  PrefForm.BorderWidth := 8;
+  PrefForm.Caption:='Remove Haze Settings';
+  PrefForm.Position := poScreenCenter;
+  PrefForm.BorderStyle := bsDialog;
+  //label
+  binLabel:=TLabel.create(PrefForm);
+  binLabel.Caption:= 'Histogram Bins';
+  binLabel.AutoSize := true;
+  binLabel.AnchorSide[akTop].Side := asrTop;
+  binLabel.AnchorSide[akTop].Control := PrefForm;
+  binLabel.BorderSpacing.Top := 6;
+  binLabel.AnchorSide[akLeft].Side := asrLeft;
+  binLabel.AnchorSide[akLeft].Control := PrefForm;
+  binLabel.BorderSpacing.Left := 6;
+  binLabel.Parent:=PrefForm;
+  //edit
+  binEdit:=TEdit.create(PrefForm);
+  binEdit.Caption := IntToStr(bins);
+  binEdit.Constraints.MinWidth:= 300;
+  binEdit.AutoSize := true;
+  binEdit.AnchorSide[akTop].Side := asrBottom;
+  binEdit.AnchorSide[akTop].Control := binLabel;
+  binEdit.BorderSpacing.Top := 4;
+  binEdit.AnchorSide[akLeft].Side := asrLeft;
+  binEdit.AnchorSide[akLeft].Control := PrefForm;
+  binEdit.BorderSpacing.Left := 6;
+  binEdit.Parent:=PrefForm;
+
+  //label
+  minLabel:=TLabel.create(PrefForm);
+  minLabel.Caption:= 'Minimum Intensity';
+  minLabel.AutoSize := true;
+  minLabel.AnchorSide[akTop].Side := asrBottom;
+  minLabel.AnchorSide[akTop].Control := binEdit;
+  minLabel.BorderSpacing.Top := 4;
+  minLabel.AnchorSide[akLeft].Side := asrLeft;
+  minLabel.AnchorSide[akLeft].Control := PrefForm;
+  minLabel.BorderSpacing.Left := 6;
+  minLabel.Parent:=PrefForm;
+  //edit
+  minEdit:=TEdit.create(PrefForm);
+  minEdit.Caption := FloatToStr(mn);
+  minEdit.Constraints.MinWidth:= 300;
+  minEdit.AutoSize := true;
+  minEdit.AnchorSide[akTop].Side := asrBottom;
+  minEdit.AnchorSide[akTop].Control := minLabel;
+  minEdit.BorderSpacing.Top := 6;
+  minEdit.AnchorSide[akLeft].Side := asrLeft;
+  minEdit.AnchorSide[akLeft].Control := PrefForm;
+  minEdit.BorderSpacing.Left := 6;
+  minEdit.Parent:=PrefForm;
+  //label
+  maxLabel:=TLabel.create(PrefForm);
+  maxLabel.Caption:= 'maximum Intensity';
+  maxLabel.AutoSize := true;
+  maxLabel.AnchorSide[akTop].Side := asrBottom;
+  maxLabel.AnchorSide[akTop].Control := minEdit;
+  maxLabel.BorderSpacing.Top := 4;
+  maxLabel.AnchorSide[akLeft].Side := asrLeft;
+  maxLabel.AnchorSide[akLeft].Control := PrefForm;
+  maxLabel.BorderSpacing.Left := 6;
+  maxLabel.Parent:=PrefForm;
+  //edit
+  maxEdit:=TEdit.create(PrefForm);
+  maxEdit.Caption := FloatToStr(mx);
+  maxEdit.Constraints.minWidth:= 300;
+  maxEdit.AutoSize := true;
+  maxEdit.AnchorSide[akTop].Side := asrBottom;
+  maxEdit.AnchorSide[akTop].Control := maxLabel;
+  maxEdit.BorderSpacing.Top := 6;
+  maxEdit.AnchorSide[akLeft].Side := asrLeft;
+  maxEdit.AnchorSide[akLeft].Control := PrefForm;
+  maxEdit.BorderSpacing.Left := 6;
+  maxEdit.Parent:=PrefForm;
+  //clampCheck
+  clampCheck:=TCheckBox.create(PrefForm);
+  clampCheck.Checked := isClampExtremeValues;
+  clampCheck.Caption:='Clamp extreme values';
+  clampCheck.AnchorSide[akTop].Side := asrBottom;
+  clampCheck.AnchorSide[akTop].Control := maxEdit;
+  clampCheck.BorderSpacing.Top := 6;
+  clampCheck.AnchorSide[akLeft].Side := asrLeft;
+  clampCheck.AnchorSide[akLeft].Control := PrefForm;
+  clampCheck.BorderSpacing.Left := 6;
+  clampCheck.Anchors := [akTop, akLeft];
+  clampCheck.Parent:=PrefForm;
+  //zeroCheck
+  zeroCheck:=TCheckBox.create(PrefForm);
+  zeroCheck.Checked := isIgnoreZeros;
+  zeroCheck.Caption:='ignore zeros';
+  zeroCheck.AnchorSide[akTop].Side := asrBottom;
+  zeroCheck.AnchorSide[akTop].Control := clampCheck;
+  zeroCheck.BorderSpacing.Top := 6;
+  zeroCheck.AnchorSide[akLeft].Side := asrLeft;
+  zeroCheck.AnchorSide[akLeft].Control := PrefForm;
+  zeroCheck.BorderSpacing.Left := 6;
+  zeroCheck.Anchors := [akTop, akLeft];
+  zeroCheck.Parent:=PrefForm;
+  //Cancel Btn
+  CancelBtn:=TButton.create(PrefForm);
+  CancelBtn.Caption:='Cancel';
+  CancelBtn.AutoSize := true;
+  CancelBtn.AnchorSide[akTop].Side := asrBottom;
+  CancelBtn.AnchorSide[akTop].Control := zeroCheck;
+  CancelBtn.BorderSpacing.Top := 8;
+  CancelBtn.AnchorSide[akLeft].Side := asrLeft;
+  CancelBtn.AnchorSide[akLeft].Control := PrefForm;
+  CancelBtn.BorderSpacing.Left := 200;
+  CancelBtn.Parent:=PrefForm;
+  CancelBtn.ModalResult:= mrCancel;
+  //OK button
+  OkBtn:=TButton.create(PrefForm);
+  OkBtn.Caption:='OK';
+  OkBtn.AutoSize := true;
+  OkBtn.AnchorSide[akTop].Side := asrBottom;
+  OkBtn.AnchorSide[akTop].Control := zeroCheck;
+  OkBtn.BorderSpacing.Top := 8;
+  OkBtn.AnchorSide[akLeft].Side := asrRight;
+  OkBtn.AnchorSide[akLeft].Control := CancelBtn;
+  OkBtn.BorderSpacing.Left := 6;
+  OkBtn.Parent:=PrefForm;
+  OkBtn.ModalResult:= mrOK;
+  //OK button
+  {$IFDEF DARKMODE}
+  if gPrefs.DarkMode then GLForm1.SetFormDarkMode(PrefForm);
+  {$ENDIF}
+  PrefForm.ShowModal;
+  //OtsuLevels := 0;
+  if (PrefForm.ModalResult = mrOK) then begin
+    bins := StrToInt(binEdit.Caption);
+    mn :=  StrToFloat(minEdit.Caption);
+    mx :=  StrToFloat(maxEdit.Caption);
+    isClampExtremeValues := clampCheck.checked;
+    isIgnoreZeros := zeroCheck.checked;
+  end;
+  FreeAndNil(PrefForm);
+end; //GetRemoveHazePrefs()
+
+
+procedure TGLForm1.IntensityHistogamMenuClick(Sender: TObject);
+//First and last bin are half width, to keep bin centers nice
+//If we choose 4 bins with a range 0 to 3 and WITHOUT clamping:
+// 0..0.5, 0.5..1.5, 1.5..2.5, 2.5..3
+//If we choose 4 bins with a range 0 to 3 and WITH clamping:
+// <0.5, 0.5..1.5, 1.5..2.5, >2.5
+label
+  191, 192;
+var
+ n: TNIfTI;
+ newVals: TFloat32s;
+ histo: TUInt32s;
+ bins, i, j, iRange : integer;
+ mn, mx, binWid: single;
+ isClampExtremeValues, isIgnoreZeros: boolean;
+begin
+  {$IFDEF GRAPH}
+  i := LayerList.ItemIndex;
+  if (i >= LayerList.Count) then i := 0;
+  if not vols.Layer(i,n) then exit;
+  bins := 256;
+  isIgnoreZeros := true;
+  isClampExtremeValues := true;
+  mn := n.VolumeMin;
+  mx := n.VolumeMax;
+  if (n.Header.datatype <= kDT_INT16) then begin //integer check
+  	i := round(n.Scaled2Raw(mn));
+    j := round(n.Scaled2Raw(mx));
+    iRange := abs(j - i) + 1; //e.g. 0..128 fits into 129 bins
+    if iRange <= bins then begin
+       bins := iRange;
+       goto 191;
+    end;
+    //search for integer divisor with value ~256
+    for i := 1 to 127 do begin //
+    	j := bins + i;
+        if (iRange mod j) = 0 then goto 192;
+    	j := bins - i;
+        if (iRange mod j) = 0 then goto 192;
+    end;
+    goto 191;
+    192:
+    bins := j; //e.g. 0..1011 could fit into 1012 bins, but 253 is closer to target of 256 bins
+  end;
+  191:
+  if (Sender as TMenuItem).tag = 1 then
+  	GetHistogramPrefs(bins, mn, mx, isClampExtremeValues, isIgnoreZeros);
+  if (bins < 2) or (mx < mn) then exit;
+  GraphPanelShow();
+   gGraph.ClearLines();
+   gGraph.HorizontalSelection:= -1;
+   setlength(histo,bins);
+   setlength(newVals, bins);
+   n.MakeHistogram(histo, mn, mx, isClampExtremeValues, isIgnoreZeros);
+   for i := 0 to (bins-1) do
+       newVals[i] := sqrt(histo[i]);
+   gGraph.AddLine(newVals, n.ShortName);
+   binWid := abs(mx - mn)/ (bins - 1);
+   for i := 0 to (bins-1) do begin
+   	newVals[i] := mn + ((i) * binWid); //+0.5 = middle of bin
+    //writeln(format('%g %g %g', [mn, binWid, newVals[i]]));
+   end;
+   //LayerBox.caption := format('%.2g...%.2g %.2g %.2g: %.2g', [n.VolumeMin, n.VolumeMax, scaleMin, scale255, newVals[0]]);
+   gGraph.AddXData(newVals);
+   newVals := nil;
+   histo := nil;
+   //gGraph.minXData := n.VolumeMin;
+   //gGraph.maxXData := n.VolumeMax;
+   if gGraph.Style <> kStyleSqrt then
+   	GraphSqrtMenu.Click
+   else
+   	ViewGPUg.Invalidate;
+   {$ENDIF}
+end;
+
 function TGLForm1.Sobel(layer: integer): boolean;
 var
  i: integer;
@@ -1125,12 +1358,10 @@ procedure TGLForm1.FormChangeBounds(Sender: TObject);
 begin
   {$IFDEF LCLCocoa} {$IFNDEF METALAPI}
   ViewGPU1.Invalidate;
+  {$IFDEF GRAPH}
+  ViewGPUg.Invalidate;
+  {$ENDIF}
   {$ENDIF}{$ENDIF}
-end;
-
-procedure TGLForm1.FormResize(Sender: TObject);
-begin
-  //LayerBox.Caption := inttostr(random(888));
 end;
 
 procedure TGLForm1.FormShortCut(var Msg: TLMKey; var Handled: Boolean);
@@ -2964,6 +3195,7 @@ begin
       clr := Vec4(R/255.0, G/255.0, B/255.0, clr.a);
       //gPrefs.LineColor := clr;
       Vol1.Slices.LineColor := clr;
+      Vol1.CE.GridColor := clr;
       gClrbar.RulerColor := SetRGBA(Vol1.Slices.LineColor);
       GLFOrm1.RulerVisible();
     end;
@@ -3125,7 +3357,7 @@ var
   methods: array[0..69] of TPythonBridgeMethod = (
 (name: 'atlashide'; callback: @PyATLASHIDE; help: ' atlashide(layer, indices...) -> Hide all (e.g. "atlashide(1)") or some (e.g. "atlashide(1, (17, 22))") regions of an atlas.'),
 (name: 'atlaslabels'; callback: @PyATLASLABELS; help: ' atlasmaxindex(layer) -> Returns string listing all regions in an atlas'),
-(name: 'atlasmaxindex'; callback: @PyATLASMAXINDEX; help: ' atlasmaxindex(layer) -> Returns maximum region humber in specified atlas. For example, if you load the CIT168 atlas (which has 15 regions) as your background image, then atlasmaxindex(0) will return 15.'),
+(name: 'atlasmaxindex'; callback: @PyATLASMAXINDEX; help: ' atlasmaxindex(layer) -> Returns maximum region number in specified atlas. For example, if you load the CIT168 atlas (which has 15 regions) as your background image, then atlasmaxindex(0) will return 15.'),
 (name: 'atlasshow'; callback: @PyATLASSHOW; help: ' atlasshow(layer, indices...) -> Show all (e.g. "atlasshow(1)") or some (e.g. "atlasshow(1, (17, 22))") regions of an atlas.'),
 (name: 'azimuthelevation'; callback: @PyAZIMUTHELEVATION; help: ' azimuthelevation(azi, elev) -> Sets the render camera location.'),
 (name: 'backcolor'; callback: @PyBACKCOLOR; help: ' backcolor(r, g, b) -> changes the background color, for example backcolor(255, 0, 0) will set a bright red background'),
@@ -3137,7 +3369,7 @@ var
 (name: 'colorbarposition'; callback: @PyCOLORBARPOSITION; help: ' colorbarposition(p) -> Set colorbar position (0=off, 1=top, 2=right).'),
 (name: 'colorbarsize'; callback: @PyCOLORBARSIZE; help: ' colorbarsize(p) -> Change width of color bar f is a value 0.01..0.5 that specifies the fraction of the screen used by the colorbar.'),
 (name: 'coloreditor'; callback: @PyCOLOREDITOR; help: ' coloreditor(s) -> Show (1) or hide (0) color editor and histogram.'),
-(name: 'colorfromzero'; callback: @PyCOLORFROMZERO; help: ' colorfromzero(layer, isFromZero) -> Color scheme display range from zero (1) or from treshold value (0)?'),
+(name: 'colorfromzero'; callback: @PyCOLORFROMZERO; help: ' colorfromzero(layer, isFromZero) -> Color scheme display range from zero (1) or from threshold value (0)?'),
 (name: 'colorname'; callback: @PyCOLORNAME; help: ' colorname(colorName) -> Loads  the requested colorscheme for the background image.'),
 (name: 'colornode'; callback: @PyCOLORNODE; help: ' colornode(layer, index, intensity, r, g, b, a) -> Adjust color scheme for image.'),
 (name: 'cutout'; callback: @PyCUTOUT; help: ' cutout(L,A,S,R,P,I) -> Remove sector from volume.'),
@@ -3178,7 +3410,7 @@ var
 (name: 'shaderquality1to10'; callback: @PySHADERQUALITY1TO10; help: ' shaderquality1to10(i) -> Renderings can be fast (1) or high quality (10), medium values (6) balance speed and quality.'),
 (name: 'shaderupdategradients'; callback: @PySHADERUPDATEGRADIENTS; help: ' shaderupdategradients() -> Recalculate volume properties.'),
 (name: 'sharpen'; callback: @PySHARPEN; help: ' sharpen() -> apply unsharp mask to background volume to enhance edges'),
-(name: 'smooth'; callback: @PySMOOTH2D; help: ' smooth2D(s) -> make 2D images blurry (linear interpolation, 1) or jagged (nearest neightbor, 0).'),
+(name: 'smooth'; callback: @PySMOOTH2D; help: ' smooth2D(s) -> make 2D images blurry (linear interpolation, 1) or jagged (nearest neighbor, 0).'),
 (name: 'sobel'; callback: @PySOBEL; help: ' sobel(layer) -> Creates new layer based on Sobel edge map of selected layer.'),
 (name: 'toolformvisible'; callback: @PyTOOLFORMVISIBLE; help: ' toolformvisible(visible) -> Show (1) or hide (0) the tool panel.'),
 (name: 'version'; callback: @PyVERSION; help: ' version() -> Return the version of MRIcroGL.'),
@@ -3292,7 +3524,7 @@ begin
     gPyRunning := false;
   end;
   if gPyRunning then
-     ScriptOutputMemo.lines.Add('Python Succesfully Executed');
+     ScriptOutputMemo.lines.Add('Python Successfully Executed');
   gPyRunning := false;
   GLForm1.ScriptingRunMenu.caption := 'Run';
   if  GlForm1.ScriptOutputMemo.Tag = 123 then
@@ -4284,8 +4516,10 @@ begin
               GraphPanel.width := BottomPanel.Width div 2
            else
                GraphPanel.width := 8;
-        end else if isMultiVol1 then
+        end else //if isMultiVol1 then
             GraphPanel.width := BottomPanel.ClientWidth - ClusterGraphSplitter.width - 8;
+        //else
+        //    GraphPanel.width := BottomPanel.Width div 2 ;
         if (not hasClusters) and (not isMultiVol1) then
            BottomPanel.Height := 8
         else if (BottomPanel.Height < 20) then
@@ -4460,9 +4694,10 @@ begin
  clr := Vec4(Red(ColorDialog1.Color)/255.0, Green(ColorDialog1.Color)/255.0, Blue(ColorDialog1.Color)/255.0, clr.a/255.0);
  Vol1.Slices.LineColor := clr;
  {$IFDEF CLRBAR}
- gClrbar.RulerColor := SetRGBA(clr);
+ gClrbar.RulerColor := gPrefs.LineColor;//SetRGBA(clr);
  RulerVisible();
  {$ENDIF}
+ Vol1.CE.GridColor := clr;
  ViewGPU1.Invalidate;
 end;
 
@@ -5143,10 +5378,11 @@ var
   ClusterizeAtlasCheck, BitmapAlphaCheck, RadiologicalCheck: TCheckBox;
   OkBtn, AdvancedBtn: TButton;
   bmpLabel, maxVoxLabel: TLabel;
-  RenderQCombo, WindowCombo : TComboBox;
+  RenderQCombo, WindowCombo, DisplayCombo : TComboBox;
   {$IFDEF DARKMODE} isDarkModeChanged, {$ENDIF}
   {$IFDEF LCLCocoa} isRetinaChanged, {$ENDIF}
   isAdvancedPrefs: boolean;
+  v: integer;
 begin
   PrefForm:=TForm.Create(GLForm1);
   PrefForm.AutoSize := true;
@@ -5193,13 +5429,44 @@ begin
   WindowCombo.BorderSpacing.Left := 6;
   WindowCombo.Anchors := [akTop, akLeft];
   WindowCombo.Parent:=PrefForm;
+  // Startup Display
+  DisplayCombo:=TComboBox.create(PrefForm);
+  DisplayCombo.Parent:=PrefForm;
+  DisplayCombo.AutoSize:= true;
+  DisplayCombo.Width := 420;
+  DisplayCombo.Items.Add('Startup: Render');
+  DisplayCombo.Items.Add('Startup: Axial');
+  DisplayCombo.Items.Add('Startup: Coronal');
+  DisplayCombo.Items.Add('Startup: Sagittal');
+  DisplayCombo.Items.Add('Startup: Sagittal (nose left)');
+  DisplayCombo.Items.Add('Startup: Multi-Planar (A+C+S)');
+  DisplayCombo.Items.Add('Startup: Multi-Planar (A+C+S+R)');
+  case (gPrefs.StartupDisplayOrient) of
+    kRenderOrient: v := 0;
+  	kAxialOrient: v := 1;
+    kCoronalOrient: v := 2;
+    kSagRightOrient: v := 3;
+    kSagLeftOrient: v := 4;
+    kAxCorSagOrient4: v := 6;
+    else v := 5;
+  end;
+  DisplayCombo.ItemIndex:=  v;
+  DisplayCombo.Style := csDropDownList;
+  DisplayCombo.AnchorSide[akTop].Side := asrBottom;
+  DisplayCombo.AnchorSide[akTop].Control := WindowCombo;
+  DisplayCombo.BorderSpacing.Top := 6;
+  DisplayCombo.AnchorSide[akLeft].Side := asrLeft;
+  DisplayCombo.AnchorSide[akLeft].Control := PrefForm;
+  DisplayCombo.BorderSpacing.Left := 6;
+  DisplayCombo.Anchors := [akTop, akLeft];
+  DisplayCombo.Parent:=PrefForm;
   //Bitmap Scale
   maxVoxLabel:=TLabel.create(PrefForm);
   maxVoxLabel.Width := PrefForm.Width - 86;
   maxVoxLabel.Caption := 'Maximum Texture Size (mb, 64 for software rendering, default '+inttostr(kMaxTexMb)+', 2048 for 8Gb graphics cards)';
   maxVoxLabel.Hint := 'If using software rather than hardware graphics, consider 256';
   maxVoxLabel.AnchorSide[akTop].Side := asrBottom;
-  maxVoxLabel.AnchorSide[akTop].Control := WindowCombo;
+  maxVoxLabel.AnchorSide[akTop].Control := DisplayCombo;
   maxVoxLabel.BorderSpacing.Top := 6;
   maxVoxLabel.AnchorSide[akLeft].Side := asrLeft;
   maxVoxLabel.AnchorSide[akLeft].Control := PrefForm;
@@ -5404,6 +5671,24 @@ begin
      QualityTrack.Position := gPrefs.Quality1to5;
   end;
   gPrefs.StartupWindowMode := WindowCombo.ItemIndex;
+  case DisplayCombo.ItemIndex of
+    0: gPrefs.StartupDisplayOrient := kRenderOrient;
+    1: gPrefs.StartupDisplayOrient := kAxialOrient;
+    2: gPrefs.StartupDisplayOrient := kCoronalOrient;
+    3: gPrefs.StartupDisplayOrient := kSagRightOrient;
+    4: gPrefs.StartupDisplayOrient := kSagLeftOrient;
+    6: gPrefs.StartupDisplayOrient := kAxCorSagOrient4;
+    else gPrefs.StartupDisplayOrient := kAxCorSagOrient3;
+  end;
+  DisplayCombo.Items.Add('Startup: Axial');
+  DisplayCombo.Items.Add('Startup: Coronal');
+  DisplayCombo.Items.Add('Startup: Sagittal');
+  DisplayCombo.Items.Add('Startup: Sagittal (nose left)');
+  DisplayCombo.Items.Add('Startup: Multi-Planar (A+C+S)');
+  DisplayCombo.Items.Add('Startup: Multi-Planar (A+C+S+R)');
+
+
+
   vols.LoadFewVolumes  := gPrefs.LoadFewVolumes;
   if gPrefs.BitmapZoom < 1 then gPrefs.BitmapZoom := 1;
   if gPrefs.BitmapZoom > 10 then gPrefs.BitmapZoom := 10;
@@ -5759,7 +6044,10 @@ begin
           gGraph.AddLine(graphLine,format('%s (%d of %d) [%d %d %d]',[niftiVol.ShortName, niftiVol.VolumesLoaded, niftiVol.VolumesTotal, vox.x, vox.y, vox.z]), true)
        else
            gGraph.AddLine(graphLine,format('%s [%d %d %d]',[niftiVol.ShortName, vox.x, vox.y, vox.z]), true);
-       ViewGPUg.Invalidate;
+       if gGraph.Style >= kStyleSqrt then
+   			GraphRawMenu.Click //TODO
+       else
+       	ViewGPUg.Invalidate;
        //gGraph.isRedraw:= true;  //2021
        setlength(graphLine, 0);
      end;
@@ -5805,6 +6093,7 @@ var
   newVals: TFloat32s;
 begin
 	{$IFDEF GRAPH}
+    GraphPanelShow();
 	vec := startMM - endMM;
 	len := vec.length;
     if (len < 0.01) then exit;
@@ -5815,6 +6104,7 @@ begin
     samples := floor(len /  minPixDim);
     if (samples < 2) then exit;
     gGraph.ClearLines();
+    gGraph.HorizontalSelection:= -1;
   	setlength(newVals, samples);
     vec := (Vol1.Slices.distanceLineEnd - Vol1.Slices.distanceLineStart) / (samples - 1); //direction
     for v := 0 to (vols.NumLayers-1) do begin
@@ -5829,7 +6119,10 @@ begin
 
     end;
     newVals := nil;
-  	ViewGPUg.Invalidate;
+    if gGraph.Style >= kStyleSqrt then
+    	GraphRawMenu.Click
+    else
+  		ViewGPUg.Invalidate;
     {$ENDIF}
     //xxx
 end;
@@ -6623,6 +6916,7 @@ var
 begin
  {$IFDEF GRAPH}
   gGraph.ClearLines();
+ gGraph.HorizontalSelection:= -1;
   setlength(newVals, k);
   for i := 0 to k-1 do
       newVals[i] := 0;//(3 * sin(i/(k/12))) + 6;
@@ -7511,13 +7805,15 @@ begin
     LineWidthEdit.value := 1;
     //gPrefs.DisplayOrient := kRenderOrient;
     //gPrefs.LineWidth := 1;
-    {$IFDEF CLRBAR}
-    gClrbar.RulerColor := SetRGBA(Vol1.Slices.LineColor);
-    {$ENDIF}
-    RulerVisible();
+
     SetDefaultPrefs(gPrefs,true);
     Vol1.Slices.LineColor := Vec4(gPrefs.LineColor.R/255.0, gPrefs.LineColor.G/255.0, gPrefs.LineColor.B/255.0, gPrefs.LineColor.A/255.0);
     Vol1.Slices.LineWidth := gPrefs.LineWidth;
+    {$IFDEF CLRBAR}
+    gClrbar.RulerColor := gPrefs.LineColor;//SetRGBA(Vol1.Slices.LineColor);
+    RulerVisible();
+    {$ENDIF}
+    Vol1.CE.GridColor := GetRGBA(gPrefs.LineColor);
     UpdateOpenRecent();
   end;
   UpdateVisibleBoxes();
@@ -7702,112 +7998,6 @@ begin
      //metal only
 end;
 
-(*function ScreenShotGL(GLBox : TOpenGLControl): TBitmap;
-var
-  RawImage: TRawImage;
-  p: array of byte;
-  tileW, tileH, nTileW, nTileH,
-  wOut, hOut,
-  q, w, w4, yOut, h, x, y, hR, wR, BytePerPixel: integer;
-  z: int64;
-  DestPtr: PInteger;
-begin
- if (gPrefs.BitmapZoom = 1) and (gPrefs.DisplayOrient <> kMosaicOrient) then begin
-    result := ScreenShot(GLBox, gPrefs.ScreenCaptureTransparentBackground); //if you get an error here, update your metal-demos
-    exit;
- end;
- w := GLBox.ClientWidth;
- h := GLBox.ClientHeight;
- GLForm1.OptimalMosaicPixels(wOut,hOut);
- //showmessage(format('%d %d', [wOut, hOut])); exit;
- wOut := wOut * gPrefs.BitmapZoom;
- hOut := hOut * gPrefs.BitmapZoom;
- if (wOut <= 0) or (hOut <= 0) or (w <= 0) or (h <= 0) then exit(nil);
- nTileW := ceil(wOut/w);
- nTileH := ceil(hOut/h);
- //GLForm1.Caption := format('%d %d   %d %d',[h,w, hOut, wOut]);
- Result:=TBitmap.Create;
- Result.Width:= wOut;
- Result.Height:= hOut;
- if gPrefs.ScreenCaptureTransparentBackground then
-   Result.PixelFormat := pf32bit
- else
-     Result.PixelFormat := pf24bit; //if pf32bit the background color is wrong, e.g. when alpha = 0
- RawImage := Result.RawImage;
- BytePerPixel := RawImage.Description.BitsPerPixel div 8;
- //note lines can be padded, on MacOS the results are evenly divisible by 16
- // e.g. bmp=4 wOut=994 BytesPerLine=3984 (expected 3976)
- if (RawImage.Description.BytesPerLine < (wOut *BytePerPixel)) then begin
-    Showmessage(format('Catastrophic bmp error bpp=%d wid=%d bytes=%d',[BytePerPixel, wOut, RawImage.Description.BytesPerLine])); //not sure if this is fatal - e.g. line lengths rounded up
-    exit;
- end;
- //GLForm1.caption := format('%d %d %d 3=%d 4=%d', [BytePerPixel,RawImage.Description.BytesPerLine, wOut, wOut * 3, wOut * 4]);
- GLBox.MakeCurrent;
- q := Vol1.Quality1to10;
- Vol1.Quality1to10 := 10;
- w4 := 4 * w;
- yOut := 0;
- hR := 0;
- setlength(p, w4 * h);
- for TileH := 0 to  (nTileH-1) do begin
-     for TileW := 0 to (nTileW-1) do begin
-        GLBox.enableTiledScreenShot(-TileW*w, -h*TileH,wOut, hOut); //tileLeft, tileBottom,totalWidth, totalHeight
-        GLForm1.ViewGPUPaint(nil);
-        glFlush;
-        glFinish;//<-this would pause until all jobs finished: generally a bad idea! required here
-        GLBox.SwapBuffers; //<- required by Windows
-
-        {$IFDEF Darwin} //http://lists.apple.com/archives/mac-opengl/2006/Nov/msg00196.html
-        glReadPixels(0, 0, w, h, $80E1, $8035, @p[0]); //OSX-Darwin   GL_BGRA = $80E1;  GL_UNSIGNED_INT_8_8_8_8_EXT = $8035;
-        {$ELSE} {$IFDEF Linux}
-         glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, @p[0]); //Linux-Windows   GL_RGBA = $1908; GL_UNSIGNED_BYTE
-        {$ELSE}
-         glReadPixels(0, 0, w, h, $80E1, GL_UNSIGNED_BYTE, @p[0]); //Linux-Windows   GL_RGBA = $1908; GL_UNSIGNED_BYTE
-        {$ENDIF} {$ENDIF}
-
-        DestPtr := PInteger(RawImage.Data);
-        hR := min(h, hOut-yOut);
-        wR := min(w, wOut-(TileW*w) ) ;
-        Inc(PByte(DestPtr), (hOut - yOut - hR) * RawImage.Description.BytesPerLine );
-        Inc(PByte(DestPtr), TileW * w * BytePerPixel );
-        z := hR * w4;
-        if BytePerPixel = 3 then begin
-          for y:= hR-1 downto 0 do begin
-               DestPtr := PInteger(RawImage.Data);
-               Inc(PByte(DestPtr), y * RawImage.Description.BytesPerLine );
-               for x := 1 to wR do begin
-                   DestPtr^ := p[z] + (p[z+1] shl 8) + (p[z+2] shl 16);
-                   Inc(PByte(DestPtr), BytePerPixel);
-                   z := z + 4;
-               end;
-           end; //for y : each line in image
-        end else begin
-          for y:= hR-1 downto 0 do begin
-              Dec(z,w4);
-              System.Move(p[z], DestPtr^, wR * BytePerPixel );
-              //if (y > 1) then
-              Inc(PByte(DestPtr), RawImage.Description.BytesPerLine);
-          end; //for y : each line in image
-        end;
-   end;
-   yOut := yOut + hR;
- end; //TileH
-
- //{$DEFINE ISOPAQUE} //see pf24bit
- {$IFDEF ISOPAQUE}
- DestPtr := PInteger(RawImage.Data);
- for z := 0 to ((w * h)-1) do begin
-     DestPtr[z] := DestPtr[z] and $FFFFFF00;
- end;
- {$ENDIF}
-
- GLBox.disableTiledScreenShot();
- GLbox.ReleaseContext;
- Vol1.Quality1to10 := q;
- setlength(p, 0);
- ViewGPU1.Invalidate;
-end;*)
-
 function ScreenShotGL(GLBox : TOpenGLControl): TBitmap;
 var
   RawImage: TRawImage;
@@ -7857,18 +8047,20 @@ begin
  BytePerPixel := RawImage.Description.BitsPerPixel div 8;
  if (RawImage.Description.BytesPerLine <  (wOut *BytePerPixel)) then begin
     showmessage(format('Catastrophic error bytes=%d bpp=%d w=%d', [RawImage.Description.BytesPerLine, BytePerPixel, wOut]));
-
  end;
  GLBox.MakeCurrent;
  q := Vol1.Quality1to5;
  Vol1.Quality1to5 := 5;
  //if (q > 5) then GLForm1.ReloadShader(false); //best quality
+ if (nTileH > 1) or (nTileW > 1) then
+ 	printf('Warning: not all graphics drivers support tiled bitmaps. If screenshot looks wrong, open "Preferences" window and set "Bitmap Zoom" to 1.');
  w4 := 4 * w;
  yOut := 0;
  hR := 0;
  setlength(p, w4 * h);
  for TileH := 0 to  (nTileH-1) do begin
      for TileW := 0 to (nTileW-1) do begin
+        //printf(format('screenshot %d %d %d %d', [-TileW*w, -h*TileH,wOut, hOut]));
         {$IFDEF RETINA}
         GLBox.enableTiledScreenShot(-TileW*w, -h*TileH,wOut, hOut); //tileLeft, tileBottom,totalWidth, totalHeight
         {$ENDIF}
@@ -8005,6 +8197,30 @@ begin
    else if (TActive is TMemo) then
       (TActive as TMemo).PasteFromClipboard;
  //inherited;//showmessage('Use paste to insert text from clipboard into scripts');
+end;
+
+procedure TGLForm1.GraphPanelShow();
+begin
+  if GraphPanel.width < 24 then begin
+  	if (ClusterView.Items.Count > 0) then
+    	GraphPanel.width := BottomPanel.Width div 2
+    else
+  		GraphPanel.width := (BottomPanel.ClientWidth - ClusterGraphSplitter.Width - 2);
+  end;
+  if (BottomPanel.Height < 20) then
+      BottomPanel.Height := round(GLForm1.Height * 0.3);
+  //ClusterView.Items.Count
+end;
+
+procedure TGLForm1.FormResize(Sender: TObject);
+begin
+  //LayerBox.Caption := inttostr(ClusterPanel.width);
+  if GraphPanel.Width > (BottomPanel.ClientWidth - ClusterGraphSplitter.Width - 2) then begin
+  	GraphPanel.Width := (BottomPanel.ClientWidth - ClusterGraphSplitter.Width - 2);
+    exit;
+  end;
+  if (ClusterView.Items.Count > 0) or (BottomPanel.Height < 20) then exit;
+  GraphPanel.width := (BottomPanel.ClientWidth - ClusterGraphSplitter.Width - 2);
 end;
 
 procedure TGLForm1.GraphPanelResize(Sender: TObject);
@@ -8213,14 +8429,19 @@ begin
     X := round(X * f);
     Y := round(Y * f);
     {$ENDIF}
-     f := gGraph.HorizontalClickFrac(X);
-     if (f < 0) or (f > 1) then exit;
-     if f = 1 then f := f - 0.000001;
      if LayerList.ItemIndex <>0 then
         LayerList.ItemIndex:= 0;
      if not vols.Layer(0,v) then exit;
-     if (v.VolumesLoaded < 2) then exit;
-     //TGV
+     if ((v.VolumesLoaded < 2) or (gGraph.Style >= kStyleSqrt)) then begin
+        caption := gGraph.HorizontalClickString(X);
+        gGraph.isRedraw := true;
+        ViewGPUg.Invalidate;
+        exit;
+     end;
+     f := gGraph.HorizontalClickFrac(X);
+     if (f < 0) or (f > 1) then exit;
+     if f = 1 then f := f - 0.000001;
+
      vol := trunc(v.VolumesLoaded * f) ; // 0...(v.VolumesTotal-1)
      v.SetDisplayVolume(vol);
      gGraph.HorizontalSelection:= v.VolumeDisplayed;
@@ -9716,10 +9937,16 @@ begin
   if gPrefs.StartupWindowMode = 1 then begin
      GLForm1.BoundsRect := Screen.MonitorFromWindow(Handle).BoundsRect;
      GLForm1.WindowState:= wsMaximized;
-  end;
-  if gPrefs.StartupWindowMode = 2 then begin
+  end else if gPrefs.StartupWindowMode = 2 then begin
      GLForm1.WindowState:= wsFullScreen;
      {$IFNDEF LCLCocoa}ExitFullScreenMenu.Visible:=true;{$ENDIF} //Linux has issues getting out of full screen
+  end else begin
+	//Display as Window...
+    if (Screen.MonitorFromWindow(Handle).BoundsRect.Height >= 1024) then
+    	GLForm1.Height := 960
+    else if (Screen.MonitorFromWindow(Handle).BoundsRect.Height > 799) then
+    	GLForm1.Height := 780;
+    //LayerBox.Caption := inttostr(Screen.MonitorFromWindow(Handle).BoundsRect.Height)+'x'+inttostr(GLForm1.Height);
   end;
 
   if DirectoryExists(gPrefs.DicomDir) then
@@ -9914,6 +10141,9 @@ begin
   HelpAboutMenu.Visible := false; //use apple menu
   FileSepMenu.Visible := false;
   FileExitMenu.Visible := false;
+  ColorEditorMenu.ShortCut := ShortCut(Word('J'), [ssModifier]); //ssCtrl -> ssMeta
+
+  IntensityHistogamMenu.ShortCut := ShortCut(Word('I'), [ssModifier]); //ssCtrl -> ssMeta
   NewWindowMenu.ShortCut := ShortCut(Word('N'), [ssShift, ssModifier]); //ssCtrl -> ssMeta
   ScriptingRunMenu.ShortCut := ShortCut(Word('R'), [ssModifier]); //ssCtrl -> ssMeta
   OpenMenu.ShortCut := ShortCut(Word('O'), [ssModifier]); //ssCtrl -> ssMeta
@@ -9987,11 +10217,12 @@ begin
   {$IFDEF CLRBAR}
   gClrbar:= TGPUClrbar.Create(ViewGPU1);
   Vol1.SetColorBar(gClrBar);
-  gClrbar.RulerColor := SetRGBA(Vol1.Slices.LineColor);
+  gClrbar.RulerColor := gPrefs.LineColor; //SetRGBA(Vol1.Slices.LineColor);
   RulerVisible();
   gClrbar.isVisible := gPrefs.ColorbarVisible;
   VisibleClrbarMenu.checked := gPrefs.ColorbarVisible;
   {$ENDIF}
+  Vol1.CE.GridColor := GetRGBA(gPrefs.LineColor);
   Smooth2DCheck.Checked := gPrefs.Smooth2D;
   RulerCheck.checked := gPrefs.RulerVisible;
   TextAndCubeMenu.Checked := gPrefs.LabelOrient;

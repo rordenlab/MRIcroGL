@@ -22,7 +22,7 @@ const //slice displays
 type
   TVertex2D = record //vertex position/texture coordinates for drawing using GPU: six per bitmap
     position: TVec2;
-    //metal requires we align each vertex attribute on 16 byte boundries
+    //metal requires we align each vertex attribute on 16 byte boundaries
     // here these values do double duty to reveal location of mouse clicks
     unused: single;
     orient: int32;

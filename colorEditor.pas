@@ -100,19 +100,14 @@ begin
   nodeSelected := -1;
   if (addNode) then begin
      vol.CX.AddNode(round(X),round(Y));
-     //vol.CX.AddNode(22, 128);
-     //GLForm1.Caption := format('%g %g %d',[X, Y, kGridHWPixScale1]);
      exit(true);
   end;
   for i := 0 to (vol.CX.FullColorTable.numnodes-1) do begin
       if (abs(X- vol.CX.FullColorTable.nodes[i].intensity) <= kCloseHit) and (abs(Y- vol.CX.FullColorTable.nodes[i].rgba.a) <= kCloseHit) then
          nodeSelected := i;
   end;
-  if (deleteNode) then begin
-     vol.CX.DeleteNode(nodeSelected);
-     //nodeSelected := -1;
-     exit(true);
-  end;
+  if (deleteNode) then
+     exit(vol.CX.DeleteNode(nodeSelected));
   result := nodeSelected > 0;
 end;
 
@@ -217,9 +212,10 @@ begin
   viewPixelHeight := h;
   minHW := min(w,h);
   numLineVerts := 0;
-  if (minHW < 1) then exit;
+  if (minHW < 2) then exit;
   newLines := true;
-  gridScale := trunc(minHW / 1024)+1;
+  //gridScale := trunc(minHW / 1024)+1;
+  gridScale := trunc( (minHW-1) / (kGridHWPixScale1 * 2.25))+1;
   gridHWPix := gridScale * kGridHWPixScale1;
   texL := gridBorderPix;
   texB := h - gridHWPix-gridBorderPix;
@@ -228,7 +224,7 @@ begin
   //draw grid
   lineWid := gridScale;
   for i := 0 to 4 do begin
-    x := i * gridScale * 64;
+    x := (i * gridScale * kGridHWPixScale1) * 0.25;
     DrawLine(texL+x,texB,texL+x,texB+texH, lineWid, gridClr, gridClr);
     DrawLine(texL,texB+x,texL+texW,texB+x, lineWid, gridClr, gridClr);
   end;
@@ -239,7 +235,7 @@ begin
   lineWid := gridScale*8;
   DrawLine(texL+texW+gridScale*8,texB,texL+texW+gridScale*8, texB+texH, lineWid, vec4(gridClr.r,gridClr.b,gridClr.g,0), gridClr);
   //draw color table: node color is table color, horizontal is image intensity, vertical is opacity
-  lineWid := gridScale*4;
+  lineWid := gridScale*6;
   startClr := clr(0);
   startXY := xy(0);
   for i := 1 to (vol.FullColorTable.numnodes-1) do begin

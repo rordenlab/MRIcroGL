@@ -2738,8 +2738,35 @@ begin
     glEnd();
     {$ENDIF}
   end;
+  //reset linear interpolation - much better for rendering and mosaics
+  if not isSmooth2D then begin
+      glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
+      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      glBindTexture(GL_TEXTURE_3D, overlayIntensityTexture3D);
+      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  end;
+  //Draw rendering: do this BEFORE color editor and colorbar so it is behind them
+  if (DisplayOrient = kAxCorSagOrient4) then begin
+      i := RayCastQuality1to5;
+      if (i < kQualityMedium) then
+        RayCastQuality1to5 := kQualityMedium;
+      PaintCore(vol, slices2D.axCorSagOrient4XY, false, false);
+      RayCastQuality1to5 := i;
+      glControl.SetViewport();
+  end;
+  txt.DrawText(); //D888
+  //GLForm1.LayerBox.caption := format('%g %g', [scale, vol.MaxMM]);    //uses mainunit
+  rulerPx := (scale)/vol.MaxMM ;//pixels per mm
+  rulerPx := rulerPx * 100; //ruler is 10cm = 100mm
+  {$IFDEF CLRBAR}
+  clrbar.RulerPixels:= rulerPx;
+  if clrbar <> nil then
+   clrbar.Draw();
+  {$ENDIF}
   //draw color editor
-  if colorEditorVisible then begin
+  if colorEditorVisible then begin //final step: draw ON TOP of the colorbar and ruler
     colorEditor.Update(w, h, vol);
     if colorEditor.NumberOfLineVertices > 2 then begin
         glUseProgram(programLine2D);
@@ -2755,34 +2782,7 @@ begin
         {$ENDIF}
     end;
   end;
-  txt.DrawText(); //D888
-  //GLForm1.LayerBox.caption := format('%g %g', [scale, vol.MaxMM]);    //uses mainunit
-  rulerPx := (scale)/vol.MaxMM ;//pixels per mm
-  rulerPx := rulerPx * 100; //ruler is 10cm = 100mm
-  {$IFDEF CLRBAR}
-  clrbar.RulerPixels:= rulerPx;
-  if clrbar <> nil then
-   clrbar.Draw();
-  {$ENDIF}
-  if (DisplayOrient = kAxCorSagOrient4) then begin
-    if (DisplayOrient = kAxCorSagOrient4) then begin
-          i := RayCastQuality1to5;
-          if (i < kQualityMedium) then
-           	RayCastQuality1to5 := kQualityMedium;
-          PaintCore(vol, slices2D.axCorSagOrient4XY, false, false);
-          RayCastQuality1to5 := i;
-    end;
-  end;
   glControl.SwapBuffers;
-  //reset linear interpolation - much better for rendering and mosaics
-  if not isSmooth2D then begin
-      glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
-      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-      glBindTexture(GL_TEXTURE_3D, overlayIntensityTexture3D);
-      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  end;
 end;
 {$ENDIF}
 
@@ -2791,9 +2791,9 @@ var
 	widthHeightLeft: TVec3i;
 begin
 	widthHeightLeft.x := glControl.clientwidth;
-        widthHeightLeft.y := glControl.clientheight;
-        widthHeightLeft.z := 0;
-        PaintCore(vol, widthHeightLeft);
+    widthHeightLeft.y := glControl.clientheight;
+    widthHeightLeft.z := 0;
+    PaintCore(vol, widthHeightLeft);
 end;
 
 {$IFDEF DEPTHPICKER2}
@@ -2888,7 +2888,7 @@ begin
           scale := 1
   else
       scale := 0.5 * 1/abs(kDefaultDistance/(fDistance+1.0));
-  glViewport(widthHeightLeft.z, 0, widthHeightLeft.x, widthHeightLeft.y);
+  glViewport(widthHeightLeft.z+glControl.tileLeft, glControl.tileBottom, widthHeightLeft.x, widthHeightLeft.y);
   whratio := widthHeightLeft.x /widthHeightLeft.y;
   if (whratio > 1) or (whratio = 0) then //Wide window
      projectionMatrix := TMat4.OrthoGL (-scale * whratio, scale * whratio, -scale, scale, fDistance-1, fDistance+1)

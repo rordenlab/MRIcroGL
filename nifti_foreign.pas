@@ -5415,7 +5415,7 @@ begin
                       NSLog('Unsupported BRICK_TYPES feature: datatype varies between sub-bricks');
                       goto 666;
                   end;
-              end; //if acount > 0
+              end; //if itemCount > 1
               //NSLog('HEAD datatype is '+inttostr(nhdr.datatype) );
          end else if AnsiContainsText(nameStr,'BRICK_STATS') then begin
               if (itemCount < 2) then continue;

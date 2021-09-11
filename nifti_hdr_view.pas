@@ -671,8 +671,8 @@ begin
      if lHdr.magic = kNIFTI_MAGIC_EMBEDDED_HDR then
         if lHdr.vox_offset < sizeof(TNIFTIHdr) then
            lHdr.vox_offset := sizeof(TNIFTIHdr)+4; //352 embedded images MUST start after header
-     if lHdr.magic = kNIFTI_MAGIC_SEPARATE_HDR then
-           lHdr.vox_offset := 0; //embedded images MUST start after header
+     //if (lHdr.magic = kNIFTI_MAGIC_SEPARATE_HDR) then
+     //      lHdr.vox_offset := 0; //embedded images MUST start after header
      result := true;
      move(lHdr, lOutHdr, sizeof(lOutHdr));
      if lIsNativeEndian = false then
@@ -750,19 +750,19 @@ end;
 procedure THdrForm.HeaderMagicDropSelect(Sender: TObject);
 var lHdrIndex: integer;
 begin
-     lHdrIndex := HeaderMagicDrop.ItemIndex; //0=unkown, 1=nifti hdr+img, 2=nifti .nii embedded
-     if lHdrIndex = 1 then begin//nifti hdr+img, offset must be = 0
+     lHdrIndex := HeaderMagicDrop.ItemIndex; //0=unknown, 1=nifti hdr+img, 2=nifti .nii embedded
+     (*if lHdrIndex = 1 then begin//nifti hdr+img, offset must be = 0
         OffsetEdit.MinValue := 0;
-        OffsetEdit.Enabled := false;
+        //OffsetEdit.Enabled := false;
         OffsetEdit.value := 0;
-     end else if lHdrIndex = 2 then begin//embedded header, offset must be at least 348
-        OffsetEdit.Enabled := true;
+     end else*) if lHdrIndex = 2 then begin//embedded header, offset must be at least 352
+        //OffsetEdit.Enabled := true;
         if OffsetEdit.value < sizeof(TNIFTIHdr) then
            OffsetEdit.value := sizeof(TNIFTIHdr);
         OffsetEdit.MinValue := sizeof(TNIFTIHdr);
      end else begin //no embedded header... therefore offset can be zero
         OffsetEdit.MinValue := 0;
-        OffsetEdit.Enabled := true;
+        //OffsetEdit.Enabled := true;
 
         if OffsetEdit.value = sizeof(TNIFTIHdr) then
 		   OffsetEdit.value := 0;

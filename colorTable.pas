@@ -36,7 +36,7 @@ type
       procedure ChangeNode(index, intensity, R,G,B,A: byte);
       procedure AddNode(intensity, A: byte);
       procedure SetLabels();
-      procedure DeleteNode (index: integer);
+      function DeleteNode (index: integer): boolean;
       //procedure SetTag(cTag: integer);
       property LUT: TLUT read fLUT;
       procedure LoadCustomLabelLut(lFileName: string);
@@ -397,13 +397,13 @@ begin
     GenerateLUT();//CLUT,fLUT);
 end;
 
-procedure TCLUT.DeleteNode (index: integer);
+function TCLUT.DeleteNode (index: integer): boolean;
 //deletes a node from color table: will not delete 1st or final node
 var
   lN: integer;
 begin
-  if (index = 0) or (index >= (CLUT.numnodes-1)) or (CLUT.numnodes < 3) then
-    exit; //out of range or edge node...
+  if (index <= 0) or (index >= (CLUT.numnodes-1)) or (CLUT.numnodes < 3) then
+    exit(false); //out of range or edge node...
   fNeedsUpdate := true;
   dec(CLUT.numnodes); //if 3 now only 2...
   if index < (CLUT.numnodes) then begin
@@ -411,6 +411,7 @@ begin
       CLUT.nodes[lN] := CLUT.nodes[lN+1];
   end;
   GenerateLUT();//CLUT,fLUT);
+  exit(true);
 end;
 
 procedure TCLUT.ChangeNode(index, intensity, R,G,B,A: byte);

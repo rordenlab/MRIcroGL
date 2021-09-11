@@ -14,7 +14,6 @@
       <XPManifest>
         <DpiAware Value="True"/>
       </XPManifest>
-      <Icon Value="0"/>
     </General>
     <BuildModes Count="1">
       <Item1 Name="Default" Default="True"/>
@@ -36,7 +35,7 @@
         <PackageName Value="LCL"/>
       </Item2>
     </RequiredPackages>
-    <Units Count="13">
+    <Units Count="11">
       <Unit0>
         <Filename Value="MRIcroGL.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -103,17 +102,6 @@
         <Filename Value="afni_fdr.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit10>
-      <Unit11>
-        <Filename Value="intensityfilter.pas"/>
-        <IsPartOfProject Value="True"/>
-        <ComponentName Value="IntensityFilterForm"/>
-        <HasResources Value="True"/>
-        <ResourceBaseClass Value="Form"/>
-      </Unit11>
-      <Unit12>
-        <Filename Value="nifti_save.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit12>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -122,23 +110,20 @@
       <Filename Value="MRIcroGL"/>
     </Target>
     <SearchPaths>
-      <IncludeFiles Value="$(ProjOutDir);PythonBridge"/>
+      <IncludeFiles Value="$(ProjOutDir)"/>
       <OtherUnitFiles Value="../Metal-Demos/common;PythonBridge"/>
       <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <CodeGeneration>
       <SmartLinkUnit Value="True"/>
       <Optimizations>
-        <OptimizationLevel Value="3"/>
+        <OptimizationLevel Value="0"/>
       </Optimizations>
     </CodeGeneration>
     <Linking>
-      <Debugging>
-        <DebugInfoType Value="dsDwarf2"/>
-        <StripSymbols Value="True"/>
-      </Debugging>
-      <LinkSmart Value="True"/>
       <Options>
+        <PassLinkerOptions Value="True"/>
+        <LinkerOptions Value="-plugin /usr/lib/llvm-10/lib/LLVMgold.so"/>
         <Win32>
           <GraphicApplication Value="True"/>
         </Win32>
@@ -151,7 +136,9 @@
       </CompilerMessages>
       <CustomOptions Value="-dDisableLCLGIF 
 -dDisableLCLPNM
--dMYPY"/>
+-dMYPY
+-Clflto
+-Clfltonosystem"/>
     </Other>
   </CompilerOptions>
   <Debugging>

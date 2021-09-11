@@ -114,7 +114,7 @@ Type
         procedure InitInt16();
         procedure InitFloat32();
         procedure DetectV1();
-        //display functions apply windo min/max to generate image with desired brightness/contrast
+        //display functions apply window min/max to generate image with desired brightness/contrast
         procedure SetDisplayMinMaxRGB24();
         //procedure SetDisplayMinMaxRGBV1();
         procedure LoadRGBVector();
@@ -134,7 +134,6 @@ Type
         //procedure ApplyVolumeReorient(perm: TVec3i; outR: TMat4);
         function OpenNIfTI(): boolean;
         procedure MakeBorg(voxelsPerDimension: integer);
-        procedure initHistogram(Histo: TUInt32s =  nil);
         procedure ApplyCutout();
         function loadForeign(FileName : AnsiString; var  rawData: TUInt8s; var lHdr: TNIFTIHdr): boolean;// Load 3D data
         function LoadRaw(FileName : AnsiString; out isNativeEndian: boolean): boolean;
@@ -157,6 +156,7 @@ Type
         procedure GenerateAtlasClusters;
         function rawAtlasMax: integer;
         function mm3toVox(mm3: single) : integer; //e.g. if 3x3x3mm voxels (27mm) and input is 28, return 2
+        procedure initHistogram(Histo: TUInt32s =  nil);
         //procedure robustMinMax(var rMin, rMax: single);
       public
         RefreshCount: integer;
@@ -179,6 +179,7 @@ Type
         {$ENDIF}
         clusters: TClusters;
         clusterNotes: string[128]; //interpolated, label map, etc
+        procedure MakeHistogram(Histo: TUInt32s; mn, mx: single; isClampExtremeValues : boolean = true; isIgnoreZeros: boolean = false);
         property InputReorientPermute: TVec3i read fPermInOrient;
         property IsNativeEndian: boolean read fIsNativeEndian;
         property VolumeDisplayed: integer read fVolumeDisplayed; //indexed from 0 (0..VolumesLoaded-1)
@@ -221,6 +222,7 @@ Type
         function VoxIntensityArray(vox: TVec3i): TFloat32s; overload;
         function VoxIntensityArray(roi: TUInt8s): TFloat32s; overload;
         function EdgeMap(isSmooth: boolean): TUInt8s;
+        function Scaled2Raw(lScaled: single): single;
         function SeedCorrelationMap(vox: TVec3i; isZ: boolean): TFloat32s; overload;
         function SeedCorrelationMap(roi: TUInt8s; isZ: boolean): TFloat32s; overload;
         function SeedCorrelationMap(vSeed: TFloat32s; isZ: boolean): TFloat32s; overload;
@@ -2854,7 +2856,7 @@ begin
      h.srow_z[1] := 0;
      h.srow_z[2] := h.pixdim[3];
      h.srow_z[3] := -(a.originator[3]-1) *h.pixdim[3];
-     printf('Warning: unable to determin left from right side SPM-style for Analyze images');
+     printf('Warning: unable to determine left from right side SPM-style for Analyze images');
 end;
 
 procedure CheckXForm(var lHdr: TNIfTIHdr);
@@ -3011,8 +3013,6 @@ begin
     end;
 
 end;
-
-
 
 function Nifti2to1(Stream:TFileStream; var isNativeEndian: boolean): TNIFTIhdr; overload;
 var
@@ -3894,48 +3894,72 @@ begin
  SetDisplayMinMax(true);
 end; //sharpen()
 
-procedure TNIfTI.initHistogram(Histo: TUInt32s = nil);
+procedure TNIfTI.MakeHistogram(Histo: TUInt32s; mn, mx: single; isClampExtremeValues : boolean = true; isIgnoreZeros: boolean = false);
 var
-   i,j,vx, mx: int64;
-   v,scale255: single;
-   cnt: array [0..255] of integer;
+   i, j, vx, maxBin: integer;
    vol32 : TFloat32s;
    vol16: TInt16s;
    vol8: TUInt8s;
+   v,scaleBin: single;
+begin
+    vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
+    maxBin := length(Histo) - 1;
+    if (maxBin < 1) or (vx < 1) or (abs(mx-mn) <= 0) then exit;
+	for i := 0 to maxBin do
+    	Histo[i] := 0;
+    vol8 := fRawVolBytes;
+    vol16 := TInt16s(vol8);
+    vol32 := TFloat32s(vol8);
+    scaleBin := (maxBin) / abs(mx-mn);
+    j := 1; //for RGBA read Green
+    v := 0;
+    for i := 0 to (vx - 1) do begin
+        if fHdr.datatype = kDT_UINT8 then
+           v := vol8[i]
+        else if fHdr.datatype = kDT_INT16 then
+             v := vol16[i]
+        else if fHdr.datatype = kDT_FLOAT then
+             v := vol32[i]
+        else if fHdr.datatype = kDT_RGB then begin
+             v := max(max(vol8[j], vol8[j+1]),vol8[j+2]);
+             j := j + 3;
+        end;
+        v := (v * fHdr.scl_slope) + fHdr.scl_inter;
+        if (v < mn) then begin
+          if (not isClampExtremeValues) then continue;
+          v := 0;
+        end;
+        if (v > mx) then begin
+          if (not isClampExtremeValues) then continue;
+          v := maxBin;
+        end;
+        if (v = 0) and (isIgnoreZeros) then
+        	continue;
+        v := (v - mn) * scaleBin;
+        inc(Histo[round(v)]);
+    end;
+end;
+
+procedure TNIfTI.initHistogram(Histo: TUInt32s = nil);
+{$DEFINE HISTO_SQRT}
+{$DEFINE DESPIKE}
+const
+	kSpikeFrac = 1.25; //only allow 25% increase relative to neighboring bins
+var
+   i,j,vx, mx, prevBin, currBin, nextBin: int64;
+   v,scale255: single;
+   cnt: TUInt32s; //cnt: array [0..255] of integer;
 begin
     for i := 0 to 255 do
         fHistogram[i].A := 0;
     vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
     if (vx < 1) or ((fMax-fMin) <= 0) then exit;
-    for i := 0 to 255 do
-        cnt[i] := 0;
+    setlength(cnt,256);
     if (Histo <> nil) and (length(Histo) = 256) then begin
       for i := 0 to 255 do
         cnt[i] := Histo[i];
     end else if (Histo = nil) or (length(Histo) < 255) then begin
-      vol8 := fRawVolBytes;
-      vol16 := TInt16s(vol8);
-      vol32 := TFloat32s(vol8);
-      scale255 := 255 / (fMax-fMin);
-      j := 1; //for RGBA read Green
-      v := 0;
-        for i := 0 to (vx - 1) do begin
-            if fHdr.datatype = kDT_UINT8 then
-               v := vol8[i]
-            else if fHdr.datatype = kDT_INT16 then
-                 v := vol16[i]
-            else if fHdr.datatype = kDT_FLOAT then
-                 v := vol32[i]
-            else if fHdr.datatype = kDT_RGB then begin
-                 v := max(max(vol8[j], vol8[j+1]),vol8[j+2]);
-                 j := j + 3;
-            end;
-            v := (v * fHdr.scl_slope) + fHdr.scl_inter;
-            v := (v - fMin) * scale255;
-            if (v < 0) then v := 0;
-            if (v > 255) then v := 255;
-            inc(cnt[round(v)]);
-        end;
+    	MakeHistogram(cnt, fMin, fMax);
     end else begin //if Histo = nil, else use provided histogram
         mx := length(Histo)-1;
         scale255 := 255/mx;
@@ -3944,18 +3968,45 @@ begin
             cnt[j] := cnt[j] + Histo[i];
         end;
     end;
+    {$IFDEF DESPIKE} //limit bin to not be extreme relative to previous or next bin
+    prevBin := cnt[1]; // bin[0] has only one neighbor: bin[1]
+    currBin := cnt[0];
+    for i := 0 to 255 do begin
+        if i < 255 then
+    		nextBin := cnt[i+1]
+        else
+            nextBin := cnt[254]; //bin[255] has only one neighbor: bin[254]
+        mx := round(max(nextBin, prevBin) * kSpikeFrac);
+        if currBin > mx then
+        	cnt[i] := mx;
+        prevBin := currBin;
+        currBin := nextBin;
+    end;
+    {$ENDIF}
     mx := 0;
     for i := 0 to 255 do
         if (cnt[i] > mx) then mx := cnt[i];
-    if mx < 2 then exit;
+    if mx < 2 then begin
+      cnt := nil;
+      exit;
+    end;
+    {$IFDEF HISTO_SQRT}
+    scale255 := 255/sqrt(mx);
+    {$ELSE}
     scale255 := 255/log2(mx);
+    {$ENDIF}
     for i := 0 to 255 do begin
       if (cnt[i] < 1) then // log2(0) = -inf!
            v := 0
       else
-           v := scale255 * log2(cnt[i]);;
-        fHistogram[i].A := round(v);
+      {$IFDEF HISTO_SQRT}
+      	v := scale255 * sqrt(cnt[i]);
+      {$ELSE}
+        v := scale255 * log2(cnt[i]);
+      {$ENDIF}
+      fHistogram[i].A := round(v);
     end;
+    cnt := nil;
 end;
 
 procedure TNIfTI.initUInt8();
@@ -4077,7 +4128,8 @@ var
    mn, mx: uint16;
 begin
  if fHdr.datatype <> kDT_UINT16 then exit;
- vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]*fVolumesLoaded);
+ //vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]*fVolumesLoaded);
+ vx := length(fRawVolBytes) shr 1;
  if vx < 1 then exit;
  u16 := TUInt16s(fRawVolBytes);
  i16 := TInt16s(fRawVolBytes);
@@ -4096,13 +4148,13 @@ begin
     exit;
  end;
  printf(' Adjusting NIfTI header "scl_inter" to losslessy store UInt16 data');
- for i := 0 to vx-1 do
-     i16[i] := smallint(u16[i]- 32768);
+ printf(format('UINT16 -> INT16 %d×%d×%d×%d ',[fHdr.dim[1],fHdr.dim[2],fHdr.dim[3],fVolumesLoaded]));
+ for i := 0 to (vx - 1) do
+ 	i16[i] := smallint(u16[i]- 32768);
  fHdr.datatype := kDT_SIGNED_SHORT;
+ fHdr.glmin := -32768; //glmin and glmax are technically unused, we use to flag that areas outside bounding box should be -32768
+ fHdr.glmax := 32767;
  fHdr.scl_inter:= (32768 * fHdr.scl_slope) + fHdr.scl_inter;
- //reported
- //fHdrNoRotation.scl_inter := fHdr.scl_inter;
- //fHdrNoRotation.datatype := kDT_SIGNED_SHORT;
 end;
 
 procedure TNIfTI.Convert2Float();
@@ -4186,6 +4238,11 @@ begin
 	result := (lScaled)-lHdr.scl_inter
   else
 	result := (lScaled-lHdr.scl_inter) / lHdr.scl_slope;
+end;
+
+function TNIfTI.Scaled2Raw(lScaled: single): single;
+begin
+	result := Scaled2RawIntensity(fHdr, lScaled);
 end;
 
 procedure TNIfTI.InitFloat32(); //kDT_FLOAT
@@ -6505,7 +6562,6 @@ begin
         if (tarMat = fMat) and (tarDim.X = fDim.X) and (tarDim.Y = fDim.Y) and (tarDim.Z = fDim.Z) then exit;
      end;
      IsInterpolated := true;
-
      (*if fVolumesLoaded > 1 then begin
         showmessage('Fatal error: overlays can not have multiple volumes [yet]');
         exit;
@@ -6539,6 +6595,12 @@ begin
      out8 := TUInt8s(fRawVolBytes);
      for lXi := 0 to (i-1) do
          out8[lXi] := 0;
+     if ((dataType = kDT_SIGNED_SHORT) and (round(fHdr.glmin) = -32768) and (round(fHdr.glmax) = 32767)) then begin
+     	out16 := TInt16s(fRawVolBytes);
+        lYi :=  prod(tarDim);
+        for lXi := 0 to (lYi-1) do
+        	out16[lXi] := -32768;
+     end;
      //clipboard.AsText := format('%d %d', [prod(tarDim), lBPP]);
      in16 := TInt16s(in8);
      out16 := TInt16s(fRawVolBytes);

@@ -1,11 +1,11 @@
 object GLForm1: TGLForm1
-  Left = 332
-  Height = 662
+  Left = 269
+  Height = 693
   Top = 25
   Width = 916
   AllowDropFiles = True
   Caption = 'MRIcroGL'
-  ClientHeight = 662
+  ClientHeight = 693
   ClientWidth = 916
   Constraints.MinHeight = 20
   Constraints.MinWidth = 20
@@ -23,25 +23,25 @@ object GLForm1: TGLForm1
   LCLVersion = '2.3.0.0'
   object TopPanel: TPanel
     Left = 0
-    Height = 576
+    Height = 607
     Top = 0
     Width = 916
     Align = alClient
-    ClientHeight = 576
+    ClientHeight = 607
     ClientWidth = 916
     ParentFont = False
     TabOrder = 0
     object ToolPanel: TScrollBox
       Left = 1
-      Height = 574
+      Height = 605
       Top = 1
       Width = 268
       HorzScrollBar.Page = 1
       HorzScrollBar.Visible = False
-      VertScrollBar.Page = 574
+      VertScrollBar.Page = 605
       Align = alLeft
       BorderStyle = bsNone
-      ClientHeight = 574
+      ClientHeight = 605
       ClientWidth = 253
       ParentFont = False
       TabOrder = 0
@@ -1592,12 +1592,12 @@ object GLForm1: TGLForm1
     end
     object ScriptPanel: TPanel
       Left = 913
-      Height = 574
+      Height = 605
       Top = 1
       Width = 2
       Align = alRight
       BevelOuter = bvNone
-      ClientHeight = 574
+      ClientHeight = 605
       ClientWidth = 2
       Constraints.MinWidth = 2
       ParentFont = False
@@ -1605,12 +1605,12 @@ object GLForm1: TGLForm1
       OnDblClick = ScriptPanelDblClick
       object ScriptBox: TGroupBox
         Left = -8
-        Height = 574
+        Height = 605
         Top = 0
         Width = 10
         Align = alClient
         Caption = 'Scripting'
-        ClientHeight = 555
+        ClientHeight = 586
         ClientWidth = 0
         Constraints.MinWidth = 10
         ParentFont = False
@@ -1618,7 +1618,7 @@ object GLForm1: TGLForm1
         OnDblClick = ScriptPanelDblClick
         object ScriptMemo: TMemo
           Left = 0
-          Height = 349
+          Height = 380
           Top = 0
           Width = 0
           Align = alClient
@@ -1642,7 +1642,7 @@ object GLForm1: TGLForm1
         object ScriptOutputMemo: TMemo
           Left = 0
           Height = 200
-          Top = 355
+          Top = 386
           Width = 0
           Align = alBottom
           BorderStyle = bsNone
@@ -1659,7 +1659,7 @@ object GLForm1: TGLForm1
           Cursor = crVSplit
           Left = 0
           Height = 6
-          Top = 349
+          Top = 380
           Width = 0
           Align = alBottom
           ResizeAnchor = akBottom
@@ -1668,13 +1668,13 @@ object GLForm1: TGLForm1
     end
     object LeftSplitter: TSplitter
       Left = 269
-      Height = 574
+      Height = 605
       Top = 1
       Width = 6
     end
     object RightSplitter: TSplitter
       Left = 907
-      Height = 574
+      Height = 605
       Top = 1
       Width = 6
       Align = alRight
@@ -1682,7 +1682,7 @@ object GLForm1: TGLForm1
     end
     object CenterPanel: TPanel
       Left = 275
-      Height = 574
+      Height = 605
       Top = 1
       Width = 632
       Align = alClient
@@ -1695,7 +1695,7 @@ object GLForm1: TGLForm1
     Cursor = crVSplit
     Left = 0
     Height = 6
-    Top = 576
+    Top = 607
     Width = 916
     Align = alBottom
     MinSize = 4
@@ -1704,7 +1704,7 @@ object GLForm1: TGLForm1
   object BottomPanel: TPanel
     Left = 0
     Height = 80
-    Top = 582
+    Top = 613
     Width = 916
     Align = alBottom
     ClientHeight = 80
@@ -1742,6 +1742,7 @@ object GLForm1: TGLForm1
       Caption = 'Layer does not have clusters'
       ClientHeight = 78
       ClientWidth = 829
+      Constraints.MinWidth = 2
       ParentFont = False
       TabOrder = 2
       object ClusterView: TListView
@@ -2148,6 +2149,16 @@ object GLForm1: TGLForm1
         Caption = 'Add (Keep Previous Graphs)'
         OnClick = GraphOpenMenuClick
       end
+      object IntensityHistogamMenu: TMenuItem
+        Caption = 'Intensity Histogram'
+        ShortCut = 16457
+        OnClick = IntensityHistogamMenuClick
+      end
+      object IntensityHistogamOptionsMenu: TMenuItem
+        Tag = 1
+        Caption = 'Intensity Histogram with Options'
+        OnClick = IntensityHistogamMenuClick
+      end
       object GraphSaveMenu: TMenuItem
         Caption = 'Save As Text'
         OnClick = GraphSaveMenuClick
@@ -2206,6 +2217,30 @@ object GLForm1: TGLForm1
           Tag = 4
           AutoCheck = True
           Caption = 'Percent Signal'
+          GroupIndex = 211
+          RadioItem = True
+          OnClick = GraphScaleClick
+        end
+        object GraphSqrtMenu: TMenuItem
+          Tag = 5
+          AutoCheck = True
+          Caption = 'Square Root'
+          GroupIndex = 211
+          RadioItem = True
+          OnClick = GraphScaleClick
+        end
+        object GraphLognMenu: TMenuItem
+          Tag = 6
+          AutoCheck = True
+          Caption = 'Log (ln)'
+          GroupIndex = 211
+          RadioItem = True
+          OnClick = GraphScaleClick
+        end
+        object GraphLog10Menu: TMenuItem
+          Tag = 7
+          AutoCheck = True
+          Caption = 'Log 10'
           GroupIndex = 211
           RadioItem = True
           OnClick = GraphScaleClick
@@ -2444,6 +2479,7 @@ object GLForm1: TGLForm1
       object ColorEditorMenu: TMenuItem
         AutoCheck = True
         Caption = 'Color Editor'
+        ShortCut = 16458
         OnClick = ColorEditorMenuClick
       end
       object ClrbarMenu: TMenuItem

@@ -1,9 +1,9 @@
-REM COMPILE MRIcroGL12 paths must be changed as required
-cd d:\pas\MRIcroGL12
+REM COMPILE MRIcroGL paths must be changed as required
+cd d:\pas\MRIcroGL
 REM optional fastgz
 REM copy fastgz.inc opts.inc /y
 d:\lazarus\lazbuild --cpu=x86_64 -B MRIcroGL.lpi
-move /Y "D:\pas\MRIcroGL12\MRIcroGL.exe" "d:\neuro\mricrogl\MRIcroGL.exe"
+move /Y "D:\pas\MRIcroGL\MRIcroGL.exe" "d:\neuro\mricrogl\MRIcroGL.exe"
 
 del /S *.~*
 del /S .DS_STORE

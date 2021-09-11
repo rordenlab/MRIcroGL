@@ -1,7 +1,7 @@
 object HdrForm: THdrForm
   Left = 723
   Height = 336
-  Top = 106
+  Top = 25
   Width = 557
   AutoSize = True
   BorderWidth = 2
@@ -15,7 +15,7 @@ object HdrForm: THdrForm
   OnHide = FormHide
   OnShow = FormShow
   Position = poScreenCenter
-  LCLVersion = '2.1.0.0'
+  LCLVersion = '2.3.0.0'
   object PageControl1: TPageControl
     Left = 6
     Height = 302
@@ -45,7 +45,6 @@ object HdrForm: THdrForm
         BorderSpacing.Left = 6
         BorderSpacing.Top = 6
         Caption = 'Header Type'
-        ParentColor = False
       end
       object DimLabel: TLabel
         AnchorSideLeft.Control = DimensionSheet
@@ -58,7 +57,6 @@ object HdrForm: THdrForm
         BorderSpacing.Left = 10
         BorderSpacing.Top = 6
         Caption = 'Dimension'
-        ParentColor = False
       end
       object Label2: TLabel
         AnchorSideLeft.Control = DimLabel
@@ -69,7 +67,6 @@ object HdrForm: THdrForm
         Top = 54
         Width = 45
         Caption = 'I Space'
-        ParentColor = False
       end
       object Label3: TLabel
         AnchorSideLeft.Control = Label2
@@ -80,7 +77,6 @@ object HdrForm: THdrForm
         Top = 80
         Width = 48
         Caption = 'J Space'
-        ParentColor = False
       end
       object Label4: TLabel
         AnchorSideLeft.Control = Label2
@@ -91,7 +87,6 @@ object HdrForm: THdrForm
         Top = 106
         Width = 50
         Caption = 'K Space'
-        ParentColor = False
       end
       object Label8: TLabel
         AnchorSideLeft.Control = DimLabel
@@ -102,7 +97,6 @@ object HdrForm: THdrForm
         Top = 236
         Width = 28
         Caption = 'Data'
-        ParentColor = False
       end
       object Label7: TLabel
         AnchorSideLeft.Control = PixDim7
@@ -115,7 +109,6 @@ object HdrForm: THdrForm
         Width = 38
         BorderSpacing.Left = 30
         Caption = 'Offset'
-        ParentColor = False
       end
       object Label44: TLabel
         AnchorSideLeft.Control = Label2
@@ -126,7 +119,6 @@ object HdrForm: THdrForm
         Top = 132
         Width = 30
         Caption = 'Time'
-        ParentColor = False
       end
       object Label29: TLabel
         AnchorSideLeft.Control = Label2
@@ -137,7 +129,6 @@ object HdrForm: THdrForm
         Top = 158
         Width = 47
         Caption = '5th Dim'
-        ParentColor = False
       end
       object Label41: TLabel
         AnchorSideLeft.Control = Label2
@@ -148,7 +139,6 @@ object HdrForm: THdrForm
         Top = 184
         Width = 48
         Caption = '6th Dim'
-        ParentColor = False
       end
       object Label42: TLabel
         AnchorSideLeft.Control = Label2
@@ -158,7 +148,6 @@ object HdrForm: THdrForm
         Top = 208
         Width = 47
         Caption = '7th Dim'
-        ParentColor = False
       end
       object HeaderMagicDrop: TComboBox
         AnchorSideLeft.Control = Label21
@@ -507,7 +496,6 @@ object HdrForm: THdrForm
         Top = 30
         Width = 42
         Caption = 'Length'
-        ParentColor = False
       end
       object SpacingLabel: TLabel
         AnchorSideLeft.Control = Xmm
@@ -517,7 +505,6 @@ object HdrForm: THdrForm
         Top = 30
         Width = 49
         Caption = 'Spacing'
-        ParentColor = False
       end
       object UnitLabel: TLabel
         AnchorSideLeft.Control = xyzt_sizeDrop
@@ -527,7 +514,6 @@ object HdrForm: THdrForm
         Top = 30
         Width = 25
         Caption = 'Unit'
-        ParentColor = False
       end
     end
     object ReorientSheet: TTabSheet
@@ -543,7 +529,6 @@ object HdrForm: THdrForm
         Top = 138
         Width = 9
         Caption = 'X'
-        ParentColor = False
       end
       object Label36: TLabel
         AnchorSideLeft.Control = Label46
@@ -554,7 +539,6 @@ object HdrForm: THdrForm
         Top = 164
         Width = 8
         Caption = 'Y'
-        ParentColor = False
       end
       object Label37: TLabel
         AnchorSideLeft.Control = Label46
@@ -565,7 +549,6 @@ object HdrForm: THdrForm
         Top = 190
         Width = 9
         Caption = 'Z'
-        ParentColor = False
       end
       object Label39: TLabel
         AnchorSideLeft.Control = Label46
@@ -576,7 +559,6 @@ object HdrForm: THdrForm
         Top = 86
         Width = 58
         Caption = 'Q Offsets'
-        ParentColor = False
       end
       object Label40: TLabel
         AnchorSideLeft.Control = Label46
@@ -587,7 +569,6 @@ object HdrForm: THdrForm
         Top = 60
         Width = 74
         Caption = 'Quaternions'
-        ParentColor = False
       end
       object Label46: TLabel
         AnchorSideLeft.Control = Label38
@@ -599,7 +580,6 @@ object HdrForm: THdrForm
         Width = 97
         BorderSpacing.Left = 6
         Caption = 'qFactor [1 or -1]'
-        ParentColor = False
       end
       object Label38: TLabel
         AnchorSideLeft.Control = ReorientSheet
@@ -611,7 +591,6 @@ object HdrForm: THdrForm
         Width = 143
         BorderSpacing.Left = 6
         Caption = 'Quaternion parameters '
-        ParentColor = False
       end
       object Label47: TLabel
         AnchorSideLeft.Control = Label38
@@ -622,7 +601,6 @@ object HdrForm: THdrForm
         Top = 112
         Width = 112
         Caption = 'Affine parameters '
-        ParentColor = False
       end
       object QFormDrop: TComboBox
         AnchorSideLeft.Control = Label38
@@ -963,7 +941,6 @@ object HdrForm: THdrForm
         Top = 130
         Width = 58
         Caption = 'Maximum'
-        ParentColor = False
       end
       object MinLabel: TLabel
         AnchorSideLeft.Control = SlopeLabel
@@ -974,7 +951,6 @@ object HdrForm: THdrForm
         Top = 104
         Width = 55
         Caption = 'Minimum'
-        ParentColor = False
       end
       object SlopeLabel: TLabel
         AnchorSideLeft.Control = CalLabel
@@ -986,7 +962,6 @@ object HdrForm: THdrForm
         Width = 34
         BorderSpacing.Left = 6
         Caption = 'Slope'
-        ParentColor = False
       end
       object InterceptLabel: TLabel
         AnchorSideLeft.Control = SlopeLabel
@@ -997,7 +972,6 @@ object HdrForm: THdrForm
         Top = 56
         Width = 55
         Caption = 'Intercept'
-        ParentColor = False
       end
       object CalLabel: TLabel
         AnchorSideLeft.Control = IntensitySheet
@@ -1009,7 +983,6 @@ object HdrForm: THdrForm
         BorderSpacing.Left = 4
         BorderSpacing.Top = 6
         Caption = 'Calibration Scaling'
-        ParentColor = False
       end
       object DisplayLabel: TLabel
         AnchorSideLeft.Control = CalLabel
@@ -1021,7 +994,6 @@ object HdrForm: THdrForm
         Width = 192
         BorderSpacing.Top = 6
         Caption = 'Display Range (calibrated units)'
-        ParentColor = False
       end
       object cmax: TFloatSpinEdit
         AnchorSideLeft.Control = cmin
@@ -1098,7 +1070,6 @@ object HdrForm: THdrForm
         Width = 53
         BorderSpacing.Left = 6
         Caption = 'Intention'
-        ParentColor = False
       end
       object Intent1Label: TLabel
         AnchorSideLeft.Control = IntentLabel
@@ -1110,7 +1081,6 @@ object HdrForm: THdrForm
         Width = 72
         BorderSpacing.Left = 6
         Caption = 'Parameter 1'
-        ParentColor = False
       end
       object Intent2Label: TLabel
         AnchorSideLeft.Control = Intent1Label
@@ -1121,7 +1091,6 @@ object HdrForm: THdrForm
         Top = 60
         Width = 74
         Caption = 'Parameter 2'
-        ParentColor = False
       end
       object Intent3Label: TLabel
         AnchorSideLeft.Control = Intent1Label
@@ -1132,7 +1101,6 @@ object HdrForm: THdrForm
         Top = 86
         Width = 74
         Caption = 'Parameter 3'
-        ParentColor = False
       end
       object IntentCodeDrop: TComboBox
         AnchorSideTop.Control = StatSheet
@@ -1147,7 +1115,7 @@ object HdrForm: THdrForm
         Items.Strings = (
           'Not statistics'
           'Correlation coefficient '
-          'T-testation coefficient '
+          'T-test '
           'F-test'
           'Z-score'
           'Chi-squared'
@@ -1255,7 +1223,6 @@ object HdrForm: THdrForm
         Top = 112
         Width = 67
         Caption = 'Slice Order'
-        ParentColor = False
       end
       object TimeLabel: TLabel
         AnchorSideLeft.Control = fmriSheet
@@ -1267,7 +1234,6 @@ object HdrForm: THdrForm
         Width = 71
         BorderSpacing.Left = 6
         Caption = 'Time Offset'
-        ParentColor = False
       end
       object DurationLabel: TLabel
         AnchorSideLeft.Control = TimeLabel
@@ -1278,7 +1244,6 @@ object HdrForm: THdrForm
         Top = 34
         Width = 83
         Caption = 'Slice duration'
-        ParentColor = False
       end
       object StartLabel: TLabel
         AnchorSideLeft.Control = TimeLabel
@@ -1289,7 +1254,6 @@ object HdrForm: THdrForm
         Top = 60
         Width = 63
         Caption = 'Slice Start'
-        ParentColor = False
       end
       object EndLabel: TLabel
         AnchorSideLeft.Control = TimeLabel
@@ -1300,7 +1264,6 @@ object HdrForm: THdrForm
         Top = 86
         Width = 56
         Caption = 'Slice End'
-        ParentColor = False
       end
       object FreqLabel: TLabel
         AnchorSideLeft.Control = TimeLabel
@@ -1311,7 +1274,6 @@ object HdrForm: THdrForm
         Top = 138
         Width = 131
         Caption = 'Frequency Dimension'
-        ParentColor = False
       end
       object PhaseLabel: TLabel
         AnchorSideLeft.Control = TimeLabel
@@ -1322,7 +1284,6 @@ object HdrForm: THdrForm
         Top = 164
         Width = 104
         Caption = 'Phase Dimension'
-        ParentColor = False
       end
       object SliceLabel: TLabel
         AnchorSideLeft.Control = TimeLabel
@@ -1333,7 +1294,6 @@ object HdrForm: THdrForm
         Top = 190
         Width = 96
         Caption = 'Slice Dimension'
-        ParentColor = False
       end
       object SliceCodeDrop: TComboBox
         AnchorSideLeft.Control = OrderLabel
@@ -1497,7 +1457,6 @@ object HdrForm: THdrForm
         Top = 29
         Width = 61
         Caption = 'Data Type'
-        ParentColor = False
       end
       object IntentStrLabel: TLabel
         AnchorSideLeft.Control = OptionalSheet
@@ -1509,7 +1468,6 @@ object HdrForm: THdrForm
         Width = 53
         BorderSpacing.Left = 6
         Caption = 'Intention'
-        ParentColor = False
       end
       object ExtentLabel: TLabel
         AnchorSideLeft.Control = GMinLabel
@@ -1520,7 +1478,6 @@ object HdrForm: THdrForm
         Top = 187
         Width = 45
         Caption = 'Extents'
-        ParentColor = False
       end
       object SessErrLabel: TLabel
         AnchorSideLeft.Control = GMinLabel
@@ -1531,7 +1488,6 @@ object HdrForm: THdrForm
         Top = 165
         Width = 81
         Caption = 'Session Error'
-        ParentColor = False
       end
       object RegLabel: TLabel
         AnchorSideLeft.Control = GMinLabel
@@ -1542,7 +1498,6 @@ object HdrForm: THdrForm
         Top = 209
         Width = 80
         Caption = 'Regular [114]'
-        ParentColor = False
       end
       object GMinLabel: TLabel
         AnchorSideLeft.Control = IntentStrLabel
@@ -1553,7 +1508,6 @@ object HdrForm: THdrForm
         Top = 121
         Width = 35
         Caption = 'G Min'
-        ParentColor = False
       end
       object GMaxLabel: TLabel
         AnchorSideLeft.Control = GMinLabel
@@ -1564,7 +1518,6 @@ object HdrForm: THdrForm
         Top = 143
         Width = 38
         Caption = 'G Max'
-        ParentColor = False
       end
       object AuxLabel: TLabel
         AnchorSideLeft.Control = IntentStrLabel
@@ -1575,7 +1528,6 @@ object HdrForm: THdrForm
         Top = 98
         Width = 47
         Caption = 'Aux File'
-        ParentColor = False
       end
       object DBLabel: TLabel
         AnchorSideLeft.Control = IntentStrLabel
@@ -1586,7 +1538,6 @@ object HdrForm: THdrForm
         Top = 75
         Width = 57
         Caption = 'DB Name'
-        ParentColor = False
       end
       object NotesLabel: TLabel
         AnchorSideLeft.Control = IntentStrLabel
@@ -1597,7 +1548,6 @@ object HdrForm: THdrForm
         Top = 52
         Width = 69
         Caption = 'Description'
-        ParentColor = False
       end
       object intent_nameEdit: TEdit
         AnchorSideLeft.Control = SessErrLabel
