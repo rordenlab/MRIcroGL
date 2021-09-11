@@ -750,7 +750,7 @@ end;
 procedure THdrForm.HeaderMagicDropSelect(Sender: TObject);
 var lHdrIndex: integer;
 begin
-     lHdrIndex := HeaderMagicDrop.ItemIndex; //0=unkown, 1=nifti hdr+img, 2=nifti .nii embedded
+     lHdrIndex := HeaderMagicDrop.ItemIndex; //0=unknown, 1=nifti hdr+img, 2=nifti .nii embedded
      if lHdrIndex = 1 then begin//nifti hdr+img, offset must be = 0
         OffsetEdit.MinValue := 0;
         OffsetEdit.Enabled := false;

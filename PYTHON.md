@@ -63,7 +63,7 @@ colorbarposition (built-in function):
 colorbarsize (built-in function):
  colorbarsize(p) -> Change width of color bar f is a value 0.01..0.5 that specifies the fraction of the screen used by the colorbar.
 colorfromzero (built-in function):
- colorfromzero(layer, isFromZero) -> Color scheme display range from zero (1) or from treshold value (0)?
+ colorfromzero(layer, isFromZero) -> Color scheme display range from zero (1) or from threshold value (0)?
 colorname (built-in function):
  colorname(layer, colorName) -> Set the colorscheme for the target overlay (0=background layer) to a specified name.
 cutout (built-in function):

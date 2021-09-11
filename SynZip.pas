@@ -146,7 +146,7 @@ unit SynZip;
    - fixed TZipWrite.AddDeflated() to handle data > 200 MB - thanks jpdk!
    - fixed unexpected error when adding files e.g. via TZipWrite.CreateForm()
      to an empty archive - thanks Gigo for the feedback!
-   - addded CompressZLib() function, as expected by web browsers
+   - added CompressZLib() function, as expected by web browsers
    - any zip-related error will now raise a ESynZipException
    - fixed ticket [2e22dd25aa] about TZipRead.UnMap
    - fixed ticket [431b8b3dd9d] about gzread() overoptimistic assertion
@@ -331,13 +331,13 @@ function UncompressString(const data: ZipString) : ZipString;
 
 /// (un)compress a data content using the gzip algorithm
 // - as expected by THttpSocket.RegisterCompress
-// - will use internaly a level compression of 1, i.e. fastest available (content
+// - will use internally a level compression of 1, i.e. fastest available (content
 // of 4803 bytes is compressed into 700, and time is 440 us instead of 220 us)
 function CompressGZip(var DataRawByteString; Compress: boolean): AnsiString;
 
 /// (un)compress a data content using the Deflate algorithm (i.e. "raw deflate")
 // - as expected by THttpSocket.RegisterCompress
-// - will use internaly a level compression of 1, i.e. fastest available (content
+// - will use internally a level compression of 1, i.e. fastest available (content
 // of 4803 bytes is compressed into 700, and time is 440 us instead of 220 us)
 // - deflate content encoding is pretty inconsistent in practice, so slightly
 // slower CompressGZip() is preferred - http://stackoverflow.com/a/9186091/458259
@@ -345,7 +345,7 @@ function CompressDeflate(var DataRawByteString; Compress: boolean): AnsiString;
 
 /// (un)compress a data content using the zlib algorithm
 // - as expected by THttpSocket.RegisterCompress
-// - will use internaly a level compression of 1, i.e. fastest available (content
+// - will use internally a level compression of 1, i.e. fastest available (content
 // of 4803 bytes is compressed into 700, and time is 440 us instead of 220 us)
 // - zlib content encoding is pretty inconsistent in practice, so slightly
 // slower CompressGZip() is preferred - http://stackoverflow.com/a/9186091/458259
@@ -364,7 +364,7 @@ type
 function CRC32string(const aString: ZipString): cardinal;
 
 type
-  /// exception raised internaly in case of Zip errors
+  /// exception raised internally in case of Zip errors
   ESynZipException = class(Exception);
 
 {$ifdef USEZLIBSSE} // statically linked with new 64-bit TZStream
@@ -642,7 +642,7 @@ type
     /// will uncompress into dest/destsize buffer as supplied to ZStreamStart
     // - return the number of bytes uncompressed, 0 if the input stream is finished
     function ZStreamNext: integer;
-    /// any successfull call to ZStreamStart should always run ZStreamDone
+    /// any successful call to ZStreamStart should always run ZStreamDone
     // - return true if the crc and the uncompressed size are ok
     function ZStreamDone: boolean;
   end;
@@ -664,7 +664,7 @@ type
   /// a simple TStream descendant for compressing data into a stream
   // - this simple version don't use any internal buffer, but rely
   // on Zip library buffering system
-  // - the version in SynZipFiles is much more powerfull, but this one
+  // - the version in SynZipFiles is much more powerful, but this one
   // is sufficient for most common cases (e.g. for on the fly .gz backup)
   TSynZipCompressor = class(TStream)
   private
@@ -676,7 +676,7 @@ type
     fBufferOut: array[word] of byte; // a 64 KB buffer
     function FlushBufferOut: integer;
   public
-    /// create a compression stream, writting the compressed data into
+    /// create a compression stream, writing the compressed data into
     // the specified stream (e.g. a file stream)
     constructor Create(outStream: TStream; CompressionLevel: Integer;
       Format: TSynZipCompressorFormat = szcfRaw);
@@ -825,7 +825,7 @@ type
 
   /// write-only access for creating a .zip archive file
   // - not to be used to update a .zip file, but to create a new one
-  // - update can be done manualy by using a TZipRead instance and the
+  // - update can be done manually by using a TZipRead instance and the
   // AddFromZip() method
   TZipWrite = class(TZipWriteAbstract)
   protected

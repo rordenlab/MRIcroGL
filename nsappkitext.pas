@@ -52,7 +52,7 @@ begin
     else ap := AAppearance;
 
   cls := NSClassFromString( NSSTR('NSAppearance'));
-  if not Assigned(cls) then Exit; // not suppored in OSX version
+  if not Assigned(cls) then Exit; // not supported in OSX version
 
   apr := objc_msgSend(cls, ObjCSelector('appearanceNamed:'), NSSTR(@ap[1]));
   if not Assigned(apr) then Exit;

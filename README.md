@@ -98,7 +98,7 @@ One can also make minor adjustments to these command line options.
 The MRIcroGL executable has more functionality if it can access its `Resources` folder. This folder includes color lookup tables (`lut` folder), Python scripts (`script`), Material Capture (`matcap`), GLSL Shaders (`shader`), default NIfTI images (`standard`), NIfTI atlases (`atlas`), as well as fonts and icons. Therefore, for full functionality, you want the executable to have access to this folder.
  - For MacOS, the `Resources` folder is placed inside the application package bundle. In other words, if your application is `MRIcroGL.app`, the software expects `MRIcroGL.app/Resources`.
  - For Windows, place the `Resources` folder in the same folder as `MRIcroGL.exe`.
- - For Linux, you can place the `Resources` folder in the same folder as the `MRIcroGL` exectuable. If this fails, it will look for the folder `$MRICROGL_DIR` where `$MRICROGL_DIR` is an environment variable. It will then look a folder in the following order (for the first pass, where the applications actual name is used `MRIcroGL_QT`, and for a second pass using `MRIcroGL`):
+ - For Linux, you can place the `Resources` folder in the same folder as the `MRIcroGL` executable. If this fails, it will look for the folder `$MRICROGL_DIR` where `$MRICROGL_DIR` is an environment variable. It will then look a folder in the following order (for the first pass, where the applications actual name is used `MRIcroGL_QT`, and for a second pass using `MRIcroGL`):
  ```
   /opt/MRIcroGL/Resources
   /opt/MRIcroGL

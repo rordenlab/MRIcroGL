@@ -105,7 +105,7 @@ introducing new functionality between major revisions (to avoid mid-version
 changes in the PYTHON_API_VERSION).
 
 Arbitration of the flag bit positions will need to be coordinated among
-all extension writers who publically release their extensions (this will
+all extension writers who publicly release their extensions (this will
 be fewer than you might expect!)..
 
 Python 1.5.2 introduced the bf_getcharbuffer slot into PyBufferProcs.
@@ -807,7 +807,7 @@ type
     next           : PPyInterpreterState;
     tstate_head    : PPyThreadState;
 
-//  The strucure has changed between versions beyond this point.
+//  The structure has changed between versions beyond this point.
 //  Not safe to use members
 //    modules        : PPyObject;
 //    sysdict        : PPyObject;
@@ -832,7 +832,7 @@ type
     interp         : PPyInterpreterState;
     interp34       : PPyInterpreterState;
 
-//  The strucure has changed between versions beyond this point.
+//  The structure has changed between versions beyond this point.
 //  Not safe to use members
 //
 //    frame          : PPyFrameObject;

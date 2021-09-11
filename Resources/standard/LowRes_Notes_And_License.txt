@@ -9,5 +9,5 @@ The MNI152 image is a non-linear average of 152 individuals. Note that due to th
 
 The volume CT_Philips is coutresy of Philips Medical and described here https://www.nitrc.org/plugins/mwiki/index.php/dcm2nii:MainPage#Computed_Tomography_.28CT.2C_CAT.29
 
-The volume CT_Abdo is provided by Steve Pieper and is availible in NRRD format at https://www.slicer.org/wiki/File:CTA-cardio.nrrd
+The volume CT_Abdo is provided by Steve Pieper and is available in NRRD format at https://www.slicer.org/wiki/File:CTA-cardio.nrrd
 

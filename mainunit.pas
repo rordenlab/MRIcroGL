@@ -3125,7 +3125,7 @@ var
   methods: array[0..69] of TPythonBridgeMethod = (
 (name: 'atlashide'; callback: @PyATLASHIDE; help: ' atlashide(layer, indices...) -> Hide all (e.g. "atlashide(1)") or some (e.g. "atlashide(1, (17, 22))") regions of an atlas.'),
 (name: 'atlaslabels'; callback: @PyATLASLABELS; help: ' atlasmaxindex(layer) -> Returns string listing all regions in an atlas'),
-(name: 'atlasmaxindex'; callback: @PyATLASMAXINDEX; help: ' atlasmaxindex(layer) -> Returns maximum region humber in specified atlas. For example, if you load the CIT168 atlas (which has 15 regions) as your background image, then atlasmaxindex(0) will return 15.'),
+(name: 'atlasmaxindex'; callback: @PyATLASMAXINDEX; help: ' atlasmaxindex(layer) -> Returns maximum region number in specified atlas. For example, if you load the CIT168 atlas (which has 15 regions) as your background image, then atlasmaxindex(0) will return 15.'),
 (name: 'atlasshow'; callback: @PyATLASSHOW; help: ' atlasshow(layer, indices...) -> Show all (e.g. "atlasshow(1)") or some (e.g. "atlasshow(1, (17, 22))") regions of an atlas.'),
 (name: 'azimuthelevation'; callback: @PyAZIMUTHELEVATION; help: ' azimuthelevation(azi, elev) -> Sets the render camera location.'),
 (name: 'backcolor'; callback: @PyBACKCOLOR; help: ' backcolor(r, g, b) -> changes the background color, for example backcolor(255, 0, 0) will set a bright red background'),
@@ -3137,7 +3137,7 @@ var
 (name: 'colorbarposition'; callback: @PyCOLORBARPOSITION; help: ' colorbarposition(p) -> Set colorbar position (0=off, 1=top, 2=right).'),
 (name: 'colorbarsize'; callback: @PyCOLORBARSIZE; help: ' colorbarsize(p) -> Change width of color bar f is a value 0.01..0.5 that specifies the fraction of the screen used by the colorbar.'),
 (name: 'coloreditor'; callback: @PyCOLOREDITOR; help: ' coloreditor(s) -> Show (1) or hide (0) color editor and histogram.'),
-(name: 'colorfromzero'; callback: @PyCOLORFROMZERO; help: ' colorfromzero(layer, isFromZero) -> Color scheme display range from zero (1) or from treshold value (0)?'),
+(name: 'colorfromzero'; callback: @PyCOLORFROMZERO; help: ' colorfromzero(layer, isFromZero) -> Color scheme display range from zero (1) or from threshold value (0)?'),
 (name: 'colorname'; callback: @PyCOLORNAME; help: ' colorname(colorName) -> Loads  the requested colorscheme for the background image.'),
 (name: 'colornode'; callback: @PyCOLORNODE; help: ' colornode(layer, index, intensity, r, g, b, a) -> Adjust color scheme for image.'),
 (name: 'cutout'; callback: @PyCUTOUT; help: ' cutout(L,A,S,R,P,I) -> Remove sector from volume.'),
@@ -3178,7 +3178,7 @@ var
 (name: 'shaderquality1to10'; callback: @PySHADERQUALITY1TO10; help: ' shaderquality1to10(i) -> Renderings can be fast (1) or high quality (10), medium values (6) balance speed and quality.'),
 (name: 'shaderupdategradients'; callback: @PySHADERUPDATEGRADIENTS; help: ' shaderupdategradients() -> Recalculate volume properties.'),
 (name: 'sharpen'; callback: @PySHARPEN; help: ' sharpen() -> apply unsharp mask to background volume to enhance edges'),
-(name: 'smooth'; callback: @PySMOOTH2D; help: ' smooth2D(s) -> make 2D images blurry (linear interpolation, 1) or jagged (nearest neightbor, 0).'),
+(name: 'smooth'; callback: @PySMOOTH2D; help: ' smooth2D(s) -> make 2D images blurry (linear interpolation, 1) or jagged (nearest neighbor, 0).'),
 (name: 'sobel'; callback: @PySOBEL; help: ' sobel(layer) -> Creates new layer based on Sobel edge map of selected layer.'),
 (name: 'toolformvisible'; callback: @PyTOOLFORMVISIBLE; help: ' toolformvisible(visible) -> Show (1) or hide (0) the tool panel.'),
 (name: 'version'; callback: @PyVERSION; help: ' version() -> Return the version of MRIcroGL.'),
@@ -3292,7 +3292,7 @@ begin
     gPyRunning := false;
   end;
   if gPyRunning then
-     ScriptOutputMemo.lines.Add('Python Succesfully Executed');
+     ScriptOutputMemo.lines.Add('Python Successfully Executed');
   gPyRunning := false;
   GLForm1.ScriptingRunMenu.caption := 'Run';
   if  GlForm1.ScriptOutputMemo.Tag = 123 then

@@ -319,7 +319,7 @@ var
   nii: TNIfTI;
   backColor : TRGBA;
 begin
-     //n.b. assumes caller closed previously editted drawing!
+     //n.b. assumes caller closed previously edited drawing!
      result :=  (fileexists(niftiFileName));
      if not result then exit;
      backColor := setRGBA(0,0,0,0);

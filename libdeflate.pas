@@ -20,7 +20,7 @@ function UncompressMemX(src, dst: pointer; srcLen, dstLen: PtrInt; out cmpBytes:
 implementation //535
 
 type
-  /// opaque pointer maintaing a libdeflate decompressor instance
+  /// opaque pointer maintaining a libdeflate decompressor instance
   PLibDeflateDecompressor = type pointer;
 	  
 type

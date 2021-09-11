@@ -114,7 +114,7 @@ Type
         procedure InitInt16();
         procedure InitFloat32();
         procedure DetectV1();
-        //display functions apply windo min/max to generate image with desired brightness/contrast
+        //display functions apply window min/max to generate image with desired brightness/contrast
         procedure SetDisplayMinMaxRGB24();
         //procedure SetDisplayMinMaxRGBV1();
         procedure LoadRGBVector();
@@ -2854,7 +2854,7 @@ begin
      h.srow_z[1] := 0;
      h.srow_z[2] := h.pixdim[3];
      h.srow_z[3] := -(a.originator[3]-1) *h.pixdim[3];
-     printf('Warning: unable to determin left from right side SPM-style for Analyze images');
+     printf('Warning: unable to determine left from right side SPM-style for Analyze images');
 end;
 
 procedure CheckXForm(var lHdr: TNIfTIHdr);

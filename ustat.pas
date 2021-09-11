@@ -49,7 +49,7 @@ var
    k1     : double;   // adjusted degrees of freedom
    sum    : double;   // temporary storage for partial sums
    term   : double;   // term of series
-   x1     : double;   // adjusted argument of funtion
+   x1     : double;   // adjusted argument of function
    chi2prob : double; // chi-squared probability
 begin
      // the distribution function of the chi-squared distribution based on k d.f.

@@ -7,7 +7,7 @@ Running the `help` menu item listed in the `Scripting` Menu's `Templates` menu w
  - atlaslabels (built-in function): 
  atlasmaxindex(layer) -> Returns string listing all regions in an atlas
  - atlasmaxindex (built-in function): 
- atlasmaxindex(layer) -> Returns maximum region humber in specified atlas. For example, if you load the CIT168 atlas (which has 15 regions) as your background image, then atlasmaxindex(0) will return 15.
+ atlasmaxindex(layer) -> Returns maximum region number in specified atlas. For example, if you load the CIT168 atlas (which has 15 regions) as your background image, then atlasmaxindex(0) will return 15.
  - atlasshow (built-in function): 
  atlasshow(layer, indices...) -> Show all (e.g. "atlasshow(1)") or some (e.g. "atlasshow(1, (17, 22))") regions of an atlas.
  - azimuthelevation (built-in function): 
@@ -31,7 +31,7 @@ Running the `help` menu item listed in the `Scripting` Menu's `Templates` menu w
  - coloreditor (built-in function): 
  coloreditor(s) -> Show (1) or hide (0) color editor and histogram.
  - colorfromzero (built-in function): 
- colorfromzero(layer, isFromZero) -> Color scheme display range from zero (1) or from treshold value (0)?
+ colorfromzero(layer, isFromZero) -> Color scheme display range from zero (1) or from threshold value (0)?
  - colorname (built-in function): 
  colorname(layer, colorName) -> Set the colorscheme for the target overlay (0=background layer) to a specified name.
  - colornode (built-in function): 
@@ -114,7 +114,7 @@ overlaymaskwithbackground(v) -> hide (1) or show (0) overlay voxels that are tra
  - sharpen (built-in function): 
  sharpen() -> apply unsharp mask to background volume to enhance edges
  - smooth (built-in function): 
- smooth2D(s) -> make 2D images blurry (linear interpolation, 1) or jagged (nearest neightbor, 0).
+ smooth2D(s) -> make 2D images blurry (linear interpolation, 1) or jagged (nearest neighbor, 0).
  - toolformvisible (built-in function): 
  toolformvisible(visible) -> Show (1) or hide (0) the tool panel.
  - version (built-in function): 
@@ -137,5 +137,4 @@ overlaymaskwithbackground(v) -> hide (1) or show (0) overlay voxels that are tra
  zoomcenter(x,y,z) -> Set center of expansion for zoom scale (values in range 0..1 with 0.5 in volume center).
  - zoomscale (built-in function): 
  zoomscale2D(z) -> Enlarge 2D image (range 1..6).
-Python Succesfully Executed
-
+Python Successfully Executed
