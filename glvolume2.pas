@@ -2871,12 +2871,17 @@ begin
   LoadTexture(vol, false);
   if (intensityTexture3D = 0) then
     exit;
+  if (widthHeightLeft.y < 1) or (widthHeightLeft.x < 1) then
+  	exit;
   {$IFDEF MTX}
   modelMatrix := fModelMatrix;
   {$ELSE}
   modelMatrix := TMat4.Identity;
   modelMatrix *= TMat4.Translate(0, 0, -fDistance);
-  modelMatrix *= TMat4.RotateX(-DegToRad(90-fElevation));
+  if (Vol.Dim.z < 2) and  (abs(fElevation) < 0.1) then
+    modelMatrix *= TMat4.RotateX(-DegToRad(90.1))
+  else
+  	modelMatrix *= TMat4.RotateX(-DegToRad(90-fElevation));
   modelMatrix *= TMat4.RotateZ(DegToRad(fAzimuth));
   modelMatrix *= TMat4.RotateX(DegToRad(fPitch));
   {$ENDIF}
@@ -2900,6 +2905,7 @@ begin
   mvp := modelViewProjectionMatrix;
   viewportXYWH := vec4(widthHeightLeft.z, 0, widthHeightLeft.x, widthHeightLeft.y);
   //printf(format('viewport %g %g %g %g', [viewportXYWH.x, viewportXYWH.y, viewportXYWH.z, viewportXYWH.w]));
+  //printf(format('volScale %g %g %g', [vol.Scale.X, vol.Scale.Y, vol.Scale.Z]));
   //viewportXYWH: TVec4;
   {$ENDIF}
   glEnable(GL_DEPTH_TEST);
@@ -3040,7 +3046,7 @@ begin
   //draw color editor
   {$IFDEF VIEW2D}{$IFDEF LINE3D}
   if ((not isDepthShader) and (widthHeightLeft.z <> 0) and (slices2D.LineWidth > 0.0)) then begin
-    glUseProgram(programLine3D);
+  	glUseProgram(programLine3D);
     glUniformMatrix4fv(mvpLine3DLoc, 1, GL_FALSE, @modelViewProjectionMatrix);
 
     glEnable(GL_DEPTH_TEST);

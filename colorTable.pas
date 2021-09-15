@@ -390,8 +390,6 @@ begin
              CLUT.nodes[n].rgba.r := (CLUT.nodes[n-1].rgba.r + CLUT.nodes[n+1].rgba.r) div 2;
              CLUT.nodes[n].rgba.g := (CLUT.nodes[n-1].rgba.g + CLUT.nodes[n+1].rgba.g) div 2;
              CLUT.nodes[n].rgba.b := (CLUT.nodes[n-1].rgba.b + CLUT.nodes[n+1].rgba.b) div 2;
-
-
           end;
      end;
     GenerateLUT();//CLUT,fLUT);

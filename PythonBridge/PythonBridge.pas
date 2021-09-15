@@ -1,8 +1,6 @@
 {$mode objfpc}
 {$assertions on}
-{$ifdef windows}
-  {$define PYTHON_DYNAMIC}
-{$endif}
+{$include pyopts.inc} //for  define PYTHON_DYNAMIC
 
 
 
@@ -95,6 +93,61 @@ end;
 Function  SetDllDirectory(lpPathName: LPCTSTR):LongBool; stdcall; external 'kernel32.dll' name 'SetDllDirectoryA'; //uses add windows,sysutils,
 {$endif}
 
+{$ifdef linux} {$ifdef PYTHON_DYNAMIC}
+function findLibDebian(base: string): string;
+//https://matthew-brett.github.io/pydagogue/debian_python_paths.html
+// check base of "/usr/local/lib" and "/usr/lib"
+//lib := '/usr/lib/python3.9/config-3.9-x86_64-linux-gnu/libpython3.9.so';
+var
+  i: integer;
+begin
+  for i := 11 downto 7 do begin
+    result := format('%s/python3.%d/config-3.%d-x86_64-linux-gnu/libpython3.%d.so', [base, i, i, i]);
+    if FileExists(result) then exit;
+    //pymalloc  PEP-3149: ABI version tagged .so files.
+    result := format('%s/python3.%d/config-3.%d-x86_64-linux-gnu/libpython3.%dm.so', [base, i, i, i]);
+    if FileExists(result) then exit;
+  end;
+  writeln('Unable to find a library with a name like '+result);
+  result := '';
+end;
+
+function findFirstRecursive(const SearchPath: String; SearchMask: String): string;
+//example findFirstRecursive('/usr/lib/', 'libpython3*so')
+//uses LazFileUtils
+var
+  ret: string;
+procedure find1(Dir: string);
+var
+   SR: TSearchRec;
+begin
+     if (ret <> '') or (FileIsSymlink(Dir)) then exit;
+     if FindFirst(IncludeTrailingBackslash(Dir) + SearchMask, faAnyFile or faDirectory, SR) = 0 then begin
+         ret := IncludeTrailingBackslash(Dir) +SR.Name;
+         FindClose(SR);
+         exit;
+      end;
+      if FindFirst(IncludeTrailingBackslash(Dir) + '*.*', faAnyFile or faDirectory, SR) = 0 then
+         try
+           repeat
+             if ((SR.Attr and faDirectory) <> 0) and (SR.Name <> '.') and (SR.Name <> '..') then
+               find1(IncludeTrailingBackslash(Dir) + SR.Name);  // recursive call!
+           until FindNext(Sr) <> 0;
+         finally
+           FindClose(SR);
+         end;
+end;
+begin
+ ret := '';
+ find1(SearchPath);
+ result := ret;
+end;
+
+function findLinuxLibPython3(pthroot: string = '/usr/lib/'): string;
+begin
+     result := findFirstRecursive(pthroot, 'libpython3*so');
+end;
+{$endif} {$endif}
 function PythonLoadAndInitialize(resourceDir: ansistring; callback: PythonDataMethodCallback): boolean;
 var
   home: ansistring;
@@ -109,6 +162,31 @@ begin
     Assert(FileExists(home), 'Python home can''t be found at '+home);
     PythonInitialize(home, callback);
   {$else}
+    {$ifdef PYTHON_DYNAMIC}
+    //https://matthew-brett.github.io/pydagogue/debian_python_paths.html
+    home := '';
+    if  (FileExists(resourceDir)) then begin
+        home := ResourceDir;
+        writeln('Assuming this is a valid python library (e.g. "libpython3.9.so")'+home);
+    end;
+    {$ifdef linux}
+    if not (FileExists(home)) then
+       home := findLibDebian('/usr/lib');
+    if not (FileExists(home)) then
+       home := findLibDebian('/usr/local/lib');
+    if not (FileExists(home)) then
+       home := findLinuxLibPython3('/usr/local/lib');
+    {$endif}
+    if not (FileExists(home)) then begin
+      {$ifdef lcl}
+      ShowMessage('Unable to find Python library: '+home);
+      {$else}
+      writeln('Unable to find Python home: '+home);
+      {$endif}
+       exit(false);
+    end;
+    LoadLibrary(home);
+    {$else}
     home := resourceDir + pathdelim + 'python37';
     if not (DirectoryExists(home)) then begin
       {$ifdef lcl}
@@ -118,9 +196,7 @@ begin
       {$endif}
        exit(false);
     end;
-    writeln('Python Home: ' + home);
-    PythonInitialize(home, callback);
-    Assert(DirectoryExists(home), 'Python home can''t be found at '+home);
+    {$endif PYTHON_DYNAMIC}
     PythonInitialize(home, callback);
   {$endif}
   result := true;
@@ -382,8 +458,14 @@ end;
 function PythonInitialize(pythonHome: ansistring; callback: PythonDataMethodCallback): boolean;
 begin
   DataMethodCallback := callback;
+  {$ifdef unix}
+   {$ifndef PYTHON_DYNAMIC}
+   Py_SetPythonHome(Py_DecodeLocale(PAnsiChar(pythonHome), nil));
+   {$endif}
+  {$else}
   Py_SetPythonHome(Py_DecodeLocale(PAnsiChar(pythonHome), nil));
-  //Py_SetPythonHome(PWideChar(pythonHome));
+
+  {$endif}
   Py_Initialize;
   result := RedirectIO;
 end;

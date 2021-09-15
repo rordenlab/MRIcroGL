@@ -209,7 +209,7 @@ PyFunction_GetCode:function (ob:PPyObject):PPyObject; cdecl;
 PyFunction_GetGlobals:function (ob:PPyObject):PPyObject; cdecl;
 PyFunction_New:function (ob1,ob2:PPyObject):PPyObject; cdecl;
 PyImport_AddModule:function (name:PAnsiChar):PPyObject; cdecl;
-PyImport_Cleanup:procedure; cdecl;
+//PyImport_Cleanup:procedure; cdecl;
 PyImport_GetMagicNumber:function :LONGINT; cdecl;
 PyImport_ImportFrozenModule:function (key:PAnsiChar):integer; cdecl;
 PyImport_ImportModule:function (name:PAnsiChar):PPyObject; cdecl;

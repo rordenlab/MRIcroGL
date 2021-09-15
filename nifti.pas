@@ -1666,12 +1666,14 @@ Begin
     for Index := 0 to ((XYsz*Zsz)-1) do
       VolData[Index] := rData[Index];
   //next line: blur the data
-  SmoothVol (VolData, Xsz,Ysz,Zsz);
+  if (ZSz > 2) then
+  	SmoothVol (VolData, Xsz,Ysz,Zsz);
   {$IFDEF DYNRGBA}
   SetLength (VolRGBA, XYsz*Zsz);
   {$ELSE}
   SetLengthP (VolRGBA, XYsz*Zsz);
   {$ENDIF}
+  if (ZSz > 2) then exit;
   SetLength (GradMagS,XYsz*Zsz);
   for Index := 0 to ((XYsz*Zsz)-1) do //we can not compute gradients for image edges, so initialize volume so all voxels are transparent
   	  {$IFDEF DYNRGBA}
@@ -3703,6 +3705,62 @@ begin
  fVolRGBA := nil; //close CPU buffer afterit has been copied to GPU
 end;
 
+(*function blurS(img: TFloat32s; nx, ny: integer; xmm, Sigmamm: single): boolean;
+var
+	sum, wt, expd, sigma: single;
+	i, j, x, y, cutoffvox, rowStart: integer;
+	tmp, k, kWeight: array of single;
+	kStart, kEnd: array of integer;
+begin
+	//make kernels
+	if ((xmm = 0) or (nx < 2) or (ny < 1) or (Sigmamm <= 0.0)) then
+		exit(false);
+	sigma := (Sigmamm / xmm); //mm to vox
+	cutoffvox := ceil(4 * sigma); //filter width to 6 sigma: faster but lower precision AFNI_BLUR_FIRFAC = 2.5
+	cutoffvox := max(cutoffvox, 1);
+	setlength(k, cutoffvox + 1);
+	expd := 2 * sigma * sigma;
+	for i := 0 to cutoffvox do
+		k[i] := exp(-1.0 * (i * i) / expd);
+	//calculate start, end for each voxel in
+	setlength(kStart, nx); //-cutoff except left left columns, e.g. 0, -1, -2... cutoffvox
+	setlength(kEnd, nx); //+cutoff except right columns
+	setlength(kWeight, nx); //ensure sum of kernel = 1.0
+	for i := 0 to (nx - 1) do begin
+		kStart[i] := max(-cutoffvox, -i); //do not read below 0
+		kEnd[i] := min(cutoffvox, nx - i - 1); //do not read beyond final columnn
+		if ((i > 0) and (kStart[i] = (kStart[i - 1])) and (kEnd[i] = (kEnd[i - 1]))) then begin //reuse weight
+			kWeight[i] := kWeight[i - 1];
+			continue;
+		end;
+		wt := 0.0;
+		for j := kStart[i] to kEnd[i] do
+			wt += k[abs(j)];
+		kWeight[i] := 1 / wt;
+	end;
+	//apply kernel to each row
+	setlength(tmp, nx); //input values prior to blur
+	rowStart := 0;
+	for y := 0 to (ny - 1) do begin
+		//printf("-+ %d:%d\n", y, ny);
+		for x := 0 to (nx - 1) do
+			tmp[x] := img[x+rowStart];
+		for x := 0 to (nx - 1) do begin
+			sum := 0;
+			for i := kStart[x] to kEnd[x] do
+				sum += tmp[x + i] * k[abs(i)];
+			img[x + rowStart] := sum * kWeight[x];
+		end;
+		rowStart += nx;
+	end; //blurX
+	tmp := nil;
+	k := nil;
+	kStart := nil;
+	kEnd := nil;
+	kWeight := nil;
+    exit(true);
+end; //blurS()*)
+
 procedure SmoothFloat(smoothImg: TFloat32s; X,Y,Z: int64);
 var
    i, xydim, vx: int64;
@@ -3720,58 +3778,7 @@ begin
  for i := xydim to (vx-xydim-1) do  // *4 input (12bit->14bit) : 6 for 8 bit output
      smoothImg[i] := (svol32b[i-xydim] + (svol32b[i] * 2) + svol32b[i+xydim]) * 1/64;
  svol32b := nil;
-end;
-
-(*procedure SmoothCore(var rawVolBytes: TUInt8s; dimx, dimy, dimz, datatype: integer);
-//blur image
-var
-   inSkip, i, vx: integer;
-   vol32, svol32 : TFloat32s;
-   vol16: TInt16s;
-   vol8: TUInt8s;
-   x,y,z: integer;
-   zMask, yMask: boolean;
-begin
- if datatype = kDT_RGB then exit;
- if (dimx < 3) or (dimy < 3) or (dimz < 3) then exit;
- vx := dimx * dimy * dimz;
- vol8 := rawVolBytes;
- vol16 := TInt16s(vol8);
- vol32 := TFloat32s(vol8);
- //smooth
- setlength(svol32,vx);
- if datatype = kDT_UINT8 then begin
-   for i := 0 to (vx-1) do
-       svol32[i] := vol8[i];
- end else if datatype = kDT_INT16 then begin
-     for i := 0 to (vx-1) do
-         svol32[i] := vol16[i];
- end else if datatype = kDT_FLOAT then begin
-    svol32 := Copy(vol32, 0, vx);
- end;
- smoothFloat(svol32, dimx, dimy, dimz);
- i := 0;
- for z := 1 to dimz do begin
-     zMask := (z = 1) or (z = dimz);
-     for y := 1 to dimy do begin
-         yMask := (y = 1) or (y = dimy);
-         for x := 1 to dimx] do begin
-             if (not zMask) and (not yMask) and (x > 1) and (x < dimx) then begin
-                if datatype = kDT_UINT8 then
-                   vol8[i] := round(svol32[i])
-                else if fHdr.datatype = kDT_INT16 then
-                     vol16[i] := round(svol32[i])
-                else if datatype = kDT_FLOAT then
-                  vol32[i] := svol32[i];
-             end;
-             i := i +1;
-         end; //x
-
-     end; //y
- end; //z
- svol32 := nil;
-end; //SmoothCore()  *)
-
+end; //SmoothFloat()
 
 procedure TNIfTI.Smooth(Mask: TUInt8s = nil);
 //blur image
@@ -3786,14 +3793,10 @@ begin
  if fHdr.datatype = kDT_RGB then exit;
  if (fHdr.dim[1] < 3) or (fHdr.dim[2] < 3) or (fHdr.dim[3] < 3) then exit;
  if ((fMax-fMin) <= 0) then exit;
- (*lBPP := 4;
- case fHdr.datatype of
-   kDT_UNSIGNED_CHAR : lBPP := 1;
-   kDT_SIGNED_SHORT: lBPP := 2;
- end;*)
+
  skip := skipVox();
  vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]);
- //vol8 := @fRawVolBytes[lBPP*skipVox()];                            s
+ //vol8 := @fRawVolBytes[lBPP*skipVox()];
  vol8 := fRawVolBytes;
  vol16 := TInt16s(vol8);
  vol32 := TFloat32s(vol8);

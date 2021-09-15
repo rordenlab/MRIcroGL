@@ -28,6 +28,7 @@ unit mainunit;
 {$DEFINE MATT1}
 
 {$IFDEF MYPY}{$IFNDEF PY4LAZ}
+  {$include ./PythonBridge/pyopts.inc}  //for PYTHON_DYNAMIC
   {$ifdef darwin}
     {$ifdef CPUAARCH64}
       {$linklib ./PythonBridge/aarch64-darwin/libpython3.7m.a}
@@ -36,12 +37,14 @@ unit mainunit;
     {$endif}
   {$endif}
   {$ifdef linux}
+    {$ifdef PYTHON_DYNAMIC}
     {$linklib c}
     {$linklib m}
     {$linklib pthread}
     {$linklib util}
     {$linklib dl}
     {$linklib ./PythonBridge/x86_64-linux/libpython3.7m.a}
+    {$ENDIF}
   {$endif}
 {$ENDIF}{$ENDIF}
 
@@ -3461,9 +3464,13 @@ begin
 end;
 
 function TGLForm1.PyCreate: boolean;
+var
+  PyLib: string;
 begin
-
- if not PythonLoadAndInitialize(ResourceDir, GLForm1.GotPythonData) then begin
+ PyLib := ResourceDir;
+ if (FileExists(gPrefs.PyLib)) then
+ 	PyLib := gPrefs.PyLib;
+ if not PythonLoadAndInitialize(PyLib, GLForm1.GotPythonData) then begin
    writeln('Unable to load Python');
    exit(false);
  end;

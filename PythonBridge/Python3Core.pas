@@ -1,12 +1,11 @@
 {$mode objfpc}
+{$include pyopts.inc} //for  define PYTHON_DYNAMIC
 {$assertions on}
 
 {$ifdef win32}
   {$define cpux86}
 {$endif}
-{$ifdef windows}
-  {$define PYTHON_DYNAMIC}
-{$endif}
+
 
 {$ifdef fpc}
   {$ifdef cpu64}
