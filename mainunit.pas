@@ -37,7 +37,7 @@ unit mainunit;
     {$endif}
   {$endif}
   {$ifdef linux}
-    {$ifdef PYTHON_DYNAMIC}
+    {$ifndef PYTHON_DYNAMIC}
     {$linklib c}
     {$linklib m}
     {$linklib pthread}

@@ -7,7 +7,7 @@
 unit PythonBridge;
 interface
 uses
-  {$ifdef windows}windows,{$endif}{$ifdef lcl} dialogs, {$endif} Python3Core, SysUtils;
+  {$ifdef linux}LazFileUtils,{$endif}{$ifdef windows}windows,{$endif}{$ifdef lcl} dialogs, {$endif} Python3Core, SysUtils;
 
 type
   TPythonBridgeMethod = record

@@ -1673,7 +1673,7 @@ Begin
   {$ELSE}
   SetLengthP (VolRGBA, XYsz*Zsz);
   {$ENDIF}
-  if (ZSz > 2) then exit;
+  if (ZSz < 3) then exit;
   SetLength (GradMagS,XYsz*Zsz);
   for Index := 0 to ((XYsz*Zsz)-1) do //we can not compute gradients for image edges, so initialize volume so all voxels are transparent
   	  {$IFDEF DYNRGBA}
