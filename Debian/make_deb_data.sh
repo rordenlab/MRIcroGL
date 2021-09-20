@@ -4,7 +4,8 @@
 # Fail if anything not planed to go wrong, goes wrong
 set -eu
 sw=mricrogl-data
-ver=1.2.20210909
+source ../vers.inc
+ver=$kVers
 pkg=${sw}_${ver}_all
 #deb=${pkg}.deb
 resourcePath=${pkg}/usr/share/mricrogl/
@@ -17,7 +18,9 @@ cd $SCRIPT_DIR
 rm -rf ${pkg}
 #copy all required files
 mkdir -p ${pkg}/DEBIAN
-cp ./data-control.txt ${pkg}/DEBIAN/control
+#cp ./data-control.txt ${pkg}/DEBIAN/control
+sed "s/<ver>/$ver/" ./data-control.txt > ${pkg}/DEBIAN/control
+
 mkdir -p ${resourcePath}
 cp -a ../Resources/. ${resourcePath}
 #Linux does not need Windows resources python36.dll and python36.zip

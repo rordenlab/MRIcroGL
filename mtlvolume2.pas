@@ -34,7 +34,7 @@ type
         colorEditorVertexBuffer, sliceVertexBuffer, renderVertexBuffer, lineVertexBuffer: MTLBufferProtocol;
         {$IFDEF GPUGRADIENTS}blurShader, sobelShader,{$ENDIF}
         shader2D, shader2Dn, shaderLines2D: TMetalPipeline;
-        MeshRenderPassDescriptor: MTLRenderPassDescriptor;
+        //MeshRenderPassDescriptor: MTLRenderPassDescriptor;
         slices2D: TSlices2D;
         colorEditor: TColorEditor;
         isSmooth2D, colorEditorVisible: boolean;
@@ -47,7 +47,12 @@ type
         fDistance, overlayNum: single;
         fLightPos, fClipPlane: TVec4;
         indexBuffer, vertexBuffer: MTLBufferProtocol;
-        {$IFDEF DEPTHPICKER}shaderDepth,{$ENDIF} shader3D, shader3Dbetter : TMetalPipeline;
+        mvp: TMat4;
+        viewportXYWH: TVec4;
+        {$IFDEF LINE3D}
+        line3DBuffer: MTLBufferProtocol;
+        {$ENDIF}
+        {$IFDEF LINE3D}shaderLine3D, shaderLine3Dalpha, {$ENDIF}{$IFDEF OLDDEPTHPICKER}shaderDepth,{$ENDIF} shader3D, shader3Dbetter : TMetalPipeline;
         volTex, gradTex, overlayVolTex, overlayGradTex: MTLTextureProtocol;
         {$IFDEF MATCAP} matCapTex: MTLTextureProtocol;{$ENDIF}
         mtlControl: TMetalControl;
@@ -62,6 +67,7 @@ type
         procedure CreateGradientVolumeGPU(Xsz,Ysz,Zsz: integer; var inTex, grTex: MTLTextureProtocol);
       public
         ClipThick: single;
+        renderBitmapWidth: integer;
         matcapLoc: integer;
         {$IFDEF VIEW2D}
         SelectionRect: TVec4;
@@ -74,6 +80,7 @@ type
         property Slices: Tslices2D read slices2D;
         procedure SetSlice2DFrac(frac : TVec3);
         function GetSlice2DFrac(mouseX, mouseY: integer; out Orient: integer): TVec3;
+        function Unproject(mouseX, mouseY, depth: single): TVec3;
         function GetSlice2DMaxXY(mouseX, mouseY: integer; var Lo: TPoint): TPoint;
         procedure Paint2D(var vol: TNIfTI; Drawing: TDraw; DisplayOrient: integer);
         procedure PaintMosaicRender(var vol: TNIfTI; lRender: TMosaicRender);
@@ -90,6 +97,7 @@ type
         property ClipPlane: TVec4 read fClipPlane write fClipPlane;
         procedure Prepare(shaderName: string);
         constructor Create(fromView: TMetalControl);
+        procedure PaintCrosshair3D(rgba: TVec4);
         procedure PaintCore(var vol: TNIfTI; widthHeightLeft: TVec3i; clearScreen: boolean = true; isDepthShader: boolean = false);
         procedure Paint(var vol: TNIfTI);
         procedure PaintDepth(var vol: TNIfTI; isAxCorSagOrient4: boolean = false);
@@ -97,8 +105,8 @@ type
         procedure SetShader(shaderName: string; isUpdatePrefs: boolean = true);
         procedure SetShaderSlider(idx: integer; newVal: single);
         procedure SaveBmp(filename: string; hasAlpha: boolean);
-        function DrawableWidth: integer;
         function ReadPixel(x, y: integer): UInt32;
+        function ReadDepth(x,y: integer): single;
         {$IFDEF CLRBAR} procedure SetColorBar(fromColorbar: TGPUClrbar); {$ENDIF}
         procedure  SetTextContrast(clearclr: TRGBA);
         {$IFDEF MATCAP} function SetMatCap(fnm: string): boolean; {$ENDIF}
@@ -108,17 +116,40 @@ type
 implementation
 
 //uses mainunit;
-
-destructor TGPUVolume.Destroy;
+function gluUnProject(winXYZ: TVec3; mvp: TMat4; viewportXYWH: TVec4): TVec3;
+//viewport[0]=x, viewport[1]=y, viewport[2]=width, viewport[3]=height
+//return coordinates in object space
+(*vec4 v = vec4(2.0*(gl_FragCoord.x-view.x)/view.z-1.0,
+              2.0*(gl_FragCoord.y-view.y)/view.w-1.0,
+              2.0*texture2DRect(DepthTex,gl_FragCoord.xy).z-1.0,
+              1.0 );
+v = gl_ModelViewProjectionMatrixInverse * v;
+v /= v.w;*)
+//https://community.khronos.org/t/converting-gl-fragcoord-to-model-space/57397
+//https://www.khronos.org/registry/OpenGL-Refpages/gl2.1/xhtml/gluUnProject.xml
+//http://nehe.gamedev.net/article/using_gluunproject/16013/
+var
+	v: TVec4;
+    mvpInv: TMat4;
 begin
-  {$IFDEF VIEW2D}
-  slices2D.free;
-  colorEditor.free;
-  txt.free;
-  {$ENDIF}
-  {$IFDEF CUBE} gCube.free; {$ENDIF}
-  {$IFDEF CLRBAR} clrbar.free; {$ENDIF}
-  inherited;
+	v := vec4(2.0*(winXYZ.x-viewportXYWH.x)/viewportXYWH.z-1.0,
+    	2.0*(winXYZ.y-viewportXYWH.y)/viewportXYWH.w-1.0,
+        2.0*winXYZ.z-1.0,
+        1.0);
+    mvpInv := mvp.inverse;
+    v := mvpInv * v;
+    v := v / v.w;
+    result := vec3(v.x, v.y, v.z);
+end;
+
+function TGPUVolume.Unproject(mouseX, mouseY, depth: single): TVec3;
+var
+	winXYZ: TVec3;
+begin
+    winXYZ := vec3(mouseX, mouseY, depth);
+    result := gluUnProject(winXYZ, mvp, viewportXYWH);
+    //printf(format('windowXYZ %g %g %g', [winXYZ.x, winXYZ.y, winXYZ.z]));
+    //printf(format('objXYZ %g %g %g', [result.x, result.y, result.z]));
 end;
 
 type
@@ -140,8 +171,27 @@ type
     normMatrix: TMat4;
   end;
 
-{$IFDEF MATCAP}
+{$IFDEF LINE3D}
+var gLines3D: array of TVertVertex;
+{$ENDIF}
 
+destructor TGPUVolume.Destroy;
+begin
+  {$IFDEF VIEW2D}
+  slices2D.free;
+  colorEditor.free;
+  txt.free;
+  {$ENDIF}
+  {$IFDEF LINE3D}
+  gLines3D := nil;
+  //line3DBuffer := nil;
+  {$ENDIF}
+  {$IFDEF CUBE} gCube.free; {$ENDIF}
+  {$IFDEF CLRBAR} clrbar.free; {$ENDIF}
+  inherited;
+end;
+
+{$IFDEF MATCAP}
 procedure FlipVertical (var px: TPicture);
 var
   p: array of byte;
@@ -302,14 +352,14 @@ begin
     prefValues[idx] :=newVal;
 end;
 
-function TGPUVolume.DrawableWidth: integer;
-begin
-  result := MTLCurrentDrawableTextureWidth;
-end;
-
 function TGPUVolume.ReadPixel(x, y: integer): UInt32;
 begin
 	result := MTLReadPixel(x, y);
+end;
+
+function TGPUVolume.ReadDepth(x,y: integer): single;
+begin
+	result := MTLReadDepth(x, y);
 end;
 
 procedure TGPUVolume.SaveBmp(filename: string; hasAlpha: boolean);
@@ -361,7 +411,7 @@ begin
             end;
             prefValues[i] := shaderPrefs.Uniform[i].DefaultV;
     end;
- //MTLSetDepthStencil(shader3D, MTLCompareFunctionLess, true);
+ MTLSetDepthStencil(shader3D, MTLCompareFunctionLess, true);//TQ
 end;
 
 procedure TGPUVolume.Prepare(shaderName: string);
@@ -375,7 +425,7 @@ begin
     shaderName := ShaderDir+pathdelim+'Default.metal';
  SetShader(shaderName);
  {$IFDEF VIEW2D}
- meshRenderPassDescriptor := nil;
+ //meshRenderPassDescriptor := nil;
  options := TMetalPipelineOptions.Default;
  //default shader
  shaderName := ShaderDir+pathdelim+'_Texture2D.metal';
@@ -404,14 +454,13 @@ begin
   writeln('Unable to find ' + shaderName);
  shaderLines2D  := MTLCreatePipeline(options);
  //depth picker
- {$IFDEF DEPTHPICKER}
+ {$IFDEF OLDDEPTHPICKER}
  shaderName := ShaderDir+pathdelim+'_Depth3D.metal';
  options.libraryName := shaderName;
  if not fileexists(shaderName) then
   writeln('Unable to find ' + shaderName);
  shaderDepth  := MTLCreatePipeline(options);
  {$ENDIF}
- //
  options := TMetalPipelineOptions.Default;
  shaderName := ShaderDir+pathdelim+'_Blur3d.metal';
  {$IFDEF GPUGRADIENTS}
@@ -441,6 +490,33 @@ begin
  if matCapTex = nil then
     SetMatCap('');
  {$ENDIF}
+ {$IFDEF LINE3D}
+ options := TMetalPipelineOptions.Default;
+ shaderName := ShaderDir+pathdelim+'_Line3D.metal';
+ options.libraryName := shaderName;
+ if not fileexists(shaderName) then
+  writeln('Unable to find ' + shaderName);
+ options.pipelineDescriptor := MTLCreatePipelineDescriptor;
+ options.pipelineDescriptor.colorAttachmentAtIndex(0).setBlendingEnabled(true);
+ options.pipelineDescriptor.colorAttachmentAtIndex(0).setRgbBlendOperation(MTLBlendOperationAdd);
+ options.pipelineDescriptor.colorAttachmentAtIndex(0).setAlphaBlendOperation(MTLBlendOperationAdd);
+ options.pipelineDescriptor.colorAttachmentAtIndex(0).setSourceRGBBlendFactor(MTLBlendFactorSourceAlpha);
+ options.pipelineDescriptor.colorAttachmentAtIndex(0).setSourceAlphaBlendFactor(MTLBlendFactorSourceAlpha);
+ options.pipelineDescriptor.colorAttachmentAtIndex(0).setDestinationRGBBlendFactor(MTLBlendFactorOneMinusSourceAlpha);
+ options.pipelineDescriptor.colorAttachmentAtIndex(0).setDestinationAlphaBlendFactor(MTLBlendFactorOneMinusSourceAlpha);
+ shaderLine3D  := MTLCreatePipeline(options);
+ MTLSetDepthStencil(shaderLine3D, MTLCompareFunctionLess, true);//TQ
+ //alpha shader does not use
+ shaderName := ShaderDir+pathdelim+'_Line3Dalpha.metal';
+ options.libraryName := shaderName;
+ if not fileexists(shaderName) then
+  writeln('Unable to find ' + shaderName);
+
+ shaderLine3Dalpha  := MTLCreatePipeline(options);
+ MTLSetDepthStencil(shaderLine3Dalpha, MTLCompareFunctionGreaterEqual, true);//TQ
+ setlength(gLines3D,6); //3D crosshair is three lines, six vertices
+ line3DBuffer := nil;
+ {$ENDIF} //LINE3D
 end;
 
 {$IFDEF CLRBAR}
@@ -613,7 +689,6 @@ begin
   //volRegion := MTLRegionMake1D(i);
   volRegion := MTLRegionMake1D(0, 256);
   drawVolLut.replaceRegion_mipmapLevel_slice_withBytes_bytesPerRow_bytesPerImage(volRegion, 0,0, @colorLut[0], 0, 0);
-
 end;
 
 procedure TGPUVolume.UpdateDraw(Drawing: TDraw);
@@ -735,7 +810,7 @@ begin
  if (Vol.VolRGBA = nil) and (volTex <> nil) and(gradTex = nil) and (not deferGradients) then CreateGradientVolumeGPU(Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z, volTex, gradTex);
  {$ENDIF}
  if (Vol.VolRGBA = nil) then exit;
- volTex := nil;
+ if gradTex <> nil then gradTex.release;
  gradTex := nil;
  maxDim := max(Vol.Dim.X,max(Vol.Dim.Y,Vol.Dim.Z));
  volTexDesc := MTLTextureDescriptor.alloc.init.autorelease;
@@ -746,6 +821,7 @@ begin
  volTexDesc.setDepth(Vol.Dim.Z);
  //volTex := nil; //789
  if volTex <> nil then volTex.release;
+ volTex := nil;
  volTex := mtlControl.renderView.device.newTextureWithDescriptor(volTexDesc);
  Fatal(volTex = nil, 'loadTex: newTextureWithDescriptor failed');
  volRegion := MTLRegionMake3D(0, 0, 0, Vol.Dim.X, Vol.Dim.Y, Vol.Dim.Z);
@@ -899,6 +975,14 @@ begin
       MTLSetVertexBytes(@vertUniforms, sizeof(vertUniforms), 1);
       MTLDraw(MTLPrimitiveTypeTriangle, 0, slices2D.NumberOfLineVertices);
     end;
+    //draw inset rendering
+    if (DisplayOrient = kAxCorSagOrient4) then begin
+          i := RayCastQuality1to5;
+          if (i < kQualityMedium) then
+           	RayCastQuality1to5 := kQualityMedium;
+          PaintCore(vol, slices2D.axCorSagOrient4XY, false, false);
+          RayCastQuality1to5 := i;
+    end;
     //draw color editor
     if colorEditorVisible then begin
       colorEditor.Update( w, h, vol);
@@ -922,13 +1006,6 @@ begin
     if clrbar <> nil then
      clrbar.Draw();
     {$ENDIF}
-    if (DisplayOrient = kAxCorSagOrient4) then begin
-          i := RayCastQuality1to5;
-          if (i < kQualityMedium) then
-           	RayCastQuality1to5 := kQualityMedium;
-          PaintCore(vol, slices2D.axCorSagOrient4XY, false, false);
-          RayCastQuality1to5 := i;
-    end;
   MTLEndFrame();
   //GLForm1.caption := inttostr(slices2D.NumberOfLineVertices) +' '+inttostr(random(888));
 end; //paint2D
@@ -1262,6 +1339,23 @@ begin
   writeln(s);
   {$ENDIF}
 end;*)
+procedure TGPUVolume.PaintCrosshair3D(rgba: TVec4);
+begin
+  {$IFDEF LINE3D}
+  gLines3D[0].position := Vec3(slices2D.sliceFrac.x, slices2D.sliceFrac.y, -0.1);
+  gLines3D[1].position := Vec3(slices2D.sliceFrac.x, slices2D.sliceFrac.y, 1.1);
+  gLines3D[2].position := Vec3(slices2D.sliceFrac.x, -0.1, slices2D.sliceFrac.z);
+  gLines3D[3].position := Vec3(slices2D.sliceFrac.x, 1.1, slices2D.sliceFrac.z);
+  gLines3D[4].position := Vec3(-0.1, slices2D.sliceFrac.y, slices2D.sliceFrac.z);
+  gLines3D[5].position := Vec3(1.1, slices2D.sliceFrac.y, slices2D.sliceFrac.z);
+  gLines3D[0].color := rgba;
+  gLines3D[1].color := rgba;
+  gLines3D[2].color := rgba;
+  gLines3D[3].color := rgba;
+  gLines3D[4].color := rgba;
+  gLines3D[5].color := rgba;
+  {$ENDIF}
+end;
 
 procedure TGPUVolume.PaintCore(var vol: TNIfTI; widthHeightLeft: TVec3i; clearScreen: boolean = true; isDepthShader: boolean = false);
 //procedure TGPUVolume.Paint(var vol: TNIfTI);
@@ -1273,7 +1367,7 @@ var
   fragUniforms: TFragUniforms;
   projectionMatrix, modelMatrix: TMat4;
   modelLightPos, v, rayDir: TVec4;
-  scale, left, bottom: single;
+  whratio, scale, left, bottom, rotateX: single;
 begin
   //whratio := widthHeightLeft.x /widthHeightLeft.y;
   if vertexBuffer = nil then // only once
@@ -1282,10 +1376,14 @@ begin
   LoadTexture(vol, false);
   if (volTex = nil) or ( widthHeightLeft.x < 1) or (widthHeightLeft.y < 1) then
      exit;
+  if (Vol.Dim.z < 2) and  (abs(fElevation) < 0.1) then
+      rotateX := -1.57254//(-DegToRad(90.1))
+  else
+      rotateX := -DegToRad(90-fElevation);
   //next lines required if object is translated on screen:
   modelMatrix := TMat4.Identity;
   modelMatrix *= TMat4.Translate(0.5, 0.5, -1.0);
-  modelMatrix *= TMat4.RotateX(-DegToRad(90-fElevation));
+  modelMatrix *= TMat4.RotateX(rotateX);
   modelMatrix *= TMat4.RotateZ(DegToRad(fAzimuth));
   modelMatrix *= TMat4.Translate(-0.5, -0.5, -0.5); //pivot around 0.5 as cube spans 0..1
   modelLightPos := (modelMatrix.Transpose * fLightPos);
@@ -1294,7 +1392,7 @@ begin
   modelMatrix := TMat4.Identity;
   modelMatrix *= TMat4.Scale(widthHeightLeft.x / mtlControl.clientwidth, widthHeightLeft.y / mtlControl.clientheight, 1);
   modelMatrix *= TMat4.Translate(0, 0, -fDistance);
-  modelMatrix *= TMat4.RotateX(-DegToRad(90-fElevation));
+  modelMatrix *= TMat4.RotateX(rotateX);
   modelMatrix *= TMat4.RotateZ(DegToRad(fAzimuth));
   modelMatrix *= TMat4.RotateX(-DegToRad(fPitch));
   modelMatrix *= TMat4.Translate(-vol.Scale.X/2, -vol.Scale.Y/2, -vol.Scale.Z/2);
@@ -1304,8 +1402,17 @@ begin
      scale := 1
   else
       scale := 0.5 * 1/abs(kDefaultDistance/(fDistance+1.0));
+
+  //whratio := widthHeightLeft.x /widthHeightLeft.y;
+  //if (whratio < 1) and (whratio > 0) then //Wide window
+  //		scale /= whratio;
   bottom := -widthHeightLeft.y / mtlControl.clientheight * scale;
-  left :=  2.0 *  ((widthHeightLeft.z + (0.5 * widthHeightLeft.x))  / mtlControl.clientwidth) * scale;
+  if widthHeightLeft.z <= 0 then
+	left :=  scale * (widthHeightLeft.x/widthHeightLeft.y)
+  else begin
+    renderBitmapWidth :=  MTLCurrentDrawableTextureWidth;
+	  left :=  2.0 *  ((widthHeightLeft.z + (0.5 * widthHeightLeft.x))  / mtlControl.clientwidth) * scale;
+  end;
   projectionMatrix := TMat4.Ortho(0-left, scale * (widthHeightLeft.x/widthHeightLeft.y) * 2 - left, bottom + 0, bottom + 2 * scale, fDistance-1, fDistance+1);
   vertUniforms.modelViewProjectionMatrix := ( projectionMatrix * modelMatrix);
   rayDir.x := 0; RayDir.y := 0; rayDir.z := 1; RayDir.w := 0;
@@ -1330,7 +1437,7 @@ begin
   fragUniforms.stepSize := ComputeStepSize (RayCastQuality1to5, maxDim);
   if (clearScreen) then
   	MTLBeginFrame();
-  {$IFDEF DEPTHPICKER}
+  {$IFDEF OLDDEPTHPICKER}
   if (isDepthShader) then
      MTLSetShader(shaderDepth)
   else {$ENDIF}
@@ -1372,10 +1479,29 @@ begin
       end;
     end;
     {$ENDIF}
-    //draw render
+    //draw crosshair
+    {$IFDEF LINE3D}
+    if ((widthHeightLeft.z <> 0) and (slices2D.LineWidth > 0.0)) then begin
+      MTLSetShader(shaderLine3D);
+      MTLSetVertexBytes(@vertUniforms, sizeof(vertUniforms), 1);
+      PaintCrosshair3D( slices2D.LineColor);
+      line3DBuffer := mtlControl.renderView.device.newBufferWithBytes_length_options(@gLines3D[0], 6*sizeof(TVertVertex), MTLResourceStorageModeShared);
+      MTLSetVertexBuffer(line3DBuffer, 0, 0);
+      MTLDraw(MTLPrimitiveTypeLine, 0, 6);
+      //draw again with alpha shader
+      MTLSetShader(shaderLine3Dalpha);
+      MTLSetVertexBytes(@vertUniforms, sizeof(vertUniforms), 1);
+      //PaintCrosshair3D( slices2D.LineColor);
+      //line3DBuffer := mtlControl.renderView.device.newBufferWithBytes_length_options(@gLines3D[0], 6*sizeof(TVertVertex), MTLResourceStorageModeShared);
+      MTLSetVertexBuffer(line3DBuffer, 0, 0);
+      MTLDraw(MTLPrimitiveTypeLine, 0, 6);
+
+    end;
+    //MTLDrawIndexed (MTLPrimitiveTypeLine, 14, MTLIndexTypeUInt16, indexBuffer, 0);
+    {$ENDIF}
     {$IFDEF CLRBAR}
     clrbar.RulerPixels:= 0;
-    if clrbar <> nil then
+    if (widthHeightLeft.z = 0)  and (clrbar <> nil) then
        clrbar.Draw();
     {$ENDIF}
     {$IFDEF CUBE}

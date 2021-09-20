@@ -2,7 +2,8 @@
 # Fail if anything not planed to go wrong, goes wrong
 set -eu
 sw=mricrogl
-ver=1.2.20210909
+source ../vers.inc
+ver=$kVers
 arch=amd64
 #set widgetset set for default(QT5)
 wigetset=
@@ -32,7 +33,8 @@ rm -rf ${pkg}
 #copy all required files
 #copy control file
 mkdir -p ${pkg}/DEBIAN
-cp ./${sw}-control.txt ${pkg}/DEBIAN/control
+#cp ./${sw}-control.txt ${pkg}/DEBIAN/control
+sed "s/<ver>/$ver/" ./${sw}-control.txt > ${pkg}/DEBIAN/control
 #copy executable
 mkdir -p ${exePath}
 cp ../MRIcroGL ${exePath}${sw}
@@ -51,9 +53,9 @@ cp ../license.txt ${docPath}copyright
 mkdir -p ${manPath}
 cp ${man} ${manPath}${man}
 
-dpkg-deb --build --root-owner-group ${pkg}
+#dpkg-deb --build --root-owner-group ${pkg}
 #remove temporary files
-rm -rf ${pkg}
+#rm -rf ${pkg}
 
 echo Test the package:
 echo sudo dpkg -I ${pkg}.deb

@@ -53,7 +53,6 @@ interface
 uses
   {$IFDEF MATT1}umat, {$ENDIF}
   {$IFDEF METALAPI}
-  	//{$IFDEF DEPTHPICKER}MetalUtils,{$ENDIF}
   	MetalPipeline,  Metal,MetalControl, mtlvolume2,
   	{$IFDEF GRAPH}mtlgraph,{$ENDIF}
   	{$IFDEF CLRBAR}mtlclrbar, {$ENDIF}
@@ -79,11 +78,12 @@ uses
   nifti_hdr_view, fsl_calls, math, nifti, niftis, prefs, dcm2nii, strutils, drawVolume, autoroi, VectorMath, LMessages;
 
 const
-  {$IFDEF FASTGZ}
-  kVers = '1.2.20210831';
-  {$ELSE}
-  kVers = '1.2.20210831-';
-  {$ENDIF}
+  {$include vers.inc}
+  //{$IFDEF FASTGZ}
+  //kVers = '1.2.20210831';
+  //{$ELSE}
+  //kVers = '1.2.20210831-';
+  //{$ENDIF}
 type
 
   { TGLForm1 }
@@ -665,9 +665,6 @@ type
     procedure DrawIntensityFilter(rampAbove, rampBelow, drawMode: integer);
     procedure ForceOverlayUpdate();
     procedure ZoomBtnClick(Sender: TObject);
-    {$IFDEF DEPTHPICKER}{$IFDEF METALAPI}
-    //function MTLCopyLastFrameTextureX(texture: MTLTextureProtocol; hasAlpha: boolean): CGImageRef;
-    {$ENDIF}{$ENDIF}
   private
     //
   end;
@@ -684,7 +681,8 @@ const  kExt = '.metal';
 {$ELSE}
 uses
  {$IFDEF GRAPH}glgraph,{$ENDIF}
- {$IFDEF COREGL}glcorearb,{$ELSE}gl,glext,{$ENDIF}
+ {$IFDEF COREGL}glcorearb,{$ELSE}{$IFNDEF Darwin}gl, {macos has macgl }{$ENDIF} glext,
+ {$ENDIF}
  {$IFDEF LCLCocoa}glcocoanscontext,{$ENDIF}{$IFDEF CLRBAR}glclrbar, {$ENDIF}
  {$IFDEF RETINA}retinahelper,{$ENDIF}
  OpenGLContext,  glvolume2, gl_core_utils {$IFDEF MYPY}{$IFDEF PY4LAZ}{$IFNDEF UNIX}, proc_py {$ENDIF}{$ENDIF}{$ENDIF};
@@ -9152,7 +9150,15 @@ gIsMouseDown: boolean = false;      // https://bugs.freepascal.org/view.php?id=3
 {$ENDIF}
 
 {$IFDEF DEPTHPICKER}{$IFDEF METALAPI}
-
+//TODO METAL:
+//We need to read and write to the depth buffer
+// https://metashapes.com/blog/reading-depth-buffer-metal-api/
+// https://developer.apple.com/forums/thread/62552
+// https://stackoverflow.com/questions/37489545/how-do-i-save-depth-buffer-to-a-texture-with-metal
+// https://developer.apple.com/forums/thread/111242
+// renderPass.depthAttachment.storeAction = MTLStoreActionStore;
+//function MTLCopyLastFrameTextureX(texture: MTLTextureProtocol; hasAlpha: boolean): CGImageRef;
+//https://developer.apple.com/documentation/metal/calculating_primitive_visibility_using_depth_testing
 (*function TGLForm1.MTLCopyLastFrameTextureX(texture: MTLTextureProtocol; hasAlpha: boolean): CGImageRef;
 var
   wid, ht, bytesPerRow, bytesCount: integer;
@@ -9213,123 +9219,47 @@ begin
 	CFRelease(colorSpace);
 end;      *)
 {$ENDIF}{$ENDIF}
-{$IFDEF DEPTHPICKER2}
 procedure TGLForm1.PickRenderDepth( X, Y: Integer);
 var
+{$IFDEF METALAPI}
+ u: uint32;
+{$ENDIF}
  c3: TVec3;
  niftiVol: TNIfTI;
  depth: single;
 begin
   if not vols.Layer(0,niftiVol) then exit;
+  {$IFNDEF METALAPI}
   glDrawBuffer(GL_BACK);
   Vol1.PaintDepth(niftiVol, gPrefs.DisplayOrient = kAxCorSagOrient4);
   glFinish;
   glReadBuffer(GL_BACK);
   glReadPixels( X, Y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, @depth);
+  {$ELSE}
+  ViewGPU1.Invalidate;
+  u := 0;//Vol1.ReadPixel(X,Y);
+  depth := Vol1.ReadDepth(X,Y);
+  //c := Vec4(((u shr 16) and $FF) / 255, ((u shr 8) and $FF) / 255, ((u shr 0) and $FF) / 255);
+  LayerBox.Caption := format('%d,%d : %d %d %d : %g',[X,Y, (u shr 16) and $FF, (u shr 8) and $FF, (u shr 0) and $FF, depth]);
+  //c := Vec4(((u shr 16) and $FF) / 255, ((u shr 8) and $FF) / 255, ((u shr 0) and $FF) / 255, ((u shr 24) and $FF) / 255);
+  exit;
+  {$ENDIF}
   c3 := Vol1.Unproject(X,Y, depth);
-  //Vol1.PaintDepth(niftiVol, gPrefs.DisplayOrient = kAxCorSagOrient4);
-  //Vol1.PaintDepth(niftiVol, false);
-  //LineBox.caption := format('xyz %0.3g %0.3g %0.3g len %g', [c3.X, c3.Y, c3.Z, c3.Length]);
   if (min(c3.X, min(c3.Y, c3.z)) < 0.0) or  (max(c3.X, max(c3.Y, c3.z)) > 1.0) then begin
-  	//Caption := '';
     exit;
   end;
   gSliceMM := niftiVol.FracMM(Vec3(c3.X, c3.Y, c3.Z));
   Caption := format('%0.4g×%0.4g×%0.4g', [gSliceMM.x, gSliceMM.y, gSliceMM.z]);
   vol1.SetSlice2DFrac(Vec3(c3.X, c3.Y, c3.Z));
-  //gSliceMM := Vec3(sliceMM.X, sliceMM.Y, sliceMM.Z);
   {$IFDEF COMPILEYOKE}
   SetShareFloats2D(gSliceMM.X,gSliceMM.Y,gSliceMM.Z);
   {$ENDIF}
-  //if (gPrefs.DisplayOrient = kAxCorSagOrient4) then
-  	ViewGPU1.Invalidate
-  //else
-  //	Vol1.Paint(niftiVol);
+  ViewGPU1.Invalidate;
   {$IFDEF METALAPI}
   UpdateTimer.Enabled := true;//OKRA
   {$ENDIF}
-  //ViewGPU1.Invalidate;
 end;
 
-{$ELSE}
-procedure TGLForm1.PickRenderDepth( X, Y: Integer);
-{$IFDEF DEPTHPICKER}
-var
- c: TVec4;
- sum: single;
- sliceMM : TVec3;
- niftiVol: TNIfTI;
- //u: uint32;
- depth: single;
-begin
-  if not vols.Layer(0,niftiVol) then exit;
-  {$IFNDEF METALAPI}
-  glDrawBuffer(GL_BACK);
-  {$ENDIF}
-  glReadPixels( X, Y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, @depth);
-
-  Vol1.Unproject(X,Y, depth);
-  //https://www.khronos.org/opengl/wiki/Compute_eye_space_from_window_space
-  //https://community.khronos.org/t/depth-buffer-how-do-i-get-the-pixels-z-coord/35318/3
-  //https://stackoverflow.com/questions/30340558/how-to-get-object-coordinates-from-screen-coordinates
-  //glm::vec3 result  = glm::unProject(a, viewMatrix, proj, viewport);
-  //https://community.khronos.org/t/converting-gl-fragcoord-to-model-space/57397
- (*vec4 v = vec4(2.0*(gl_FragCoord.x-view.x)/view.z-1.0,
-              2.0*(gl_FragCoord.y-view.y)/view.w-1.0,
-              2.0*texture2DRect(DepthTex,gl_FragCoord.xy).z-1.0,
-              1.0 );
-v = gl_ModelViewProjectionMatrixInverse * v;
-v /= v.w;*)
-  Vol1.PaintDepth(niftiVol, gPrefs.DisplayOrient = kAxCorSagOrient4);
-  {$IFDEF METALAPI}
-  //ViewGPU1.Invalidate;
-  //xxx
-  //todo
-  c := Vec4(0.5, 0.5, 0.5, 0.5);
-  u := Vol1.ReadPixel(X,Y);
-  c := Vec4(((u shr 16) and $FF) / 255, ((u shr 8) and $FF) / 255, ((u shr 0) and $FF) / 255, ((u shr 24) and $FF) / 255);
-  //https://stackoverflow.com/questions/28424883/ios-metal-how-to-read-from-the-depth-buffer-at-a-point
-  {$ELSE}
-  //https://learnopengl.com/Advanced-OpenGL/Framebuffers
-  glReadBuffer(GL_BACK);
-  glReadPixels(X, Y, 1, 1, GL_RGBA, GL_FLOAT, @c); //OSX-Darwin   GL_BGRA = $80E1;  GL_UNSIGNED_INT_8_8_8_8_EXT = $8035;
-  {$IFDEF COREGL}
-  {$IFDEF LCLgtk3}
-  glBindFramebuffer(GL_FRAMEBUFFER, 1);
-  {$ELSE}
-   glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  {$ENDIF}
-  {$ELSE}
-  glBindFramebufferExt(GL_FRAMEBUFFER, 0);
-  {$ENDIF}
-  {$ENDIF}
-  LayerBox.caption := format('%0.3g %0.3g %0.3g', [c.X, c.Y, c.Z]);
-  sliceMM := niftiVol.FracMM(Vec3(c.X, c.Y, c.Z));
-  sum := c.r + c.g + c.b; //a click outside the rendering will return background color. No good solution...
-  if (sum < 0.001) or (sum > 2.99) then begin
-     Caption := '';
-     exit;
-  end;
-  Caption := format('%0.4g×%0.4g×%0.4g', [sliceMM.x, sliceMM.y, sliceMM.z]);
-  vol1.SetSlice2DFrac(Vec3(c.X, c.Y, c.Z));
-  gSliceMM := Vec3(sliceMM.X, sliceMM.Y, sliceMM.Z);
-  {$IFDEF COMPILEYOKE}
-  SetShareFloats2D(sliceMM.X,sliceMM.Y,sliceMM.Z);
-  {$ENDIF}
-  if (gPrefs.DisplayOrient = kAxCorSagOrient4) then
-  	ViewGPU1.Invalidate
-  else
-  	Vol1.Paint(niftiVol);
-  {$IFDEF METALAPI}
-  UpdateTimer.Enabled := true;//OKRA
-  {$ENDIF}
-  //ViewGPU1.Invalidate;
-{$ELSE}
-begin
-   //
-{$ENDIF}
-end;
-{$ENDIF}
 var
 	gAxCorSagOrient4MouseDownOrient: integer = 222;
 
@@ -9357,9 +9287,6 @@ begin
  X := round(X * f);
  Y := round(Y * f);
  Yrev := ViewGPU1.ClientHeight - Y;
-
- //ss := getKeyshiftstate;
- //if  (ssShift in ss) then
  {$ENDIF}
  gMouseDrag := false;
   if (ssAlt in Shift) and (ColorEditorMenu.Checked) then begin
@@ -9403,13 +9330,14 @@ begin
  	if (i < 0) and (gPrefs.RenderDepthPicker) then begin
        if (ssShift in Shift) then exit;
        {$IFDEF METALAPI}
-        {TODO
-        f := Vol1.DrawableWidth();
+       f := Vol1.renderBitmapWidth;//ViewGPU1.retinaScale;
         if (f > 0) and (ViewGPU1.width > 0) then
         	f := f / ViewGPU1.width
         else
           f := 1;
-        PickRenderDepth( round(X * f), round(Y * f) );}
+        //ClipBox.Caption := floattostr(f);
+        PickRenderDepth( round(X * f), round(Y * f) );
+        //PickRenderDepth(X,Y);
         {$ELSE}
        	PickRenderDepth(X,Yrev);
         {$ENDIF}
@@ -9779,16 +9707,17 @@ begin
     halt;
  end;
  {$ELSE}
+ //EUK
  if (not  Load_GL_version_2_1) then begin
     printf('Unable to load OpenGL 2.1');
     showmessage('Unable to load OpenGL 2.1');
     halt;
  end;
- (*  //extensions used by rendering, not graphing
+ //extensions used by rendering, not graphing
  glext_LoadExtension('GL_version_1_2'); //https://bugs.freepascal.org/view.php?id=37368
  if not glext_LoadExtension('GL_EXT_framebuffer_object') then begin
     printf('This software does not support GL_EXT_framebuffer_object used for GPU-based Gradient calculation');
- end; *)
+ end;
  {$ENDIF}
  ViewGPUg.ReleaseContext;
  if GLErrorStr <> '' then begin

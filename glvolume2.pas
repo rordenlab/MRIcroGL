@@ -18,7 +18,7 @@ uses
   {$IFDEF TIMER} DateUtils,{$ENDIF}
  {$IFDEF CUBE} Forms, glcube, {$ENDIF}
   {$IFDEF CLRBAR}glclrbar,  {$ENDIF}
-  {$IFDEF COREGL} glcorearb, {$ELSE} gl, glext, {$ENDIF}
+  {$IFDEF COREGL} glcorearb, {$ELSE} {$IFNDEF Darwin}gl, {macos has macgl }{$ELSE}MacOSAll,{$ENDIF} glext, {$ENDIF}
   {$IFDEF VIEW2D} colorEditor, slices2D, glfont, {$ENDIF}
  retinahelper, niftis, SimdUtils,  gl_core_utils, VectorMath, Classes, SysUtils, Graphics,
     math, OpenGLContext, dialogs, nifti, drawvolume ;
@@ -34,13 +34,6 @@ const
 type
   TGPUVolume = class
       private
-        {$IFDEF DEPTHPICKER}
-        {$IFNDEF DEPTHPICKER2}depthProgram: GLuint;
-        rayDirLocDepth, mvpLocDepth, textureSzLocDepth, overlaysLocDepth,lightPositionLocDepth,
-         clipPlaneLocDepth,clipThickLocDepth,intensityVolLocDepth,sliceSizeLocDepth,
-         overlayIntensityVolLocDepth,stepSizeLocDepth: GLint;
-        {$ENDIF}
-        {$ENDIF}
         {$IFDEF VIEW2D}
         {$IFDEF COREGL}
         vao, vaoTex2D, vboTex2D, vaoLine2D, vboLine2D,
@@ -1196,109 +1189,6 @@ kFrag = kFragFaster
 +#10'	FragColor = colAcc;'
 +#10'}';
 
-{$IFNDEF DEPTHPICKER2}
-kFragDepth = kFragFaster
-+#10'uniform float ambient = 1.0;'
-+#10'uniform float diffuse = 0.3;'
-+#10'uniform float specular = 0.25;'
-+#10'uniform float shininess = 10.0;'
-+#10'uniform float overlayFuzzy = 0.5;'
-+#10'uniform float overlayDepth = 0.3;'
-+#10'uniform float overlayClip = 0.0;'
-+#10'void main() {'
-+#10'	#ifdef BETTER_BUT_SLOWER'
-+#10'	textureSz = textureSize(intensityVol, 0);'
-+#10'	#endif'
-+#10' vec3 start = TexCoord1.xyz;'
-+#10'	vec3 backPosition = GetBackPosition(start);'
-+#10'	vec3 dir = backPosition - start;'
-+#10'	float len = length(dir);'
-+#10'	dir = normalize(dir);'
-+#10'	vec4 deltaDir = vec4(dir.xyz * stepSize, stepSize);'
-+#10'	vec4 gradSample, colorSample;'
-+#10'	float bgNearest = len;'
-+#10'	vec4 colAcc = vec4(0.0,0.0,0.0,0.0);'
-+#10'	vec4 prevGrad = vec4(0.0,0.0,0.0,0.0);'
-+#10'	vec4 samplePos;'
-+#10'	float noClipLen = len;'
-+#10'	samplePos = vec4(start.xyz +deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)), 0.0);'
-+#10'	if (clipPlane.a > -0.5) {'
-+#10'		bool frontface = (dot(dir , clipPlane.xyz) > 0.0);'
-+#10'		float dis = dot(dir,clipPlane.xyz);'
-+#10'		if (dis != 0.0 ) dis = (-clipPlane.a - dot(clipPlane.xyz, start.xyz-0.5)) / dis;'
-+#10'		if (((frontface) && (dis >= len)) || ((!frontface) && (dis <= 0.0))) {'
-+#10'			samplePos.a = len + 1.0;'
-+#10'		} else if ((dis > 0.0) && (dis < len)) {'
-+#10'			if (frontface) {'
-+#10'				samplePos.a = dis;'
-+#10'				samplePos.xyz += dir * dis;'
-+#10'			} else {'
-+#10'				backPosition = start + dir * (dis);'
-+#10'				len = length(backPosition - start);'
-+#10'			}'
-+#10'		}'
-+#10'	}'
-+#10'	vec4 clipPos = samplePos;'
-+#10'	float stepSizeX2 = samplePos.a + (stepSize * 2.0);'
-+#10'	deltaDir = vec4(dir.xyz * max(stepSize, sliceSize * 1.95), max(stepSize, sliceSize * 1.95));'
-+#10'	while (samplePos.a <= len) {'
-+#10'		if ((texture(intensityVol,samplePos.xyz).a) > 0.0) break;'
-+#10'		samplePos += deltaDir;'
-+#10'	}'
-+#10'	if ((samplePos.a > len) && ( overlays < 1 )) {'
-+#10'		FragColor = colAcc;'
-+#10'		return;		'
-+#10'	}'
-+#10'	samplePos -= deltaDir;'
-+#10'	if (samplePos.a < clipPos.a)'
-+#10'		samplePos = clipPos;'
-+#10'	deltaDir = vec4(dir.xyz * stepSize, stepSize);'
-+#10'	vec3 defaultDiffuse = vec3(0.5, 0.5, 0.5);'
-+#10'	while (samplePos.a <= len) {'
-+#10'		colorSample = texture3Df(intensityVol,samplePos.xyz);'
-+#10'		colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);'
-+#10'		if (colorSample.a > 0.05) {'
-+#10'			colAcc = vec4(samplePos.xyz, 1.0);'
-+#10'			bgNearest = samplePos.a;'
-+#10'			break;'
-+#10'		}'
-+#10'		samplePos += deltaDir;'
-+#10'	}'
-+#10'	colAcc.a = colAcc.a/0.95;'
-+#10'	if ( overlays < 1 ) {'
-+#10'		FragColor = colAcc;'
-+#10'		return;'
-+#10'	}'
-+#10'	vec4 overAcc = vec4(0.0,0.0,0.0,0.0);'
-+#10'	prevGrad = vec4(0.0,0.0,0.0,0.0);'
-+#10'	if (overlayClip > 0)'
-+#10'		samplePos = clipPos;'
-+#10'	else {'
-+#10'		len = noClipLen;'
-+#10'		samplePos = vec4(start.xyz +deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)), 0.0);'
-+#10'	}'
-+#10'	clipPos = samplePos;'
-+#10'	deltaDir = vec4(dir.xyz * max(stepSize, sliceSize), max(stepSize, sliceSize));'
-+#10'	while (samplePos.a <= len) {'
-+#10'		if ((texture(intensityOverlay,samplePos.xyz).a) > 0.0) break;'
-+#10'		samplePos += deltaDir;'
-+#10'	}'
-+#10'	samplePos -= deltaDir;'
-+#10'	if (samplePos.a < clipPos.a)'
-+#10'		samplePos = clipPos;'
-+#10'	deltaDir = vec4(dir.xyz * stepSize, stepSize);'
-+#10'	while (samplePos.a <= len) {'
-+#10'		colorSample = texture3Df(intensityOverlay,samplePos.xyz);'
-+#10'		if (colorSample.a > 0.05) {'
-+#10'			colAcc = vec4(samplePos.xyz, 1.0);'
-+#10'			break;'
-+#10'		}'
-+#10'		samplePos += deltaDir;'
-+#10'		if (samplePos.a > bgNearest) break;'
-+#10'	} //while samplePos.a < len'
-+#10'	FragColor = colAcc;'
-+#10'}';
-{$ENDIF} //DepthPicker2 does not need a custom shader
 {$ELSE}
 kFragBase = '#version 120'
 +#10'varying vec3 TexCoord1;'
@@ -1485,68 +1375,6 @@ kFrag = kFragFaster
 +#10'	#endif'
 +#10'}';
 
-{$IFNDEF DEPTHPICKER2}
-kFragDepth = kFragFaster
-+#10'uniform float overlayClip = 0.0;'
-+#10'void main() {'
-+#10'    vec3 start = TexCoord1.xyz;'
-+#10'	vec3 backPosition = GetBackPosition(start);'
-+#10'	vec3 dir = backPosition - start;'
-+#10'	float len = length(dir);'
-+#10'	dir = normalize(dir);'
-+#10'	vec4 deltaDir = vec4(dir.xyz * stepSize, stepSize);'
-+#10'	vec4 colorSample;'
-+#10'	float bgNearest = len; //assume no hit'
-+#10'	vec4 colAcc = vec4(0.0,0.0,0.0,0.0);'
-+#10'	vec4 samplePos;'
-+#10'	//background pass'
-+#10'	float noClipLen = len;'
-+#10'	samplePos = vec4(start.xyz +deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)), 0.0);'
-+#10'	vec4 clipPos = applyClip(dir, samplePos, len);'
-+#10'	float stepSizeX2 = samplePos.a + (stepSize * 2.0);'
-+#10'	//fast pass - optional'
-+#10'	fastPass (len, dir, intensityVol, samplePos);'
-+#10'	if ((textureSz.x < 1) || ((samplePos.a > len) && ( overlays < 1 ))) { //no hit'
-+#10'		gl_FragColor = colAcc;'
-+#10'		return;		'
-+#10'	}	'
-+#10'	if (samplePos.a < clipPos.a)'
-+#10'		samplePos = clipPos;'
-+#10'	deltaDir = vec4(dir.xyz * stepSize, stepSize);'
-+#10'	//end fastpass - optional'
-+#10'	while (samplePos.a <= len) {'
-+#10'		colorSample = texture3Df(intensityVol,samplePos.xyz);'
-+#10'		if (colorSample.a > 0.05) {'
-+#10'			colAcc = vec4(samplePos.xyz, 1.0);'
-+#10'			bgNearest = samplePos.a;'
-+#10'			break;'
-+#10'		}'
-+#10'		samplePos += deltaDir;'
-+#10'	} //while samplePos.a < len'
-+#10'	if ((textureSz.x < 1) || ( overlays < 1 )) {'
-+#10'		gl_FragColor = colAcc;'
-+#10'		return;'
-+#10'	}'
-+#10'	//overlay pass'
-+#10'	vec4 overAcc = vec4(0.0,0.0,0.0,0.0);'
-+#10'	if (overlayClip > 0)'
-+#10'		samplePos = clipPos;'
-+#10'	else {'
-+#10'		len = noClipLen;'
-+#10'		samplePos = vec4(start.xyz +deltaDir.xyz* (fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453)), 0.0);'
-+#10'	}'
-+#10'	while (samplePos.a <= len) {'
-+#10'		colorSample = texture3Df(intensityOverlay,samplePos.xyz);'
-+#10'		if (colorSample.a > 0.05) {'
-+#10'			colAcc = vec4(samplePos.xyz, 1.0);'
-+#10'			break;'
-+#10'		}'
-+#10'		samplePos += deltaDir;'
-+#10'		if (samplePos.a > bgNearest) break;'
-+#10'	} //while samplePos.a < len'
-+#10'	gl_FragColor = colAcc;'
-+#10'}';
-{$ENDIF}//not required for depthpicker2
 {$ENDIF}
 procedure TGPUVolume.SetShader(shaderName: string);
 var
@@ -1672,7 +1500,7 @@ begin
   mvpLine3DLoc := glGetUniformLocation(programLine3D, pAnsiChar('ModelViewProjectionMatrix'));
   colorLine3DLoc := glGetUniformLocation(programLine3D, pAnsiChar('Color'));
   {$IFDEF COREGL}
-  setlength(gLines3D,6); //3D crosshair is six lines
+  setlength(gLines3D,6); //3D crosshair is three lines, six vertices
   {$ENDIF} //COREGL
 
   {$ENDIF} //LINE3D
@@ -1698,23 +1526,6 @@ begin
   dlTex2D := 0; //display list empty
   dlBox3D := 0;
   dlColorEditor := 0;
-  {$ENDIF}
-  //Depth Program
-  {$IFDEF DEPTHPICKER}
-  {$IFNDEF DEPTHPICKER2}
-  depthProgram := initVertFrag(kVert, kFragDepth);
-  overlaysLocDepth := glGetUniformLocation(depthProgram, pAnsiChar('overlays'));
-  lightPositionLocDepth := glGetUniformLocation(depthProgram, pAnsiChar('lightPosition'));
-  clipPlaneLocDepth :=  glGetUniformLocation(depthProgram, pAnsiChar('clipPlane'));
-  clipThickLocDepth :=  glGetUniformLocation(depthProgram, pAnsiChar('clipThick'));
-  intensityVolLocDepth := glGetUniformLocation(depthProgram, pAnsiChar('intensityVol'));
-  overlayIntensityVolLocDepth := glGetUniformLocation(depthProgram, pAnsiChar('intensityOverlay'));
-  sliceSizeLocDepth := glGetUniformLocation(depthProgram, pAnsiChar('sliceSize'));
-  stepSizeLocDepth := glGetUniformLocation(depthProgram, pAnsiChar('stepSize'));
-  textureSzLocDepth := glGetUniformLocation(depthProgram, pAnsiChar('textureSz'));
-  mvpLocDepth := glGetUniformLocation(depthProgram, pAnsiChar('ModelViewProjectionMatrix'));
-  rayDirLocDepth := glGetUniformLocation(depthProgram, pAnsiChar('rayDir'));
-  {$ENDIF}
   {$ENDIF}
   //2D program
   {$IFDEF FX}
@@ -1853,9 +1664,6 @@ begin
   shaderPrefs.nUniform:= 0;
   programRaycast := 0;
   programRaycastBetter := 0;
-  {$IFDEF DEPTHPICKER}
-  //depthFrameBuffer := 0;
-  {$ENDIF}
 end;
 
 procedure TGPUVolume.LoadCube();
@@ -2808,19 +2616,6 @@ begin
           widthHeightLeft := slices2D.axCorSagOrient4XY;
   PaintCore(vol, widthHeightLeft, false, false);
 end;
-
-{$ELSE}
-procedure TGPUVolume.PaintDepth(var vol: TNIfTI; isAxCorSagOrient4: boolean = false);
-var
-	widthHeightLeft: TVec3i;
-begin
-  widthHeightLeft.x := glControl.clientwidth;
-  widthHeightLeft.y := glControl.clientheight;
-  widthHeightLeft.z := 0;
-  if isAxCorSagOrient4 then
-          widthHeightLeft := slices2D.axCorSagOrient4XY;
-  PaintCore(vol, widthHeightLeft, false, true);
-end;
 {$ENDIF}
 
 //def __drawCursor(self):
@@ -2909,16 +2704,10 @@ begin
   //viewportXYWH: TVec4;
   {$ENDIF}
   glEnable(GL_DEPTH_TEST);
-  {$IFDEF DEPTHPICKER} {$IFNDEF DEPTHPICKER2}
-  if isDepthShader then
-  	glUseProgram(depthProgram)
-  else {$ENDIF}{$ENDIF} begin
-    if Quality1to5 = kQualityBest then
+  if Quality1to5 = kQualityBest then
          glUseProgram(programRaycastBetter)
-    else
+  else
         glUseProgram(programRaycast);
-  end;
-
   {$IFDEF COREGL}
   {$IFDEF LCLgtk3}
   glBindFramebuffer(GL_FRAMEBUFFER, 1);
@@ -2927,16 +2716,6 @@ begin
   {$ENDIF}
   //2020 glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
   {$ENDIF}
-  {$IFDEF DEPTHPICKER}{$IFDEF DEPTHPICKER_USEFRAMEBUFFER}
-  {$IFDEF COREGL}
-  if isDepthShader then
-  	glBindFramebuffer(GL_FRAMEBUFFER, depthPickerFrameBuffer);
-  {$ELSE}
-  if isDepthShader then
-  	glBindFramebufferExt(GL_FRAMEBUFFER, depthPickerFrameBuffer);
-  {$ENDIF}
-  {$ENDIF}{$ENDIF}
-
   //bind background intensity (color)
   glActiveTexture(GL_TEXTURE2);
   glBindTexture(GL_TEXTURE_3D, intensityTexture3D);
@@ -2958,21 +2737,6 @@ begin
   //printf(format('%g %g %g', [vol.Scale.X, vol.Scale.Y, vol.Scale.Z]));
   //printMat(modelMatrix);
   //printf(format('a %d e %d = [%g %g %g]', [fAzimuth, fElevation, rayDir.x, rayDir.y, rayDir.z]));
-  {$IFDEF DEPTHPICKER}{$IFNDEF DEPTHPICKER2} if isDepthShader then begin
-    glUniform1i(intensityVolLocDepth, 2);
-    glUniform1i(overlaysLocDepth, overlayNum); //0 if no overlays
-    glUniform1i(overlayIntensityVolLocDepth, 4);
-    glUniform1f(stepSizeLocDepth, ComputeStepSize(Quality1to5, maxDim)) ;
-    glUniform1f(sliceSizeLocDepth, 1/maxDim);
-    glUniform3f(lightPositionLocDepth, modelLightPos.x, modelLightPos.y, modelLightPos.z);
-    glUniform4f(clipPlaneLocDepth, fClipPlane.x, fClipPlane.y, fClipPlane.z, fClipPlane.w);
-    glUniform1f(clipThickLocDepth, ClipThick);
-    {$IFNDEF COREGL}
-    glUniform3f(textureSzLocDepth, Vol.Dim.x, Vol.Dim.y, Vol.Dim.z );
-    {$ENDIF}
-    glUniformMatrix4fv(mvpLocDepth, 1, GL_FALSE, @modelViewProjectionMatrix);
-    glUniform3f(rayDirLocDepth,rayDir.x,rayDir.y,rayDir.z);
-  end else {$ENDIF}{$ENDIF} begin
     glUniform1i(intensityVolLoc, 2);
     //bind background gradient (edges)
     glActiveTexture(GL_TEXTURE3);
@@ -3019,7 +2783,7 @@ begin
        glUniformMatrix3fv(normLoc, 1, GL_FALSE, @nMtx);
     end;
     {$ENDIF}
-  end;
+
   //glControl.SetViewport(); //OKRA
   if (clearScreen) then glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT);
   //glDisable(GL_DEPTH_TEST);

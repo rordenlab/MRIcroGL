@@ -1,5 +1,5 @@
 Package: mricrogl-data
-Version: 1.2.20210909
+Version: <ver>
 Architecture: all
 Maintainer: NeuroDebian Team <team@neuro.debian.net>
 Description: data files for MRIcroGL
