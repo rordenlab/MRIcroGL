@@ -134,7 +134,9 @@
     </CodeGeneration>
     <Linking>
       <Debugging>
+        <GenerateDebugInfo Value="False"/>
         <DebugInfoType Value="dsDwarf2"/>
+        <UseLineInfoUnit Value="False"/>
         <StripSymbols Value="True"/>
       </Debugging>
       <LinkSmart Value="True"/>
@@ -151,7 +153,7 @@
       </CompilerMessages>
       <CustomOptions Value="-dDisableLCLGIF 
 -dDisableLCLPNM
--dMYPY"/>
+-dxMYPY"/>
     </Other>
   </CompilerOptions>
   <Debugging>

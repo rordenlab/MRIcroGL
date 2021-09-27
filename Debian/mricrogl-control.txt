@@ -2,7 +2,7 @@ Package: mricrogl
 Version: <ver>
 Architecture: amd64
 Maintainer: NeuroDebian Team <team@neuro.debian.net>
-Depends: libqt5pas1, libc6 (>= 2.14), python3:any (>= 3.7), mricrogl-data
+Depends: libqt5pas1, libc6 (>= 2.14), libpython-dev:any (>= 3.6), python3:any (>= 3.6), mricrogl-data
 Recommends: dcm2niix
 Description: MRIcroGL
  MRIcroGL GUI-based visualization for medical imaging data (using QT5)

@@ -1,10 +1,8 @@
 //pref
-//brighten|float|0.5|2|3.5
-//surfaceColor|float|0.0|1.0|1.0
 //overlayFuzzy|float|0.01|0.5|1
-//overlayDepth|float|0.0|0.15|0.99
-//overlayClip|float|0|0|1|Does clipping also influence overlay layers?
-//matCap|set|True
+//overlayDepth|float|0.0|0.3|0.8
+//overlayClip|float|0|0|1
+
 //vert
 #include <metal_stdlib>
 //xcrun -sdk macosx metal -c Default.metal -o Render.air
@@ -12,11 +10,9 @@
 using namespace metal;
 
 struct CustomFragUniforms {
-	float brighten;
-	float surfaceColor;
-	float overlayFuzzy;
-	float overlayDepth;
-	float overlayClip;
+float overlayFuzzy;
+float overlayDepth;
+float overlayClip;
 };
 
 struct VertexIn {
@@ -45,6 +41,27 @@ struct FragUniforms {
 	float4x4 normMatrix;
 };
 
+vertex VertexOut vertexShader(  unsigned int vertexID               [[ vertex_id ]],
+                                const device VertexIn* verts    [[ buffer(0) ]],
+								const device Uniforms* uniforms    	[[ buffer(1) ]]
+                                ) {
+	VertexIn VertexIn = verts[vertexID];
+	VertexOut VertexOut;
+	VertexOut.position = uniforms->modelViewProjectionMatrix * float4(VertexIn.position, 1);
+	VertexOut.color = VertexIn.color;
+	return VertexOut;
+}
+
+float3 GetBackPosition (float3 startPosition, float3 rayDir) {
+	//assume orthographic projection - perspective a bit trickier
+	// http://prideout.net/blog/?p=64
+	float3 invR = 1.0 / (rayDir);
+    float3 tbot = invR * (float3(0.0)-startPosition);
+    float3 ttop = invR * (float3(1.0)-startPosition);
+    float3 tmax = max(ttop, tbot);
+    float2 t = min(tmax.xx, tmax.yz);
+	return startPosition + (rayDir * min(t.x, t.y));
+}
 
 #ifdef CUBIC
 float4 texture(texture3d<float> vol, float3 coord) {
@@ -118,52 +135,26 @@ float4 texture3Df(texture3d<float> vol, float3 coord) {
 }
 #endif
 
-vertex VertexOut vertexShader(  unsigned int vertexID               [[ vertex_id ]],
-                                const device VertexIn* verts    [[ buffer(0) ]],
-								const device Uniforms* uniforms    	[[ buffer(1) ]]
-                                ) {
-	VertexIn VertexIn = verts[vertexID];
-	VertexOut VertexOut;
-	VertexOut.position = uniforms->modelViewProjectionMatrix * float4(VertexIn.position, 1);
-	VertexOut.color = VertexIn.color;
-	return VertexOut;
-}
-
-float3 GetBackPosition (float3 startPosition, float3 rayDir) {
-	//assume orthographic projection - perspective a bit trickier
-	// http://prideout.net/blog/?p=64
-	float3 invR = 1.0 / (rayDir);
-    float3 tbot = invR * (float3(0.0)-startPosition);
-    float3 ttop = invR * (float3(1.0)-startPosition);
-    float3 tmax = max(ttop, tbot);
-    float2 t = min(tmax.xx, tmax.yz);
-	return startPosition + (rayDir * min(t.x, t.y));
-}
 
 fragment float4 fragmentShader(VertexOut  in [[stage_in]],
                texture3d<float> volTexture [[ texture(0) ]],
                texture3d<float> gradTexture [[ texture(1) ]],
                texture3d<float> overlayVolTexture [[ texture(2) ]],
                texture3d<float> overlayGradTexture [[ texture(3) ]],
-			   texture2d<float> matCapTexture [[ texture(4) ]],
-			   depth2d<float> depth [[ texture(5) ]],
-               const device FragUniforms* fragUniforms    	[[ buffer(1) ]],
+			   const device FragUniforms* fragUniforms    	[[ buffer(1) ]],
                const device CustomFragUniforms* customFragUniforms    	[[ buffer(2) ]]
                ) {
 	//return float4(1,0,1,1);
 	constexpr sampler textureSampler (mag_filter::linear,min_filter::linear, address::clamp_to_zero);
-	constexpr sampler matCapSampler (mag_filter::linear,min_filter::linear);
 	float2 gl_FragCoord = float2(in.position.xy); //random jitter to reduce wood grain
 	float3 lightPosition = fragUniforms->lightPos.xyz;
 	float clipThick = fragUniforms->clipThick;
 	float backAlpha = fragUniforms->backAlpha;
 	int overlays = round(fragUniforms->overlayNum);
-	float brighten = customFragUniforms->brighten;
-	float surfaceColor = customFragUniforms->surfaceColor;
-	float overlayDepth = customFragUniforms->overlayDepth;
 	float overlayFuzzy = customFragUniforms->overlayFuzzy;
+	float overlayDepth = customFragUniforms->overlayDepth;
 	float overlayClip = customFragUniforms->overlayClip;	
-	float3x3 normalMatrix = float3x3(fragUniforms->normMatrix[0].xyz, fragUniforms->normMatrix[1].xyz, fragUniforms->normMatrix[2].xyz);
+	//float3x3 normalMatrix = float3x3(fragUniforms->normMatrix[0].xyz, fragUniforms->normMatrix[1].xyz, fragUniforms->normMatrix[2].xyz);
 	float sliceSize = fragUniforms->sliceSiz;//for opacity correction
 	float stepSize = fragUniforms->stepSiz;//sampling rate
 	float4 clipPlane = fragUniforms->clipPlane;
@@ -233,50 +224,23 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 	//end fastpass - optional
 	float ran = fract(sin(gl_FragCoord.x * 12.9898 + gl_FragCoord.y * 78.233) * 43758.5453);
 	samplePos += deltaDir * ran;
-	float3 defaultDiffuse = float3(0.5, 0.5, 0.5);
+	//float3 defaultDiffuse = float3(0.5, 0.5, 0.5);
 	while (samplePos.a <= len) {
 		#ifdef CUBIC
 		colorSample = texture3Df(volTexture, samplePos.xyz);
 		#else
 		colorSample = (volTexture.sample(textureSampler, samplePos.xyz));
 		#endif
-		if (colorSample.a > 0.0)  {
-			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
-			bgNearest = min(samplePos.a,bgNearest);
-			#ifdef CUBIC
-			gradSample = texture3Df(gradTexture, samplePos.xyz);
-			#else
-			gradSample = (gradTexture.sample(textureSampler, samplePos.xyz)).rgba;
-			#endif
-			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
-			//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
-			if (gradSample.a < prevGrad.a)
-				gradSample.rgb = prevGrad.rgb;
-			prevGrad = gradSample;
-			float3 n = normalize(normalMatrix * gradSample.rgb) * 0.5 + 0.5;
-			float3 d = (matCapTexture.sample(matCapSampler, n.xy)).rgb;
-			float3 surf = mix(defaultDiffuse, colorSample.rgb, surfaceColor);
-			colorSample.rgb = d * surf * brighten * colorSample.a;
-			colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
-			if ( colAcc.a > 0.95 )
-				break;
-
+		if (colorSample.a > 0.05)  {
+			bgNearest = samplePos.a;
+			colAcc = float4(samplePos.rgb, 1.0);
+			break;
 		}
 		samplePos += deltaDir;
 	}
-	colAcc.a = colAcc.a/0.95;
-	colAcc.a *= backAlpha;
-	if ( overlays< 1 ) {
+	if ( overlays< 1 )
 		return colAcc;
-	}
 	//overlay pass
-	float overFarthest = len;
-	float ambient = 1.0;
-	float diffuse = 0.3;
-	float specular = 0.25;
-	float shininess = 10.0;
-	float4 overAcc = float4(0.0,0.0,0.0,0.0);
-	prevGrad = float4(0.0,0.0,0.0,0.0);
 	if (overlayClip > 0)
 		samplePos = clipPos;
 	else {
@@ -301,42 +265,12 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 		#else
 		colorSample = (overlayVolTexture.sample(textureSampler, samplePos.xyz));
 		#endif
-		if (colorSample.a > 0.00) {
-			if (overAcc.a < 0.3)
-				overFarthest = samplePos.a;
-			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
-			colorSample.a *=  overlayFuzzy;
-			//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
-			#ifdef CUBIC
-			gradSample = texture3Df(overlayGradTexture,samplePos.xyz);
-			#else
-			gradSample = (overlayGradTexture.sample(textureSampler, samplePos.xyz));
-			#endif
-			gradSample.rgb = normalize(gradSample.rgb*2.0 - 1.0);
-			//reusing Normals http://www.marcusbannerman.co.uk/articles/VolumeRendering.html
-			if (gradSample.a < prevGrad.a)
-				gradSample.rgb = prevGrad.rgb;
-			prevGrad = gradSample;
-			float lightNormDot = dot(gradSample.rgb, lightPosition);
-			float3 a = colorSample.rgb * ambient;
-			float3 d = max(lightNormDot, 0.0) * colorSample.rgb * diffuse;
-			float s =   specular * pow(max(dot(reflect(lightPosition, gradSample.rgb), dir), 0.0), shininess);
-			colorSample.rgb = a + d + s;
-			colorSample.rgb *= colorSample.a;
-			overAcc= (1.0 - overAcc.a) * colorSample + overAcc;
-			if (overAcc.a > 0.95 )
-				break;
+		if (colorSample.a > 0.05) {
+			colAcc = float4(samplePos.rgb, 1.0);
+			break;
 		}
 		samplePos += deltaDir;
+		if (samplePos.a > bgNearest) break;
 	} //while samplePos.a < len
-	overAcc.a = overAcc.a/0.95;
-	float overMix = overAcc.a;
-	if (((overFarthest) > bgNearest) && (colAcc.a > 0.0)) { //background (partially) occludes overlay
-		float dx = (overFarthest - bgNearest)/1.73;
-		dx = colAcc.a * pow(dx, overlayDepth);
-		overMix *= 1.0 - dx;
-	}
-	colAcc.rgb = mix(colAcc.rgb, overAcc.rgb, overMix);
-	colAcc.a = max(colAcc.a, overAcc.a);
 	return colAcc;
 }

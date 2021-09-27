@@ -38,7 +38,7 @@ struct FragUniforms {
 	float4 rayDir;
 	float4 lightPos;
 	float4 clipPlane;
-	float4x4 normMatrix;
+	float4x4 normMatrix, modelViewProjectionMatrix;
 };
 
 vertex VertexOut vertexShader(  unsigned int vertexID               [[ vertex_id ]],
@@ -63,7 +63,17 @@ float3 GetBackPosition (float3 startPosition, float3 rayDir) {
 	return startPosition + (rayDir * min(t.x, t.y));
 }
 
-fragment float4 fragmentShader(VertexOut  in [[stage_in]],
+struct FragmentOut {
+	float4 color [[color(0)]];
+	float depth [[depth(any)]];
+};
+
+float setDepthBuffer(float3 pos, float4x4 mvp) {
+	//return ((mvp * float4(pos, 1.0)).z + 1.0) * 0.5;
+	return (mvp * float4(pos, 1)).z;
+}
+
+fragment FragmentOut fragmentShader(VertexOut  in [[stage_in]],
                texture3d<float> volTexture [[ texture(0) ]],
                texture3d<float> gradTexture [[ texture(1) ]],
                texture3d<float> overlayVolTexture [[ texture(2) ]],
@@ -71,6 +81,8 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 			   const device FragUniforms* fragUniforms    	[[ buffer(1) ]],
                const device CustomFragUniforms* customFragUniforms    	[[ buffer(2) ]]
                ) {
+	FragmentOut out;
+	out.depth = 1000.0;
 	constexpr sampler textureSampler (mag_filter::linear,min_filter::linear, address::clamp_to_zero);
 	float2 gl_FragCoord = float2(in.position.xy); //random jitter to reduce wood grain
 	//float3 lightPosition = fragUniforms->lightPos.xyz;
@@ -130,8 +142,10 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 
 	//if ((samplePos.a > len) && ( !hasOverlays )) { //no hit: quit here
 	if ((samplePos.a > len) && ( overlays < 1 )) {
-		return colAcc;	
-	}	
+		out.color = colAcc;
+		return out;
+	}
+	int nHit = 0;	
 	if (samplePos.a < clipPos.a) {
 		samplePos = clipPos;
 		bgNearest = clipPos.a;
@@ -154,7 +168,11 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 		colorSample = (volTexture.sample(textureSampler, samplePos.xyz));
 		if (colorSample.a > 0.0) {
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), stepSize/sliceSize);
-			bgNearest = min(samplePos.a,bgNearest);
+			if (nHit == 0) {
+					out.depth = setDepthBuffer(samplePos.xyz, fragUniforms->modelViewProjectionMatrix);
+					nHit += 1;
+					bgNearest = samplePos.a;
+			}
 			colorSample.rgb *= colorSample.a;
 			colAcc= (1.0 - colAcc.a) * colorSample + colAcc;
 			if ( colAcc.a > 0.95 )
@@ -165,7 +183,8 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 	colAcc.a = colAcc.a/0.95;
 	colAcc.a *= backAlpha;
 	if ( overlays< 1 ) {
-		return colAcc;
+		out.color = colAcc;
+		return out;
 	}
 	//overlay pass
 	float overFarthest = len;
@@ -210,5 +229,6 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 	}
 	colAcc.rgb = mix(colAcc.rgb, overAcc.rgb, overMix);
 	colAcc.a = max(colAcc.a, overAcc.a);
-	return colAcc;
+	out.color = colAcc;
+	return out;
 }

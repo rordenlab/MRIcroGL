@@ -10,6 +10,7 @@ interface
 {$DEFINE CUBE}
 {$DEFINE MATCAP}
 {$DEFINE CLRBAR}
+{$DEFINE OLDDEPTHPICKER}
 {$DEFINE TIMER} //reports GPU gradient time to stdout (Unix only)
 {$include opts.inc} //for  DEFINE DEPTHPICKER
 uses
@@ -34,7 +35,6 @@ type
         colorEditorVertexBuffer, sliceVertexBuffer, renderVertexBuffer, lineVertexBuffer: MTLBufferProtocol;
         {$IFDEF GPUGRADIENTS}blurShader, sobelShader,{$ENDIF}
         shader2D, shader2Dn, shaderLines2D: TMetalPipeline;
-        //MeshRenderPassDescriptor: MTLRenderPassDescriptor;
         slices2D: TSlices2D;
         colorEditor: TColorEditor;
         isSmooth2D, colorEditorVisible: boolean;
@@ -69,6 +69,7 @@ type
         ClipThick: single;
         renderBitmapWidth: integer;
         matcapLoc: integer;
+        UseDepthShader: boolean;
         {$IFDEF VIEW2D}
         SelectionRect: TVec4;
         property ShowColorEditor: boolean read colorEditorVisible write colorEditorVisible;
@@ -97,7 +98,7 @@ type
         property ClipPlane: TVec4 read fClipPlane write fClipPlane;
         procedure Prepare(shaderName: string);
         constructor Create(fromView: TMetalControl);
-        procedure PaintCrosshair3D(rgba: TVec4);
+        procedure PaintCrosshair3D(Dim: TVec3i; rgba: TVec4);
         procedure PaintCore(var vol: TNIfTI; widthHeightLeft: TVec3i; clearScreen: boolean = true; isDepthShader: boolean = false);
         procedure Paint(var vol: TNIfTI);
         procedure PaintDepth(var vol: TNIfTI; isAxCorSagOrient4: boolean = false);
@@ -168,11 +169,14 @@ type
     rayDir: TVec4;
     lightPos: TVec4;
     clipPlane: TVec4;
-    normMatrix: TMat4;
+    normMatrix, modelViewProjectionMatrix: TMat4;
   end;
 
 {$IFDEF LINE3D}
-var gLines3D: array of TVertVertex;
+var
+ gLines3Dv: array of TVertVertex = nil;
+ gLines3DnIdx: integer = 0;
+ gLines3DIndexBuffer: MTLBufferProtocol = nil;
 {$ENDIF}
 
 destructor TGPUVolume.Destroy;
@@ -183,8 +187,8 @@ begin
   txt.free;
   {$ENDIF}
   {$IFDEF LINE3D}
-  gLines3D := nil;
-  //line3DBuffer := nil;
+  gLines3Dv := nil;
+  gLines3DIndexBuffer := nil;
   {$ENDIF}
   {$IFDEF CUBE} gCube.free; {$ENDIF}
   {$IFDEF CLRBAR} clrbar.free; {$ENDIF}
@@ -425,7 +429,6 @@ begin
     shaderName := ShaderDir+pathdelim+'Default.metal';
  SetShader(shaderName);
  {$IFDEF VIEW2D}
- //meshRenderPassDescriptor := nil;
  options := TMetalPipelineOptions.Default;
  //default shader
  shaderName := ShaderDir+pathdelim+'_Texture2D.metal';
@@ -453,8 +456,10 @@ begin
  if not fileexists(shaderName) then
   writeln('Unable to find ' + shaderName);
  shaderLines2D  := MTLCreatePipeline(options);
+ MTLSetDepthStencil(shaderLines2D, MTLCompareFunctionLess, false);
  //depth picker
  {$IFDEF OLDDEPTHPICKER}
+ UseDepthShader := false;
  shaderName := ShaderDir+pathdelim+'_Depth3D.metal';
  options.libraryName := shaderName;
  if not fileexists(shaderName) then
@@ -514,7 +519,6 @@ begin
 
  shaderLine3Dalpha  := MTLCreatePipeline(options);
  MTLSetDepthStencil(shaderLine3Dalpha, MTLCompareFunctionGreaterEqual, true);//TQ
- setlength(gLines3D,6); //3D crosshair is three lines, six vertices
  line3DBuffer := nil;
  {$ENDIF} //LINE3D
 end;
@@ -1073,6 +1077,7 @@ begin
 
   projectionMatrix := TMat4.Ortho(0, mtlControl.clientwidth, 0, mtlControl.clientheight, 0.01, 2);
   vertUniforms.modelViewProjectionMatrix := ( projectionMatrix * modelMatrix);
+  fragUniforms.modelViewProjectionMatrix :=  vertUniforms.modelViewProjectionMatrix;
   rayDir.x := 0; RayDir.y := 0; rayDir.z := 1; RayDir.w := 0;
   v := rayDir;
   rayDir := (vertUniforms.modelViewProjectionMatrix.Inverse * v);
@@ -1333,28 +1338,25 @@ begin
         PaintCore(vol, widthHeightLeft, true, true);
 end;
 
-(*procedure printf(s: string);
+{$include cylinder.inc}
+
+procedure TGPUVolume.PaintCrosshair3D(Dim: TVec3i; rgba: TVec4);
+var
+    faces: TFaces = nil;
+    vertices: TVertices = nil;
+    i,nVert: integer;
 begin
-  {$IFDEF UNIX}
-  writeln(s);
-  {$ENDIF}
-end;*)
-procedure TGPUVolume.PaintCrosshair3D(rgba: TVec4);
-begin
-  {$IFDEF LINE3D}
-  gLines3D[0].position := Vec3(slices2D.sliceFrac.x, slices2D.sliceFrac.y, -0.1);
-  gLines3D[1].position := Vec3(slices2D.sliceFrac.x, slices2D.sliceFrac.y, 1.1);
-  gLines3D[2].position := Vec3(slices2D.sliceFrac.x, -0.1, slices2D.sliceFrac.z);
-  gLines3D[3].position := Vec3(slices2D.sliceFrac.x, 1.1, slices2D.sliceFrac.z);
-  gLines3D[4].position := Vec3(-0.1, slices2D.sliceFrac.y, slices2D.sliceFrac.z);
-  gLines3D[5].position := Vec3(1.1, slices2D.sliceFrac.y, slices2D.sliceFrac.z);
-  gLines3D[0].color := rgba;
-  gLines3D[1].color := rgba;
-  gLines3D[2].color := rgba;
-  gLines3D[3].color := rgba;
-  gLines3D[4].color := rgba;
-  gLines3D[5].color := rgba;
-  {$ENDIF}
+  MakeCyl(slices2D.LineWidth, slices2D.sliceFrac, Dim, faces, vertices);
+  nVert := length(vertices);
+  if length(gLines3Dv) <> nVert then
+  	setlength(gLines3Dv, nVert);
+  for i := 0 to (nVert - 1) do begin
+  	 gLines3Dv[i].position := vertices[i];
+     gLines3Dv[i].color := rgba;
+  end;
+  if (gLines3DnIdx = (3 * length(faces))) then exit;
+  gLines3DnIdx := 3 * length(faces);
+  gLines3DIndexBuffer := mtlControl.renderView.device.newBufferWithBytes_length_options(@faces[0], sizeof(uint32) * gLines3DnIdx, MTLResourceStorageModeShared);
 end;
 
 procedure TGPUVolume.PaintCore(var vol: TNIfTI; widthHeightLeft: TVec3i; clearScreen: boolean = true; isDepthShader: boolean = false);
@@ -1367,7 +1369,7 @@ var
   fragUniforms: TFragUniforms;
   projectionMatrix, modelMatrix: TMat4;
   modelLightPos, v, rayDir: TVec4;
-  whratio, scale, left, bottom, rotateX: single;
+  scale, left, bottom, rotateX: single;
 begin
   //whratio := widthHeightLeft.x /widthHeightLeft.y;
   if vertexBuffer = nil then // only once
@@ -1415,6 +1417,7 @@ begin
   end;
   projectionMatrix := TMat4.Ortho(0-left, scale * (widthHeightLeft.x/widthHeightLeft.y) * 2 - left, bottom + 0, bottom + 2 * scale, fDistance-1, fDistance+1);
   vertUniforms.modelViewProjectionMatrix := ( projectionMatrix * modelMatrix);
+  fragUniforms.modelViewProjectionMatrix := vertUniforms.modelViewProjectionMatrix;
   rayDir.x := 0; RayDir.y := 0; rayDir.z := 1; RayDir.w := 0;
   v := rayDir;
   rayDir := (vertUniforms.modelViewProjectionMatrix.Inverse * v);
@@ -1438,7 +1441,9 @@ begin
   if (clearScreen) then
   	MTLBeginFrame();
   {$IFDEF OLDDEPTHPICKER}
-  if (isDepthShader) then
+  //writeln('>>>',isDepthShader);
+  //if (isDepthShader) then
+  if (UseDepthShader) then
      MTLSetShader(shaderDepth)
   else {$ENDIF}
     if RayCastQuality1to5 = kQualityBest then
@@ -1461,6 +1466,25 @@ begin
     MTLSetCullMode(MTLCullModeFront);
     MTLDrawIndexed (MTLPrimitiveTypeTriangleStrip, 14, MTLIndexTypeUInt16, indexBuffer, 0);
     MTLSetCullMode(MTLCullModeNone);
+
+    //draw crosshair
+    {$IFDEF LINE3D}
+    if ((widthHeightLeft.z <> 0) and (slices2D.LineWidth > 0.0)) then begin
+      MTLSetShader(shaderLine3D);
+      MTLSetVertexBytes(@vertUniforms, sizeof(vertUniforms), 1);
+      PaintCrosshair3D(vol.Dim,  slices2D.LineColor);
+      line3DBuffer := mtlControl.renderView.device.newBufferWithBytes_length_options(@gLines3Dv[0], length(gLines3Dv) *sizeof(TVertVertex), MTLResourceStorageModeShared);
+      MTLSetVertexBuffer(line3DBuffer, 0, 0);
+      MTLDrawIndexed (MTLPrimitiveTypeTriangle, gLines3DnIdx, MTLIndexTypeUInt32, gLines3DIndexBuffer, 0);
+      //draw again with alpha shader
+      MTLSetShader(shaderLine3Dalpha);
+      MTLSetVertexBytes(@vertUniforms, sizeof(vertUniforms), 1);
+      MTLSetVertexBuffer(line3DBuffer, 0, 0);
+      MTLDrawIndexed (MTLPrimitiveTypeTriangle, gLines3DnIdx, MTLIndexTypeUInt32, gLines3DIndexBuffer, 0);
+    end;
+    //MTLDrawIndexed (MTLPrimitiveTypeLine, 14, MTLIndexTypeUInt16, indexBuffer, 0);
+    {$ENDIF}
+
     {$IFDEF VIEW2D}
     if (colorEditorVisible) and (widthHeightLeft.z = 0) then begin //n.b. depth testing causes issues...
       //MTLSetCullMode(MTLCullModeNone); //added to end of rendering
@@ -1478,26 +1502,6 @@ begin
         MTLDraw(MTLPrimitiveTypeTriangle, 0, colorEditor.NumberOfLineVertices);
       end;
     end;
-    {$ENDIF}
-    //draw crosshair
-    {$IFDEF LINE3D}
-    if ((widthHeightLeft.z <> 0) and (slices2D.LineWidth > 0.0)) then begin
-      MTLSetShader(shaderLine3D);
-      MTLSetVertexBytes(@vertUniforms, sizeof(vertUniforms), 1);
-      PaintCrosshair3D( slices2D.LineColor);
-      line3DBuffer := mtlControl.renderView.device.newBufferWithBytes_length_options(@gLines3D[0], 6*sizeof(TVertVertex), MTLResourceStorageModeShared);
-      MTLSetVertexBuffer(line3DBuffer, 0, 0);
-      MTLDraw(MTLPrimitiveTypeLine, 0, 6);
-      //draw again with alpha shader
-      MTLSetShader(shaderLine3Dalpha);
-      MTLSetVertexBytes(@vertUniforms, sizeof(vertUniforms), 1);
-      //PaintCrosshair3D( slices2D.LineColor);
-      //line3DBuffer := mtlControl.renderView.device.newBufferWithBytes_length_options(@gLines3D[0], 6*sizeof(TVertVertex), MTLResourceStorageModeShared);
-      MTLSetVertexBuffer(line3DBuffer, 0, 0);
-      MTLDraw(MTLPrimitiveTypeLine, 0, 6);
-
-    end;
-    //MTLDrawIndexed (MTLPrimitiveTypeLine, 14, MTLIndexTypeUInt16, indexBuffer, 0);
     {$ENDIF}
     {$IFDEF CLRBAR}
     clrbar.RulerPixels:= 0;

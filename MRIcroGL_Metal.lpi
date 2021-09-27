@@ -145,7 +145,7 @@
       </CompilerMessages>
       <CustomOptions Value="-dDisableLCLGIF 
 -dDisableLCLPNM
--dMYPY
+-dxMYPY
 -dMETALAPI"/>
     </Other>
   </CompilerOptions>

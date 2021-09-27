@@ -1,7 +1,7 @@
 object GLForm1: TGLForm1
-  Left = 220
+  Left = 164
   Height = 693
-  Top = 103
+  Top = 220
   Width = 916
   AllowDropFiles = True
   Caption = 'MRIcroGL'
@@ -89,6 +89,7 @@ object GLForm1: TGLForm1
           Width = 47
           Caption = 'Darkest'
           ParentFont = False
+          OnClick = LayerResetBrightnessMenuClick
         end
         object LayerDarkEdit: TEdit
           AnchorSideLeft.Control = LayerBox
@@ -134,6 +135,7 @@ object GLForm1: TGLForm1
           Width = 55
           Caption = 'Brightest'
           ParentFont = False
+          OnClick = LayerResetBrightnessMenuClick
         end
         object LayerColorDrop: TComboBox
           AnchorSideLeft.Control = LayerList

@@ -37,7 +37,6 @@ type
         {$IFDEF VIEW2D}
         {$IFDEF COREGL}
         vao, vaoTex2D, vboTex2D, vaoLine2D, vboLine2D,
-         {$IFDEF LINE3D}vaoLine3D, vboLine3D,{$ENDIF}
         {$ELSE}
         textureSzLoc : GLint;
         dlTex2D, dlLine2D,  dlBox3D, dlColorEditor,
@@ -47,7 +46,7 @@ type
         {$ENDIF}
         programLine2D, programTex2D: GLuint;
         slices2D: TSlices2D;
-        {$IFDEF LINE3D} mvpLine3DLoc, colorLine3DLoc, {$ENDIF}
+        {$IFDEF LINE3D}{$IFDEF COREGL}vaoLine3D,{$ENDIF} vboLine3D, vboLineIdx3D, mvpLine3DLoc, colorLine3DLoc, {$ENDIF}
         uniform_drawTex, uniform_drawLUT, uniform_drawAlpha,
         uniform_texVox, uniform_viewportSizeLine, uniform_viewportSizeTex, uniform_backAlpha,
         uniform_tex, uniform_overlay, uniform_overlaysLoc: GLint;
@@ -127,7 +126,8 @@ type
         procedure Prepare(shaderName: string);
         procedure SetGradientMode(newMode: integer);
         constructor Create(fromView: TOpenGLControl);
-        procedure PaintCrosshair3D(rgba: TVec4);
+        function MakeCrosshair3D(Dim: TVec3i): integer;
+        procedure PaintCrosshair3D(rgba: TVec4; nFaces: integer);
         procedure PaintCore(var vol: TNIfTI; widthHeightLeft: TVec3i; clearScreen: boolean = true; isDepthShader: boolean = false);
         procedure Paint(var vol: TNIfTI);
         procedure PaintDepth(var vol: TNIfTI; isAxCorSagOrient4: boolean = false);
@@ -144,7 +144,7 @@ implementation
   {$DEFINE MESA_HACKS}
 {$ENDIF}{$ENDIF}
 {$IFDEF LINE3D}{$IFDEF COREGL}
-var gLines3D: array of TVec3;
+//var gLines3D: array of TVec3;
 {$ENDIF}{$ENDIF}
 
 procedure printf (lS: AnsiString);
@@ -203,7 +203,7 @@ begin
   txt.free;
   {$ENDIF}
   {$IFDEF LINE3D}{$IFDEF COREGL}
-  gLines3D := nil;
+  //gLines3D := nil;
   {$ENDIF}{$ENDIF}
   {$IFDEF CUBE} gCube.free; {$ENDIF}
   {$IFDEF CLRBAR} clrbar.free; {$ENDIF}
@@ -784,9 +784,10 @@ kVert = '#version 120'
 
 {$IFDEF LINE3D}
 kVertLine3D = '#version 120'
++#10'attribute vec3 Vert;'
 +#10'uniform mat4 ModelViewProjectionMatrix;'
 +#10'void main() {'
-+#10'    gl_Position = ModelViewProjectionMatrix * vec4(gl_Vertex.xyz, 1.0);'
++#10'    gl_Position = ModelViewProjectionMatrix * vec4(Vert.xyz, 1.0);'
 +#10'}';
 
  kFragLine3D = '#version 120'
@@ -1500,7 +1501,7 @@ begin
   mvpLine3DLoc := glGetUniformLocation(programLine3D, pAnsiChar('ModelViewProjectionMatrix'));
   colorLine3DLoc := glGetUniformLocation(programLine3D, pAnsiChar('Color'));
   {$IFDEF COREGL}
-  setlength(gLines3D,6); //3D crosshair is three lines, six vertices
+  //setlength(gLines3D,6); //3D crosshair is three lines, six vertices
   {$ENDIF} //COREGL
 
   {$ENDIF} //LINE3D
@@ -1549,6 +1550,10 @@ begin
   uniform_overlaysLoc := glGetUniformLocation(programTex2D, pAnsiChar('overlays'));
   CreateDrawTex(pti(4,4,4), nil);
   CreateDrawColorTable;
+  {$IFDEF LINE3D}
+  vboLine3D := 0;
+  vboLineIdx3D := 0;
+  {$ENDIF}
   {$IFDEF COREGL}
   //setup VAO for lines
   vboLine2D := 0;
@@ -1571,10 +1576,9 @@ begin
   glBindVertexArray(0);  //required, even if we will bind it next
   {$IFDEF LINE3D}
   //setup VAO for lines
-  vboLine3D := 0;
+  glGenBuffers(1, @vboLine3D);
   vaoLine3D := 0;
   glGenVertexArrays(1, @vaoLine3D);
-  glGenBuffers(1, @vboLine3D);
   // Prepare vertrex array object (VAO)
   glBindVertexArray(vaoLine3D);
   glBindBuffer(GL_ARRAY_BUFFER, vboLine3D);
@@ -2618,34 +2622,57 @@ begin
 end;
 {$ENDIF}
 
-//def __drawCursor(self):
-//    """Draws three lines at the current
-procedure TGPUVolume.PaintCrosshair3D(rgba: TVec4);
+{$include cylinder.inc}
+
+
+procedure TGPUVolume.PaintCrosshair3D(rgba: TVec4; nfaces: integer );
 begin
   glUniform4f(colorLine3DLoc, rgba.r, rgba.g, rgba.b, rgba.a);
+  glDisable(GL_CULL_FACE);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboLineIdx3D);
+  glDrawElements(GL_TRIANGLES,  nfaces*3, GL_UNSIGNED_INT, nil);
   {$IFDEF COREGL}
-  gLines3D[0] := Vec3(slices2D.sliceFrac.x, slices2D.sliceFrac.y, -0.1);
-  gLines3D[1] := Vec3(slices2D.sliceFrac.x, slices2D.sliceFrac.y, 1.1);
-  gLines3D[2] := Vec3(slices2D.sliceFrac.x, -0.1, slices2D.sliceFrac.z);
-  gLines3D[3] := Vec3(slices2D.sliceFrac.x, 1.1, slices2D.sliceFrac.z);
-  gLines3D[4] := Vec3(-0.1, slices2D.sliceFrac.y, slices2D.sliceFrac.z);
-  gLines3D[5] := Vec3(1.1, slices2D.sliceFrac.y, slices2D.sliceFrac.z);
-  glBindBuffer(GL_ARRAY_BUFFER, vboLine3D);
-  glBufferData(GL_ARRAY_BUFFER, 6*SizeOf(TVec3), @gLines3D[0], GL_STATIC_DRAW);
-  glBindVertexArray(vaoLine3D);
-  glDrawArrays(GL_LINES, 0, 6);
-  glBindVertexArray(0);
-  {$ELSE}
-  glLineWidth( slices2D.LineWidth);
-  glBegin(GL_LINES);
-  glVertex3f(slices2D.sliceFrac.x, slices2D.sliceFrac.y, -0.1);
-  glVertex3f(slices2D.sliceFrac.x, slices2D.sliceFrac.y, 1.1);
-  glVertex3f(slices2D.sliceFrac.x, -0.1, slices2D.sliceFrac.z);
-  glVertex3f(slices2D.sliceFrac.x, 1.1, slices2D.sliceFrac.z);
-  glVertex3f(-0.1, slices2D.sliceFrac.y, slices2D.sliceFrac.z);
-  glVertex3f(1.1, slices2D.sliceFrac.y, slices2D.sliceFrac.z);
-  glEnd;
+  //glBindVertexArray(0);
   {$ENDIF}
+
+end;
+
+function TGPUVolume.MakeCrosshair3D(Dim: TVec3i): integer;
+var
+    vertices: TVertices = nil ;
+    faces: TFaces = nil;
+    vertLoc: GLint;
+begin
+  MakeCyl(slices2D.LineWidth, slices2D.sliceFrac, Dim, faces, vertices);
+  {$IFDEF COREGL}
+  glBindBuffer(GL_ARRAY_BUFFER, vboLine3D);
+  glBufferData(GL_ARRAY_BUFFER, length(vertices)*SizeOf(TVec3), @vertices[0], GL_STATIC_DRAW);
+  glBindVertexArray(vaoLine3D);
+  if (vboLineIdx3D = 0) then begin
+  	glGenBuffers(1, @vboLineIdx3D);
+  	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboLineIdx3D);
+  	glBufferData(GL_ELEMENT_ARRAY_BUFFER, Length(faces)*sizeof(TVec3i), @faces[0], GL_STATIC_DRAW);
+  end;
+  {$ELSE}
+  if (vboLine3D = 0) then begin
+    glGenBuffers(1, @vboLine3D);
+    glBindBuffer(GL_ARRAY_BUFFER, vboLine3D);
+    glBufferData(GL_ARRAY_BUFFER, length(vertices)*SizeOf(TVec3), @vertices[0], GL_STATIC_DRAW);
+    vertLoc := glGetAttribLocation(programLine3D, 'Vert');
+    glVertexAttribPointer(vertLoc, 3, GL_FLOAT, GL_FALSE, SizeOf(TVec3), PChar(0));
+    glEnableVertexAttribArray(vertLoc);
+  end else begin
+  	glBindBuffer(GL_ARRAY_BUFFER, vboLine3D);
+  	glBufferSubData(GL_ARRAY_BUFFER, 0, length(vertices)*SizeOf(TVec3), @vertices[0]);
+  end;
+  if (vboLineIdx3D = 0) then begin
+  	glGenBuffers(1, @vboLineIdx3D);
+  	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vboLineIdx3D);
+  	glBufferData(GL_ELEMENT_ARRAY_BUFFER, Length(faces)*sizeof(TVec3i), @faces[0], GL_STATIC_DRAW);
+  end;// else
+  //	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,vboLineIdx3D);
+  {$ENDIF}
+  exit(length(faces));
 end;
 
 procedure TGPUVolume.PaintCore(var vol: TNIfTI; widthHeightLeft: TVec3i; clearScreen: boolean = true; isDepthShader: boolean = false);
@@ -2655,7 +2682,7 @@ var
   nMtx: array [0..8] of single;
   modelLightPos, v, rayDir: TVec4;
   w,h, whratio, scale: single;
-  i: integer;
+  i, nfaces: integer;
 begin
   {$IFDEF COREGL}
   if vao = 0 then // only once
@@ -2810,16 +2837,16 @@ begin
   //draw color editor
   {$IFDEF VIEW2D}{$IFDEF LINE3D}
   if ((not isDepthShader) and (widthHeightLeft.z <> 0) and (slices2D.LineWidth > 0.0)) then begin
-  	glUseProgram(programLine3D);
+    glUseProgram(programLine3D);
     glUniformMatrix4fv(mvpLine3DLoc, 1, GL_FALSE, @modelViewProjectionMatrix);
-
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL); //GL_LESS);
     //draw opaque line occluded by volume render
-    PaintCrosshair3D( slices2D.LineColor);
+    nfaces := MakeCrosshair3D(vol.Dim);
+    PaintCrosshair3D(slices2D.LineColor, nfaces);
     glDisable(GL_DEPTH_TEST);
     //draw translucent line regardless of volume render
-    PaintCrosshair3D(Vec4(slices2D.LineColor.r,slices2D.LineColor.g,slices2D.LineColor.b,slices2D.LineColor.a * 0.225));
+    PaintCrosshair3D(Vec4(slices2D.LineColor.r,slices2D.LineColor.g,slices2D.LineColor.b,slices2D.LineColor.a * 0.225), nfaces);
     //glDepthFunc(GL_ALWAYS); //always pass test
   end else begin
   	glDepthFunc(GL_LEQUAL); //GL_LESS);

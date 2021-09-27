@@ -43,7 +43,7 @@ struct FragUniforms {
 	float4 rayDir;
 	float4 lightPos;
 	float4 clipPlane;
-	float4x4 normMatrix;
+	float4x4 normMatrix, modelViewProjectionMatrix;
 };
 
 vertex VertexOut vertexShader(  unsigned int vertexID               [[ vertex_id ]],
@@ -141,7 +141,17 @@ float4 texture3Df(texture3d<float> vol, float3 coord) {
 #endif
 
 
-fragment float4 fragmentShader(VertexOut  in [[stage_in]],
+struct FragmentOut {
+	float4 color [[color(0)]];
+	float depth [[depth(any)]];
+};
+
+float setDepthBuffer(float3 pos, float4x4 mvp) {
+	//return ((mvp * float4(pos, 1.0)).z + 1.0) * 0.5;
+	return (mvp * float4(pos, 1)).z;
+}
+
+fragment FragmentOut fragmentShader(VertexOut  in [[stage_in]],
                texture3d<float> volTexture [[ texture(0) ]],
                texture3d<float> gradTexture [[ texture(1) ]],
                texture3d<float> overlayVolTexture [[ texture(2) ]],
@@ -149,7 +159,8 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 			   const device FragUniforms* fragUniforms    	[[ buffer(1) ]],
                const device CustomFragUniforms* customFragUniforms    	[[ buffer(2) ]]
                ) {
-	//return float4(1,0,1,1);
+	FragmentOut out;
+	out.depth = 1000.0;
 	constexpr sampler textureSampler (mag_filter::linear,min_filter::linear, address::clamp_to_zero);
 	float2 gl_FragCoord = float2(in.position.xy); //random jitter to reduce wood grain
 	float3 lightPosition = fragUniforms->lightPos.xyz;
@@ -221,7 +232,8 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 
 	//if ((samplePos.a > len) && ( !hasOverlays )) { //no hit: quit here
 	if ((samplePos.a > len) && ( overlays < 1 )) {
-		return colAcc;	
+		out.color = colAcc;
+		return out;	
 	}	
 	if (samplePos.a < clipPos.a) {
 		samplePos = clipPos;
@@ -256,6 +268,7 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 	if (overlays > 0)
 		alphaTerminate = 2.0; //force exhaustive search
 	colorSample = float4(0.0,0.0,0.0,0.0);
+	int nHit = 0;
 	while (samplePos.a <= len) {
 		//if (samplePos.a > clipPos.a) {
 		if ((samplePos.a > clipPos.a) && (samplePos.a <= clipLen)) {
@@ -267,7 +280,11 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 			#endif
 			if (colorSample.a > 0.0)  {
 					colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
-					bgNearest = min(samplePos.a, bgNearest);
+					if (nHit == 0) {
+						out.depth = setDepthBuffer(samplePos.xyz, fragUniforms->modelViewProjectionMatrix);
+						nHit += 1;
+						bgNearest = samplePos.a;
+					}
 					//gradient based lighting http://www.mccauslandcenter.sc.edu/mricrogl/gradients
 					#ifdef CUBIC
 					gradSample = texture3Df(gradTexture, samplePos.xyz);
@@ -360,12 +377,15 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 		colAcc.rgb = mix(colAcc.rgb, float3(0.0,0.0,0.0), (edgeBoundMix * boundAcc)/(colAcc.a+(edgeBoundMix * boundAcc)) );
 		colAcc.a = max(colAcc.a, boundAcc);
 	}
-	if ((overlays < 1) || (overAcc.a == 0.0)) //if no overlay for this pixel
-		return colAcc; 
+	if ((overlays < 1) || (overAcc.a == 0.0)) {//if no overlay for this pixel
+		out.color = colAcc;
+		return out;
+	} 
 	colAcc.a=max(colAcc.a, overAcc.a);
 	if (overNearest <= bgNearest) { //if overlay closer than background
 		colAcc.rgb=mix(colAcc.rgb, overAcc.rgb,  overAcc.a);
-		return colAcc;
+		out.color = colAcc;
+		return out;
 	}
 	//overlay behind surface
 	//overlay behind surface
@@ -374,7 +394,7 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 	depth = min(depth, 1.0);
 	depth = sqrt(depth);
 	colAcc.rgb = mix(overAcc.rgb, colAcc.rgb,  depth);
-    
-	return colAcc;
+	out.color = colAcc;
+	return out;
 
 }

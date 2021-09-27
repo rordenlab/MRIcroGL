@@ -48,7 +48,7 @@ struct FragUniforms {
 	float4 rayDir;
 	float4 lightPos;
 	float4 clipPlane;
-	float4x4 normMatrix;
+	float4x4 normMatrix, modelViewProjectionMatrix;
 };
 
 vertex VertexOut vertexShader(  unsigned int vertexID               [[ vertex_id ]],
@@ -145,7 +145,17 @@ float4 texture3Df(texture3d<float> vol, float3 coord) {
 }
 #endif
 
-fragment float4 fragmentShader(VertexOut  in [[stage_in]],
+struct FragmentOut {
+	float4 color [[color(0)]];
+	float depth [[depth(any)]];
+};
+
+float setDepthBuffer(float3 pos, float4x4 mvp) {
+	//return ((mvp * float4(pos, 1.0)).z + 1.0) * 0.5;
+	return (mvp * float4(pos, 1)).z;
+}
+
+fragment FragmentOut fragmentShader(VertexOut  in [[stage_in]],
                texture3d<float> volTexture [[ texture(0) ]],
                texture3d<float> gradTexture [[ texture(1) ]],
                texture3d<float> overlayVolTexture [[ texture(2) ]],
@@ -154,7 +164,8 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
                const device FragUniforms* fragUniforms    	[[ buffer(1) ]],
                const device CustomFragUniforms* customFragUniforms    	[[ buffer(2) ]]
                ) {
-	//return float4(1,0,1,1);
+	FragmentOut out;
+	out.depth = 1000.0;
 	constexpr sampler textureSampler (mag_filter::linear,min_filter::linear, address::clamp_to_zero);
 	constexpr sampler matCapSampler (mag_filter::linear,min_filter::linear);
 	float2 gl_FragCoord = float2(in.position.xy); //random jitter to reduce wood grain
@@ -221,8 +232,9 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 
 	//if ((samplePos.a > len) && ( !hasOverlays )) { //no hit: quit here
 	if ((samplePos.a > len) && ( overlays < 1 )) {
-		return colAcc;	
-	}	
+		out.color = colAcc;
+		return out;
+	}
 	float4 colorMax = float4(0.0, 0.0, 0.0, 0.0);
 	if (samplePos.a < clipPos.a) {
 		samplePos = clipPos;
@@ -248,6 +260,7 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 	float4 gradMax = gradAcc;
 	//end tomography
 	float3 defaultDiffuse = float3(0.5, 0.5, 0.5);
+	int nHit = 0;
 	while (samplePos.a <= len) {
 		#ifdef CUBIC
 		colorSample = texture3Df(volTexture, samplePos.xyz);
@@ -257,7 +270,11 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 		if (colorSample.a > 0.0)  {
 			colorSample.a = 1.0-pow((1.0 - colorSample.a), opacityCorrection);
 			if (colorSample.a > colorMax.a) colorMax = colorSample;
-			bgNearest = min(samplePos.a,bgNearest);
+			if (nHit == 0) {
+				out.depth = setDepthBuffer(samplePos.xyz, fragUniforms->modelViewProjectionMatrix);
+				nHit += 1;
+				bgNearest = samplePos.a;
+			}
 			#ifdef CUBIC
 			gradSample = texture3Df(gradTexture, samplePos.xyz);
 			#else
@@ -305,8 +322,10 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 	//end tomography
 	colAcc.a = colAcc.a/0.95;
 	colAcc.a *= backAlpha;
-	if ( overlays< 1 )
-		return colAcc;
+	if ( overlays< 1 ) {
+		out.color = colAcc;
+		return out;
+	}
 	//overlay pass
 	float overFarthest = len;
 	float ambient = 1.0;
@@ -377,5 +396,6 @@ fragment float4 fragmentShader(VertexOut  in [[stage_in]],
 	}
 	colAcc.rgb = mix(colAcc.rgb, overAcc.rgb, overMix);
 	colAcc.a = max(colAcc.a, overAcc.a);
-	return colAcc;
+	out.color = colAcc;
+	return out;
 }

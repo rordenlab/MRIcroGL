@@ -97,13 +97,11 @@ Function  SetDllDirectory(lpPathName: LPCTSTR):LongBool; stdcall; external 'kern
 function findLibDebian(base: string): string;
 //https://matthew-brett.github.io/pydagogue/debian_python_paths.html
 // check base of "/usr/local/lib" and "/usr/lib"
-//lib = /usr/lib/python3.9/config-3.9-x86_64-linux-gnu/libpython3.9.so
-//e.g. Ubuntu 18.04
-//lib = /usr/lib/python3.6/config-3.6m-x86_64-linux-gnu/libpython3.6m.so
+//lib := '/usr/lib/python3.9/config-3.9-x86_64-linux-gnu/libpython3.9.so';
 var
   i: integer;
 begin
-  for i := 11 downto 6 do begin
+  for i := 11 downto 7 do begin
     result := format('%s/python3.%d/config-3.%d-x86_64-linux-gnu/libpython3.%d.so', [base, i, i, i]);
     if FileExists(result) then exit;
     //pymalloc  PEP-3149: ABI version tagged .so files.

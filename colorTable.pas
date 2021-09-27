@@ -602,22 +602,79 @@ begin
   result := true;
 end;
 
-function TCLUT.SaveCLUT(clutFileName: string): boolean;
+function CLUT2json(lFilename: string; var lCLUTrec: TCLUTrec): boolean;
+//Save color tables as NiiVue format JSON
 var
-  lCLUTrec: TCLUTrec;
+  i: integer;
+  f: TextFile;
 begin
-      lCLUTrec := CLUT;
-      lCLUTrec.min := 0;
-      lCLUTrec.Max := 0;
-      result := CLUT2disk(false, clutFileName, CLUT);
-
+  result := false;
+  AssignFile(f, lFilename);
+  rewrite(f);
+  writeln(f,'{');
+  writeln(f, format('"min": %g,', [lCLUTrec.min]));
+  writeln(f, format('"max": %g,', [lCLUTrec.max]));
+  //red
+  write(f, '"R": [');
+  for i := 0 to (lCLUTrec.numnodes-1) do begin
+  	if (i > 0) then write(f, ', ');
+    write(f, inttostr(lCLUTrec.nodes[i].rgba.r));
+  end;
+  writeln(f, '],');
+  //green
+  write(f, '"G": [');
+  for i := 0 to (lCLUTrec.numnodes-1) do begin
+  	if (i > 0) then write(f, ', ');
+    write(f, inttostr(lCLUTrec.nodes[i].rgba.g));
+  end;
+  writeln(f, '],');
+  //blue
+  write(f, '"B": [');
+  for i := 0 to (lCLUTrec.numnodes-1) do begin
+  	if (i > 0) then write(f, ', ');
+    write(f, inttostr(lCLUTrec.nodes[i].rgba.b));
+  end;
+  writeln(f, '],');
+  //intensity
+  write(f, '"I": [');
+  for i := 0 to (lCLUTrec.numnodes-1) do begin
+  	if (i > 0) then write(f, ', ');
+    write(f, inttostr(lCLUTrec.nodes[i].intensity));
+  end;
+  writeln(f, ']');
+  writeln(f, '}');
+  closefile(f);
+  result := true;
 end;
+
+function TCLUT.SaveCLUT(clutFileName: string): boolean;
+//var
+//  lCLUTrec: TCLUTrec;
+begin
+  //lCLUTrec := CLUT;
+  if upcase(ExtractFileExt(clutFileName))= '.JSON' then begin
+  	exit(CLUT2json(clutFileName, CLUT));
+  end;
+  //lCLUTrec.min := 0;
+  //lCLUTrec.Max := 0;
+  result := CLUT2disk(false, clutFileName, CLUT);
+end;
+
+(*procedure export2JSON(fnm: string; var lCLUTrec: TCLUTrec);
+begin
+    if (fnm = '') then exit;
+    fnm := changefileext(fnm,'.json');
+    {$IFDEF UNIX}writeln('Saving '+fnm);{$ENDIF}
+    CLUT2json(fnm, lCLUTrec);
+end; *)
+
 function TCLUT.OpenCLUT(clutFileName: string; cTag: integer): boolean;
 begin
   if fIsDrawing then exit(false);
   CLUT.Tag := cTag;
  fNeedsUpdate := true;
  result := CLUT2disk(true, clutFileName, CLUT);
+ //export2Json(clutFileName, CLUT);
  GenerateLUT();//CLUT,fLUT);
 end;
 

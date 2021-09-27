@@ -69,6 +69,12 @@ uses
      kDTIrgb = 1; //display as RGB V1 image
      kDTIlines = 2; //display as lines  *)
 Type
+ {$IFNDEF DYNARRAYS}
+f32ra = array [0..0] of Single;
+f32p = ^f32ra;
+i32ra = array [0..0] of int32;
+i32p = ^i32ra;
+{$ENDIF}
   TCluster = record
 		CogXYZ, PeakXYZ: TVec3; //Center of Gravity, Peak
                 Peak, SzMM3: single;
@@ -221,6 +227,11 @@ Type
         function VoxIntensity(frac: TVec3): single; overload;//return intensity of voxel fraction
         function VoxIntensityArray(vox: TVec3i): TFloat32s; overload;
         function VoxIntensityArray(roi: TUInt8s): TFloat32s; overload;
+        {$IFDEF DYNARRAYS}
+        function nifti_smooth_gauss(var img: TFloat32s; SigmammX, SigmammY, SigmammZ: single; nVol: int64): integer;
+        {$ELSE}
+        function nifti_smooth_gauss(var img: f32p; SigmammX, SigmammY, SigmammZ: single; nVol: int64): integer;
+        {$ENDIF}
         function EdgeMap(isSmooth: boolean): TUInt8s;
         function Scaled2Raw(lScaled: single): single;
         function SeedCorrelationMap(vox: TVec3i; isZ: boolean): TFloat32s; overload;
@@ -808,7 +819,558 @@ begin
   exit(r);
 end;
 {$ENDIF} //FASTCORREL2
+
+{$IFDEF DYNARRAYS} //using dynamic arrays
+procedure transposeXY( img3Din: TFloat32s; var img3Dout: TFloat32s; var nxp, nyp, nz: int64);
+//transpose X and Y dimensions: rows <-> columns
+var
+  nx, ny, vi, x, xo, y, z, zo: int64;
+begin
+ nx := nxp;
+ ny := nyp;
+ vi := 0; //volume offset
+ for z := 0 to (nz -1) do begin
+		zo := z * nx * ny;
+		for y := 0 to (ny -1) do begin
+			xo := 0;
+			for x := 0 to (nx -1) do begin
+             img3Dout[zo + xo + y] := img3Din[vi];
+             xo += ny;
+             vi += 1;
+            end;
+        end;
+	end;
+	nxp := ny;
+	nyp := nx;
+end;
+
+procedure transposeXZ( img3Din: TFloat32s; var img3Dout: TFloat32s; var nxp, ny, nzp: int64);
+//transpose X and Z dimensions: slices <-> columns
+var
+  nx, nyz, nz, vi, x, y, yo, z, zo: int64;
+begin
+ nx := nxp;
+ nz := nzp;
+ nyz := ny * nzp;
+ vi := 0; //volume offset
+ for z := 0 to (nzp -1) do begin
+	for y := 0 to (ny -1) do begin
+     yo := y * nz;
+	 zo := 0;
+     for x := 0 to (nx -1) do begin
+      img3Dout[z + yo + zo] := img3Din[vi];
+      zo += nyz;
+      vi += 1;
+      end;
+     end;
+    end;
+	nxp := nz;
+	nzp := nx;
+end;
+
+//Gaussian blur, both serial and parallel variants, https://github.com/neurolabusc/niiSmooth
+procedure blurS(var img: TFloat32s; nx, ny: integer; xmm, Sigmamm: single);
+var
+	sigma, expd, wt, sum: single;
+	cutoffvox, i, j, y: integer;
+	k, kWeight, tmp: TFloat32s;
+	kStart, kEnd: TInt32s;
+	x, imgp: int64;
+begin
+	//make kernels
+	if ((xmm = 0) or (nx < 2) or (ny < 1) or (Sigmamm <= 0.0)) then
+		exit();
+	sigma := (Sigmamm / xmm); //mm to vox
+	//cutoffvox := ceil(4 * sigma); //filter width to 4 sigma (FSL): faster but lower precision AFNI_BLUR_FIRFAC = 2.5
+	cutoffvox := ceil(2.5 * sigma); //filter width to 6 sigma: faster but lower precision AFNI_BLUR_FIRFAC = 2.5
+	//printf(".Blur Cutoff (%g) %d\n", 4*sigma, cutoffvox);
+	//validated on SPM12's 1.5mm isotropic mask_ICV.nii (discrete jump in number of non-zero voxels)
+	//fslmaths mask -s 2.26 f6.nii //Blur Cutoff (6.02667) 7
+	//fslmaths mask -s 2.24 f4.nii //Blur Cutoff (5.97333) 6
+	cutoffvox := MAX(cutoffvox, 1);
+	setlength(k, cutoffvox + 1); //FIR Gaussian
+	expd := 2 * sigma * sigma;
+	for i := 0 to cutoffvox do
+		k[i] := exp(-1.0 * (i * i) / expd);
+	//calculate start, end for each voxel in
+	setlength(kStart, nx); //-cutoff except left left columns, e.g. 0, -1, -2... cutoffvox
+	setlength(kEnd, nx); //+cutoff except right columns
+	setlength(kWeight, nx); //ensure sum of kernel = 1.0
+	for i := 0 to (nx - 1) do begin
+		kStart[i] := MAX(-cutoffvox, -i); //do not read below 0
+		kEnd[i] := MIN(cutoffvox, nx - i - 1); //do not read beyond final columnn
+		if ((i > 0) and (kStart[i] = (kStart[i - 1])) and (kEnd[i] = (kEnd[i - 1]))) then begin //reuse weight
+			kWeight[i] := kWeight[i - 1];
+			continue;
+		end;
+		wt := 0.0;
+		for j := kStart[i] to kEnd[i] do
+			wt += k[abs(j)];
+		kWeight[i] := 1 / wt;
+		//printf("%d %d->%d %g\n", i, kStart[i], kEnd[i], kWeight[i]);
+	end;
+	//apply kernel to each row
+	setlength(tmp, nx); //input values prior to blur
+	imgp := 0; //pointer
+	for y := 0 to (ny - 1) do begin
+		//printf("-+ %d:%d\n", y, ny);
+		//memcpy(tmp, img, nx * sizeof(flt));
+		//for x := 0 to (nx - 1) do
+		//	tmp[x] := img[imgp + x];
+        tmp := copy(img, imgp, imgp + nx - 1);
+		for x := 0 to (nx - 1) do begin
+			sum := 0;
+			for i := kStart[x] to kEnd[x] do
+				sum += tmp[x + i] * k[abs(i)];
+			img[imgp + x] := sum * kWeight[x];
+		end;
+		imgp += nx;
+	end; //blurX
+	//free kernel
+	tmp := nil;
+	k := nil;
+	kStart := nil;
+	kEnd := nil;
+	kWeight := nil;
+end;
+
+function TNIfTI.nifti_smooth_gauss(var img: TFloat32s; SigmammX, SigmammY, SigmammZ: single; nVol: int64): integer;
+label
+     DO_Y_BLUR, DO_Z_BLUR;
+var
+	nRow, nvox3D, nx, ny, nz, v, vo: int64;
+    dx, dy, dz: single;
+    img3D: TFloat32s;
+begin
+    //https://github.com/afni/afni/blob/699775eba3c58c816d13947b81cf3a800cec606f/src/edt_blur.c
+    if (nVol <> 1) then
+        exit(123);//only supports 3D
+    nx := fHdr.Dim[1];
+    ny := fHdr.Dim[2];
+    nz := fHdr.Dim[3];
+    dx := abs(fHdr.PixDim[1]);
+    dy := abs(fHdr.PixDim[2]);
+    dz := abs(fHdr.PixDim[3]);
+    if ((nx < 2) or (ny < 2) or (nz < 1) or (dx = 0) or (dy = 0) or (dz = 0)) then
+		exit( 1);
+	//if (nim->datatype != DT_CALC) then
+	//	exit( 1);
+	if ((SigmammX = 0) and (SigmammY = 0) and (SigmammZ = 0)) then
+		exit(0); //all done: no smoothing, e.g. small kernel for difference of Gaussian
+	if (SigmammX < 0) then //negative values for voxels, not mm
+		SigmammX := -SigmammX  * dx;
+	if (SigmammY < 0) then //negative values for voxels, not mm
+		SigmammY := -SigmammY  * dy;
+	if (SigmammZ < 0) then //negative values for voxels, not mm
+		SigmammZ := -SigmammZ  * dz;
+	nvox3D := nx * ny * MAX(nz, 1);
+	if ((nvox3D * nVol) < 1) then
+		exit( 1);
+	if (SigmammX <= 0.0) then
+		goto DO_Y_BLUR;
+	//BLUR X
+    nRow := ny * nz * nVol;
+    blurS(img, nx, nRow, dx, SigmammX);
+    //BLUR Y
+    DO_Y_BLUR:
+    if (SigmammY <= 0.0) then
+		goto DO_Z_BLUR;
+    nRow := nx * nz; //transpose XYZ to YXZ and blur Y columns with XZ Rows
+    setlength(img3D, nvox3D);
+	for v := 0 to (nVol - 1) do begin //transpose each volume separately
+		vo := v * nvox3D; //volume offset
+		transposeXY(@img[vo], img3D, nx, ny, nz);
+		blurS(img3D, fHdr.Dim[2], nRow, dy, SigmammY);
+		transposeXY(img3D, img, nx, ny, nz);
+	end;
+    img3D := nil;
+    //BLUR Z
+    DO_Z_BLUR:
+	if ((SigmammZ <= 0.0) or (nz < 2)) then
+		exit(0); //all done!
+	nRow := nx * ny; //transpose XYZ to ZXY and blur Z columns with XY Rows
+
+    setlength(img3D, nvox3D);
+	for v := 0 to (nVol - 1) do begin //transpose each volume separately
+        vo := v * nvox3D; //volume offset
+		transposeXZ(@img[vo], img3D, nx, ny, nz);
+		blurS(img3D, fHdr.Dim[3], nRow, dz, SigmammZ);
+		transposeXZ(img3D, img, nx, ny, nz);
+	end;
+    img3D := nil;
+    exit(0);
+end;
+
 function TNIfTI.EdgeMap(isSmooth: boolean): TUInt8s;
+var
+  i, vx, nx, ny, nz, nxy, nxyz, x, y, z: int64;
+  vol8: TUInt8s;
+  vol25, vol40: TFloat32s;
+  val: single;
+begin
+ setlength(result, 0);
+ if IsLabels then exit;
+ if fHdr.bitpix = 24 then exit;
+ nX := fHdr.Dim[1];
+ nY := fHdr.Dim[2];
+ nZ := fHdr.Dim[3];
+ if (nx < 3) or (ny < 3) or (nz < 3) then exit;
+ nxy := nx * ny;
+ nxyz := nxy * nz;
+ setlength(vol25, nxyz);
+ vol8 := fCache8;
+ for vx := 0 to (nxyz -1) do
+  	vol25[vx] := vol8[vx];
+ nifti_smooth_gauss(vol25, 2.5, 2.5, 2.5, 1);
+ vol40 := Copy(vol25, Low(vol25), Length(vol25));
+ //use 2mm blur as input for 4mm blur, allowing 3.122498999
+ nifti_smooth_gauss(vol40, 3.122498999 , 3.122498999 , 3.122498999 , 1);
+ //scale 0..1
+ for vx := 0 to (nxyz - 1) do begin
+     vol25[vx] := vol25[vx] - vol40[vx];
+     vol40[vx] := 0;
+ end;
+ for z := 1 to (nz - 2) do begin
+ 	for y := 1 to (ny - 2) do begin
+ 		for x := 1 to (nx - 2) do begin
+ 			i := x + (y * nx) + (z * nxy);//for 4D + (v * nxyz);
+ 			val := vol25[i];
+ 			if (val <= 0.0) then continue; //one sided edge
+ 			//logic: pos*neg = neg; pos*pos=pos; neg*neg=neg
+ 			//check six neighbors that share a face
+ 			if (val * vol25[i-1] < 0) then vol40[i] := 1.0;
+ 			if (val * vol25[i+1] < 0) then vol40[i] := 1.0;
+ 			if (val * vol25[i-nx] < 0) then vol40[i] := 1.0;
+ 			if (val * vol25[i+nx] < 0) then vol40[i] := 1.0;
+ 			if (val * vol25[i-nxy] < 0) then vol40[i] := 1.0;
+ 			if (val * vol25[i+nxy] < 0) then vol40[i] := 1.0;
+ 		end; //x
+ 	end; //y
+ end; //z
+ vol25 := nil;
+
+ setlength(result, nXYZ);
+ for vx := 0 to (nXYZ - 1) do
+     result[vx] := round(vol40[vx] * 255);
+ vol40 := nil;
+end;
+{$ELSE}
+procedure transposeXY( img3Din: f32p; var img3Dout: f32p; var nxp, nyp, nz: int64);
+//transpose X and Y dimensions: rows <-> columns
+var
+  nx, ny, vi, x, xo, y, z, zo: int64;
+begin
+ nx := nxp;
+ ny := nyp;
+ vi := 0; //volume offset
+ for z := 0 to (nz -1) do begin
+		zo := z * nx * ny;
+		for y := 0 to (ny -1) do begin
+			xo := 0;
+			for x := 0 to (nx -1) do begin
+             img3Dout^[zo + xo + y] := img3Din^[vi];
+             xo += ny;
+             vi += 1;
+            end;
+        end;
+	end;
+	nxp := ny;
+	nyp := nx;
+end;
+
+procedure transposeXZ( img3Din: f32p; var img3Dout: f32p; var nxp, ny, nzp: int64);
+//transpose X and Z dimensions: slices <-> columns
+var
+  nx, nyz, nz, vi, x, y, yo, z, zo: int64;
+begin
+ nx := nxp;
+ nz := nzp;
+ nyz := ny * nzp;
+ vi := 0; //volume offset
+ for z := 0 to (nzp -1) do begin
+	for y := 0 to (ny -1) do begin
+     yo := y * nz;
+	 zo := 0;
+     for x := 0 to (nx -1) do begin
+      img3Dout^[z + yo + zo] := img3Din^[vi];
+      zo += nyz;
+      vi += 1;
+      end;
+     end;
+    end;
+	nxp := nz;
+	nzp := nx;
+end;
+
+procedure blurS(var img: f32p; nx, ny: integer; xmm, Sigmamm: single);
+var
+	sigma, expd, wt, sum: single;
+	cutoffvox, i, j, y: integer;
+	k, kWeight, tmp: f32p;
+	kStart, kEnd: i32p;
+	x, imgp: int64;
+begin
+	//make kernels
+	if ((xmm = 0) or (nx < 2) or (ny < 1) or (Sigmamm <= 0.0)) then
+		exit();
+	sigma := (Sigmamm / xmm); //mm to vox
+	cutoffvox := ceil(2.5 * sigma); //filter width to 6 sigma: faster but lower precision AFNI_BLUR_FIRFAC = 2.5
+	cutoffvox := MAX(cutoffvox, 1);
+    GetMem(k , (cutoffvox + 1)*4);
+    expd := 2 * sigma * sigma;
+	for i := 0 to cutoffvox do
+		k^[i] := exp(-1.0 * (i * i) / expd);
+	//calculate start, end for each voxel in
+    GetMem(kStart, nx*4);
+    GetMem(kEnd, nx*4);
+    GetMem(kWeight, nx*4);
+    for i := 0 to (nx - 1) do begin
+		kStart^[i] := MAX(-cutoffvox, -i); //do not read below 0
+		kEnd^[i] := MIN(cutoffvox, nx - i - 1); //do not read beyond final columnn
+		if ((i > 0) and (kStart^[i] = (kStart^[i - 1])) and (kEnd^[i] = (kEnd^[i - 1]))) then begin //reuse weight
+			kWeight^[i] := kWeight^[i - 1];
+			continue;
+		end;
+		wt := 0.0;
+		for j := kStart^[i] to kEnd^[i] do
+			wt += k^[abs(j)];
+		kWeight^[i] := 1 / wt;
+		//printf("%d %d->%d %g\n", i, kStart[i], kEnd[i], kWeight[i]);
+	end;
+	//apply kernel to each row
+	GetMem(tmp, nx*4);
+    imgp := 0; //pointer
+	for y := 0 to (ny - 1) do begin
+		//printf("-+ %d:%d\n", y, ny);
+		//memcpy(tmp, img, nx * sizeof(flt));
+		//for x := 0 to (nx - 1) do
+		//	tmp[x] := img[imgp + x];
+        Move(img^[imgp], tmp^[0],nx*4);//src,dst
+        for x := 0 to (nx - 1) do begin
+			sum := 0;
+			for i := kStart^[x] to kEnd^[x] do
+				sum += tmp^[x + i] * k^[abs(i)];
+			img^[imgp + x] := sum * kWeight^[x];
+		end;
+		imgp += nx;
+	end; //blurX
+	//free kernel
+	FreeMem(tmp);
+	FreeMem(k);
+	FreeMem(kStart);
+	FreeMem(kEnd);
+	FreeMem(kWeight);
+
+end;
+
+function TNIfTI.nifti_smooth_gauss(var img: f32p; SigmammX, SigmammY, SigmammZ: single; nVol: int64): integer;
+label
+     DO_Y_BLUR, DO_Z_BLUR;
+var
+	nRow, nvox3D, nx, ny, nz, v, vo: int64;
+    dx, dy, dz: single;
+    img3D: f32p;
+begin
+    //https://github.com/afni/afni/blob/699775eba3c58c816d13947b81cf3a800cec606f/src/edt_blur.c
+    if (nVol <> 1) then
+        exit(123);//only supports 3D
+    nx := fHdr.Dim[1];
+    ny := fHdr.Dim[2];
+    nz := fHdr.Dim[3];
+    dx := abs(fHdr.PixDim[1]);
+    dy := abs(fHdr.PixDim[2]);
+    dz := abs(fHdr.PixDim[3]);
+    if ((nx < 2) or (ny < 2) or (nz < 1) or (dx = 0) or (dy = 0) or (dz = 0)) then
+		exit( 1);
+	//if (nim->datatype != DT_CALC) then
+	//	exit( 1);
+	if ((SigmammX = 0) and (SigmammY = 0) and (SigmammZ = 0)) then
+		exit(0); //all done: no smoothing, e.g. small kernel for difference of Gaussian
+	if (SigmammX < 0) then //negative values for voxels, not mm
+		SigmammX := -SigmammX  * dx;
+	if (SigmammY < 0) then //negative values for voxels, not mm
+		SigmammY := -SigmammY  * dy;
+	if (SigmammZ < 0) then //negative values for voxels, not mm
+		SigmammZ := -SigmammZ  * dz;
+	nvox3D := nx * ny * MAX(nz, 1);
+	if ((nvox3D * nVol) < 1) then
+		exit( 1);
+	if (SigmammX <= 0.0) then
+		goto DO_Y_BLUR;
+	//BLUR X
+    nRow := ny * nz * nVol;
+    blurS(img, nx, nRow, dx, SigmammX);
+    //BLUR Y
+    DO_Y_BLUR:
+    if (SigmammY <= 0.0) then
+		goto DO_Z_BLUR;
+    nRow := nx * nz; //transpose XYZ to YXZ and blur Y columns with XZ Rows
+    //setlength(img3D, nvox3D);
+    GetMem(img3D, nvox3D * 4);
+	for v := 0 to (nVol - 1) do begin //transpose each volume separately
+		vo := v * nvox3D; //volume offset
+		transposeXY(@img[vo], img3D, nx, ny, nz);
+		blurS(img3D, fHdr.Dim[2], nRow, dy, SigmammY);
+		transposeXY(img3D, img, nx, ny, nz);
+	end;
+    FreeMem(img3D);
+    //BLUR Z
+    DO_Z_BLUR:
+	if ((SigmammZ <= 0.0) or (nz < 2)) then
+		exit(0); //all done!
+	nRow := nx * ny; //transpose XYZ to ZXY and blur Z columns with XY Rows
+
+    GetMem(img3D, nvox3D * 4);
+	for v := 0 to (nVol - 1) do begin //transpose each volume separately
+        vo := v * nvox3D; //volume offset
+		transposeXZ(@img[vo], img3D, nx, ny, nz);
+		blurS(img3D, fHdr.Dim[3], nRow, dz, SigmammZ);
+		transposeXZ(img3D, img, nx, ny, nz);
+	end;
+    FreeMem(img3D);
+    exit(0);
+end;
+
+
+function TNIfTI.EdgeMap(isSmooth: boolean): TUInt8s;
+var
+  i, vx, nx, ny, nz, nxy, nxyz, x, y, z: int64;
+  vol8: TUInt8s;
+  vol25, vol40: f32p;
+  val: single;
+begin
+ setlength(result, 0);
+ if IsLabels then exit;
+ if fHdr.bitpix = 24 then exit;
+ nX := fHdr.Dim[1];
+ nY := fHdr.Dim[2];
+ nZ := fHdr.Dim[3];
+ if (nx < 3) or (ny < 3) or (nz < 3) then exit;
+ nxy := nx * ny;
+ nxyz := nxy * nz;
+ //setlength(vol25, nxyz);
+ GetMem(vol25, nxyz * 4);
+ vol8 := fCache8;
+ for vx := 0 to (nxyz -1) do
+  	vol25^[vx] := vol8[vx];
+ nifti_smooth_gauss(vol25, 2.5, 2.5, 2.5, 1);
+ GetMem(vol40, nxyz * 4);
+ Move(vol25^, vol40^, nxyz * 4); //(src,dst,count)
+ //use 2mm blur as input for 4mm blur, allowing 3.122498999
+ nifti_smooth_gauss(vol40, 3.122498999 , 3.122498999 , 3.122498999 , 1);
+ //find edges
+ for vx := 0 to (nxyz - 1) do begin
+     vol25^[vx] := vol25^[vx] - vol40^[vx];
+     vol40^[vx] := 0;
+ end;
+ for z := 1 to (nz - 2) do begin
+ 	for y := 1 to (ny - 2) do begin
+ 		for x := 1 to (nx - 2) do begin
+ 			i := x + (y * nx) + (z * nxy);//for 4D + (v * nxyz);
+ 			val := vol25^[i];
+ 			if (val <= 0.0) then continue; //one sided edge
+ 			//logic: pos*neg = neg; pos*pos=pos; neg*neg=neg
+ 			//check six neighbors that share a face
+ 			if (val * vol25^[i-1] < 0) then vol40^[i] := 1.0;
+ 			if (val * vol25^[i+1] < 0) then vol40^[i] := 1.0;
+ 			if (val * vol25^[i-nx] < 0) then vol40^[i] := 1.0;
+ 			if (val * vol25^[i+nx] < 0) then vol40^[i] := 1.0;
+ 			if (val * vol25^[i-nxy] < 0) then vol40^[i] := 1.0;
+ 			if (val * vol25^[i+nxy] < 0) then vol40^[i] := 1.0;
+ 		end; //x
+ 	end; //y
+ end; //z
+ Freemem(vol25);
+
+ setlength(result, nXYZ);
+ for vx := 0 to (nXYZ - 1) do
+     result[vx] := round(vol40^[vx] * 255);
+ Freemem(vol40);
+end;
+
+{$ENDIF} //switch for dynamic arrays
+
+
+{$IFDEF SOBELUNUSED} //DoG is better
+function TNIfTI.EdgeMap(isSmooth: boolean): TUInt8s;
+//blur
+var
+  vx, nXYZ: int64;
+  mn, mx, scale255: single;
+  vol8: TUInt8s;
+  vol25: TFloat32s;
+begin
+ setlength(result, 0);
+ if IsLabels then exit;
+ if fHdr.bitpix = 24 then exit;
+ nXYZ := fHdr.Dim[1] * fHdr.Dim[2] * fHdr.Dim[3];
+ setlength(vol25, nXYZ);
+ vol8 := fCache8;
+ for vx := 0 to (nXYZ -1) do
+  	vol25[vx] := vol8[vx];
+ nifti_smooth_gauss(vol25, 2.5, 2.5, 2.5, 1);
+ //scale 0..1
+ mn := infinity;
+ mx := -infinity;
+ for vx := 0 to (nXYZ - 1) do begin
+     if specialsingle(vol25[vx]) then continue;
+     mn := min(mn, vol25[vx]);
+     mx := max(mx, vol25[vx]);
+ end;
+ if (mn >= mx) then begin
+   setlength(vol25, 0);
+   exit;
+ end;
+ scale255 := 255.0 / (mx - mn);
+ setlength(result, nXYZ);
+ for vx := 0 to (nXYZ - 1) do
+     result[vx] := round(scale255 * (vol25[vx] - mn));
+ setlength(vol25, 0);
+end;
+{$ENDIF}
+(*
+function TNIfTI.EdgeMap(isSmooth: boolean): TUInt8s;
+//https://afni.nimh.nih.gov/pub/dist/doc/htmldoc/programs/3dedge3_sphx.html
+// 2dedge3 uses R. Deriche formula https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.476.5736&rep=rep1&type=pdf
+//https://en.wikipedia.org/wiki/Sobel_operator#Extension_to_other_dimensions
+//optional compile:
+// Asjad and M. Deriche: https://www.researchgate.net/publication/283280465_A_new_approach_for_salt_dome_detection_using_a_3D_multidirectional_edge_detector
+//{$DEFINE ASJAD}
+var
+  vx, nXYZ: int64;
+  mn, mx, scale255: single;
+  vol8: TUInt8s;
+  vol32: TFloat32s;
+begin
+ setlength(result, 0);
+ if IsLabels then exit;
+ if fHdr.bitpix = 24 then exit;
+ nXYZ := fHdr.Dim[1] * fHdr.Dim[2] * fHdr.Dim[3];
+ setlength(vol32, nXYZ);
+ vol8 := fCache8;
+ for vx := 0 to (nXYZ -1) do
+  	vol32[vx] := vol8[vx];
+ nifti_smooth_gauss(vol32, 4, 4, 4, 1);
+ //scale 0..1
+ mn := infinity;
+ mx := -infinity;
+ for vx := 0 to (nXYZ - 1) do begin
+     if specialsingle(vol32[vx]) then continue;
+     mn := min(mn, vol32[vx]);
+     mx := max(mx, vol32[vx]);
+ end;
+ if (mn >= mx) then begin
+   setlength(vol32, 0);
+   exit;
+ end;
+ scale255 := 255.0 / (mx - mn);
+ setlength(result, nXYZ);
+ for vx := 0 to (nXYZ - 1) do
+     result[vx] := round(scale255 * (vol32[vx] - mn));
+ setlength(vol32, 0);
+end; *)
+
+(*function TNIfTI.EdgeMap(isSmooth: boolean): TUInt8s;
 //https://afni.nimh.nih.gov/pub/dist/doc/htmldoc/programs/3dedge3_sphx.html
 // 2dedge3 uses R. Deriche formula https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.476.5736&rep=rep1&type=pdf
 //https://en.wikipedia.org/wiki/Sobel_operator#Extension_to_other_dimensions
@@ -937,7 +1499,7 @@ begin
  for vx := 0 to (nXYZ - 1) do
      result[vx] := round(scale255 * (vol32[vx] - mn));
  setlength(vol32, 0);
-end;
+end;   *)
 
 function TNIfTI.SeedCorrelationMap(vSeed: TFloat32s; isZ: boolean): TFloat32s; overload;
 //https://www.johndcook.com/blog/2008/11/05/how-to-calculate-pearson-correlation-accurately/

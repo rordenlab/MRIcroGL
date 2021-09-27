@@ -1331,6 +1331,27 @@ begin
   UpdateTimer.Enabled:= true;
   result := true;
 end;
+(*function TGLForm1.Sobel(layer: integer): boolean;
+var
+ i: integer;
+begin
+   result := false;
+   if (layer < 0) or (layer >= LayerList.Count) then exit;
+   //if not vols.Layer(i,niftiVol) then exit;
+   while (isBusy) or (GLForm1.Updatetimer.enabled) do
+         Application.ProcessMessages;
+   if not vols.AddEdgeLayer(layer, gPrefs.ClearColor) then exit;
+   i := GLForm1.LayerColorDrop.Items.IndexOf('8RedYell'); //search is case-insensitive!
+  if i > 0 then
+     LayerChange(vols.NumLayers-1, i, -1, 0.15, 1.0)
+  else
+      LayerChange(vols.NumLayers-1, vols.NumLayers-1, -1, 0.15, 1.0);
+  UpdateLayerBox(true);
+  UpdateColorbar();
+  //Vol1.UpdateOverlays(vols);
+  UpdateTimer.Enabled:= true;
+  result := true;
+end;*)
 
 procedure TGLForm1.EdgeMenuClick(Sender: TObject);
 var
@@ -1338,21 +1359,6 @@ var
     //niftiVol: TNIfTI;
 begin
   Sobel(LayerList.ItemIndex);
-  //   i := LayerList.ItemIndex;
-  // if (i < 0) or (i >= LayerList.Count) then exit;
-  (*i := LayerList.Count-1;
-  if (i < 0) then exit;
-  //if not vols.Layer(i,niftiVol) then exit;
-  if not vols.AddEdgeLayer(i, gPrefs.ClearColor) then exit;
-  i := GLForm1.LayerColorDrop.Items.IndexOf('8RedYell'); //search is case-insensitive!
- if i > 0 then
-    LayerChange(vols.NumLayers-1, i, -1, 0.1, 1.0)
- else
-     LayerChange(vols.NumLayers-1, vols.NumLayers-1, -1, 0.1, 1.0);
- UpdateLayerBox(true);
- UpdateColorbar();
- //Vol1.UpdateOverlays(vols);
- UpdateTimer.Enabled:= true;   *)
 end;
 
 procedure TGLForm1.FormChangeBounds(Sender: TObject);
@@ -3371,7 +3377,7 @@ var
 (name: 'colorbarsize'; callback: @PyCOLORBARSIZE; help: ' colorbarsize(p) -> Change width of color bar f is a value 0.01..0.5 that specifies the fraction of the screen used by the colorbar.'),
 (name: 'coloreditor'; callback: @PyCOLOREDITOR; help: ' coloreditor(s) -> Show (1) or hide (0) color editor and histogram.'),
 (name: 'colorfromzero'; callback: @PyCOLORFROMZERO; help: ' colorfromzero(layer, isFromZero) -> Color scheme display range from zero (1) or from threshold value (0)?'),
-(name: 'colorname'; callback: @PyCOLORNAME; help: ' colorname(colorName) -> Loads  the requested colorscheme for the background image.'),
+(name: 'colorname'; callback: @PyCOLORNAME; help: ' colorname(layer, colorName) -> Loads  the requested colorscheme for image.'),
 (name: 'colornode'; callback: @PyCOLORNODE; help: ' colornode(layer, index, intensity, r, g, b, a) -> Adjust color scheme for image.'),
 (name: 'cutout'; callback: @PyCUTOUT; help: ' cutout(L,A,S,R,P,I) -> Remove sector from volume.'),
 (name: 'drawload'; callback: @PyDRAWLOAD; help: ' drawload(filename) -> Load an image as a drawing (region of interest).'),
@@ -9151,7 +9157,12 @@ gIsMouseDown: boolean = false;      // https://bugs.freepascal.org/view.php?id=3
 
 {$IFDEF DEPTHPICKER}{$IFDEF METALAPI}
 //TODO METAL:
+//EUREKA
+//  https://stackoverflow.com/questions/50724608/glsl-gl-fragdepth-equivalent-in-metal-shaders#
+//Thick Lines
+//  https://github.com/bialylis/ThickRedLine
 //We need to read and write to the depth buffer
+// https://stackoverflow.com/questions/50724608/glsl-gl-fragdepth-equivalent-in-metal-shaders
 // https://metashapes.com/blog/reading-depth-buffer-metal-api/
 // https://developer.apple.com/forums/thread/62552
 // https://stackoverflow.com/questions/37489545/how-do-i-save-depth-buffer-to-a-texture-with-metal
@@ -9223,10 +9234,13 @@ procedure TGLForm1.PickRenderDepth( X, Y: Integer);
 var
 {$IFDEF METALAPI}
  u: uint32;
+ sliceMM : TVec3;
+ sum: single;
+{$ELSE}
+depth: single;
 {$ENDIF}
  c3: TVec3;
  niftiVol: TNIfTI;
- depth: single;
 begin
   if not vols.Layer(0,niftiVol) then exit;
   {$IFNDEF METALAPI}
@@ -9235,20 +9249,41 @@ begin
   glFinish;
   glReadBuffer(GL_BACK);
   glReadPixels( X, Y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, @depth);
-  {$ELSE}
-  ViewGPU1.Invalidate;
-  u := 0;//Vol1.ReadPixel(X,Y);
-  depth := Vol1.ReadDepth(X,Y);
-  //c := Vec4(((u shr 16) and $FF) / 255, ((u shr 8) and $FF) / 255, ((u shr 0) and $FF) / 255);
-  LayerBox.Caption := format('%d,%d : %d %d %d : %g',[X,Y, (u shr 16) and $FF, (u shr 8) and $FF, (u shr 0) and $FF, depth]);
-  //c := Vec4(((u shr 16) and $FF) / 255, ((u shr 8) and $FF) / 255, ((u shr 0) and $FF) / 255, ((u shr 24) and $FF) / 255);
-  exit;
-  {$ENDIF}
   c3 := Vol1.Unproject(X,Y, depth);
   if (min(c3.X, min(c3.Y, c3.z)) < 0.0) or  (max(c3.X, max(c3.Y, c3.z)) > 1.0) then begin
     exit;
   end;
   gSliceMM := niftiVol.FracMM(Vec3(c3.X, c3.Y, c3.Z));
+  {$ELSE}
+  exit;//TODO
+  //Vol1.PaintDepth(niftiVol, gPrefs.DisplayOrient = kAxCorSagOrient4);
+  Vol1.UseDepthShader := true;
+  ViewGPU1.Invalidate;
+  u := Vol1.ReadPixel(X,Y);
+  //u := MTLReadPixelLock(X,Y);
+
+  Vol1.UseDepthShader := false;
+  //ViewGPU1.Invalidate;
+  //depth := Vol1.ReadDepth(X,Y);
+  //c := Vec4(((u shr 16) and $FF) / 255, ((u shr 8) and $FF) / 255, ((u shr 0) and $FF) / 255);
+  LayerBox.Caption := format('%d,%d : rgba %d %d %d : %d',[X,Y, (u shr 16) and $FF, (u shr 8) and $FF, (u shr 0) and $FF, (u shr 24) and $FF]);
+  //c := Vec4(((u shr 16) and $FF) / 255, ((u shr 8) and $FF) / 255, ((u shr 0) and $FF) / 255, ((u shr 24) and $FF) / 255);
+  c3 := Vec3(((u shr 16) and $FF) / 255, ((u shr 8) and $FF) / 255, ((u shr 0) and $FF) / 255);
+  //layerBox.Caption := format('%d %d %g %g %g', [X, Y, c3.x * 255, c3.y * 255, c3.z * 255]);
+
+  sliceMM := niftiVol.FracMM(Vec3(c3.X, c3.Y, c3.Z));
+  sum := c3.r + c3.g + c3.b; //a click outside the rendering will return background color. No good solution...
+  if (sum < 0.001) or (sum > 2.99) then begin
+     Caption := '';
+     ViewGPU1.Invalidate;
+     exit;
+  end;
+  Caption := format('%0.4g×%0.4g×%0.4g', [sliceMM.x, sliceMM.y, sliceMM.z]);
+  vol1.SetSlice2DFrac(Vec3(c3.X, c3.Y, c3.Z));
+  gSliceMM := Vec3(sliceMM.X, sliceMM.Y, sliceMM.Z);
+
+  exit;
+  {$ENDIF}
   Caption := format('%0.4g×%0.4g×%0.4g', [gSliceMM.x, gSliceMM.y, gSliceMM.z]);
   vol1.SetSlice2DFrac(Vec3(c3.X, c3.Y, c3.Z));
   {$IFDEF COMPILEYOKE}

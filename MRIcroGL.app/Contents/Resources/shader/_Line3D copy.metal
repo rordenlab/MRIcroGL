@@ -1,6 +1,6 @@
 //vert
 #include <metal_stdlib>
-//xcrun -sdk macosx metal -c _Line3Dalpha.metal -o Render.air
+//xcrun -sdk macosx metal -c _Line3D.metal -o Render.air 
 
 using namespace metal;
 
@@ -25,7 +25,7 @@ vertex VertexOut vertexShader(  unsigned int vertexID [[ vertex_id ]],
 	VertexIn VertexIn = verts[vertexID];
 	VertexOut VertexOut;
 	VertexOut.position = uniforms->modelViewProjectionMatrix * float4(VertexIn.position, 1);
-	VertexOut.color = float4(VertexIn.color.rgb, VertexIn.color.a * 0.225);
+	VertexOut.color = VertexIn.color;
 	return VertexOut;
 }
 
