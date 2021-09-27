@@ -53,9 +53,9 @@ cp ../license.txt ${docPath}copyright
 mkdir -p ${manPath}
 cp ${man} ${manPath}${man}
 
-#dpkg-deb --build --root-owner-group ${pkg}
+dpkg-deb --build --root-owner-group ${pkg}
 #remove temporary files
-#rm -rf ${pkg}
+rm -rf ${pkg}
 
 echo Test the package:
 echo sudo dpkg -I ${pkg}.deb

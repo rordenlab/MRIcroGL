@@ -1160,7 +1160,6 @@ begin
 	FreeMem(kStart);
 	FreeMem(kEnd);
 	FreeMem(kWeight);
-
 end;
 
 function TNIfTI.nifti_smooth_gauss(var img: f32p; SigmammX, SigmammY, SigmammZ: single; nVol: int64): integer;
