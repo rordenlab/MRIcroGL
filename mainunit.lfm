@@ -1,11 +1,11 @@
 object GLForm1: TGLForm1
-  Left = 164
-  Height = 693
-  Top = 25
+  Left = 213
+  Height = 960
+  Top = 198
   Width = 916
   AllowDropFiles = True
   Caption = 'MRIcroGL'
-  ClientHeight = 693
+  ClientHeight = 960
   ClientWidth = 916
   Constraints.MinHeight = 20
   Constraints.MinWidth = 20
@@ -23,25 +23,25 @@ object GLForm1: TGLForm1
   LCLVersion = '2.3.0.0'
   object TopPanel: TPanel
     Left = 0
-    Height = 607
+    Height = 874
     Top = 0
     Width = 916
     Align = alClient
-    ClientHeight = 607
+    ClientHeight = 874
     ClientWidth = 916
     ParentFont = False
     TabOrder = 0
     object ToolPanel: TScrollBox
       Left = 1
-      Height = 605
+      Height = 872
       Top = 1
       Width = 268
       HorzScrollBar.Page = 1
       HorzScrollBar.Visible = False
-      VertScrollBar.Page = 605
+      VertScrollBar.Page = 872
       Align = alLeft
       BorderStyle = bsNone
-      ClientHeight = 605
+      ClientHeight = 872
       ClientWidth = 253
       ParentFont = False
       TabOrder = 0
@@ -1594,12 +1594,12 @@ object GLForm1: TGLForm1
     end
     object ScriptPanel: TPanel
       Left = 913
-      Height = 605
+      Height = 872
       Top = 1
       Width = 2
       Align = alRight
       BevelOuter = bvNone
-      ClientHeight = 605
+      ClientHeight = 872
       ClientWidth = 2
       Constraints.MinWidth = 2
       ParentFont = False
@@ -1607,12 +1607,12 @@ object GLForm1: TGLForm1
       OnDblClick = ScriptPanelDblClick
       object ScriptBox: TGroupBox
         Left = -8
-        Height = 605
+        Height = 872
         Top = 0
         Width = 10
         Align = alClient
         Caption = 'Scripting'
-        ClientHeight = 586
+        ClientHeight = 853
         ClientWidth = 0
         Constraints.MinWidth = 10
         ParentFont = False
@@ -1620,7 +1620,7 @@ object GLForm1: TGLForm1
         OnDblClick = ScriptPanelDblClick
         object ScriptMemo: TMemo
           Left = 0
-          Height = 380
+          Height = 647
           Top = 0
           Width = 0
           Align = alClient
@@ -1644,7 +1644,7 @@ object GLForm1: TGLForm1
         object ScriptOutputMemo: TMemo
           Left = 0
           Height = 200
-          Top = 386
+          Top = 653
           Width = 0
           Align = alBottom
           BorderStyle = bsNone
@@ -1661,7 +1661,7 @@ object GLForm1: TGLForm1
           Cursor = crVSplit
           Left = 0
           Height = 6
-          Top = 380
+          Top = 647
           Width = 0
           Align = alBottom
           ResizeAnchor = akBottom
@@ -1670,13 +1670,13 @@ object GLForm1: TGLForm1
     end
     object LeftSplitter: TSplitter
       Left = 269
-      Height = 605
+      Height = 872
       Top = 1
       Width = 6
     end
     object RightSplitter: TSplitter
       Left = 907
-      Height = 605
+      Height = 872
       Top = 1
       Width = 6
       Align = alRight
@@ -1684,7 +1684,7 @@ object GLForm1: TGLForm1
     end
     object CenterPanel: TPanel
       Left = 275
-      Height = 605
+      Height = 872
       Top = 1
       Width = 632
       Align = alClient
@@ -1697,7 +1697,7 @@ object GLForm1: TGLForm1
     Cursor = crVSplit
     Left = 0
     Height = 6
-    Top = 607
+    Top = 874
     Width = 916
     Align = alBottom
     MinSize = 4
@@ -1706,7 +1706,7 @@ object GLForm1: TGLForm1
   object BottomPanel: TPanel
     Left = 0
     Height = 80
-    Top = 613
+    Top = 880
     Width = 916
     Align = alBottom
     ClientHeight = 80
@@ -1865,7 +1865,6 @@ object GLForm1: TGLForm1
       end
       object DicomDirMenu: TMenuItem
         Caption = 'Open Recent DICOM'
-        Visible = False
         OnClick = DicomDirMenuClick
       end
       object OpenAltasMenu: TMenuItem

@@ -40,8 +40,9 @@ mkdir -p ${exePath}
 cp ../MRIcroGL ${exePath}${sw}
 #copy desktop file
 mkdir -p ${appPath}
-cp ${sw}.desktop ${appPath}${sw}.desktop
-echo cp ${sw}.desktop ${appPath}${sw}.desktop
+#cp ${sw}.desktop ${appPath}${sw}.desktop
+sed "s/<ver>/$ver/" ./${sw}.desktop > ${appPath}${sw}.desktop
+
 #copy icon svg
 mkdir -p ${iconPath}
 cp ${sw}.svg ${iconPath}${sw}.svg
@@ -62,8 +63,4 @@ echo sudo dpkg -I ${pkg}.deb
 echo sudo dpkg -c ${pkg}.deb
 echo sudo dpkg -i ${pkg}.deb
 exit 0
-
-
-
-
 

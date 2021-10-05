@@ -406,7 +406,7 @@ type
     procedure DrawIntensityFilterMenuClick(Sender: TObject);
     procedure GetHistogramPrefs(var bins: integer; var mn, mx: single; var isClampExtremeValues, isIgnoreZeros: boolean);
     procedure IntensityHistogamMenuClick(Sender: TObject);
-    function Sobel(layer: integer): boolean;
+    function DoG(layer: integer): boolean;
     procedure EdgeMenuClick(Sender: TObject);
     procedure FormChangeBounds(Sender: TObject);
     procedure FormResize(Sender: TObject);
@@ -1310,7 +1310,7 @@ begin
    {$ENDIF}
 end;
 
-function TGLForm1.Sobel(layer: integer): boolean;
+function TGLForm1.DoG(layer: integer): boolean; //difference of Gaussian
 var
  i: integer;
 begin
@@ -1331,34 +1331,13 @@ begin
   UpdateTimer.Enabled:= true;
   result := true;
 end;
-(*function TGLForm1.Sobel(layer: integer): boolean;
-var
- i: integer;
-begin
-   result := false;
-   if (layer < 0) or (layer >= LayerList.Count) then exit;
-   //if not vols.Layer(i,niftiVol) then exit;
-   while (isBusy) or (GLForm1.Updatetimer.enabled) do
-         Application.ProcessMessages;
-   if not vols.AddEdgeLayer(layer, gPrefs.ClearColor) then exit;
-   i := GLForm1.LayerColorDrop.Items.IndexOf('8RedYell'); //search is case-insensitive!
-  if i > 0 then
-     LayerChange(vols.NumLayers-1, i, -1, 0.15, 1.0)
-  else
-      LayerChange(vols.NumLayers-1, vols.NumLayers-1, -1, 0.15, 1.0);
-  UpdateLayerBox(true);
-  UpdateColorbar();
-  //Vol1.UpdateOverlays(vols);
-  UpdateTimer.Enabled:= true;
-  result := true;
-end;*)
 
 procedure TGLForm1.EdgeMenuClick(Sender: TObject);
 var
     i: integer;
     //niftiVol: TNIfTI;
 begin
-  Sobel(LayerList.ItemIndex);
+  DoG(LayerList.ItemIndex);
 end;
 
 procedure TGLForm1.FormChangeBounds(Sender: TObject);
@@ -2131,19 +2110,19 @@ begin
      result := PyATLASSHOWHIDE(Self, Args, false);
 end; //PyAtlasHide
 
-function PySOBEL(Self, Args : PPyObject): PPyObject; cdecl;
+function PyDoG(Self, Args : PPyObject): PPyObject; cdecl;
 var
  v: TNIfTI;
  layer: integer;
 begin
   Result:= PyInt_FromLong(-1);
   {$IFDEF PY4LAZ}with GetPythonEngine do begin {$ENDIF}
-    if Bool(PyArg_ParseTuple(Args, 'i:sobel', @layer)) then begin
+    if Bool(PyArg_ParseTuple(Args, 'i:dog', @layer)) then begin
        if (layer < 0) or (layer >= vols.NumLayers) then begin
-          GLForm1.ScriptOutputMemo.lines.add('sobel: layer should be in range 0..'+inttostr(vols.NumLayers-1));
+          GLForm1.ScriptOutputMemo.lines.add('dog: layer should be in range 0..'+inttostr(vols.NumLayers-1));
           exit;
        end;
-       GLForm1.Sobel(layer);
+       GLForm1.DoG(layer);
        Result:= PyInt_FromLong(1);
     end;
     {$IFDEF PY4LAZ}end; {$ENDIF}
@@ -2262,12 +2241,19 @@ var
   ret: boolean;
   niftiVol: TNIfTI;
 begin
+//(name: 'colorname'; callback: @PyCOLORNAME; help: ' colorname(layer, colorName) -> Loads  the requested colorscheme for image.'),
+
 {$IFDEF PY4LAZ}with GetPythonEngine do begin  {$ENDIF}
   Result:= PyBool_FromLong(Ord(FALSE));
-    if Boolean(PyArg_ParseTuple(Args, 'is:overlaycolorname', @V, @PtrName)) then
+    if Boolean(PyArg_ParseTuple(Args, 'is:colorname', @V, @PtrName)) then
     begin
       StrName:= string(PtrName);
       i := GLForm1.LayerColorDrop.Items.IndexOf(StrName); //search is case-insensitive!
+      if (i < 0) then begin
+      	i := StrToIntDef(StrName, -1);
+        if i >= GLForm1.LayerColorDrop.Items.Count then
+        	i := -1;
+      end;
       ret := (i >= 0);
       Result:= PyBool_FromLong(Ord(True));
       if ret then begin
@@ -3418,7 +3404,7 @@ var
 (name: 'shaderupdategradients'; callback: @PySHADERUPDATEGRADIENTS; help: ' shaderupdategradients() -> Recalculate volume properties.'),
 (name: 'sharpen'; callback: @PySHARPEN; help: ' sharpen() -> apply unsharp mask to background volume to enhance edges'),
 (name: 'smooth'; callback: @PySMOOTH2D; help: ' smooth2D(s) -> make 2D images blurry (linear interpolation, 1) or jagged (nearest neighbor, 0).'),
-(name: 'sobel'; callback: @PySOBEL; help: ' sobel(layer) -> Creates new layer based on Sobel edge map of selected layer.'),
+(name: 'dog'; callback: @PyDoG; help: ' dog(layer) -> Creates new layer based on 2.5 vs 2.0mm FWHM difference-of-Gaussian edge map of selected layer.'),
 (name: 'toolformvisible'; callback: @PyTOOLFORMVISIBLE; help: ' toolformvisible(visible) -> Show (1) or hide (0) the tool panel.'),
 (name: 'version'; callback: @PyVERSION; help: ' version() -> Return the version of MRIcroGL.'),
 (name: 'view'; callback: @PyVIEW; help: ' view(v) -> Display Axial (1), Coronal (2), Sagittal (4), Flipped Sagittal (8), MPR (16), Mosaic (32) or Rendering (64)'),
@@ -9255,11 +9241,12 @@ begin
   end;
   gSliceMM := niftiVol.FracMM(Vec3(c3.X, c3.Y, c3.Z));
   {$ELSE}
-  exit;//TODO
+  //exit;//TODO
   //Vol1.PaintDepth(niftiVol, gPrefs.DisplayOrient = kAxCorSagOrient4);
   Vol1.UseDepthShader := true;
-  ViewGPU1.Invalidate;
+  //ViewGPU1.Invalidate;
   u := Vol1.ReadPixel(X,Y);
+  //Vol1.ReadDepth(x,y);
   //u := MTLReadPixelLock(X,Y);
 
   Vol1.UseDepthShader := false;
@@ -9916,12 +9903,12 @@ begin
     if (Screen.MonitorFromWindow(Handle).BoundsRect.Height >= 1024) then
     	GLForm1.Height := 960
     else if (Screen.MonitorFromWindow(Handle).BoundsRect.Height > 799) then
-    	GLForm1.Height := 780;
+    	GLForm1.Height := 780
+    else
+        GLForm1.Height := 692;
     //LayerBox.Caption := inttostr(Screen.MonitorFromWindow(Handle).BoundsRect.Height)+'x'+inttostr(GLForm1.Height);
   end;
-
-  if DirectoryExists(gPrefs.DicomDir) then
-  	DicomDirMenu.Visible:= true;
+  DicomDirMenu.Visible:= DirectoryExists(gPrefs.DicomDir);
   //auto generate shaders
   shaderPath := ShaderDir;
   if not DirectoryExists(shaderPath) then showmessage('Unable to find shaders "'+shaderPath+'"');

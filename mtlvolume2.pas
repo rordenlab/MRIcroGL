@@ -98,7 +98,7 @@ type
         property ClipPlane: TVec4 read fClipPlane write fClipPlane;
         procedure Prepare(shaderName: string);
         constructor Create(fromView: TMetalControl);
-        procedure PaintCrosshair3D(Dim: TVec3i; rgba: TVec4);
+        procedure PaintCrosshair3D(var vol: TNIfTI; rgba: TVec4);
         procedure PaintCore(var vol: TNIfTI; widthHeightLeft: TVec3i; clearScreen: boolean = true; isDepthShader: boolean = false);
         procedure Paint(var vol: TNIfTI);
         procedure PaintDepth(var vol: TNIfTI; isAxCorSagOrient4: boolean = false);
@@ -1340,13 +1340,15 @@ end;
 
 {$include cylinder.inc}
 
-procedure TGPUVolume.PaintCrosshair3D(Dim: TVec3i; rgba: TVec4);
+procedure TGPUVolume.PaintCrosshair3D(var vol: TNIfTI; rgba: TVec4);
 var
     faces: TFaces = nil;
     vertices: TVertices = nil;
     i,nVert: integer;
+    radius: TVec3;
 begin
-  MakeCyl(slices2D.LineWidth, slices2D.sliceFrac, Dim, faces, vertices);
+  radius := vol.mmAsFrac * (vol.minPixDim * slices2D.LineWidth * 0.5);
+  MakeCyl(radius, slices2D.sliceFrac, faces, vertices);
   nVert := length(vertices);
   if length(gLines3Dv) <> nVert then
   	setlength(gLines3Dv, nVert);
@@ -1472,7 +1474,7 @@ begin
     if ((widthHeightLeft.z <> 0) and (slices2D.LineWidth > 0.0)) then begin
       MTLSetShader(shaderLine3D);
       MTLSetVertexBytes(@vertUniforms, sizeof(vertUniforms), 1);
-      PaintCrosshair3D(vol.Dim,  slices2D.LineColor);
+      PaintCrosshair3D(vol,  slices2D.LineColor);
       line3DBuffer := mtlControl.renderView.device.newBufferWithBytes_length_options(@gLines3Dv[0], length(gLines3Dv) *sizeof(TVertVertex), MTLResourceStorageModeShared);
       MTLSetVertexBuffer(line3DBuffer, 0, 0);
       MTLDrawIndexed (MTLPrimitiveTypeTriangle, gLines3DnIdx, MTLIndexTypeUInt32, gLines3DIndexBuffer, 0);

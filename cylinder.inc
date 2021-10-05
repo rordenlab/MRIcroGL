@@ -82,15 +82,11 @@ begin
     v0 += num_v;
 end;
 
-procedure MakeCyl(lineWidth:single; sliceFrac: TVec3; Dim: TVec3i; var faces: TFaces; var vertices: TVertices);
+procedure MakeCyl(radius, sliceFrac: TVec3;  var faces: TFaces; var vertices: TVertices);
 var
     f0: integer = 0;
     v0: integer = 0;
-	radius: TVec3;
 begin
-  radius.x := 0.5 * LineWidth/Dim.x;
-  radius.y := 0.5 * LineWidth/Dim.y;
-  radius.z := 0.5 * LineWidth/Dim.z;
   MakeCylinder(radius, Vec3(sliceFrac.x, sliceFrac.y, -0.1), Vec3(sliceFrac.x, sliceFrac.y, 1.1), faces, vertices, f0, v0);
   MakeCylinder(radius, Vec3(sliceFrac.x, -0.1, sliceFrac.z),  Vec3(sliceFrac.x, 1.1, sliceFrac.z), faces, vertices, f0, v0);
   MakeCylinder(radius, Vec3(-0.1, sliceFrac.y, sliceFrac.z),  Vec3(1.1, sliceFrac.y, sliceFrac.z), faces, vertices, f0, v0);

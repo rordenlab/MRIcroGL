@@ -635,6 +635,13 @@ begin
     write(f, inttostr(lCLUTrec.nodes[i].rgba.b));
   end;
   writeln(f, '],');
+  //alpha
+  write(f, '"A": [');
+  for i := 0 to (lCLUTrec.numnodes-1) do begin
+  	if (i > 0) then write(f, ', ');
+    write(f, inttostr(lCLUTrec.nodes[i].rgba.a));
+  end;
+  writeln(f, '],');
   //intensity
   write(f, '"I": [');
   for i := 0 to (lCLUTrec.numnodes-1) do begin
@@ -648,13 +655,11 @@ begin
 end;
 
 function TCLUT.SaveCLUT(clutFileName: string): boolean;
-//var
-//  lCLUTrec: TCLUTrec;
 begin
-  //lCLUTrec := CLUT;
   if upcase(ExtractFileExt(clutFileName))= '.JSON' then begin
   	exit(CLUT2json(clutFileName, CLUT));
   end;
+  //lCLUTrec := CLUT;
   //lCLUTrec.min := 0;
   //lCLUTrec.Max := 0;
   result := CLUT2disk(false, clutFileName, CLUT);
@@ -666,7 +671,7 @@ begin
     fnm := changefileext(fnm,'.json');
     {$IFDEF UNIX}writeln('Saving '+fnm);{$ENDIF}
     CLUT2json(fnm, lCLUTrec);
-end; *)
+end;*)
 
 function TCLUT.OpenCLUT(clutFileName: string; cTag: integer): boolean;
 begin

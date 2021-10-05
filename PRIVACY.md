@@ -1,0 +1,4 @@
+## About
+
+The Apple App Store requires a Privacy Policy URL for each application. MRIcroGL is designed to view MRI and CT scans. It only opens files selected by the user. It never communicates with other programs or via the web. Like most applications, the settings you specify in the Preferences window and the most recent files you have opened are recorded locally on your computer. This allows your favorite settings to be retained after you quit the program. These settings are never shared with other computers or across the web. The program is open source, and all the code is available for review. The program operates within an "Apple Sandbox" and is never able to open files on your computer without the user explicitly selecting a file (either by dragging and dropping the file, selecting from a menu or via a file dialog).
+

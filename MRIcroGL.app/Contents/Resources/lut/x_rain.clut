@@ -13,9 +13,9 @@ nodeintensity5=192
 nodeintensity6=255
 [RGBA255]
 nodergba0=3|0|0|0
-nodergba1=64|0|128|8
-nodergba2=0|0|255|16
-nodergba3=0|255|0|24
-nodergba4=255|255|0|32
-nodergba5=255|192|0|52
-nodergba6=255|3|0|80
+nodergba1=64|0|32|8
+nodergba2=0|0|48|16
+nodergba3=0|255|56|24
+nodergba4=255|255|64|32
+nodergba5=255|192|96|52
+nodergba6=255|3|128|80

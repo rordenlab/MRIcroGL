@@ -126,7 +126,7 @@ type
         procedure Prepare(shaderName: string);
         procedure SetGradientMode(newMode: integer);
         constructor Create(fromView: TOpenGLControl);
-        function MakeCrosshair3D(Dim: TVec3i): integer;
+        function MakeCrosshair3D(var vol: TNIfTI): integer;
         procedure PaintCrosshair3D(rgba: TVec4; nFaces: integer);
         procedure PaintCore(var vol: TNIfTI; widthHeightLeft: TVec3i; clearScreen: boolean = true; isDepthShader: boolean = false);
         procedure Paint(var vol: TNIfTI);
@@ -2637,13 +2637,15 @@ begin
 
 end;
 
-function TGPUVolume.MakeCrosshair3D(Dim: TVec3i): integer;
+function TGPUVolume.MakeCrosshair3D(var vol: TNIfTI): integer;
 var
     vertices: TVertices = nil ;
     faces: TFaces = nil;
     vertLoc: GLint;
+    radius: TVec3;
 begin
-  MakeCyl(slices2D.LineWidth, slices2D.sliceFrac, Dim, faces, vertices);
+  radius := vol.mmAsFrac * (vol.minPixDim * slices2D.LineWidth * 0.5);
+  MakeCyl(radius, slices2D.sliceFrac, faces, vertices);
   {$IFDEF COREGL}
   glBindBuffer(GL_ARRAY_BUFFER, vboLine3D);
   glBufferData(GL_ARRAY_BUFFER, length(vertices)*SizeOf(TVec3), @vertices[0], GL_STATIC_DRAW);
@@ -2842,11 +2844,11 @@ begin
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL); //GL_LESS);
     //draw opaque line occluded by volume render
-    nfaces := MakeCrosshair3D(vol.Dim);
+    nfaces := MakeCrosshair3D(vol);
     PaintCrosshair3D(slices2D.LineColor, nfaces);
     glDisable(GL_DEPTH_TEST);
     //draw translucent line regardless of volume render
-    PaintCrosshair3D(Vec4(slices2D.LineColor.r,slices2D.LineColor.g,slices2D.LineColor.b,slices2D.LineColor.a * 0.225), nfaces);
+    PaintCrosshair3D(Vec4(slices2D.LineColor.r,slices2D.LineColor.g,slices2D.LineColor.b,slices2D.LineColor.a * 0.2), nfaces);
     //glDepthFunc(GL_ALWAYS); //always pass test
   end else begin
   	glDepthFunc(GL_LEQUAL); //GL_LESS);
