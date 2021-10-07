@@ -18,9 +18,8 @@
         <ComponentName Value="GLForm1"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
-        <IsVisibleTab Value="True"/>
-        <TopLine Value="9894"/>
-        <CursorPos X="58" Y="9911"/>
+        <TopLine Value="10"/>
+        <CursorPos X="19" Y="12"/>
         <UsageCount Value="204"/>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
@@ -181,9 +180,11 @@
       </Unit18>
       <Unit19>
         <Filename Value="glvolume2.pas"/>
-        <EditorIndex Value="-1"/>
-        <CursorPos X="103" Y="7"/>
+        <EditorIndex Value="1"/>
+        <TopLine Value="2700"/>
+        <CursorPos X="44" Y="2720"/>
         <UsageCount Value="116"/>
+        <Loaded Value="True"/>
       </Unit19>
       <Unit20>
         <Filename Value="nifti_foreign.pas"/>
@@ -225,10 +226,11 @@
       </Unit25>
       <Unit26>
         <Filename Value="colorEditor.pas"/>
-        <EditorIndex Value="-1"/>
-        <TopLine Value="270"/>
+        <EditorIndex Value="3"/>
+        <TopLine Value="267"/>
         <CursorPos X="61" Y="292"/>
-        <UsageCount Value="76"/>
+        <UsageCount Value="78"/>
+        <Loaded Value="True"/>
       </Unit26>
       <Unit27>
         <Filename Value="opts.inc"/>
@@ -252,10 +254,10 @@
       </Unit29>
       <Unit30>
         <Filename Value="colorTable.pas"/>
-        <EditorIndex Value="1"/>
+        <EditorIndex Value="4"/>
         <TopLine Value="562"/>
         <CursorPos X="71" Y="568"/>
-        <UsageCount Value="71"/>
+        <UsageCount Value="73"/>
         <Loaded Value="True"/>
       </Unit30>
       <Unit31>
@@ -282,9 +284,11 @@
       </Unit33>
       <Unit34>
         <Filename Value="../Metal-Demos/common/retinahelper.pas"/>
-        <EditorIndex Value="-1"/>
-        <CursorPos X="21" Y="22"/>
-        <UsageCount Value="96"/>
+        <IsVisibleTab Value="True"/>
+        <EditorIndex Value="2"/>
+        <CursorPos X="13" Y="22"/>
+        <UsageCount Value="98"/>
+        <Loaded Value="True"/>
       </Unit34>
       <Unit35>
         <Filename Value="../Python27-for-Lazarus/python4lazarus/PythonEngine.pas"/>
@@ -380,7 +384,7 @@
     <Build>
       <CleanOutputFileMask Value="*.ppu;*.ppl;*.o;*.or"/>
     </Build>
-    <JumpHistory Count="14" HistoryIndex="13">
+    <JumpHistory Count="17" HistoryIndex="16">
       <Position1>
         <Filename Value="mainunit.pas"/>
         <Caret Line="2232" Column="47" TopLine="2230"/>
@@ -437,6 +441,18 @@
         <Filename Value="mainunit.pas"/>
         <Caret Line="9899" Column="33" TopLine="9883"/>
       </Position14>
+      <Position15>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="13" Column="30"/>
+      </Position15>
+      <Position16>
+        <Filename Value="glvolume2.pas"/>
+        <Caret Line="7" Column="103"/>
+      </Position16>
+      <Position17>
+        <Filename Value="glvolume2.pas"/>
+        <Caret Line="2720" Column="44" TopLine="2700"/>
+      </Position17>
     </JumpHistory>
     <RunParams>
       <FormatVersion Value="2"/>
