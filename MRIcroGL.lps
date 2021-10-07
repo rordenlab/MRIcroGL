@@ -18,8 +18,9 @@
         <ComponentName Value="GLForm1"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
-        <TopLine Value="10"/>
-        <CursorPos X="19" Y="12"/>
+        <IsVisibleTab Value="True"/>
+        <TopLine Value="3386"/>
+        <CursorPos X="90" Y="3407"/>
         <UsageCount Value="204"/>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
@@ -284,7 +285,6 @@
       </Unit33>
       <Unit34>
         <Filename Value="../Metal-Demos/common/retinahelper.pas"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="2"/>
         <CursorPos X="13" Y="22"/>
         <UsageCount Value="98"/>
@@ -384,7 +384,7 @@
     <Build>
       <CleanOutputFileMask Value="*.ppu;*.ppl;*.o;*.or"/>
     </Build>
-    <JumpHistory Count="17" HistoryIndex="16">
+    <JumpHistory Count="23" HistoryIndex="22">
       <Position1>
         <Filename Value="mainunit.pas"/>
         <Caret Line="2232" Column="47" TopLine="2230"/>
@@ -453,6 +453,30 @@
         <Filename Value="glvolume2.pas"/>
         <Caret Line="2720" Column="44" TopLine="2700"/>
       </Position17>
+      <Position18>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="12" Column="19" TopLine="10"/>
+      </Position18>
+      <Position19>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="409" Column="18" TopLine="389"/>
+      </Position19>
+      <Position20>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="1313" Column="23" TopLine="1292"/>
+      </Position20>
+      <Position21>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="1340" Column="7" TopLine="1319"/>
+      </Position21>
+      <Position22>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="2113" Column="16" TopLine="2092"/>
+      </Position22>
+      <Position23>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="2123" Column="16" TopLine="2104"/>
+      </Position23>
     </JumpHistory>
     <RunParams>
       <FormatVersion Value="2"/>

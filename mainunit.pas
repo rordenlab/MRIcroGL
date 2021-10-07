@@ -3404,7 +3404,7 @@ var
 (name: 'shaderupdategradients'; callback: @PySHADERUPDATEGRADIENTS; help: ' shaderupdategradients() -> Recalculate volume properties.'),
 (name: 'sharpen'; callback: @PySHARPEN; help: ' sharpen() -> apply unsharp mask to background volume to enhance edges'),
 (name: 'smooth'; callback: @PySMOOTH2D; help: ' smooth2D(s) -> make 2D images blurry (linear interpolation, 1) or jagged (nearest neighbor, 0).'),
-(name: 'dog'; callback: @PyDoG; help: ' dog(layer) -> Creates new layer based on 2.5 vs 2.0mm FWHM difference-of-Gaussian edge map of selected layer.'),
+(name: 'dog'; callback: @PyDoG; help: ' dog(layer) -> Creates new layer based on 2.5 vs 4.0mm FWHM difference-of-Gaussian edge map of selected layer.'),
 (name: 'toolformvisible'; callback: @PyTOOLFORMVISIBLE; help: ' toolformvisible(visible) -> Show (1) or hide (0) the tool panel.'),
 (name: 'version'; callback: @PyVERSION; help: ' version() -> Return the version of MRIcroGL.'),
 (name: 'view'; callback: @PyVIEW; help: ' view(v) -> Display Axial (1), Coronal (2), Sagittal (4), Flipped Sagittal (8), MPR (16), Mosaic (32) or Rendering (64)'),
