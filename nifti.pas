@@ -5998,6 +5998,7 @@ var
   Stream: TGZFileStream;
   volBytes: int64;
   lSwappedReportedSz : LongInt;
+  isFastFailed: boolean = true;
 begin
  isNativeEndian := true;
  result := false;
@@ -6009,6 +6010,7 @@ begin
     // disadvantage: for very large files we might not want to decompress entire volume
     result := LoadFastGz(FileName,isNativeEndian);
     if result then exit;
+    isFastFailed := true;
  end;
  {$ENDIF}
  Stream := TGZFileStream.Create (FileName, gzopenread);
@@ -6054,6 +6056,7 @@ begin
   {$IFDEF FASTGZ}
   if (fVolumesLoaded = fVolumesTotal) then begin // did not trigger LoadFewVolumes
      Stream.Free;
+     if isFastFailed then exit;
      result := LoadFastGz(FileName,isNativeEndian);
      if result then exit;
      Stream := TGZFileStream.Create (FileName, gzopenread);
@@ -6066,7 +6069,16 @@ begin
       Stream.Seek(round(fHdr.vox_offset),soFromBeginning);
   end;
   SetLength (fRawVolBytes, volBytes);
+  try
   Stream.ReadBuffer (fRawVolBytes[0], volBytes);
+  except
+    printf('GZ error: image corrupted?');
+    Stream.Free;
+    fRawVolBytes := nil;
+    showmessage('GZ error: image corrupted?');
+    exit;
+  end;
+
   if not isNativeEndian then
    SwapImg(fRawVolBytes, fHdr.bitpix);
  //Finally
@@ -6858,6 +6870,10 @@ end;
 procedure TNIfTI.VolumeReslice(tarMat: TMat4; tarDim: TVec3i; isLinearReslice: boolean);
 var
    m: TMat4;
+   f32zero: single;
+   i16zero: int16;
+   i32zero: int32;
+   u8zero: byte;
    in8, out8: TUInt8s;
    in16, out16: TInt16s;
    in32, out32: TInt32s;
@@ -6904,9 +6920,9 @@ begin
      i := prod(fDim) * lBPP; //input bytes
      //zz setlength(in8, i);
      in8 := Copy(fRawVolBytes, Low(fRawVolBytes), Length(fRawVolBytes));
-     i := prod(tarDim) * lBPP; //target bytes
+     outVox := prod(tarDim);
+     i := outVox * lBPP; //target bytes
      //clipboard.AsText := format('%d %d', [prod(tarDim), lBPP]);
-     setlength(fRawVolBytes,0);
      setlength(fRawVolBytes, i);
      out8 := TUInt8s(fRawVolBytes);
      for lXi := 0 to (i-1) do
@@ -6924,6 +6940,24 @@ begin
      out32 := TInt32s(fRawVolBytes);
      in32f := TFloat32s(in8);
      out32f := TFloat32s(fRawVolBytes);
+     if (fHdr.scl_inter <> 0.0) and (fHdr.scl_slope <> 0.0) then begin
+        f32zero := fHdr.scl_inter / fHdr.scl_slope;
+        i16zero := round(f32zero);
+        i32zero := round(f32zero);
+        u8zero :=  round(f32zero);
+        if lBPP = 1 then
+        	for i := 0 to (outVox-1) do
+        		out8[i] := u8zero;
+        if lBPP = 2 then
+        	for i := 0 to (outVox-1) do
+        		out16[i] := i16zero;
+        if (lBPP = 4) and (dataType <> kDT_FLOAT) then
+        	for i := 0 to (outVox-1) do
+        		out32[i] := i32zero;
+        if (lBPP = 4) and (dataType = kDT_FLOAT) then
+        	for i := 0 to (outVox-1) do
+        		out32f[i] := f32zero;
+     end;
      setlength(lXx, tarDim.x);
      setlength(lXy, tarDim.x);
      setlength(lXz, tarDim.x);
