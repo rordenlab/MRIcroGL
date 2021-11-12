@@ -2213,6 +2213,28 @@ begin
   {$IFDEF PY4LAZ}end;  {$ENDIF}
 end;
 
+function PyCOLORBARCOLOR(Self, Args : PPyObject): PPyObject; cdecl;
+var
+ R,G,B, A: integer;
+ y: single;
+begin
+{$IFDEF PY4LAZ}with GetPythonEngine do begin  {$ENDIF}
+  Result:= PyBool_FromLong(Ord(True));
+    if Boolean(PyArg_ParseTuple(Args, 'iiii:colorbarcolor',@R,@G,@B, @A)) then begin
+      gClrbar.BackColor := (setRGBA(R,G,B,A));
+      y := (0.2126*R + 0.7152*G + 0.0722*B); //luminance
+      //y := max(max(R,G),B);
+      if y > 127 then //bright background: use a dark font
+        gClrbar.FontColor := (setRGBA(0,0,0,255))
+      else
+         gClrbar.FontColor := (setRGBA(255,255,255,255));
+      GLForm1.ScriptOutputMemo.lines.add(inttostr(A)+'luminance: '+floattostr(y));
+    end;
+  {$IFDEF PY4LAZ}end;  {$ENDIF}
+  //ViewGPU1.Invalidate;
+  ViewGPU1.Invalidate;
+end;
+
 function PyCOLORNODE(Self, Args : PPyObject): PPyObject; cdecl;
 var
  layer, index, intensity, R,G,B, A: integer;
@@ -3347,7 +3369,7 @@ type
   end;
 {$ENDIF}
 var
-  methods: array[0..69] of TPythonBridgeMethod = (
+  methods: array[0..70] of TPythonBridgeMethod = (
 (name: 'atlashide'; callback: @PyATLASHIDE; help: ' atlashide(layer, indices...) -> Hide all (e.g. "atlashide(1)") or some (e.g. "atlashide(1, (17, 22))") regions of an atlas.'),
 (name: 'atlaslabels'; callback: @PyATLASLABELS; help: ' atlasmaxindex(layer) -> Returns string listing all regions in an atlas'),
 (name: 'atlasmaxindex'; callback: @PyATLASMAXINDEX; help: ' atlasmaxindex(layer) -> Returns maximum region number in specified atlas. For example, if you load the CIT168 atlas (which has 15 regions) as your background image, then atlasmaxindex(0) will return 15.'),
@@ -3361,6 +3383,7 @@ var
 (name: 'clipthick'; callback: @PyCLIPTHICK; help: ' clipthick(thick) -> Set size of clip plane slab (0..1).'),
 (name: 'colorbarposition'; callback: @PyCOLORBARPOSITION; help: ' colorbarposition(p) -> Set colorbar position (0=off, 1=top, 2=right).'),
 (name: 'colorbarsize'; callback: @PyCOLORBARSIZE; help: ' colorbarsize(p) -> Change width of color bar f is a value 0.01..0.5 that specifies the fraction of the screen used by the colorbar.'),
+(name: 'colorbarcolor'; callback: @PyCOLORBARCOLOR; help: ' colorbarcolor(r,g,b,a) -> Change background color and translucency of colorbar, e.g. red translucent: "colorbarcolor(255,0,0,128)".'),
 (name: 'coloreditor'; callback: @PyCOLOREDITOR; help: ' coloreditor(s) -> Show (1) or hide (0) color editor and histogram.'),
 (name: 'colorfromzero'; callback: @PyCOLORFROMZERO; help: ' colorfromzero(layer, isFromZero) -> Color scheme display range from zero (1) or from threshold value (0)?'),
 (name: 'colorname'; callback: @PyCOLORNAME; help: ' colorname(layer, colorName) -> Loads  the requested colorscheme for image.'),
@@ -4573,6 +4596,8 @@ begin
      LayerAfniBtn.Visible := isAFNI;
      {$ENDIF}
      //LayerClusterMenu.click;
+     if (NewLayers) and (HdrForm.Visible) then
+     	LayerShowHeaderMenuClick(nil);
 end;
 
 procedure TGLForm1.LayerChange(layer, colorTag, opacityPercent: integer; displayMin, displayMax: single); //kNaNsingle
@@ -8643,7 +8668,7 @@ var
 begin
   if HdrForm.Visible then begin
      HdrForm.BringToFront;
-     exit;
+     //exit;
   end;
   i := LayerList.ItemIndex;
   if (i < 0) or (i >= LayerList.Count) then exit;
