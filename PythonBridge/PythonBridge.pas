@@ -45,7 +45,7 @@ type
 type
   PythonDataMethodCallback = procedure (data: UnicodeString) of object; 
 
-function PythonLoadAndInitialize(resourceDir: ansistring; callback: PythonDataMethodCallback): boolean;
+function PythonLoadAndInitialize(resourceDir, resourceDir2: ansistring; callback: PythonDataMethodCallback): boolean;
 function PythonInitialize(pythonHome: ansistring; callback: PythonDataMethodCallback): boolean;
 function PythonAddModule(name: ansistring; methods: PPythonBridgeMethodArray; count: integer): TPythonModule;
 function PyString_FromString( str: ansistring): PPyObject;
@@ -150,9 +150,9 @@ begin
      result := findFirstRecursive(pthroot, 'libpython3*so');
 end;
 {$endif} {$endif}
-function PythonLoadAndInitialize(resourceDir: ansistring; callback: PythonDataMethodCallback): boolean;
+function PythonLoadAndInitialize(resourceDir, resourceDir2: ansistring; callback: PythonDataMethodCallback): boolean;
 var
-  home: ansistring;
+  home, home2: ansistring;
 begin
   {$ifdef windows}
     SetDllDirectory(PChar(resourceDir));
@@ -190,11 +190,15 @@ begin
     LoadLibrary(home);
     {$else}
     home := resourceDir + pathdelim + 'python37';
+    home2 := resourceDir2 + pathdelim + 'python37';
+    if (not (DirectoryExists(home))) and (DirectoryExists(home2)) then
+       home := home2;
+
     if not (DirectoryExists(home)) then begin
       {$ifdef lcl}
-      ShowMessage('Unable to find Python home: '+home);
+      ShowMessage('Static Python: Unable to find Python home: '+home +' : '+home2);
       {$else}
-      writeln('Unable to find Python home: '+home);
+      writeln('Unable to find Python home: '+home +' : '+home2);
       {$endif}
        exit(false);
     end;

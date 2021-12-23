@@ -9,9 +9,13 @@ Files-Excluded: */*.or
                 */MacOS
                 */*.app
                 */*~
+                */Resources/python37
                 */Resources/python36.zip
                 */Thumbs.db
                 */.DS_Store
+                */PythonBridge/aarch64-darwin
+                */PythonBridge/x86_64-darwin
+                */PythonBridge/x86_64-linux
                 */aarch64-darwin
                 */x86_64-darwin
                 */x86_64-linux

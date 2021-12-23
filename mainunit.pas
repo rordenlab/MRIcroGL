@@ -3483,7 +3483,9 @@ begin
  PyLib := ResourceDir;
  if (FileExists(gPrefs.PyLib)) then
  	PyLib := gPrefs.PyLib;
- if not PythonLoadAndInitialize(PyLib, GLForm1.GotPythonData) then begin
+ printf('ResourceDir: '+ResourceDir +' PyLib: '+PyLib);
+ //showmessage('ResourceDir: '+ResourceDir +' PyLib: '+PyLib);
+ if not PythonLoadAndInitialize(PyLib, ResourceDir, GLForm1.GotPythonData) then begin
    writeln('Unable to load Python');
    exit(false);
  end;
