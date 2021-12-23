@@ -115,7 +115,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="../Metal-Demos/common;PythonBridge"/>
+      <OtherUnitFiles Value="Metal-Demos/common;PythonBridge"/>
       <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <CodeGeneration>
@@ -145,7 +145,8 @@
       </CompilerMessages>
       <CustomOptions Value="-dDisableLCLGIF 
 -dDisableLCLPNM
--dxMYPY
+-dMYPY
+-dFASTGZ
 -dMETALAPI"/>
     </Other>
   </CompilerOptions>

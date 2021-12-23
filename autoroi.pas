@@ -123,6 +123,4 @@ begin
   //gImageBackupSz := 0;
 end;
 
-//initialization
-//  {$I autoroi.lrs}
 end.

@@ -1,0 +1,32 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+# one ring to rule them all ...
+%:
+	dh $@
+
+
+override_dh_auto_build:
+	lazbuild --build-all --ws=qt5 --pcp=/etc/lazarus MRIcroGL_Debian.lpi
+	mv ./MRIcroGL mricrogl
+	# todo: test icon (SVG is also available)  mricrogl.xpm
+
+# we want immediately useable docs and example data, they are in a dedicated
+# package already
+override_dh_compress:
+	dh_compress -X.voi
+	-find debian/mricrogl-data/usr/share/mricrogl/ -type f -exec chmod -x {} \;
+	-find debian/mricrogl-doc/usr/share/doc/mricrogl/examples -type f -exec chmod -x {} \;
+
+override_dh_dwz:
+	echo "Lazarus code does not export debug symbols"
+
+override_dh_clean:
+	find . -name '*.o' -delete -o -name '*.ppu' -delete -o -name '*.a' -delete
+	find . -name '*.compiled' -delete
+	find . -name '*.or' -delete
+	-rm mricrogl.rc mricrogl.lrs mricrogl
+	-rm text.lrs
+	dh_clean

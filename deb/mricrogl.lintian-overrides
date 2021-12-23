@@ -1,0 +1,4 @@
+# This is a Pascal program that is completely self-contained and does not link
+# against anything -- not even statically against some internal convenience
+# library, and since it is Pascal, not even against libc
+mricrogl: statically-linked-binary

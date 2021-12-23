@@ -1,0 +1,15 @@
+Bug-Database: https://github.com/rordenlab/MRIcroGL/issues
+Bug-Submit: https://github.com/rordenlab/MRIcroGL/issues/new
+Reference:
+ - Author: Chris Rorden and Hans-Otto Karnath and Leonardo Bonilha
+   Title: Improving lesion-symptom mapping
+   Journal: Journal of Cognitive Neuroscience
+   Year: 2007
+   Volume: 19
+   Number: 7
+   Pages: 1081-1088
+   DOI: 10.1162/jocn.2007.19.7.1081 
+   PMID: 17583985
+   URL: https://www.mitpressjournals.org/doi/10.1162/jocn.2007.19.7.1081
+Repository: https://github.com/rordenlab/MRIcroGL.git
+Repository-Browse: https://github.com/rordenlab/MRIcroGL

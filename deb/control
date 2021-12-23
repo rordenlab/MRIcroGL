@@ -1,0 +1,38 @@
+Source: mricrogl
+Maintainer: Debian Med Packaging Team <debian-med-packaging@lists.alioth.debian.org>
+Uploaders: Yaroslav Halchenko <debian@onerussian.com>
+Section: science
+Priority: optional
+Build-Depends: debhelper-compat (= 13),
+               fp-units-misc,
+               imagemagick,
+               lcl-qt5,
+               lcl-units,
+               lcl-utils,
+Standards-Version: 4.6.0
+Rules-Requires-Root: no
+Vcs-Browser: https://salsa.debian.org/med-team/mricrogl
+Vcs-Git: https://salsa.debian.org/med-team/mricrogl.git
+Homepage: https://www.nitrc.org/projects/mricrogl
+
+Package: mricrogl
+Architecture: any
+Depends: mricrogl-data, python3, ${misc:Depends}, ${shlibs:Depends}
+Recommends: pigz, dcm2niix
+Suggests: fsl
+Description: magnetic resonance image conversion, viewing and analysis
+ This is a GUI-based visualization and analysis tool for medical imaging.
+.
+ This package provides the MRIcroGL executable.
+
+
+Package: mricrogl-data
+Architecture: all
+Depends: ${misc:Depends}
+Multi-Arch: foreign
+Description: data files for MRIcroGL
+ This is a GUI-based visualization and analysis tool for medical imaging.
+ .
+ This package provides data files for MRIcroGL, such as brain atlases, anatomy,
+ and color schemes.
+

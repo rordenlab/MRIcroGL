@@ -4,7 +4,7 @@ unit prefs;
 {$IFDEF Darwin} {$modeswitch objectivec2} {$ENDIF}
 
 interface
-uses Process, {$IFDEF Darwin}CocoaAll, {$ENDIF} IniFiles,SysUtils,Dialogs,Classes, SimdUtils, Math, slices2D;
+uses Process, {$IFDEF UNIX}BaseUnix,{$ENDIF} {$IFDEF Darwin}CocoaAll, {$ENDIF} IniFiles,SysUtils,Dialogs,Classes, SimdUtils, Math, slices2D;
 const
   knMRU = 10;
   //kMaxVoxDefault = 560;
@@ -61,18 +61,25 @@ begin
          MRU[i] := strs[i];
 end;
 
-function RunCommandX(exe,args: string; out outputstring: string): boolean;
+(*function RunCommandX(exe,args: string; out outputstring: string): boolean;
 //e.g.  RunCommandX('/bin/zsh',' -l -c "which afni"', s)
 begin
      outputstring := '';
      if not FileExists(exe) then exit(false);
+     {$IFDEF UNIX}
+     if fpAccess(exe,X_OK) <> 0 then exit(false); //If access is denied, or an error occurred, a nonzero value is returned
+     {$ENDIF}
      result := RunCommand(exe+' '+args, outputstring);
-end;
+     {$IFDEF UNIX}
+     writeln(format('Result %s: %s', [BoolToStr(result, true), outputstring]));
+     {$ENDIF}
+end; *)
 
 procedure SetDefaultPrefs (var lPrefs: TPrefs; lEverything: boolean);
+//label
+//  123;
 var
   i: integer;
-  s: string;
 begin
   if lEverything then begin  //These values are typically not changed...
      with lPrefs do begin
@@ -82,13 +89,18 @@ begin
             //InitScript := '';
             PrevScript := '';
             {$IFDEF UNIX}
+            AfniDir := GetEnvironmentVariable('AFNI_ATLAS_PATH');
+            (*if DirectoryExists(AfniDir) then goto 123;
             AfniDir := expandfilename('~/')+'abin';
+            if DirectoryExists(AfniDir) then goto 123;
+            RunCommandX('/bin/zsh','-l -c "which afni"', AfniDir);
+            if DirectoryExists(AfniDir) then goto 123;
+            //if (not FileExists('/bin/zsh')) and (not DirectoryExists(AfniDir)) then begin
+            RunCommandX('/bin/bash', '-l -c "which afni"', AfniDir);
+            123:*)
             if not DirectoryExists(AfniDir) then begin
-               writeln('Searching for AfniDir');
-               if RunCommandX('/bin/bash', '-l -c "which afni"', s) then
-                  AfniDir := extractfiledir(s)
-               else if RunCommandX('/bin/zsh','-l -c "which afni"', s) then
-                  AfniDir := extractfiledir(s);
+               writeln('Unable to find AFNI_ATLAS_PATH ', AfniDir);
+               AfniDir := '';
             end;
             {$ELSE}
             AfniDir := '';

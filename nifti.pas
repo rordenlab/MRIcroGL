@@ -4574,7 +4574,7 @@ end;
 var
   vol32: TFloat32s;
   //n0: int64;//masked images have huge numbers of zeros!
-  thresh, sum, i,vx, nZero, mni: int64;
+  thresh, sum, i,vx, nZero, nMax, mni: int64;
   mn : Single = 1.0 / 0.0;
   mx : Single = (- 1.0) / (0.0);
   v, slope: single;
@@ -4587,6 +4587,7 @@ begin
   //{$DEFINE RESCALE32}
   //n0 := 0;
   nZero := 0;
+  nMax := 0;
   {$IFDEF RESCALE32}
   for i := 0 to (vx-1) do begin
      if (specialsingle(vol32[i])) then vol32[i] := 0.0;
@@ -4604,21 +4605,31 @@ begin
   fHdr.scl_slope := 1;
   {$ELSE}
   // {$IFDEF TIMER}startTime := now;{$ENDIF}
+
   for i := 0 to (vx-1) do begin
      if (specialsingle(vol32[i])) then vol32[i] := 0.0;
      v := (vol32[i] * fHdr.scl_slope) + fHdr.scl_inter;
      if v < mn then
         mn := v;
-     if v > mx then
+     if v > mx then begin
         mx := v;
+        nMax := 0;
+     end;
+     if (v = mx) then
+     	nMax := nMax + 1;
      if v = 0 then
         nZero := nZero + 1;
   end;
-  // {$IFDEF TIMER}printf(format('>Init time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
   {$ENDIF}
   //robustMinMax(mn,mx);
   fMin := mn;
   fMax := mx;
+  if ((mx > 0.0) and (nZero > 0) and ((nZero + nMax) = vx)) then begin
+     	printf(format('binary float range %g..%g',[fMin,fMax]));
+        fAutoBalMin := (0.0 * fHdr.scl_slope) + fHdr.scl_inter;
+        fAutoBalMax := (mx * fHdr.scl_slope) + fHdr.scl_inter;
+        exit;
+  end;
   {$IFNDEF RESCALE32}
   mn := Scaled2RawIntensity(fHdr, mn);
   mx := Scaled2RawIntensity(fHdr, mx);

@@ -11,7 +11,7 @@ unit mainunit;
 {$ENDIF}
 {$IFNDEF METALAPI}
 {$WARN 5023 off : Unit "$1" not used in $2}
- {$include ../Metal-Demos/common/glopts.inc}
+ {$include ./Metal-Demos/common/glopts.inc}
 {$ENDIF}
 {$IFDEF LCLCarbon}
   error: you must compile for the Cocoa widgetset (ProjectOptions/Additions&Overrides)
@@ -9918,13 +9918,17 @@ begin
      gPrefs.MaxTexMb := MaxTexMb;
   AnimateTimer.Interval:= gPrefs.AnimationIntervalMsec;
   if gPrefs.StartupWindowMode = 1 then begin
-     GLForm1.BoundsRect := Screen.MonitorFromWindow(Handle).BoundsRect;
+     //GLForm1.BoundsRect := Screen.MonitorFromWindow(Handle).BoundsRect;
+     //GLForm1.SetBounds(0, 0, Screen.WorkAreaWidth, Screen.WorkAreaHeight);
+     GLForm1.SetBounds(Screen.WorkAreaLeft, Screen.WorkAreaTop, Screen.WorkAreaWidth, Screen.WorkAreaHeight);
      GLForm1.WindowState:= wsMaximized;
+
   end else if gPrefs.StartupWindowMode = 2 then begin
      GLForm1.WindowState:= wsFullScreen;
      {$IFNDEF LCLCocoa}ExitFullScreenMenu.Visible:=true;{$ENDIF} //Linux has issues getting out of full screen
   end else begin
 	//Display as Window...
+    GLForm1.WindowState := wsNormal;
     if (Screen.MonitorFromWindow(Handle).BoundsRect.Height >= 1024) then
     	GLForm1.Height := 960
     else if (Screen.MonitorFromWindow(Handle).BoundsRect.Height > 799) then

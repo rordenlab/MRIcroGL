@@ -1,0 +1,4 @@
+debian/*.desktop usr/share/applications
+debian/wrapper/mricrogl usr/bin
+mricrogl usr/lib/mricrogl
+mricrogl.svg usr/share/icons/hicolor/scalable/apps

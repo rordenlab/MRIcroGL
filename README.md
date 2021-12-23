@@ -29,38 +29,18 @@ Once you have downloaded the software, extract the archive and run the executabl
 It is generally recommended that download a pre-compiled executable (see previous section). However, you can compile your own copy from source code.
 
  - Download and install [Lazarus 2.0.6 or later](https://www.lazarus-ide.org/).
- - Get the [Metal-Demos repository](https://github.com/neurolabusc/Metal-Demos), for example: `git clone https://github.com/neurolabusc/Metal-Demos`.
- - Get the [MRIcroGL repository]( https://github.com/rordenlab/MRIcroGL.git), for example: `git clone https://github.com/neurolabusc/MRIcroGL`.
- - The Metal-Demos and MRIcroGL folders should share the same parent folder, e.g. `~/src/MRIcroGL` and `~/src/Metal-Demos`.
-  - **Option for Windows** You you can decide to build with or without faster gzip decompression:
-   - To build **without** faster GZip: Remove the text "{$DEFINE FASTGZ}" from the file opts.inc. Benefit: easier build, uses permissive BSD license.
-   - To build **with** faster GZip. Preserve the text "{$DEFINE FASTGZ}" in the file opts.inc. Benefit: faster gzip decompression. However, this only supports CPUs that support SSE4 (2008 and later).
- - **Option** You you can decide to build with or without Python Scripting:
-   - To build **without** Python: Open the project MRIcroGL_NoPython.lpi (or remove the text "-dMYPY" from the file MRIcroGL.lpi).
-   - To build **with** Python using [python4lazarus](https://github.com/Alexey-T/Python-for-Lazarus) open the project MRIcroGL_Py4Laz.lpi. **[Note, there are issues with the latest python4lazarus](https://github.com/Alexey-T/Python-for-Lazarus/issues/25) release, you should consider compiling without Python support (MRIcroGL_NoPython.lpi) [or use and earlier (2020.07.31)](https://github.com/neurolabusc/Python27-for-Lazarus.git) release (this older release supports both Python 2.7 as well as Python 3.x). Therefore, this build is not recommended. Unlike the recommended PythonBridge, PythonForLazarus attempts to use an existing Python distribution for macOS and Linux. Like PythonBridge, the Windows executable uses a DLL.
-   - To build **with** Python using the included [PythonBridge API](https://github.com/genericptr/PythonBridge), open the MRIcroGL.lpi project. This will statically link Python into Unix executables (though you will need to include the Python libraries in your Resources folder). For Windows, this method will use a dynamic link library for Python, and also requires you to include the standard libraries in your Resources folder.
-   - To build **with** Python. You will need [python4lazarus_package](https://github.com/Alexey-T/Python-for-Lazarus), but hopefully Lazarus will detect and install this for you automatically. **[Note, there are issues with the latest python4lazarus](https://github.com/Alexey-T/Python-for-Lazarus/issues/25) release, you should consider compiling without Python support (MRIcroGL_NoPython.lpi) [or use and earlier (2020.07.31)](https://github.com/neurolabusc/Python27-for-Lazarus.git) release (this older release supports both Python 2.7 as well as Python 3.x).
- - **Option** macOS developers can build for the modern Metal API instead of the legacy OpenGL API:
-   - Get the [lazmetalcontrol repository](https://github.com/genericptr/Metal-Framework).
-   - Use the Lazarus Package menu to open and install the lazmetal control.
-   - Open and compile the MRIcroGL_Metal.lpi project instead of the MRIcroGL.lpi project with Lazarus (if you do not want Python, remove the text "-dMYPY" from the file MRIcroGL_Metal.lpi).
+ - Get the [MRIcroGL repository]( https://github.com/rordenlab/MRIcroGL.git)
+ - Launch the graphical `lazarus` and choose the `Project` menu's `Open Project` item. Select the project you wish to open (e.g. MRIcroGL.lpi).
  - Use the `Run` command from the `Run` menu compile and run your project.
-
-Alternatively, Debian/Ubuntu Linux users may want to look at the [docker script](./DOCKER.md) that provides a line-by-line recipt for compiling MRIcroGL from the command line.
 
 ## Compiling with the Command Line
 
-It is generally recommended that download a pre-compiled executable (see previous section). However, you can compile your own copy from source code. Download and install [Lazarus 2.0.6 or later](https://www.lazarus-ide.org/), at which point the lazbuild command should be available from the command line.
+It is generally recommended that download a pre-compiled executable (see earlier section). However, you can compile your own copy from source code. Download and install [Lazarus 2.0.6 or later](https://www.lazarus-ide.org/), at which point the `lazbuild` command should be available from the command line.
 
- **[Note, there are issues with the latest python4lazarus](https://github.com/Alexey-T/Python-for-Lazarus/issues/25) release, you should consider compiling without Python support (MRIcroGL_NoPython.lpi) [or use and earlier (2020.07.31)](https://github.com/neurolabusc/Python27-for-Lazarus.git) release.
-
-
-For Linux (GTK2) or Windows (though see notes above), the compilation will look like this :
+For Linux (QT5) or Windows (though see notes above), the compilation will look like this :
 
 ```
 git clone https://github.com/rordenlab/MRIcroGL.git
-git clone https://github.com/neurolabusc/Metal-Demos.git
-git clone https://github.com/neurolabusc/Python27-for-Lazarus.git
 lazbuild --build-ide= --add-package lazopenglcontext ./Python27-for-Lazarus/python4lazarus/python4lazarus_package.lpk
 cd MRIcroGL
 lazbuild  -B MRIcroGL.lpr
@@ -70,32 +50,55 @@ For MacOS, you will want to specify the modern Cocoa widgetset, rather than the 
 
 ```
 git clone https://github.com/rordenlab/MRIcroGL.git
-git clone https://github.com/neurolabusc/Metal-Demos.git
-git clone https://github.com/neurolabusc/Python27-for-Lazarus.git
-lazbuild --build-ide=  --ws=cocoa --add-package lazopenglcontext ./Python27-for-Lazarus/python4lazarus/python4lazarus_package.lpk
 cd MRIcroGL
 lazbuild  -B --ws=cocoa MRIcroGL.lpi
 ```
 
-One can also compile for Linux (qt5). Users will need to install [libqt5pas 1.2.8 or later](https://github.com/davidbannon/libqt5pas/releases). This version is more recent than the version provided with Ubuntu 18.04 and Mageia 7.1, so users of many operating systems will have to download the library from Github rather than the conventional install (e.g. `sudo apt install libqt5pas`):
-```
-git clone https://github.com/rordenlab/MRIcroGL.git
-git clone https://github.com/neurolabusc/Metal-Demos.git
-git clone https://github.com/neurolabusc/Python27-for-Lazarus.git
-lazbuild --build-ide= --add-package lazopenglcontext ./Python27-for-Lazarus/python4lazarus/python4lazarus_package.lpk
-cd MRIcroGL
-lazbuild  -B --ws=qt5 MRIcroGL.lpi
-```
+## Project variations
 
-One can also make minor adjustments to these command line options. 
- - `--ws=gtk3` will compile for the GTK3 widgetset. Support for GTK3 is experimental and not all features work (e.g. color selection dialog). GTK3 requires OpenGL 3.3 Core, so you must make sure that the glopts.inc file in the Metal-Demos folder has the line "{$DEFINE COREGL}" uncommented. Unfortunately, GTK3 does not support [OpenGL multi-sampling](https://github.com/aklomp/gtk3-opengl/issues/2) so the results can never match GTK2 or QT5.
- - Compiling `MRIcroGL_NoPython.lpi` will compile without Python scripting support ().
+MRIcroGL can be compiled for Linux, macOS and Windows. Compiler directives allow MRIcroGL to be tuned for various environments. Several projects are provided with different Compiler Options. For further control, one can edit the `CompilerOptions` fields of these projects for preferred builds. Here are the provided projects:
 
+| Name                    | Python | Metal | LLVM | cfGzip | Notes              |
+| ----------------------- | ------ | ----- | ---- | ------ | ------------------ |
+| MRIcroGL.lpi            | Y      | N     | N    | Y      | default            |
+| MRIcroGL_Debian.lpi     | Y†     | N     | N    | N      | Debian only        |
+| MRIcroGL_Metal          | Y      | Y     | N    | Y      | macOS only         |
+| MRIcroGL_Metal_llvm.lpi | Y      | Y     | Y    | Y      | macOS only         |
+| MRIcroGL_NoPython.lpi   | N      | N     | N    | Y      | minimal            |
+| MRIcroGL_Py4Laz.lpi     | Y*     | N     | N    | Y      | Python-for-Lazarus |
+| MRIcroGL_llvm.lpi       | Y      | N     | Y    | Y      | macOS only         |
+| MRIcroGL_llvm_linux.lpi | Y      | N     | Y    | Y      | linux only         |
+
+Python:
+
+ - Y: Scripting uses [PythonBridge](https://github.com/genericptr/PythonBridge). Static linking for Unix, .dll for Windows.
+ - N: Built without scripting functionality and menu.
+ - Y*: cripting uses [Python-for-Lazarus](https://github.com/Alexey-T/Python-for-Lazarus).
+ - Y†: Scripting uses [PythonBridge](https://github.com/genericptr/PythonBridge). Assumes `libpython3.*.so` in either `/usr/local/lib` or `/usr/lib`. For example, `/usr/lib/python3.9/config-3.9-x86_64-linux-gnu/libpython3.9.so`.
+ 
+Metal:
+
+ - N: [OpenGL 2.1](https://en.wikipedia.org/wiki/OpenGL#History) used for visualization.
+ - Y: [Metal](https://developer.apple.com/metal/) used for visualization (macOS only).
+
+LLVM:
+
+ - N: [FreePascal](https://www.freepascal.org/) compilation.
+ - Y: FreePascal uses Clnag to create intermediate representation (IR) for [LLVM](https://wiki.freepascal.org/LLVM). This can provide slightly faster performance, perticulary for the [ARM](https://github.com/neurolabusc/AppleSiliconForNeuroimaging) architecture.
+ 
+ cfGzip:
+ 
+ - N: Uses Compiles native Pascal code for handling [GZip](https://www.gzip.org/) compression.
+ - Y: Statically links accelerated [cloudflare zlib](https://github.com/cloudflare/zlib) which requires CPU instructions introduced in 2011.
+
+## Linux dependency
+
+For the Linux (qt5) widgetset users will need to install libqt5pas. Hopefully this can be done with `sudo apt install libqt5pas`. However, you can also get a Linux [libqt5pas 1.2.8 or later](https://github.com/davidbannon/libqt5pas/releases) installer online.
 ![Head CT](HeadCT.jpg)
 
 ## Deploying MRIcroGL
 
-The MRIcroGL executable has more functionality if it can access its `Resources` folder. This folder includes color lookup tables (`lut` folder), Python scripts (`script`), Material Capture (`matcap`), GLSL Shaders (`shader`), default NIfTI images (`standard`), NIfTI atlases (`atlas`), as well as fonts and icons. Therefore, for full functionality, you want the executable to have access to this folder.
+The MRIcroGL executable has more functionality if it can access its `Resources` folder. This folder includes color lookup tables (`lut` folder), Python scripts (`script`), Material Capture (`matcap`), GPU Shaders (`shader`), default NIfTI images (`standard`), NIfTI atlases (`atlas`), as well as fonts and icons. Therefore, for full functionality, you want the executable to have access to this folder.
  - For MacOS, the `Resources` folder is placed inside the application package bundle. In other words, if your application is `MRIcroGL.app`, the software expects `MRIcroGL.app/Resources`.
  - For Windows, place the `Resources` folder in the same folder as `MRIcroGL.exe`.
  - For Linux, you can place the `Resources` folder in the same folder as the `MRIcroGL` executable. If this fails, it will look for the folder `$MRICROGL_DIR` where `$MRICROGL_DIR` is an environment variable. It will then look a folder in the following order (for the first pass, where the applications actual name is used `MRIcroGL_QT`, and for a second pass using `MRIcroGL`):

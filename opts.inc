@@ -1,9 +1,9 @@
-{$DEFINE FASTGZ}
-{$IFDEF DARWIN}{$IFDEF CPUAARCH64} {$DEFINE LIBDEFLATE} {$ENDIF}{$ENDIF}
-
+//n.b. We now define FASTGZ in the .lpi file
+//{$DEFINE FASTGZ}
+//{$IFDEF DARWIN}{$IFDEF CPUAARCH64} {$DEFINE LIBDEFLATE} {$ENDIF}{$ENDIF}
 //use libdeflate if both FASTGZ and LIBDEFLATE are set
 //use synzip CloudFlare if FASTGZ but not
-//use Pascal zlib if not FASTGZ            LIBDEFLATE
+//use Pascal zlib if not FASTGZ
 //faster GZ decompression, requires 
 //  Windows only : if you get an error "Can't find object file" you can copy the 'static' folder from
 //    https://github.com/synopse/mORMot

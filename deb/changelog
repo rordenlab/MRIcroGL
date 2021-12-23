@@ -1,0 +1,5 @@
+mricrogl (1.2.20211006+dfsg-1) unstable; urgency=medium
+  [ Yaroslav Halchenko ]
+  * initial commit
+
+ -- Yaroslav Halchenko <debian@onerussian.com>  Mon, 15 Nov 2021 19:46:25 +0100

@@ -1,0 +1,7 @@
+Resources/atlas usr/share/mricrogl
+Resources/lut usr/share/mricrogl
+Resources/matcap usr/share/mricrogl
+Resources/script usr/share/mricrogl
+Resources/shader usr/share/mricrogl
+Resources/standard usr/share/mricrogl
+#TODO Roboto.json/Roboto.png from Resources

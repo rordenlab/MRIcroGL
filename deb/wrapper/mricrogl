@@ -1,0 +1,9 @@
+#!/bin/sh
+
+fslconf=/etc/fsl/fsl.sh
+
+if [ -z "${FSLDIR}" ] && [ -e $fslconf ]; then
+	. $fslconf
+fi
+
+exec /usr/lib/mricrogl/mricrogl "$@"

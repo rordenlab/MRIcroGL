@@ -1,14 +1,11 @@
 [Desktop Entry]
-Version=1.2.20210909
-Name=MRIcroGL_GTK2
 GenericName=2D/3D MRI Image Viewer
 GenericName[de]=2D/3D Betrachter für MRT-Daten
 GenericName[ru]=Просмотр 2D/3D МРТ-данных
-Comment=Edit Exec and Icon paths for your system
-Exec=mricrogl_gtk2 %F
-TryExec=mricrogl_gtk2
-Icon=/usr/share/icons/hicolor/scalable/apps/mricrogl_gtk2.svg
-Terminal=false
+Name=MRIcroGL
+Exec=mricrogl %F
+TryExec=mricrogl
 Type=Application
+Terminal=false
 Categories=Education;Graphics;Science;DataVisualization;MedicalSoftware;GTK;Viewer;
-
+Icon=/usr/share/icons/hicolor/scalable/apps/mricrogl.svg

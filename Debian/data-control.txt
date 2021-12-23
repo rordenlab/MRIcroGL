@@ -1,6 +1,0 @@
-Package: mricrogl-data
-Version: <ver>
-Architecture: all
-Maintainer: NeuroDebian Team <team@neuro.debian.net>
-Description: data files for MRIcroGL
- MRIcroGL GUI-based visualization for medical imaging data 

@@ -1,3 +1,4 @@
+//SIMD acceleration for converting int16/float32 vectors to uint8
 // g++ -c -O3 scale2uint8.cpp -o scale2uint8.o
 
 #include <stdio.h>

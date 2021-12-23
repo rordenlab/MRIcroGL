@@ -18,7 +18,7 @@ procedure RemoveAllSmallClusters(var lImg: TUInt8s; Xi,Yi,Zi: integer; lClusterV
 implementation
 
 Type
-HistoRA = array [0..255] of integer; //uint8;
+HistoRA = array [0..255] of integer; 
 HistoRAd = array [0..255] of double;
 Histo2Dp = array of array of double;
 
@@ -358,7 +358,7 @@ begin
     //result is eq 29 from Liao
      for u := 0 to 255 do begin
          for v := u to 255 do begin
-             if S[u][v] = 0 then  //avoid divide by zero errors...
+             if (S[u][v] = 0) or (P[u][v] = 0) then  //avoid divide by zero errors...
                 resultp[u][v] := 0
              else
                  resultp[u][v] := sqr(S[u][v]) /P[u][v];

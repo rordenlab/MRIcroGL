@@ -12,7 +12,7 @@ interface
 {$DEFINE CLRBAR}
 {$DEFINE TIMER} //reports GPU gradient time to stdout (Unix only)
 //{$DEFINE DEPTHPICKER_USEFRAMEBUFFER}
-{$include ../Metal-Demos/common/glopts.inc}
+{$include ./Metal-Demos/common/glopts.inc}
 uses
   {$IFDEF MATCAP} GraphType, FPImage, IntfGraphics, LCLType,{$ENDIF}
   {$IFDEF TIMER} DateUtils,{$ENDIF}

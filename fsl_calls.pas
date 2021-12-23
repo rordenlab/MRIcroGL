@@ -126,36 +126,41 @@ begin
   writeln(S);
 end;
 
-function RunCommandX(exe,args: string; out outputstring: string): boolean;
+(*function RunCommandX(exe,args: string; out outputstring: string): boolean;
 //e.g.  RunCommandX('/bin/zsh',' -l -c "which afni"', s)
 begin
      outputstring := '';
      if not FileExists(exe) then exit(false);
      result := RunCommand(exe+' '+args, outputstring);
-end;
+end;*)
 
 function GetFSLdir: string;
 //const FSLBase = '/usr/local/fsl';
-var
-   s: string;
+label 123;
 begin
-    result := gFSLBASE;
-   if (length(result)<1) or (not DirectoryExists(result)) then begin
-      if DirectoryExists (GetEnvironmentVariable('FSLDIR')) then
-         result:=GetEnvironmentVariable('FSLDIR');
-      {$IFDEF UNIX}
-      writeln('Searching for FSLDir');
-      if not DirectoryExists (result) then
-         if RunCommandX('/bin/bash', '-l -c "which fsl"', s)  then
-            result := extractfiledir(extractfiledir(s));// '/usr/local/fsl/bin/fsl' ->  '/usr/local/fsl'
-      if not DirectoryExists (result) then
-         if RunCommandX('/bin/zsh','-l -c "which fsl"', s)  then
-            result := extractfiledir(extractfiledir(s));// '/usr/local/fsl/bin/fsl' ->  '/usr/local/fsl'
-      {$ENDIF}
-      if DirectoryExists(result) then
-         gFSLBASE := result;
-   end;
-
+	result := gFSLBASE;
+   	if (length(result) > 0) and (DirectoryExists(result)) then exit;
+    {$IFDEF UNIX}
+    result := GetEnvironmentVariable('FSLDIR');
+    if DirectoryExists(result) then goto 123;
+    result := GetEnvironmentVariable('FSL_DIR');
+    //if DirectoryExists(result) then goto 123;
+    //RunCommandX('/bin/zsh','-l -c "which fsl"', result);
+    //if DirectoryExists(result) then goto 123;
+    //RunCommandX('/bin/bash', '-l -c "which fsl"', result);
+    {$ENDIF}
+123:
+    if not DirectoryExists(result) then begin
+       result := '';
+       {$IFDEF UNIX}
+       writeln('Unable to find FSLDIR');
+       {$ENDIF}
+    end else begin
+        {$IFDEF UNIX}
+        writeln('Found FSLDIR: '+result);
+        {$ENDIF}
+    end;
+    gFSLBASE := result;
 end;
 
 procedure FSLcmd (lCmd: string);
