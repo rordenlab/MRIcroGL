@@ -3486,7 +3486,7 @@ begin
  printf('ResourceDir: '+ResourceDir +' PyLib: '+PyLib);
  //showmessage('ResourceDir: '+ResourceDir +' PyLib: '+PyLib);
  if not PythonLoadAndInitialize(PyLib, ResourceDir, GLForm1.GotPythonData) then begin
-   writeln('Unable to load Python');
+   printf('Unable to load Python');
    exit(false);
  end;
  printf('Loading modules....');

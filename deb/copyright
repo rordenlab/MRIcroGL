@@ -11,6 +11,7 @@ Files-Excluded: */*.or
                 */*~
                 */Resources/python37
                 */Resources/python36.zip
+                */Resources/python36.dll
                 */Thumbs.db
                 */.DS_Store
                 */PythonBridge/aarch64-darwin
@@ -25,7 +26,7 @@ Files-Excluded: */*.or
                 */*.dpl
 
 Files: *
-Copyright: Copyright 2006-2021, Chris Rorden
+Copyright: Copyright 2011-2021, Chris Rorden
 License: BSD-2-clause
 
 Files: Metal-Demos/common/VectorMath.pas

@@ -193,7 +193,6 @@ begin
     home2 := resourceDir2 + pathdelim + 'python37';
     if (not (DirectoryExists(home))) and (DirectoryExists(home2)) then
        home := home2;
-
     if not (DirectoryExists(home)) then begin
       {$ifdef lcl}
       ShowMessage('Static Python: Unable to find Python home: '+home +' : '+home2);
