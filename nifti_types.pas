@@ -92,6 +92,8 @@ kDT_INT32 = kDT_SIGNED_INT;
 kDT_FLOAT                 =16;     // float (32 bits/voxel)
 kDT_FLOAT32 = kDT_FLOAT;
 kDT_COMPLEX               =32;     // complex (64 bits/voxel)
+kDT_COMPLEX64  = kDT_COMPLEX;     // single pair (64 bits)
+
 kDT_DOUBLE                =64;     // double (64 bits/voxel)
 kDT_FLOAT64 = kDT_DOUBLE;
 kDT_RGB                   =128;     // RGB triple (24 bits/voxel)

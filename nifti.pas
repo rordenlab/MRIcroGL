@@ -2960,6 +2960,10 @@ begin
         for i := 0 to (n-1) do
             Xswap8r(f64s[i]);
      end;
+     if bitpix = 128 then begin
+        printf('TODO: need to handle 128-bit foreign endian');
+
+     end;
 end;
 
 procedure nifti_quatern_to_mat44( out lR :TMat4;
@@ -3066,7 +3070,7 @@ begin
         exit;
      if (lHdr.bitpix = 32) and ((lHdr.datatype = kDT_UINT32) or (lHdr.datatype = kDT_INT32) or (lHdr.datatype = kDT_FLOAT32) or (lHdr.datatype = kDT_RGBA32) ) then
         exit;
-     if (lHdr.bitpix = 64) and ((lHdr.datatype = kDT_UINT64) or (lHdr.datatype = kDT_INT64) or (lHdr.datatype = kDT_FLOAT64) or (lHdr.datatype = kDT_COMPLEX)) then
+     if (lHdr.bitpix = 64) and ((lHdr.datatype = kDT_UINT64) or (lHdr.datatype = kDT_INT64) or (lHdr.datatype = kDT_FLOAT64) or (lHdr.datatype = kDT_COMPLEX64)) then
         exit;
      if (lHdr.bitpix = 128) and ((lHdr.datatype = kDT_FLOAT128) or (lHdr.datatype = kDT_COMPLEX128)) then
         exit;
@@ -3086,7 +3090,7 @@ begin
         lHdr.bitpix := 24;
      if (lHdr.datatype = kDT_UINT32) or (lHdr.datatype = kDT_INT32) or (lHdr.datatype = kDT_FLOAT32) or (lHdr.datatype = kDT_RGBA32) then
         lHdr.bitpix := 32;
-     if (lHdr.datatype = kDT_UINT64) or (lHdr.datatype = kDT_INT64) or (lHdr.datatype = kDT_FLOAT64) or (lHdr.datatype = kDT_COMPLEX) then
+     if (lHdr.datatype = kDT_UINT64) or (lHdr.datatype = kDT_INT64) or (lHdr.datatype = kDT_FLOAT64) or (lHdr.datatype = kDT_COMPLEX64) then
         lHdr.bitpix := 64;
      if (lHdr.datatype = kDT_FLOAT128) or (lHdr.datatype = kDT_COMPLEX128) then
         lHdr.bitpix := 128;
@@ -3752,8 +3756,8 @@ begin
      end;
   end;
   fixHdr(fHdr);
-  if (fHdr.bitpix <> 8) and (fHdr.bitpix <> 16) and (fHdr.bitpix <> 24) and (fHdr.bitpix <> 32) and (fHdr.bitpix <> 64) then begin
-   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
+  if (fHdr.bitpix <> 8) and (fHdr.bitpix <> 16) and (fHdr.bitpix <> 24) and (fHdr.bitpix <> 32) and (fHdr.bitpix <> 64) and (fHdr.bitpix <> 128) then begin
+   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64,128-bit NIfTI files. (bitpix: '+inttostr(fHdr.bitpix)+' datatype: '+inttostr(fHdr.datatype)+ ')');
    exit;
   end;
   Quat2Mat(fHdr);
@@ -3940,8 +3944,8 @@ begin
     end;
   end;
   fixHdr(fHdr);
-  if (fHdr.bitpix <> 8) and (fHdr.bitpix <> 16) and (fHdr.bitpix <> 24) and (fHdr.bitpix <> 32) and (fHdr.bitpix <> 64) then begin
-   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
+  if (fHdr.bitpix <> 8) and (fHdr.bitpix <> 16) and (fHdr.bitpix <> 24) and (fHdr.bitpix <> 32) and (fHdr.bitpix <> 64)  and (fHdr.bitpix <> 128) then begin
+   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64,128-bit NIfTI files. (bitpix: '+inttostr(fHdr.bitpix)+' datatype: '+inttostr(fHdr.datatype)+ ')');
    exit;
   end;
   Quat2Mat(fHdr);
@@ -4481,8 +4485,8 @@ var
   i32in,i32temp: TInt32s;
   i64in,i64temp: TInt64s;
   f64in,f64temp: TFloat64s;
-  f32out: TFloat32s;
-  i,vx: int64;
+  f32in,f32temp,f32out: TFloat32s;
+  i,vx, j: int64;
 begin
   vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]*fVolumesLoaded);
   if (fHdr.datatype = kDT_UINT16) then begin
@@ -4518,7 +4522,6 @@ begin
      for i := 0 to (vx-1) do
          f32out[i] := ui32temp[i];
       ui32temp := nil;
-
   end else if (fHdr.datatype = kDT_INT64) then begin
      i64in := TInt64s(fRawVolBytes);
      setlength(i64temp, vx);
@@ -4541,7 +4544,47 @@ begin
    for i := 0 to (vx-1) do
        f32out[i] := f64temp[i];
    f64temp := nil;
-  end;
+
+ end else if (fHdr.datatype = kDT_COMPLEX64) then begin
+ //issue34 return absolute/modulus https://en.wikipedia.org/wiki/Absolute_value#Complex_numbers
+ //printf('Converted complex data to absolute values (aka modulus)');
+ printf('Displaying real component for DT_COMPLEX64 data');
+
+ f32in := TFloat32s(fRawVolBytes);
+ setlength(f32temp, vx);
+ j := 0;
+ for i := 0 to (vx-1) do begin
+     f32temp[i] := f32in[j]; //<- real
+     //f64temp[i] := sqrt(sqr(f64in[j]) + sqr(f64in[j+1])); //<- absolute, aka modulus
+     j := j + 2;
+ end;
+ fRawVolBytes := nil; //release
+ setlength(fRawVolBytes, 4 * vx);
+ f32out := TFloat32s(fRawVolBytes);
+ for i := 0 to (vx-1) do
+     f32out[i] := f32temp[i];
+ f32temp := nil;
+
+ end else if (fHdr.datatype = kDT_COMPLEX128) then begin
+ //issue34 return absolute/modulus https://en.wikipedia.org/wiki/Absolute_value#Complex_numbers
+ //printf('Converted complex data to absolute values (aka modulus)');
+ printf('Displaying real component for DT_COMPLEX128 data');
+
+ f64in := TFloat64s(fRawVolBytes);
+ setlength(f64temp, vx);
+ j := 0;
+ for i := 0 to (vx-1) do begin
+     f64temp[i] := f64in[j]; //<- real
+     //f64temp[i] := sqrt(sqr(f64in[j]) + sqr(f64in[j+1])); //<- absolute, aka modulus
+     j := j + 2;
+ end;
+ fRawVolBytes := nil; //release
+ setlength(fRawVolBytes, 4 * vx);
+ f32out := TFloat32s(fRawVolBytes);
+ for i := 0 to (vx-1) do
+     f32out[i] := f64temp[i];
+ f64temp := nil;
+end;
   printf('Converted data type '+ inttostr(fHdr.datatype) +' -> '+inttostr(kDT_FLOAT32));
   fHdr.datatype := kDT_FLOAT32;
   fHdr.bitpix:= 32;
@@ -5922,8 +5965,8 @@ begin
  end;
  Stream := TGZFileStream.Create (FileName, gzopenread);
  Try
-  if (lHdr.bitpix <> 8) and (lHdr.bitpix <> 16) and (lHdr.bitpix <> 24) and (lHdr.bitpix <> 32) and (lHdr.bitpix <> 64) then begin
-   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
+  if (lHdr.bitpix <> 8) and (lHdr.bitpix <> 16) and (lHdr.bitpix <> 24) and (lHdr.bitpix <> 32) and (lHdr.bitpix <> 64)  and (lHdr.bitpix <> 128) then begin
+   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64,128-bit NIfTI files. (bitpix: '+inttostr(lHdr.bitpix)+' datatype: '+inttostr(lHdr.datatype)+ ')');
    exit;
   end;
   //read the image data
@@ -5965,8 +6008,8 @@ label
 begin
  result := false;
  if not fileexists(Filename) then exit;
- if (lHdr.bitpix <> 8) and (lHdr.bitpix <> 16) and (lHdr.bitpix <> 24) and (lHdr.bitpix <> 32) and (lHdr.bitpix <> 64) then begin
-   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
+ if (lHdr.bitpix <> 8) and (lHdr.bitpix <> 16) and (lHdr.bitpix <> 24) and (lHdr.bitpix <> 32) and (lHdr.bitpix <> 64)  and (lHdr.bitpix <> 128) then begin
+   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64,128-bit NIfTI files. (bitpix: '+inttostr(lHdr.bitpix)+' datatype: '+inttostr(lHdr.datatype)+ ')');
    exit;
  end;
  volBytes := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3] * (lHdr.bitpix div 8);
@@ -6042,8 +6085,8 @@ begin
     end;
   end;
   fixHdr(fHdr);
-  if (fHdr.bitpix <> 8) and (fHdr.bitpix <> 16) and (fHdr.bitpix <> 24) and (fHdr.bitpix <> 32) and (fHdr.bitpix <> 64) then begin
-   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
+  if (fHdr.bitpix <> 8) and (fHdr.bitpix <> 16) and (fHdr.bitpix <> 24) and (fHdr.bitpix <> 32) and (fHdr.bitpix <> 64)  and (fHdr.bitpix <> 128) then begin
+   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64,128-bit NIfTI files. (bitpix: '+inttostr(fHdr.bitpix)+' datatype: '+inttostr(fHdr.datatype)+ ')');
    exit;
   end;
   Quat2Mat(fHdr);
@@ -6611,8 +6654,8 @@ begin
  {$ENDIF}
  result := readForeignHeader (FileName, lHdr,  gzBytes, swapEndian, isDimPermute2341);
  if not result then exit(false);
- if (lHdr.bitpix <> 8) and (lHdr.bitpix <> 16) and (lHdr.bitpix <> 24) and (lHdr.bitpix <> 32) and (lHdr.bitpix <> 64) then begin
-  printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64-bit NIfTI files.');
+ if (lHdr.bitpix <> 8) and (lHdr.bitpix <> 16) and (lHdr.bitpix <> 24) and (lHdr.bitpix <> 32) and (lHdr.bitpix <> 64)  and (lHdr.bitpix <> 128) then begin
+   printf('Unable to load '+Filename+' - this software can only read 8,16,24,32,64,128-bit NIfTI files. (bitpix: '+inttostr(lHdr.bitpix)+' datatype: '+inttostr(lHdr.datatype)+ ')');
   exit(false);
  end;
  if not fileexists(FileName) then begin
@@ -8775,7 +8818,7 @@ begin
   LoadRGBVector();
   Convert2RGB();
   Convert2UInt8();
-  if (fHdr.datatype = kDT_UINT16) or (fHdr.datatype = kDT_INT32) or (fHdr.datatype = kDT_UINT32) or (fHdr.datatype = kDT_DOUBLE) or (fHdr.datatype = kDT_INT64)  then
+  if (fHdr.datatype = kDT_UINT16) or (fHdr.datatype = kDT_INT32) or (fHdr.datatype = kDT_UINT32) or (fHdr.datatype = kDT_DOUBLE) or (fHdr.datatype = kDT_INT64) or (fHdr.datatype = kDT_COMPLEX64) or (fHdr.datatype = kDT_COMPLEX128)  then
      Convert2Float();
   //printf(format('->> %d', [length(fRawVolBytes)]));  //saveRotat
   if prod(tarDim) > 0 then begin
