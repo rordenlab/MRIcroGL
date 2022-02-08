@@ -15,7 +15,7 @@ uses
   {$IFDEF METALAPI}
   MetalPipeline, MetalUtils, MetalControl, Metal, VectorMath, mtlfont,
   {$ELSE}
-  {$IFDEF LCLCocoa}retinahelper,{$ENDIF}
+  {$IFDEF UNIX}retinahelper,{$ENDIF}
   {$IFDEF COREGL}glcorearb, {$ELSE} gl, glext, {$ENDIF} gl_core_utils, glfont, OpenGLContext,
   {$ENDIF}
    SimdUtils,

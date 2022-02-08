@@ -11,7 +11,7 @@ unit glfont;
 interface
 
 uses
-  {$IFDEF LCLCocoa}retinahelper,{$ENDIF}
+  {$IFDEF UNIX}retinahelper,{$ENDIF}
   {$IFDEF COREGL}glcorearb,
   {$ELSE}gl, glext, {$ENDIF} SimdUtils,
   sdffont, VectorMath,  gl_core_utils,
