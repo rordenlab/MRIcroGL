@@ -172,7 +172,8 @@ function unzipStream(inStream, outStream: TMemoryStream): boolean;
 var
   streamType: TZStreamType;
   zstream: z_stream;
-  hdr, crc, adler, adler32in, crcGZin, sizeGZin, delta, headerSize, modificationtime: longword;
+  hdr0, hdr1, hdr2, hdr3: byte;
+  crc, adler, adler32in, crcGZin, sizeGZin, delta, headerSize, modificationtime: longword;
   len, crcH, crcHeader: word;
   b: byte;
   flags: TFlags;
@@ -182,13 +183,16 @@ begin
   inStream.Position := 0; // goto start of input stream
   outStream.Position := 0; // goto start of output stream
   sizeGZin := 0;
-  hdr := inStream.ReadDWord;
-  if (hdr and $00088B1F) = $00088B1F then // gzip header (deflate method)
+  hdr0 := inStream.ReadByte;
+  hdr1 := inStream.ReadByte;
+  hdr2 := inStream.ReadByte;
+  hdr3 := inStream.ReadByte;
+  if (hdr0 = $1F) and  (hdr1 = $8B) then // gzip header (deflate method)
   begin
     streamType := zsGZip; // GZIP format
     modificationtime := inStream.ReadDWord; //Modification TIME (UNIX time format)
     inStream.ReadWord; // eXtra FLags & Operating System
-    flags := TFlags(hdr shr 24); // FLags
+    flags := TFlags(hdr3 shr 0); // FLags
     if (FEXTRA in flags) then // extra field is present
     begin
       len := inStream.ReadWord; // extra field length
@@ -229,7 +233,7 @@ begin
     sizeGZin := inStream.ReadDWord; // ISIZE (Input SIZE)
     inStream.Size := inStream.Size-8; // cut the 4 byte crc32 and 4 byte input size
   end
-  else if (hdr and $00009C78) = $00009C78 then // zlib header
+  else if (hdr0 = $78) and ((hdr1 =  $01) or (hdr1 =  $5E) or (hdr1 =  $9C) or (hdr1 =  $DA) or (hdr1 =  $20) or (hdr1 =  $7D) or (hdr1 =  $BB) or (hdr1 =  $F9)) then // zlib header
   begin
     streamType := zsZLib; // deflate format (with header)
     headerSize := 2;

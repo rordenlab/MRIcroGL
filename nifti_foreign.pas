@@ -78,7 +78,7 @@ type
 {$ENDIF}
 function readAFNIHeader(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isAllVolumesSame: boolean;  var AFNIs: TAFNIs; var fLabels: TStringList): boolean; overload;
 function readAFNIHeader(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean; overload;
-
+function isConcordeHeader(var fname: string): boolean;
 function isINTERFILE(var fname: string): boolean;
 function readForeignHeader(var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean; out xDim64: int64): boolean; overload;
 function readForeignHeader(var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean): boolean; overload;
@@ -359,7 +359,7 @@ begin
   outguy.Word2 := swap(inguy^.Word1);
   inguy^.Word1 := outguy.Word1;
   inguy^.Word2 := outguy.Word2;
-end; //proc Xswap4r
+end; //proc pswap4r
 
 procedure pswap4i(var s : LongInt);
 type
@@ -2107,10 +2107,10 @@ begin
   nhdr.pixdim[3]:=ihdr.z_pixel_size;
   nhdr.vox_offset := img1_StartBytes;
   nhdr.sform_code := 0;
-  (*nhdr.srow_x[0]:=nhdr.pixdim[1]; nhdr.srow_x[1]:=0; nhdr.srow_x[2]:=0; nhdr.srow_x[3]:=-(ihdr.x_dimension-2.0)/2.0*ihdr.x_pixel_size;
-  nhdr.srow_y[0]:=0; nhdr.srow_y[1]:=nhdr.pixdim[2]; nhdr.srow_y[2]:=0; nhdr.srow_y[3]:=-(ihdr.y_dimension-2.0)/2.0*ihdr.y_pixel_size;
-  nhdr.srow_z[0]:=0; nhdr.srow_z[1]:=0; nhdr.srow_z[2]:=nhdr.pixdim[3]; nhdr.srow_z[3]:=-(ihdr.z_dimension-2.0)/2.0*ihdr.z_pixel_size;*)
-  SetSForm(nhdr);
+  nhdr.srow_x[0]:=-nhdr.pixdim[1]; nhdr.srow_x[1]:=0; nhdr.srow_x[2]:=0; nhdr.srow_x[3]:=(ihdr.x_dimension-2.0)/2.0*ihdr.x_pixel_size;
+  nhdr.srow_y[0]:=0; nhdr.srow_y[1]:=-nhdr.pixdim[2]; nhdr.srow_y[2]:=0; nhdr.srow_y[3]:=(ihdr.y_dimension-2.0)/2.0*ihdr.y_pixel_size;
+  nhdr.srow_z[0]:=0; nhdr.srow_z[1]:=0; nhdr.srow_z[2]:=-nhdr.pixdim[3]; nhdr.srow_z[3]:=(ihdr.z_dimension-2.0)/2.0*ihdr.z_pixel_size;
+  //SetSForm(nhdr);
   convertForeignToNifti(nhdr);
   nhdr.descrip := 'ECAT'+kIVers;
   result := true;
@@ -2217,7 +2217,7 @@ const
 var
 	AIM_ints: array [0..(kheaderints-1)] of longint;
 	f: file;
-	binSz, strSz, i: integer;
+	binSz, strSz: integer;
 	x, y, z, xp, yp, zp: single;
 	str: string;
 	fSz: int64;
@@ -2366,7 +2366,7 @@ var
   h: Tmrc;
   lHdrFile: file;
   lExt: string;
-  isModern: boolean = false;
+  //isModern: boolean = false;
   lBuff: Bytep;
 begin
 	result := false;
@@ -2391,7 +2391,7 @@ begin
 		BlockRead(lHdrFile, h, sizeof(Tmrc));
 		CloseFile(lHdrFile);
 	end;
-	isModern := (h.cmap[1] = 'M') and (h.cmap[2] = 'A') and (h.cmap[3] = 'P');
+	//isModern := (h.cmap[1] = 'M') and (h.cmap[2] = 'A') and (h.cmap[3] = 'P');
 	swapEndian := false;
 	if ((h.stamp[1] = 68) or (h.stamp[1] = 65)) and ((h.stamp[2] = 68) or (h.stamp[2] = 65)) then begin
 		{$IFDEF ENDIAN_BIG}
@@ -2411,9 +2411,9 @@ begin
 		swap4(h.ny);
 		swap4(h.nz);
 		swap4(h.mode);
-		Xswap4r(h.xlen);
-		Xswap4r(h.ylen);
-		Xswap4r(h.zlen);
+		pswap4r(h.xlen);
+		pswap4r(h.ylen);
+		pswap4r(h.zlen);
 	end;
 	if (h.mode = 0) then
 		nhdr.datatype := kDT_INT8
@@ -2498,21 +2498,21 @@ begin
   swap4(mgh.mtype);
   swap4(mgh.dof);
   mgh.goodRASFlag := swap(mgh.goodRASFlag);
-  Xswap4r(mgh.spacingX);
-  Xswap4r(mgh.spacingY);
-  Xswap4r(mgh.spacingZ);
-  Xswap4r(mgh.xr);
-  Xswap4r(mgh.xa);
-  Xswap4r(mgh.xs);
-  Xswap4r(mgh.yr);
-  Xswap4r(mgh.ya);
-  Xswap4r(mgh.ys);
-  Xswap4r(mgh.zr);
-  Xswap4r(mgh.za);
-  Xswap4r(mgh.zs);
-  Xswap4r(mgh.cr);
-  Xswap4r(mgh.ca);
-  Xswap4r(mgh.cs);
+  pswap4r(mgh.spacingX);
+  pswap4r(mgh.spacingY);
+  pswap4r(mgh.spacingZ);
+  pswap4r(mgh.xr);
+  pswap4r(mgh.xa);
+  pswap4r(mgh.xs);
+  pswap4r(mgh.yr);
+  pswap4r(mgh.ya);
+  pswap4r(mgh.ys);
+  pswap4r(mgh.zr);
+  pswap4r(mgh.za);
+  pswap4r(mgh.zs);
+  pswap4r(mgh.cr);
+  pswap4r(mgh.ca);
+  pswap4r(mgh.cs);
   {$ENDIF}
   if ((mgh.version <> 1) or (mgh.mtype < 0) or (mgh.mtype > 4)) then begin
         NSLog(format('Error: first value in a MGH header should be 1 (got %d) and data type should be in the range 1..4. (got %d)', [mgh.version, mgh.mtype] ));
@@ -3982,6 +3982,137 @@ begin
   nhdr.descrip := 'VTI'+kIVers;
 end; //readVTI()
 
+procedure reportMat(s: string; m: mat33);
+begin
+  {$ifdef unix}
+  writeln(format('%s = [%g %g %g; %g %g %g; %g %g %g]',[s, m[0,0],m[0,1],m[0,2],     m[1,0],m[1,1],m[1,2],     m[2,0],m[2,1],m[2,2]]));
+  {$endif}
+end;
+
+function parseStr2Float(var a: AnsiString): float;
+//"file_type 5" -> 5.0
+var
+  aa:array of string;  
+begin
+  aa := a.split([' ']);
+  result := StrToFloatDef(aa[1], 0.0);
+end;
+
+function parseStr2Int(var a: AnsiString): integer;
+begin
+  result := round(parseStr2Float(a));
+end;
+
+function isConcordeHeader(var fname: string): boolean;
+var
+  f: file;
+  str: string;
+  fp: TextFile;
+  FSz: int64;
+begin
+  {$I-}
+  AssignFile(f, fname);
+  FileMode := 0;  //Set file access to read only
+  Reset(f, 1);
+  FSz := Filesize(f);
+  CloseFile(f);
+  {$I+}
+  FileMode := 2;
+  if (FSz < 600) then
+    exit(false);
+  AssignFile(fp,fname);
+  reset(fp);
+  while (not EOF(fp))  do begin
+    readln(fp,str);
+    if (AnsiStartsText( 'file_type', str)) then begin
+      CloseFile(FP);
+      Filemode := 2;
+      exit(true);
+    end;
+  end;
+  CloseFile(FP);
+  Filemode := 2;
+  exit(false);
+end;
+
+function readConcorde(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian: boolean): boolean;
+// siemens/concorde
+//see Andy Loening's m-conc.h for AMIDE and (X)MedCon
+var
+  str: string;
+  fp: TextFile;
+  filetype, i: integer;
+  pixel_size_x: single = 0.0;
+  pixel_size_y: single = 0.0;
+  pixel_size_z: single = 0.0;
+  
+begin
+  result := false;
+  swapEndian :=false;
+  nhdr.dim[1] := 1;
+  nhdr.dim[2] := 1;
+  nhdr.dim[3] := 1;
+  AssignFile(fp,fname);
+  reset(fp);
+  while (not EOF(fp))  do begin
+    readln(fp,str);
+    if (AnsiStartsText( 'file_type', str)) then begin
+      filetype := parseStr2Int(str);
+    end else if (AnsiStartsText( 'x_dimension', str)) then begin
+      nhdr.dim[1] := parseStr2Int(str);
+    end else if (AnsiStartsText( 'y_dimension', str)) then begin
+      nhdr.dim[2] := parseStr2Int(str);
+    end else if (AnsiStartsText( 'z_dimension', str)) then begin
+      nhdr.dim[3] := parseStr2Int(str);
+    end else if (AnsiStartsText( 'w_dimension', str)) then begin
+      nhdr.dim[4] := parseStr2Int(str);
+    end else if (AnsiStartsText( 'data_type', str)) then begin
+      i := parseStr2Int(str);
+      if (i = 1) then
+        nhdr.datatype := kDT_INT8;
+      if (i = 2)  or (i = 6) then
+        nhdr.datatype := kDT_INT16;
+      if (i = 3) or (i = 7) then
+        nhdr.datatype := kDT_INT32;
+      if (i = 4) or (i = 5) then
+        nhdr.datatype := kDT_FLOAT32;
+      {$IFDEF ENDIAN_LITTLE}
+      if (i > 4) then
+        swapEndian := true;
+      {$ELSE}
+      if (i < 5) then
+        swapEndian := true;
+      {$ENDIF}
+    end  else if (AnsiStartsText( 'pixel_size_x', str)) then begin
+      pixel_size_x := parseStr2Float(str);
+    end  else if (AnsiStartsText( 'pixel_size_y', str)) then begin
+      pixel_size_y := parseStr2Float(str);
+    end  else if (AnsiStartsText( 'pixel_size_z', str)) then begin
+      pixel_size_z := parseStr2Float(str);
+    end  else if (AnsiStartsText( 'pixel_size', str)) then begin
+      nhdr.pixdim[1] := parseStr2Float(str);
+      nhdr.pixdim[2] := nhdr.pixdim[1];
+    end else if (AnsiStartsText( 'axial_crystal_pitch', str)) then begin
+      nhdr.pixdim[3] := parseStr2Float(str) / 2.0;
+    end;
+  end;
+  //two methods to report pixel size: use preferred if available
+  if (pixel_size_x > 0) then
+    nhdr.pixdim[1] := pixel_size_x;
+  if (pixel_size_y > 0) then
+    nhdr.pixdim[2] := pixel_size_y;
+  if (pixel_size_z > 0) then
+    nhdr.pixdim[3] := pixel_size_z;
+  CloseFile(FP);
+  Filemode := 2;
+  result := true;
+  SetSForm(nhdr);
+  if (filetype = 2) or (filetype = 4) or (filetype  = 3) then //sinogram, attenuation, normalization
+    nhdr.dim[3] := 0;
+  convertForeignToNifti(nhdr);
+  nhdr.descrip := 'CONC'+kIVers;
+end;
+
 function readNRRD(var fname: string; var nhdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean): boolean;
 //http://www.sci.utah.edu/~gk/DTI-data/
 //http://teem.sourceforge.net/nrrd/format.html
@@ -4282,6 +4413,7 @@ begin
   mArray.free;
   if not result then exit;
   nhdr.vox_offset := headerSize;
+
   if (matElements >= 9) then begin
       //mat := nifti_mat33_mul( mat , rot33);
       if isMicron then begin
@@ -4294,7 +4426,11 @@ begin
       if rot33[0,0] < 0 then offset[0] := -offset[0]; //origin L<->R
       if rot33[1,1] < 0 then offset[1] := -offset[1]; //origin A<->P
       if rot33[2,2] < 0 then offset[2] := -offset[2]; //origin S<->I
+      //reportMat('rot33', rot33);
+      //reportMat('mat', mat);
        mat := nifti_mat33_mul( mat , rot33);
+      //reportMat('mat', mat);
+
         nhdr.srow_x[0] := mat[0,0];
         nhdr.srow_x[1] := mat[1,0];
         nhdr.srow_x[2] := mat[2,0];
@@ -5493,7 +5629,7 @@ begin
           end;
   until (lineNum >= (sl.count-1));
   result := true;
-666:
+666: 
   valArray := nil; //release dynamic array
   Filemode := 2;
   sl.free;
@@ -5979,6 +6115,9 @@ begin
        lFilename := ChangeFileExt(lFilename, '');
        lFilename := ChangeFileExt(lFilename, '.HEAD');
        result := readAFNIHeader(lFilename, lHdr, gzBytes, swapEndian)
+  end else if (lExt = '.HDR') and isConcordeHeader(lFilename) then begin
+       result := readConcorde(lFilename, lHdr, gzBytes, swapEndian);
+       lFilename := ChangeFileExt(lFilename, '');
   end else if (lExt = '.BRIK')  then begin
        lFilename := ChangeFileExt(lFilename, '.HEAD');
        result := readAFNIHeader(lFilename, lHdr, gzBytes, swapEndian)

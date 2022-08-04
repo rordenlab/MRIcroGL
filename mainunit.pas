@@ -145,6 +145,7 @@ type
     IntensityHistogamOptionsMenu: TMenuItem;
     GraphLognMenu: TMenuItem;
     GraphLog10Menu: TMenuItem;
+    MatCapDrop2: TComboBox;
     MPR4Menu: TMenuItem;
     ScriptHaltMenu: TMenuItem;
     NimlMenu: TMenuItem;
@@ -442,6 +443,7 @@ type
     procedure LayerIsLabelMenuClick(Sender: TObject);
     procedure LayerSmoothMenuClick(Sender: TObject);
     procedure DrawDilateMenuClick(Sender: TObject);
+    procedure MatCapDrop2Change(Sender: TObject);
     procedure MenuItem3Click(Sender: TObject);
     procedure NimlMenuClick(Sender: TObject);
     procedure RemoveSmallClusterMenuClick(Sender: TObject);
@@ -2673,6 +2675,7 @@ begin
       end;
       GLForm1.MatCapDrop.ItemIndex := i;
       GLForm1.MatCapDropChange(nil);
+      GLForm1.MatCapDrop2Change(nil);
       if not GLForm1.MatCapDrop.visible then
          GLForm1.ScriptOutputMemo.Lines.Add('Hint: shadermatcap() requires using a shader that supports matcaps (use shadername() to select a new shader).');
       Result:= PyBool_FromLong(Ord(True));
@@ -5236,7 +5239,20 @@ lFrac: double;
 fnm: string;
 saveDlg : TSaveDialog;
 begin
- fnm := gPrefs.PrevBackgroundImage;
+   if not DirectoryExists(GetFSLdir+pathdelim+ 'data'+pathdelim+'standard') then begin
+	 showmessage('Unable to find "FSLDIR". If FSL is installed, select the FSL folder.');
+     if not Dialogs.SelectDirectory('Select AFNI Folder (often named "abin")', gPrefs.FSLDir, gPrefs.FSLDir) then exit;
+
+          gFSLbase := gPrefs.FSLDir;
+     if not DirectoryExists(GetFSLdir+pathdelim+ 'data'+pathdelim+'standard') then begin
+     	showmessage('Expected a folder named "'+GetFSLdir+pathdelim+ 'data'+pathdelim+'standard'+'"');
+     end;
+
+
+
+  end;
+
+  fnm := gPrefs.PrevBackgroundImage;
 lFrac := GetFloat('Brain extraction fraction',0.1,0.45,0.9);
 if (lFrac= kNaN) then exit;
 OpenDialog1.FileName := '';
@@ -6711,9 +6727,11 @@ end;
  begin
   //ShaderSliders
  {$IFDEF MATCAP}
- MatCapDrop.Visible := (Vol1.matcapLoc >= 0);
- LightElevTrack.Visible := (Vol1.matcapLoc < 0);
- LightAziTrack.Visible := (Vol1.matcapLoc < 0);
+ MatCapDrop.Visible := (Vol1.matcap1Loc >= 0);
+ LightElevTrack.Visible := (Vol1.matcap1Loc < 0);
+ LightAziTrack.Visible := (Vol1.matcap1Loc < 0);
+ MatCapDrop2.Visible := (Vol1.matcap2Loc >= 0);
+
  {$ENDIF MATCAP}
  //if nUniform
     for i := 0 to GLForm1.ShaderBox.ControlCount - 1 do begin
@@ -6903,6 +6921,17 @@ begin
   Vols.Drawing.voiDilate(p);
   //LayerBox.caption := format('%d %d', [threshold, drawMode]);
   ViewGPU1.Invalidate;
+end;
+
+procedure TGLForm1.MatCapDrop2Change(Sender: TObject);
+begin
+  {$IFDEF MATCAP}
+  if MatCapDrop2.Items.Count < 1 then exit;
+  if MatCapDrop2.ItemIndex < 0 then
+     MatCapDrop2.ItemIndex := 0;
+  Vol1.SetMatCap(MatCapDrop2.Items[MatCapDrop2.ItemIndex], false);
+   ViewGPU1.Invalidate;
+  {$ENDIF}
 end;
 
 procedure TGLForm1.MenuItem3Click(Sender: TObject);
@@ -7231,10 +7260,6 @@ end;
 procedure TGLForm1.MatCapDropChange(Sender: TObject);
 begin
  {$IFDEF MATCAP}
- //GLBox.MakeCurrent;
- //SetMatCap(MatCapDir+pathdelim+MatCapDrop.Items[MatCapDrop.ItemIndex]+'.jpg');
- //GLBox.ReleaseContext;
- //GLBoxRequestUpdate(Sender);
  if MatCapDrop.Items.Count < 1 then exit;
  if MatCapDrop.ItemIndex < 0 then
     MatCapDrop.ItemIndex := 0;
@@ -7823,6 +7848,8 @@ begin
   if (MatCapDrop.Items.Count > 0) and (MatCapDrop.ItemIndex <> 0) then begin
      MatCapDrop.ItemIndex := 0;
      Vol1.SetMatCap(MatCapDrop.Items[MatCapDrop.ItemIndex]);
+     MatCapDrop2.ItemIndex := 1;
+     Vol1.SetMatCap(MatCapDrop2.Items[MatCapDrop2.ItemIndex], false);
   end;
   {$ENDIF}
   if (Sender <> nil) and (ssShift in ss) then begin
@@ -8336,6 +8363,7 @@ begin
   if i >= 0 then begin
      vols.Layer(i,v);
      v.SetDisplayVolume(v.VolumeDisplayed + 1);
+     ReportPositionXYZ();
      UpdateLayerBox(false, true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
      //UpdateTimer.Enabled := true;
      UpdateTimerTimer(Sender);
@@ -8345,6 +8373,7 @@ begin
      gGraph.isRedraw := true;
      ViewGPUg.Invalidate;
      {$ENDIF}
+     //
      exit;
   end;
   //exit if success
@@ -8365,6 +8394,7 @@ begin
      else
          v.SetDisplayVolume(v.VolumeDisplayed - 1);
      UpdateLayerBox(false, true);
+     ReportPositionXYZ();
      //UpdateLayerBox(true);// e.g. "fMRI (1/60)" -> "fMRI (2/60"
      UpdateTimer.Enabled := true;
      {$IFDEF GRAPH}
@@ -8688,6 +8718,20 @@ var
   p,f: string;
   ss: TShiftState;
 begin
+  if not DirectoryExists(GetFSLdir+pathdelim+ 'data'+pathdelim+'standard') then begin
+	 showmessage('Unable to find "FSLDIR". If FSL is installed, select the FSL folder.');
+     if not Dialogs.SelectDirectory('Select AFNI Folder (often named "abin")', gPrefs.FSLDir, gPrefs.FSLDir) then exit;
+
+          gFSLbase := gPrefs.FSLDir;
+     if not DirectoryExists(GetFSLdir+pathdelim+ 'data'+pathdelim+'standard') then begin
+     	showmessage('Expected a folder named "'+GetFSLdir+pathdelim+ 'data'+pathdelim+'standard'+'"');
+     end;
+
+
+
+  end;
+  //   OpenFSLMenu.Visible := false;
+
   ss := getKeyshiftstate;
   f := OpenDialog1.filename;
   p := OpenDialog1.InitialDir;
@@ -9970,8 +10014,10 @@ begin
   gLandmark := TLandmark.Create();
   CreateStandardMenus(OpenStandardMenu);
   CreateStandardMenus(OpenAltasMenu);
-  if not DirectoryExists(GetFSLdir+pathdelim+ 'data'+pathdelim+'standard') then
-     OpenFSLMenu.Visible := false;
+  if DirectoryExists(gPrefs.FSLDir) then
+  	gFSLbase := gPrefs.FSLDir; //e.g. MacOS blocks applications from reading environment variables
+  //if not DirectoryExists(GetFSLdir+pathdelim+ 'data'+pathdelim+'standard') then
+  //   OpenFSLMenu.Visible := false;
   //if DirectoryExists(GetFSLdir+pathdelim+ 'data'+pathdelim+'standard') then
   //   OpenFSLMenu.Visible := true;
   CreateStandardMenus(OpenAFNIMenu);
@@ -10072,9 +10118,12 @@ begin
   {$ENDIF}
   {$IFDEF MATCAP}
   UpdateMatCapDrop(MatCapDrop);
+  UpdateMatCapDrop(MatCapDrop2);
   if (MatCapDrop.Items.Count > 0) then begin
      MatCapDrop.ItemIndex := 0;
      Vol1.SetMatCap(MatCapDrop.Items[MatCapDrop.ItemIndex]);
+     MatCapDrop2.ItemIndex := 1;
+     Vol1.SetMatCap(MatCapDrop2.Items[MatCapDrop2.ItemIndex], false);
   end;
   {$ENDIF}
   //auto generate color tables

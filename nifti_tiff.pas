@@ -2,8 +2,12 @@ unit nifti_tiff;
 {$ifdef fpc}{$mode delphi}{$endif}
 
 interface
+{$IFDEF FPC}
+ {$DEFINE GZIP}
+{$ENDIF}
 
 uses
+   {$IFDEF GZIP}zstream, GZIPUtils, {$ENDIF}
    SimdUtils, nifti_types, dialogs, nifti_foreign, sysutils, classes, clipbrd, math;
    //function SaveTIFFAsNifti(fnm: string): string;
    function LoadTIFFAsNifti(fnm: string; var  rawData: TUInt8s; var nhdr: TNIFTIHdr): boolean;
@@ -33,6 +37,31 @@ begin
   {$ENDIF}
   //you could do something with these messages
 end;
+
+{$IFDEF GZIP}
+procedure DecodeDeflate(var Buffer: Pointer; var Count, CountDecompressed: PtrInt);
+var
+  inStream : TMemoryStream;
+  outStream : TMemoryStream;
+  mn: PtrInt;
+begin
+  inStream := TMemoryStream.Create();
+  outStream := TMemoryStream.Create();
+  inStream.WriteBuffer(Buffer, Count);
+  if not unzipStream(inStream, outStream) then
+    msgTIFF('TIFF DEFLATE decompression error.');
+  mn := outStream.size;
+  if (CountDecompressed <> outStream.size) then begin
+    msgTIFF('TIFF DEFLATE decompression error. Expected '+ inttostr(CountDecompressed)+' bytes but got '+ inttostr(outStream.size) );
+    mn := min(CountDecompressed, outStream.size);
+  end;
+  FreeMem(Buffer);
+  inStream.Free;
+  GetMem(Buffer, CountDecompressed);
+  move(outStream.Memory^, Buffer^, mn);
+  outStream.Free;
+end;
+{$ENDIF}
 
 procedure DecodePackBits(var Buffer: Pointer; var Count, CountDecompressed: PtrInt);
 label
@@ -469,7 +498,7 @@ type
   TOME = packed record
         oX, oY, oZ, oT, oC, //order, e.g. DimensionOrder="XYZTC" means oX=1 and oT=4
         nX, nY, nZ, nT, nC: uint32;
-        spacing: single;
+        pixdimX, pixdimY, pixdimZ, spacing: single;
         isImageJ: boolean;
   end;
 const
@@ -479,6 +508,7 @@ const
   kCOMPRESS_NONE = 1;
   kCOMPRESS_LZW = 5;
   kCOMPRESS_PACKBITS = 32773;
+  kCOMPRESS_DEFLATE = 32946;
 var
   tTag: TTIFFTag;
   lsm: TLSMINF2;
@@ -602,11 +632,16 @@ begin
      ome.oC := AnsiPos('C',oStr);
      //form1.memo1.lines.add(format('%d %d %d %d %d',[ome.oX, ome.oY, ome.oZ, ome.oT, ome.oC]));
      //oX, oY, oZ, oT, oC, //order, e.g. DimensionOrder="XYZTC" means oX=1 and oT=4
-     ome.nX := strtointdef(getVal('SizeX',str), 1);
-     ome.nY := strtointdef(getVal('SizeY',str), 1);
-     ome.nZ := strtointdef(getVal('SizeZ',str), 1);
-     ome.nT := strtointdef(getVal('SizeT',str), 1);
-     ome.nC := strtointdef(getVal('SizeC',str), 1);
+     //nb " SizeX" not "SizeX" to not detect " PhysicalSizeX"
+     ome.nX := strtointdef(getVal(' SizeX',str), 1);
+     ome.nY := strtointdef(getVal(' SizeY',str), 1);
+     ome.nZ := strtointdef(getVal(' SizeZ',str), 1);
+     ome.nT := strtointdef(getVal(' SizeT',str), 1);
+     ome.nC := strtointdef(getVal(' SizeC',str), 1);
+     ome.pixdimX := strtofloatdef(getVal(' PhysicalSizeX',str), 0);
+     ome.pixdimY := strtofloatdef(getVal(' PhysicalSizeY',str), 0);
+     ome.pixdimZ := strtofloatdef(getVal(' PhysicalSizeZ',str), 0);
+     writeln(ome.pixdimX, ':',ome.pixdimY, 'x', ome.pixdimZ,':::',getVal(' PhysicalSizeX',str));
      ome.isImageJ := false;
      //DimensionOrder="XYZCT" ID="Pixels:0" SizeC="1" SizeT="1" SizeX="439" SizeY="167" SizeZ="1"
      //if not ContainsText(str,'</OME>') then exit;
@@ -779,7 +814,10 @@ begin
                //1 = none, 32773 = packbits, 5 = LZW
                //memo1.lines.Add(format('format %x %d %d %d', [tTag.tagID,tTag.tagType, tTag.count, tTag.offset]));
               hdr[nIFD].Compression := tTag.offset;
-               if (hdr[nIFD].Compression <> kCOMPRESS_NONE) and (hdr[nIFD].Compression <> kCOMPRESS_LZW) and (hdr[nIFD].Compression <> kCOMPRESS_PACKBITS) then begin
+               if (hdr[nIFD].Compression <> kCOMPRESS_NONE) and (hdr[nIFD].Compression <> kCOMPRESS_LZW) {$IFDEF GZIP}and (hdr[nIFD].Compression <> kCOMPRESS_DEFLATE){$ENDIF} and (hdr[nIFD].Compression <> kCOMPRESS_PACKBITS) then begin
+                  //search for AICS-14_0 at https://www.allencell.org/3d-cell-viewer.html
+                  if (hdr[nIFD].Compression = kCOMPRESS_DEFLATE) then
+                  	msgTIFF('Not compiled with GZIP directive: deflate compression is not supported');
                   //eStr := 'Unsupported compression format '+inttostr(tTag.offset)+' try Fiji/ImageJ';
                   eStr := '-'; //silent error - Lazarus inbuilt TIFF decoder might handle this, e.g. Z deflate
                   goto 666;
@@ -891,7 +929,9 @@ begin
               lzwCount := lCounts[j];
               if outCount > sliceBytesLeft then
                  outCount := sliceBytesLeft;
-              if (hdr[i].Compression = kCOMPRESS_PACKBITS) then begin
+              {$IFDEF GZIP}if (hdr[i].Compression = kCOMPRESS_DEFLATE) then begin
+                 DecodeDeflate(lzw, lzwCount, outCount);
+              end else {$ENDIF} if (hdr[i].Compression = kCOMPRESS_PACKBITS) then begin
                  DecodePackbits(lzw, lzwCount, outCount);
               end else
                   DecodeLZW(lzw, lzwCount, outCount);
@@ -950,7 +990,9 @@ begin
      nhdr.dim[4]:=nOK;
      {$ENDIF}
   end else if isOME then begin
-     msgTIFF(format('OME slices=%d Z=%d  T=%d C=%d',[nOK, ome.nZ, ome.nT, ome.nC]));
+     msgTIFF(format('OME nX=%d nY=%d slices=%d Z=%d  T=%d C=%d',[ome.nX, ome.nY, nOK, ome.nZ, ome.nT, ome.nC]));
+     msgTIFF(format('TIFF nX=%d nY=%d',[nhdr.dim[1], nhdr.dim[2]]));
+
      if ome.isImageJ then begin
         ome.nX := nhdr.dim[1];
         ome.nY := nhdr.dim[2];
@@ -975,6 +1017,12 @@ begin
       nhdr.pixdim[1]:=1.0;
   nhdr.pixdim[2]:=nhdr.pixdim[1];
   nhdr.pixdim[3]:=nhdr.pixdim[1];
+  if (isOme) and (ome.pixDimX > 0) and (ome.pixDimY > 0) and (ome.pixDimZ > 0) then begin
+    nhdr.pixdim[1]:=ome.pixDimX;
+    nhdr.pixdim[2]:=ome.pixDimY;
+    nhdr.pixdim[3]:=ome.pixDimZ;
+    nhdr.xyzt_units:= kNIFTI_UNITS_MICRON +kNIFTI_UNITS_SEC;
+  end;
   //msgTIFF(format('>>pixdim %g %g %g',[nhdr.pixdim[1],nhdr.pixdim[2],nhdr.pixdim[3]]));
   if isLsm then begin
      msgTIFF(format('ZT %d %d',[nhdr.dim[3], nhdr.dim[4]]));

@@ -1,7 +1,7 @@
 object GLForm1: TGLForm1
-  Left = 843
+  Left = 760
   Height = 667
-  Top = 25
+  Top = 120
   Width = 916
   AllowDropFiles = True
   Caption = 'MRIcroGL'
@@ -884,20 +884,36 @@ object GLForm1: TGLForm1
           Visible = False
         end
         object MatCapDrop: TComboBox
-          AnchorSideLeft.Control = LightLabel
-          AnchorSideLeft.Side = asrBottom
+          AnchorSideLeft.Control = ShaderDrop
           AnchorSideTop.Control = LightLabel
           AnchorSideTop.Side = asrCenter
-          Left = 41
+          Left = 2
           Height = 20
           Top = 26
-          Width = 132
-          BorderSpacing.Left = 8
+          Width = 116
           ItemHeight = 26
           OnChange = MatCapDropChange
           ParentFont = False
           Style = csDropDownList
           TabOrder = 14
+          Text = '0'
+          Visible = False
+        end
+        object MatCapDrop2: TComboBox
+          AnchorSideLeft.Control = MatCapDrop
+          AnchorSideLeft.Side = asrBottom
+          AnchorSideTop.Control = LightLabel
+          AnchorSideTop.Side = asrCenter
+          Left = 122
+          Height = 20
+          Top = 26
+          Width = 116
+          BorderSpacing.Left = 4
+          ItemHeight = 26
+          OnChange = MatCapDrop2Change
+          ParentFont = False
+          Style = csDropDownList
+          TabOrder = 15
           Text = '0'
           Visible = False
         end

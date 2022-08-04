@@ -208,8 +208,8 @@ Type
         function SaveCropped(fnm: string; crop: TVec6i; cropVols: TPoint): boolean;
         function SaveAs8Bit(fnm: string; Lo,Hi: single): boolean;
         function SaveRescaled(fnm: string; xFrac, yFrac, zFrac: single; OutDataType, Filter: integer; isAllVolumes: boolean): boolean;
-        procedure SaveAsSourceOrient(NiftiOutName: string; rawVolBytes: TUInt8s);  overload;
-        procedure SaveAsSourceOrient(NiftiOutName, HdrDescrip, IntentName: string; rawVolBytes: TUInt8s; dataType: integer; intentCode: integer = 0; mn: single = 0; mx: single = 0);
+        procedure SaveAsSourceOrient(NiftiOutName: string; rawVolBytesIn: TUInt8s);  overload;
+        procedure SaveAsSourceOrient(NiftiOutName, HdrDescrip, IntentName: string; rawVolBytesIn: TUInt8s; dataType: integer; intentCode: integer = 0; mn: single = 0; mx: single = 0);
         function FracToSlice(Frac: TVec3): TVec3i; //given volume fraction return zero-indexed slice
         function FracShiftSlice(Frac: TVec3; sliceMove: TVec3i): TVec3; //move a desired number of slices
         function FracMM(Frac: TVec3): TVec3; //return mm coordinates given volume fraction
@@ -3385,7 +3385,7 @@ function GetCompressedFileInfo(const comprFile: TFileName; var size: int64; var 
 //read GZ footer https://www.forensicswiki.org/wiki/Gzip
 type
 TGzHdr = packed record
-   Signature: Word;
+   Signature1,Signature2,
    Method, Flags: byte;
    ModTime: DWord;
    Extra, OS: byte;
@@ -3413,16 +3413,13 @@ begin
   end;
   seek(F,skip);
   blockread(F, Hdr, SizeOf(Hdr) );
-  //n.b. GZ header/footer is ALWAYS little-endian
-  {$IFDEF ENDIAN_BIG}
-  Hdr.Signature := Swap(Hdr.Signature);
-  {$ENDIF}
-  if Hdr.Signature = $9C78 then begin
-    exit(2);
-    //printf('Error: not gz format: deflate with zlib wrapper');
-    //UnCompressStream(inStream.Memory, tagBytes, outStream, nil, true);
+  //https://en.wikipedia.org/wiki/List_of_file_signatures
+  if Hdr.Signature1 = $78 then begin
+    if (Hdr.Signature2 =  $01) or (Hdr.Signature2 =  $5E) or (Hdr.Signature2 =  $9C) or (Hdr.Signature2 =  $DA) or (Hdr.Signature2 =  $20) or (Hdr.Signature2 =  $7D) or (Hdr.Signature2 =  $BB) or(Hdr.Signature2 =  $F9) then
+    	exit(2);
+
   end;
-  if Hdr.Signature <> $8B1F then begin //hex: 1F 8B
+  if (Hdr.Signature1 <> $1F) or (Hdr.Signature2 <> $8B) then begin //hex: 1F 8B
     Close (F);
     exit;
   end;
@@ -4479,14 +4476,17 @@ begin
 end;
 
 procedure TNIfTI.Convert2Float();
+const
+    flintmax32 = 16777216;
 var
   ui16in,ui16temp: TUInt16s;
   ui32in,ui32temp: TUInt32s;
   i32in,i32temp: TInt32s;
   i64in,i64temp: TInt64s;
+  ui64in,ui64temp: TUInt64s;
   f64in,f64temp: TFloat64s;
   f32in,f32temp,f32out: TFloat32s;
-  i,vx, j: int64;
+  mx, i,vx, j: int64;
 begin
   vx := (fHdr.dim[1]*fHdr.dim[2]*fHdr.dim[3]*fVolumesLoaded);
   if (fHdr.datatype = kDT_UINT16) then begin
@@ -4503,8 +4503,13 @@ begin
   end else if (fHdr.datatype = kDT_INT32) then begin
      i32in := TInt32s(fRawVolBytes);
      setlength(i32temp, vx);
-     for i := 0 to (vx-1) do
+     mx := abs(i32in[0]);
+     for i := 0 to (vx-1) do begin
          i32temp[i] := i32in[i];
+         mx := max(mx, abs(i32in[i]));
+     end;
+     if (mx > flintmax32) then
+     	printf('Loss of precision representing integers as floating point.');
      fRawVolBytes := nil; //release
      setlength(fRawVolBytes, 4 * vx);
      f32out := TFloat32s(fRawVolBytes);
@@ -4514,8 +4519,13 @@ begin
   end else if (fHdr.datatype = kDT_UINT32) then begin
      ui32in := TUInt32s(fRawVolBytes);
      setlength(ui32temp, vx);
-     for i := 0 to (vx-1) do
+     mx := ui32in[0];
+     for i := 0 to (vx-1) do begin
          ui32temp[i] := ui32in[i];
+         mx := max(mx, ui32in[i]);
+     end;
+     if (mx > flintmax32) then
+     	printf('Loss of precision representing integers as floating point.');
      fRawVolBytes := nil; //release
      setlength(fRawVolBytes, 4 * vx);
      f32out := TFloat32s(fRawVolBytes);
@@ -4524,15 +4534,39 @@ begin
       ui32temp := nil;
   end else if (fHdr.datatype = kDT_INT64) then begin
      i64in := TInt64s(fRawVolBytes);
+     printf('Warning: many tools do not support INT64 images created with nibabel');
      setlength(i64temp, vx);
-     for i := 0 to (vx-1) do
+     mx := abs(i64in[0]);
+     for i := 0 to (vx-1) do begin
          i64temp[i] := i64in[i];
+         mx := max(mx, abs(i64in[i]));
+     end;
+     if (mx > flintmax32)  then
+     	printf('Loss of precision representing integers as floating point.');
      fRawVolBytes := nil; //release
      setlength(fRawVolBytes, 4 * vx);
      f32out := TFloat32s(fRawVolBytes);
      for i := 0 to (vx-1) do
          f32out[i] := i64temp[i];
       i64temp := nil;
+  end else if (fHdr.datatype = kDT_UINT64) then begin
+     ui64in := TUInt64s(fRawVolBytes);
+     printf('Warning: many tools do not support UINT64 images created with nibabel');
+     setlength(ui64temp, vx);
+     mx := ui64in[0];
+     for i := 0 to (vx-1) do begin
+         ui64temp[i] := ui64in[i];
+         if ui64in[i] > mx then
+         	mx := ui64in[i];
+     end;
+     if (mx > flintmax32)  then
+     	printf('Loss of precision representing integers as floating point.');
+     fRawVolBytes := nil; //release
+     setlength(fRawVolBytes, 4 * vx);
+     f32out := TFloat32s(fRawVolBytes);
+     for i := 0 to (vx-1) do
+         f32out[i] := ui64temp[i];
+      ui64temp := nil;
   end else if (fHdr.datatype = kDT_DOUBLE) then begin
    f64in := TFloat64s(fRawVolBytes);
    setlength(f64temp, vx);
@@ -5997,7 +6031,9 @@ end;
 
 function LoadHdrRawImgGZ(FileName : AnsiString; swapEndian: boolean; var  rawData: TUInt8s; var lHdr: TNIFTIHdr): boolean;
 var
-   {$IFNDEF FASTGZ}
+//ToDo: FastGZ does not work with `CTA-cardio.nrrd`
+  //{$DEFINE FASTGZF}  //okra
+   {$IFNDEF FASTGZF}
    fStream: TFileStream;
    inStream: TMemoryStream;
    {$ENDIF}
@@ -6015,7 +6051,7 @@ begin
  volBytes := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3] * (lHdr.bitpix div 8);
  volBytes := volBytes * HdrVolumes(lHdr);
  outStream := TMemoryStream.Create();
- {$IFDEF FASTGZ}
+ {$IFDEF FASTGZF}
  result := ExtractGzNoCrc(Filename, outStream, round(lHdr.vox_offset), volBytes);
  {$ELSE}
  fStream := TFileStream.Create(Filename, fmOpenRead);
@@ -6034,7 +6070,7 @@ begin
  //showmessage(format('%g  %dx%dx%dx%d ~= %d',[lHdr.vox_offset, lHdr.dim[1],lHdr.dim[2],lHdr.dim[3],lHdr.dim[4], HdrVolumes(lHdr) ]));
  if outStream.Size < volBytes then begin
     result := false;
-    showmessage(format('GZ error expected %d found %d bytes: %s',[volBytes,outStream.Size, Filename]));
+    showmessage(format('GZ error expected %d found %d bytes (offset %d): %s',[volBytes,outStream.Size, round(lHdr.vox_offset), Filename]));
     goto 123;
  end;
  SetLength (rawData, volBytes);
@@ -6779,7 +6815,7 @@ begin
     exit;
  end;
  {$ENDIF}
- if ((lExt = '.HDR') and (isINTERFILE(F_Filename))) or ((lExt <> '.IMG') and (lExt <> '.NII') and (lExt <> '.NII.GZ') and (lExt <> '.VOI') and  (lExt <> '.HDR') and (lExt <> '.GZ')) then begin
+ if ((lExt = '.HDR') and (isINTERFILE(F_Filename) or (isConcordeHeader(F_Filename)))) or ((lExt <> '.IMG') and (lExt <> '.NII') and (lExt <> '.NII.GZ') and (lExt <> '.VOI') and  (lExt <> '.HDR') and (lExt <> '.GZ')) then begin
    result := loadForeign(F_FileName, fRawVolBytes, fHdr);
     if result then begin
        fVolumesLoaded := length(fRawVolBytes) div (fHdr.Dim[1]*fHdr.Dim[2]*fHdr.Dim[3] * (fHdr.bitpix div 8));
@@ -8885,6 +8921,8 @@ begin
   end;
   {$IFDEF TIMER}printf(format('Init time %d',[MilliSecondsBetween(Now,startTime)]));{$ENDIF}
   {$IFDEF TIMER}startTime := now;{$ENDIF}
+  if (fHdr.cal_min = 0) and (fHdr.cal_max = 255) then
+  	fHdr.cal_max := 0; //BrainVoyager kludge
   if (IsLabels) then
      //
   else if (fHdr.cal_max > fHdr.cal_min)then begin
@@ -8924,7 +8962,7 @@ begin
      result := Load(niftiFileName,tarMat, tarDim, false);
 end;
 
-procedure TNIfTI.SaveAsSourceOrient(NiftiOutName, HdrDescrip, IntentName: string; rawVolBytes: TUInt8s; dataType: integer; intentCode: integer = 0; mn: single = 0; mx: single = 0);
+procedure TNIfTI.SaveAsSourceOrient(NiftiOutName, HdrDescrip, IntentName: string; rawVolBytesIn: TUInt8s; dataType: integer; intentCode: integer = 0; mn: single = 0; mx: single = 0);
 //for drawing rotate back to orientation of input image!
 var
    nVox: int64;
@@ -8932,6 +8970,7 @@ var
    oDim, oPerm: TVec3i;
    oScale: TVec3;
    i: integer;
+   rawVolBytes: TUInt8s;
    {$IFDEF OLDSAVE}
    oPad32: Uint32; //nifti header is 348 bytes padded with 4
    mStream : TMemoryStream;
@@ -8939,6 +8978,7 @@ var
    lExt: string;
    {$ENDIF}
 begin
+ rawVolBytes := Copy(rawVolBytesIn, Low(rawVolBytesIn), Length(rawVolBytesIn));
  oHdr := fHdr;
  oHdr.descrip := HdrDescrip;
  oHdr.intent_name := IntentName;
@@ -9010,7 +9050,7 @@ begin
  {$ENDIF}
 end;
 
-procedure TNIfTI.SaveAsSourceOrient(NiftiOutName: string; rawVolBytes: TUInt8s);
+procedure TNIfTI.SaveAsSourceOrient(NiftiOutName: string; rawVolBytesIn: TUInt8s);
 //for drawing rotate back to orientation of input image!
 var
    oHdr  : TNIFTIhdr;
@@ -9018,6 +9058,7 @@ var
    oScale: TVec3;
    nBytes,nVox: int64;
    i: integer;
+   rawVolBytes: TUInt8s;
    {$IFDEF OLDSAVE}
    oPad32: Uint32; //nifti header is 348 bytes padded with 4
    mStream : TMemoryStream;
@@ -9025,7 +9066,8 @@ var
    lExt: string;
    {$ENDIF}
 begin
- nBytes := length(rawVolBytes);
+ nBytes := length(rawVolBytesIn);
+ rawVolBytes := Copy(rawVolBytesIn, Low(rawVolBytesIn), Length(rawVolBytesIn));
  nVox := prod(fDim);
  oHdr := fHdr;
  if (nBytes = nVox) then
@@ -9046,6 +9088,7 @@ begin
  oScale := fScale;
  oHdr.scl_slope := 1;
  oHdr.scl_inter := 0;
+ oHdr.intent_code := kNIFTI_INTENT_NONE; //https://www.nitrc.org/forum/forum.php?thread_id=13440&forum_id=4442
  oHdr.cal_min:= 0.0;
  oHdr.cal_max:= 0.0;
  oHdr.glmin:= 0;

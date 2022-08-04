@@ -75,7 +75,7 @@ type
         viewportXYWH: TVec4;
         {$ENDIF}
         {$IFDEF MATCAP}
-        matcap2D: GLuint;
+        matcap2D1, matcap2D2: GLuint;
         {$ENDIF}
         {$IFDEF CUBE} gCube :TGPUCube; {$ENDIF}
         {$IFDEF GPUGRADIENTS}programSobel, programBlur: GLuint;
@@ -90,7 +90,7 @@ type
         procedure CreateOverlayTextures(Dim: TVec3i; volRGBA: TRGBAs);
         {$IFNDEF COREGL}procedure UpdateColorEditorDisplayList; {$ENDIF}
       public
-        matcapLoc: GLint;
+        matcap1Loc, matcap2Loc: GLint;
         gradientMode: integer;
         ClipThick: single;
         {$IFDEF VIEW2D}
@@ -110,7 +110,7 @@ type
         procedure PaintMosaic2D(var vol: TNIfTI; Drawing: TDraw; MosaicString: string);
         {$ENDIF} //MOSAIC
         {$ENDIF}
-        {$IFDEF MATCAP}procedure SetMatCap(lFilename: string);{$ENDIF}
+        {$IFDEF MATCAP}procedure SetMatCap(lFilename: string; isPrimary: boolean = true);{$ENDIF}
         //procedure CreateOverlayTextures();
         procedure UpdateOverlays(vols: TNIfTIs);
         property Quality1to5: integer read RayCastQuality1to5 write RayCastQuality1to5;
@@ -890,10 +890,13 @@ begin
   result := true;
 end;
 
-procedure TGPUVolume.SetMatCap(lFilename: string);
+procedure TGPUVolume.SetMatCap(lFilename: string; isPrimary: boolean = true);
 begin
   glControl.MakeCurrent();
-  LoadMatCap(lFilename, matcap2D);
+  if (isPrimary) then
+  	LoadMatCap(lFilename, matcap2D1)
+  else
+  	LoadMatCap(lFilename, matcap2D2);
   glControl.ReleaseContext;
 end;
 {$ENDIF}
@@ -1400,7 +1403,8 @@ begin
   sliceSizeLoc := glGetUniformLocation(programRaycast, pAnsiChar('sliceSize'));
   stepSizeLoc := glGetUniformLocation(programRaycast, pAnsiChar('stepSize'));
   backAlphaLoc := glGetUniformLocation(programRaycast, pAnsiChar('backAlpha'));
-  matcapLoc := glGetUniformLocation(programRaycast, pAnsiChar('matcap2D'));
+  matcap1Loc := glGetUniformLocation(programRaycast, pAnsiChar('matcap2D'));
+  matcap2Loc := glGetUniformLocation(programRaycast, pAnsiChar('matcap2D2'));
   {$IFDEF MATCAP}
   normLoc := glGetUniformLocation(programRaycast, pAnsiChar('NormalMatrix'));
   //printf(format('%d %s--->matcap @ %d = %d', [normLoc, shaderName, matcapLoc, matcap2D]));
@@ -1658,7 +1662,8 @@ begin
   dlBox3D := 0;
   dlColorEditor := 0;
   {$ENDIF}
-  matcap2D := 0;
+  matcap2D1 := 0;
+  matcap2D2 := 0;
   overlayGradientTexture3D := 0;
   overlayIntensityTexture3D := 0;
   drawTexture1D := 0;
@@ -2145,7 +2150,7 @@ begin
   //glUniform1i(loopsLoc,round(maxDim*2.2));
   {$IFDEF MATCAP}
   //printf(format('>>matcapLoc %d matcap %d',[matcapLoc, matcap2D]));
-  if (matcapLoc >= 0) and (matcap2D > 0) then begin
+  if (matcap1Loc >= 0) and (matcap2D1 > 0) then begin
     modelMatrix := TMat4.Identity;
     modelMatrix *= TMat4.Translate(0, 0, -fDistance);
     modelMatrix *= TMat4.RotateX(-DegToRad(90-lElevation));
@@ -2154,8 +2159,8 @@ begin
     modelLightPos := (modelMatrix.Transpose * fLightPos);
     modelMatrix *= TMat4.Scale(vol.Scale.X, vol.Scale.Y, vol.Scale.Z); //for volumes that are rectangular not square
     glActiveTexture(GL_TEXTURE6);
-    glBindTexture(GL_TEXTURE_2D, matcap2D);
-    glUniform1i(matcapLoc, 6);
+    glBindTexture(GL_TEXTURE_2D, matcap2D1);
+    glUniform1i(matcap1Loc, 6);
     normalMatrix := modelMatrix.Inverse.Transpose;
     nMtx[0] := normalMatrix.m[0,0];
     nMtx[1] := normalMatrix.m[0,1];
@@ -2167,6 +2172,11 @@ begin
     nMtx[7] := normalMatrix.m[2,1];
     nMtx[8] := normalMatrix.m[2,2];
     glUniformMatrix3fv(normLoc, 1, GL_FALSE, @nMtx);
+    if (matcap2Loc >= 0) then begin
+        glActiveTexture(GL_TEXTURE7);
+        glBindTexture(GL_TEXTURE_2D, matcap2D2);
+        glUniform1i(matcap2Loc, 7);
+    end;
   end;
   {$ENDIF}
   {$IFNDEF COREGL}
@@ -2795,10 +2805,10 @@ begin
     //bind matcap
     {$IFDEF MATCAP}
     //printf(format('>>matcapLoc %d matcap %d',[matcapLoc, matcap2D]));
-    if (matcapLoc >= 0) and (matcap2D > 0) then begin
+    if (matcap1Loc >= 0) and (matcap2D1 > 0) then begin
        glActiveTexture(GL_TEXTURE6);
-       glBindTexture(GL_TEXTURE_2D, matcap2D);
-       glUniform1i(matcapLoc, 6);
+       glBindTexture(GL_TEXTURE_2D, matcap2D1);
+       glUniform1i(matcap1Loc, 6);
        normalMatrix := modelMatrix.Inverse.Transpose;
        nMtx[0] := normalMatrix.m[0,0];
        nMtx[1] := normalMatrix.m[0,1];
@@ -2810,6 +2820,11 @@ begin
        nMtx[7] := normalMatrix.m[2,1];
        nMtx[8] := normalMatrix.m[2,2];
        glUniformMatrix3fv(normLoc, 1, GL_FALSE, @nMtx);
+       if (matcap2Loc >= 0) then begin
+              glActiveTexture(GL_TEXTURE7);
+              glBindTexture(GL_TEXTURE_2D, matcap2D2);
+              glUniform1i(matcap2Loc, 7);
+       end;
     end;
     {$ENDIF}
 

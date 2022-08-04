@@ -18,7 +18,7 @@ type
          ScreenCaptureTransparentBackground, LandmarkPanel, LoadFewVolumes,
          DebugMode, LoadSmooth, LabelOrient, RulerVisible, ColorbarVisible, Smooth2D, DarkMode, RetinaDisplay,
          FlipYZ, FlipLR_Radiological, SkipPrefWriting, AutoClusterizeAtlases, RenderDepthPicker: boolean;
-         AfniDir, CustomDcm2niix, PyLib, MosaicStr, InitScript, PrevScript, PrevBackgroundImage, DicomDir: string;
+         FSLDir, AfniDir, CustomDcm2niix, PyLib, MosaicStr, InitScript, PrevScript, PrevBackgroundImage, DicomDir: string;
          LineColor, ClearColor: TRGBA;
          PrevFilename: TMRU;
 
@@ -80,6 +80,7 @@ procedure SetDefaultPrefs (var lPrefs: TPrefs; lEverything: boolean);
 //  123;
 var
   i: integer;
+  tmp: string;
 begin
   if lEverything then begin  //These values are typically not changed...
      with lPrefs do begin
@@ -89,7 +90,16 @@ begin
             //InitScript := '';
             PrevScript := '';
             {$IFDEF UNIX}
-            AfniDir := GetEnvironmentVariable('AFNI_ATLAS_PATH');
+            if not DirectoryExists(AfniDir) then
+            	AfniDir := '';
+            tmp := GetEnvironmentVariable('AFNI_ATLAS_PATH');
+            if DirectoryExists(tmp) then
+            	AfniDir := tmp;
+             if not DirectoryExists(FSLDir)  then
+                FSLDir := '';
+            FSLDir := GetEnvironmentVariable('FSLDIR');
+            if DirectoryExists(tmp) then
+              FSLDir := tmp;
             (*if DirectoryExists(AfniDir) then goto 123;
             AfniDir := expandfilename('~/')+'abin';
             if DirectoryExists(AfniDir) then goto 123;
@@ -306,6 +316,7 @@ begin
   IniMRU(lRead,lIniFile,'PrevFilename', lPrefs.PrevFilename);
   IniStr(lRead, lIniFile, 'PyLib', lPrefs.PyLib);
   IniStr(lRead, lIniFile, 'AfniDir', lPrefs.AfniDir);
+  IniStr(lRead, lIniFile, 'FSLDIR', lPrefs.FSLDir);
   IniStr(lRead, lIniFile, 'PrevBackgroundImage', lPrefs.PrevBackgroundImage  );
   IniStr(lRead, lIniFile, 'DicomDir', lPrefs.DicomDir  );
   if (lRead) and (not DirectoryExists(lPrefs.DicomDir)) then

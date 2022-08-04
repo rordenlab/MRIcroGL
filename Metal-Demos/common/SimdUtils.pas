@@ -28,6 +28,7 @@ type
  end;
   TUInt32s = array of uint32;
   TInt32s = array of int32;
+  TUInt64s = array of uint64;
   TInt64s = array of int64;
   TUInt16s = array of uint16;
   TInt16s = array of int16;
