@@ -6764,7 +6764,6 @@ var
    F_Filename,lExt: string;
 begin
  result := false;
- writeln('????', fFilename);
  if (length(fFilename) < 1) then exit;
  if (not FileExists(fFilename)) or (FSize(fFilename) < 1) then begin
    printf('Missing or empty file '+fFilename);
