@@ -108,6 +108,8 @@ begin
 end;
 
 
+(*
+//https://github.com/neurolabusc/surf-ice/issues/35
 function IsReadable(fnm: string): boolean;
 //https://wiki.freepascal.org/macOS_Programming_Tips#Determining_if_a_file_is_readable
 {$IFDEF Darwin}
@@ -137,6 +139,41 @@ begin
   {$ELSE}
   result := true;
   {$ENDIF}
+end; *)
+
+function IsReadable (fnm: string): boolean;
+//https://wiki.freepascal.org/macOS_Programming_Tips#Determining_if_a_file_is_readable
+var
+  fs : TFileStream;
+  b: byte;
+begin
+  result := false;
+  if not fileexists(fnm) then begin
+    printf('File does not exist: '+fnm);
+    exit;
+  end;
+  if FSize(fnm) < 2 then begin
+    printf('Empty file: '+fnm);
+    exit;
+  end;
+  {$IFDEF Darwin}
+  {$I-}
+  try
+  fs := TFileStream.Create (fnm, fmOpenRead or fmShareDenyWrite);
+  except
+    printf('Unable to open (permissions): '+fnm);
+    exit(false);
+  end;
+  try
+    fs.Seek(0, soFromBeginning);
+    fs.Read(b, 1);
+    //writeln(inttostr(b));
+  except
+    printf('Unable to read: '+fnm);
+    exit(false);
+  end;
+  {$ENDIF}
+  result := true;
 end;
 
 

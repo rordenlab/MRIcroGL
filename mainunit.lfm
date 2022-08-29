@@ -1,7 +1,7 @@
 object GLForm1: TGLForm1
-  Left = 760
+  Left = 152
   Height = 667
-  Top = 120
+  Top = 205
   Width = 916
   AllowDropFiles = True
   Caption = 'MRIcroGL'
@@ -410,6 +410,23 @@ object GLForm1: TGLForm1
         Constraints.MinWidth = 10
         ParentFont = False
         TabOrder = 2
+        object LightLabel: TLabel
+          AnchorSideLeft.Control = ShaderBox
+          AnchorSideTop.Control = ShaderDrop
+          AnchorSideTop.Side = asrBottom
+          AnchorSideRight.Control = LightElevTrack
+          Left = 2
+          Height = 16
+          Hint = 'Set location of light source (e.g. above, below, left, right)'
+          Top = 28
+          Width = 31
+          BorderSpacing.Left = 2
+          BorderSpacing.Top = 6
+          Caption = 'Light'
+          ParentFont = False
+          ParentShowHint = False
+          ShowHint = True
+        end
         object ShaderDrop: TComboBox
           AnchorSideLeft.Control = ShaderBox
           AnchorSideTop.Control = ShaderBox
@@ -463,23 +480,6 @@ object GLForm1: TGLForm1
           ParentShowHint = False
           ShowHint = True
           TabOrder = 1
-        end
-        object LightLabel: TLabel
-          AnchorSideLeft.Control = ShaderBox
-          AnchorSideTop.Control = ShaderDrop
-          AnchorSideTop.Side = asrBottom
-          AnchorSideRight.Control = LightElevTrack
-          Left = 2
-          Height = 16
-          Hint = 'Set location of light source (e.g. above, below, left, right)'
-          Top = 28
-          Width = 31
-          BorderSpacing.Left = 2
-          BorderSpacing.Top = 6
-          Caption = 'Light'
-          ParentFont = False
-          ParentShowHint = False
-          ShowHint = True
         end
         object LightElevTrack: TTrackBar
           AnchorSideLeft.Control = LightLabel
@@ -884,13 +884,15 @@ object GLForm1: TGLForm1
           Visible = False
         end
         object MatCapDrop: TComboBox
-          AnchorSideLeft.Control = ShaderDrop
+          AnchorSideLeft.Control = LightLabel
+          AnchorSideLeft.Side = asrBottom
           AnchorSideTop.Control = LightLabel
           AnchorSideTop.Side = asrCenter
-          Left = 2
+          Left = 35
           Height = 20
           Top = 26
-          Width = 116
+          Width = 100
+          BorderSpacing.Left = 2
           ItemHeight = 26
           OnChange = MatCapDropChange
           ParentFont = False
@@ -904,10 +906,10 @@ object GLForm1: TGLForm1
           AnchorSideLeft.Side = asrBottom
           AnchorSideTop.Control = LightLabel
           AnchorSideTop.Side = asrCenter
-          Left = 122
+          Left = 139
           Height = 20
           Top = 26
-          Width = 116
+          Width = 100
           BorderSpacing.Left = 4
           ItemHeight = 26
           OnChange = MatCapDrop2Change

@@ -225,7 +225,7 @@ procedure GetErrorAll(p: integer; str: string = '');  //report OpenGL Error
       s := s+'GL_INVALID_VALUE' //out of range https://www.khronos.org/registry/OpenGL-Refpages/es2.0/xhtml/glGetError.xml
    else
        s := s + inttostr(Error);
-   printf('>>OpenGL Error (reduce MaxVox) '+str+s);
+   printf('OpenGL Error (reduce MaxVox) '+str+s);
 end;
 {$ELSE}
 begin

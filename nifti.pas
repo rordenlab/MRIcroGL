@@ -3732,7 +3732,6 @@ begin
     Stream.Free;
     exit;
    end;
-
  Stream.Position:=0;
  Try
   {$warn 5058 off}Stream.ReadBuffer (fHdr, SizeOf (TNIFTIHdr));{$warn 5058 on}
@@ -6031,9 +6030,8 @@ end;
 
 function LoadHdrRawImgGZ(FileName : AnsiString; swapEndian: boolean; var  rawData: TUInt8s; var lHdr: TNIFTIHdr): boolean;
 var
-//ToDo: FastGZ does not work with `CTA-cardio.nrrd`
-  //{$DEFINE FASTGZF}  //okra
-   {$IFNDEF FASTGZF}
+//20220827: FastGZ fix for `CTA-cardio.nrrd`
+   {$IFNDEF FASTGZ}
    fStream: TFileStream;
    inStream: TMemoryStream;
    {$ENDIF}
@@ -6051,7 +6049,7 @@ begin
  volBytes := lHdr.Dim[1]*lHdr.Dim[2]*lHdr.Dim[3] * (lHdr.bitpix div 8);
  volBytes := volBytes * HdrVolumes(lHdr);
  outStream := TMemoryStream.Create();
- {$IFDEF FASTGZF}
+ {$IFDEF FASTGZ}
  result := ExtractGzNoCrc(Filename, outStream, round(lHdr.vox_offset), volBytes);
  {$ELSE}
  fStream := TFileStream.Create(Filename, fmOpenRead);
@@ -6088,7 +6086,7 @@ var
   Stream: TGZFileStream;
   volBytes: int64;
   lSwappedReportedSz : LongInt;
-  isFastFailed: boolean = true;
+  isFastFailed: boolean = false;
 begin
  isNativeEndian := true;
  result := false;
@@ -6144,9 +6142,8 @@ begin
      volBytes := volBytes * fVolumesLoaded;
   end;
   {$IFDEF FASTGZ}
-  if (fVolumesLoaded = fVolumesTotal) then begin // did not trigger LoadFewVolumes
+  if (fVolumesLoaded = fVolumesTotal) and (not isFastFailed) then begin // did not trigger LoadFewVolumes
      Stream.Free;
-     if isFastFailed then exit;
      result := LoadFastGz(FileName,isNativeEndian);
      if result then exit;
      Stream := TGZFileStream.Create (FileName, gzopenread);
@@ -6637,22 +6634,6 @@ begin
      result := true;
 end;
 
-procedure mnmx(nVox: int64; var lBuffer: TUInt8s);
-var
-   in16: TInt16s;
-   mn, mx: integer;
-   i: Int64;
-begin
-     in16 := TInt16s(lBuffer);
-     mx := in16[0];
-     mn := in16[0];
-     for i := 0 to (nVox-1) do begin
-         mn := min(in16[i],mn);
-         mx := max(in16[i],mx);
-     end;
-     writeln('?? ', nVox, '   ',mn, '...', mx);
-end;
-
 function TNIfTI.loadForeign(FileName : AnsiString; var  rawData: TUInt8s; var lHdr: TNIFTIHdr): boolean;// Load 3D data
 //Uncompressed .nii or .hdr/.img pair
 const
@@ -6783,6 +6764,7 @@ var
    F_Filename,lExt: string;
 begin
  result := false;
+ writeln('????', fFilename);
  if (length(fFilename) < 1) then exit;
  if (not FileExists(fFilename)) or (FSize(fFilename) < 1) then begin
    printf('Missing or empty file '+fFilename);
@@ -8428,7 +8410,6 @@ begin
                   c[o].CogXYZ.z := c[o].CogXYZ.z + z;
               end;
       end;
-      writeln(vx);
     end else begin
       for v := 0 to (fVolumesLoaded-1) do begin //n.b. TTatlas+tlrc.HEAD has two volumes, scan both
           vx := (v * (dim.x * dim.y * dim.z)) -1;

@@ -6728,6 +6728,7 @@ end;
   //ShaderSliders
  {$IFDEF MATCAP}
  MatCapDrop.Visible := (Vol1.matcap1Loc >= 0);
+ //LightLabel.Visible := (Vol1.matcap1Loc < 0);
  LightElevTrack.Visible := (Vol1.matcap1Loc < 0);
  LightAziTrack.Visible := (Vol1.matcap1Loc < 0);
  MatCapDrop2.Visible := (Vol1.matcap2Loc >= 0);
