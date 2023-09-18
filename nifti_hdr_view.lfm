@@ -1134,7 +1134,7 @@ object HdrForm: THdrForm
           'Chi distribution'
           'Inverse Gaussian '
           'Extreme value type I'
-          'p-value value type I'
+          'p-value'
           'ln(p-value)'
           'log10(p-value)'
           'Estimate'

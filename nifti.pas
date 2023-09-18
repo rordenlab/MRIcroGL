@@ -3030,8 +3030,13 @@ begin
 end;
 begin
   checkSingle(h.scl_slope); //https://github.com/nipreps/fmriprep/issues/2507
-  if specialSingle(h.scl_inter) then
-  	h.scl_inter := 0.0;
+  if specialSingle(h.scl_inter) then begin
+    h.scl_inter := 0.0;
+    isBogus := true;
+  end;
+  if (isBogus) then
+    printf('Bogus scl_slope/scl_inter data scaling repaired.');
+  isBogus := false;
   checkSingle(h.PixDim[1]);
   checkSingle(h.PixDim[2]);
   checkSingle(h.PixDim[3]);

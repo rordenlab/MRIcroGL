@@ -12,12 +12,13 @@ unit mainunit;
 {$IFNDEF METALAPI}
 {$WARN 5023 off : Unit "$1" not used in $2}
  {$include ./Metal-Demos/common/glopts.inc}
+{$DEFINE MATCAP}
 {$ENDIF}
 {$IFDEF LCLCarbon}
   error: you must compile for the Cocoa widgetset (ProjectOptions/Additions&Overrides)
 {$ENDIF}
 
-{$DEFINE MATCAP}
+
 {$DEFINE COMPILEYOKE} //use yoking
 {$DEFINE CLRBAR} //provide color bar
 {$DEFINE GRAPH} //timeseries viewer
@@ -1529,7 +1530,11 @@ begin
      pth := Path;
      while (length(pth) > 0) and (DirectoryExists(pth)) do begin
            result := AddNiiExt(pth+Filename, changeExt);
-           if Fileexists(result) then exit;
+           if Fileexists(result) then begin
+            //clean with ExpandFileName '/home/x/../q/fd.nii.gz ' -> '/home/q/fd.nii.gz'
+            result := ExpandFileName(result);
+            exit;
+           end;
            //showmessage(pth);
            opth := pth;
            pth := ExtractFilePath(ExtractFileDir(pth));
@@ -1552,26 +1557,36 @@ function GetFullPathX( Filename: string; changeExt: boolean = true): string;
 // "motor" -> /home/smith/myDir/motor.nii.gz
 var
    i: integer;
+   tmpDir: string;
 begin
      result := Filename;
      if (length(Filename) < 1) or (Fileexists(result)) then exit;
      result := AddNiiExt(Filename, changeExt);
      if Fileexists(result) then exit;
+     tmpDir := ExtractFileDir(gPrefs.PrevScript);
+     //prioritize script directory if script is running
+     if gPyRunning and DirectoryExists(tmpDir) then begin
+        //writeln('Searching "'+tmpDir+'" for image "'+ Filename +'"');
+        result := CheckParentFolders(tmpDir+pathdelim, Filename, changeExt);
+        if (Fileexists(result)) then exit;
+        tmpDir := ConcatPaths([tmpDir, Filename]);
+        result := CheckParentFolders(tmpDir, '', changeExt);
+        if (Fileexists(result)) then exit;
+     end;
      {$IFDEF UNIX}
      if Filename[1] = '~' then begin
         result := AddNiiExt(ExpandFileName(Filename), changeExt);
         if Fileexists(result) then exit;
      end;
      {$ENDIF}
-     //result := Filename;
-     //Filename := ExtractFileName(result);
      result := AddNiiExt(GetCurrentDir + pathdelim+ Filename, changeExt);
-     if Fileexists(result) then exit;
+     if Fileexists(result) then
+        exit;
      if upcase(ExtractFileExt(Filename))= '.NII' then
         Filename := ChangeFileExt(Filename,''); //img.nii -> img (allows us to find .nii.gz
      if (length(ExtractFilePath(Filename)) > 1) then begin //path provided
         result := AddNiiExt(Filename, changeExt);
-        exit;
+        if Fileexists(result) then exit;
      end;
      result := CheckParentFolders(StandardDir+pathdelim, Filename, changeExt); //ResourceDir is parent of standardDir, so we check both
      //result := CheckParentFolders(ResourceDir+pathdelim, Filename);
@@ -1582,6 +1597,14 @@ begin
      if DirectoryExists(GetFSLdir) then
         result := CheckParentFolders(GetFSLdir+pathdelim, Filename, changeExt);
      if (Fileexists(result)) then exit;
+     //next: check folder from recent script file, allows scripts to not include path
+     if DirectoryExists(tmpDir) then begin
+        result := CheckParentFolders(tmpDir+pathdelim, Filename, changeExt);
+        if (Fileexists(result)) then exit;
+        tmpDir := ConcatPaths([tmpDir, Filename]);
+        result := CheckParentFolders(tmpDir, '', changeExt);
+        if (Fileexists(result)) then exit;
+     end;
      if DirectoryExists(gPrefs.AfniDir) then
         result := CheckParentFolders(gPrefs.AfniDir+pathdelim, Filename, changeExt);
      if (Fileexists(result)) then exit;
@@ -3468,10 +3491,10 @@ var
 begin
   if length(str) < 1 then exit;
   for i := 1 to length(str) do begin
-    if str[i] = LF then begin
+    if str[i] = LF then begin // LineEnding = LF
       ScriptOutputMemo.lines.add(gPythonData);
       {$ifdef unix}
-      //writeln('<<<'+gPythonData);
+      writeln(gPythonData);
       {$endif}
       gPythonData := '';
     end else
@@ -4209,6 +4232,7 @@ end;
 procedure TGLForm1.OpenScript(scriptname: string; isShowScriptPanel: boolean = true);
 begin
      if not fileexists(scriptname) then exit;
+     scriptname := ExpandFileName(scriptname);
      if (ScriptPanel.Width < 24) and (isShowScriptPanel) then
         ScriptFormVisible(true);
         //ScriptPanel.Width := 240;

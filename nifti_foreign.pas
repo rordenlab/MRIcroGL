@@ -16,7 +16,7 @@ uses
 {$IFDEF GL10} define_types, {$IFNDEF FPC}gziod,{$ELSE}gzio2,{$ENDIF}{$ENDIF}
 {$IFDEF GZIP}zstream, {$ENDIF}
 {$IFDEF GUI}
- dialogs,
+ dialogs,lazfileutils,
 {$ELSE}
  dialogsx,
 {$ENDIF}
@@ -82,7 +82,7 @@ function isConcordeHeader(var fname: string): boolean;
 function isINTERFILE(var fname: string): boolean;
 function readForeignHeader(var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean; out xDim64: int64): boolean; overload;
 function readForeignHeader(var lFilename: string; var lHdr: TNIFTIhdr; var gzBytes: int64; var swapEndian, isDimPermute2341: boolean): boolean; overload;
-function IsReadable(fnm: string): boolean;
+function IsReadable(const AFilename: string): boolean;
 procedure convertForeignToNifti(var nhdr: TNIFTIhdr);
 function FSize (lFName: String): Int64;
 function isTIFF(fnm: string): boolean;
@@ -141,7 +141,7 @@ begin
   {$ENDIF}
 end; *)
 
-function IsReadable (fnm: string): boolean;
+(*function IsReadable (fnm: string): boolean;
 //https://wiki.freepascal.org/macOS_Programming_Tips#Determining_if_a_file_is_readable
 var
   fs : TFileStream;
@@ -162,6 +162,7 @@ begin
   fs := TFileStream.Create (fnm, fmOpenRead or fmShareDenyWrite);
   except
     printf('Unable to open (permissions): '+fnm);
+    fs.Free;
     exit(false);
   end;
   try
@@ -170,10 +171,42 @@ begin
     //writeln(inttostr(b));
   except
     printf('Unable to read: '+fnm);
+    fs.Free;
     exit(false);
   end;
   {$ENDIF}
+  fs.Free;
   result := true;
+end;*)
+function IsReadable (const AFilename: string): boolean;
+// macOS will block applications from reading files outside their sandbox
+// therefore, simply knowing the user has read acces is not sufficient
+// requires "uses LazFileUtils"
+var
+  f: file;
+  b: byte;
+begin
+  Result := lazfileutils.FileIsReadable(AFilename);
+  {$IFDEF GUI}
+  {$IFDEF Darwin}
+  if not Result then exit; //globally not readable
+  if FileSizeUtf8(AFilename) < 1 then exit(false);
+  AssignFile(f, AFilename);
+  {$I+}
+  try
+    FileMode := fmOpenRead;  //Set file access to read only
+    Reset(f, 1);
+    if ioresult <> 0 then
+       exit;
+    b := 0;
+    BlockRead(f, b, sizeof(b));
+    CloseFile(f);
+    result := true;
+  except
+    result := false;
+  end;
+  {$ENDIF}
+  {$ENDIF}
 end;
 
 

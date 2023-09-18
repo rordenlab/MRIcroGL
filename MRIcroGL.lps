@@ -3,7 +3,7 @@
   <ProjectSession>
     <Version Value="12"/>
     <BuildModes Active="Default"/>
-    <Units Count="51">
+    <Units Count="52">
       <Unit0>
         <Filename Value="MRIcroGL.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -18,7 +18,6 @@
         <ComponentName Value="GLForm1"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
-        <IsVisibleTab Value="True"/>
         <TopLine Value="10191"/>
         <CursorPos X="38" Y="10195"/>
         <UsageCount Value="204"/>
@@ -157,7 +156,7 @@
       </Unit15>
       <Unit16>
         <Filename Value="nifti.pas"/>
-        <EditorIndex Value="3"/>
+        <EditorIndex Value="5"/>
         <TopLine Value="6616"/>
         <CursorPos X="61" Y="6631"/>
         <UsageCount Value="106"/>
@@ -172,7 +171,7 @@
       </Unit17>
       <Unit18>
         <Filename Value="glvolume2.pas"/>
-        <EditorIndex Value="4"/>
+        <EditorIndex Value="6"/>
         <TopLine Value="209"/>
         <CursorPos X="27" Y="212"/>
         <UsageCount Value="114"/>
@@ -180,9 +179,10 @@
       </Unit18>
       <Unit19>
         <Filename Value="nifti_foreign.pas"/>
-        <EditorIndex Value="1"/>
-        <TopLine Value="122"/>
-        <CursorPos X="33" Y="148"/>
+        <IsVisibleTab Value="True"/>
+        <EditorIndex Value="2"/>
+        <TopLine Value="184"/>
+        <CursorPos X="10" Y="205"/>
         <UsageCount Value="96"/>
         <Loaded Value="True"/>
       </Unit19>
@@ -256,9 +256,11 @@
       <Unit30>
         <Filename Value="../lazarus/components/opengl/glcocoanscontext.pas"/>
         <UnitName Value="GLCocoaNSContext"/>
-        <EditorIndex Value="-1"/>
-        <CursorPos X="40" Y="29"/>
-        <UsageCount Value="1"/>
+        <EditorIndex Value="1"/>
+        <TopLine Value="502"/>
+        <CursorPos X="32" Y="522"/>
+        <UsageCount Value="10"/>
+        <Loaded Value="True"/>
       </Unit30>
       <Unit31>
         <Filename Value="../Metal-Demos/common/retinahelper.pas"/>
@@ -377,8 +379,8 @@
       </Unit46>
       <Unit47>
         <Filename Value="vers.inc"/>
-        <EditorIndex Value="2"/>
-        <CursorPos X="21"/>
+        <EditorIndex Value="4"/>
+        <CursorPos X="46"/>
         <UsageCount Value="29"/>
         <Loaded Value="True"/>
       </Unit47>
@@ -401,6 +403,13 @@
         <EditorIndex Value="-1"/>
         <UsageCount Value="24"/>
       </Unit50>
+      <Unit51>
+        <Filename Value="../lazarus/packager/registration/fcllaz.pas"/>
+        <EditorIndex Value="3"/>
+        <CursorPos X="35" Y="21"/>
+        <UsageCount Value="10"/>
+        <Loaded Value="True"/>
+      </Unit51>
     </Units>
     <Build>
       <CleanOutputFileMask Value="*.ppu;*.ppl;*.o;*.or"/>
@@ -408,123 +417,123 @@
     <JumpHistory Count="30" HistoryIndex="29">
       <Position1>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="6385" Column="18" TopLine="6354"/>
+        <Caret Line="6522" Column="19" TopLine="6494"/>
       </Position1>
       <Position2>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="6518" Column="18" TopLine="6488"/>
+        <Caret Line="6580" Column="27" TopLine="6549"/>
       </Position2>
       <Position3>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="6" Column="139"/>
+        <Caret Line="7005" Column="25" TopLine="6973"/>
       </Position3>
       <Position4>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="1551" Column="17" TopLine="1519"/>
+        <Caret Line="1610" Column="43" TopLine="1587"/>
       </Position4>
       <Position5>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="1596" Column="73" TopLine="1580"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="85" Column="20" TopLine="55"/>
       </Position5>
       <Position6>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="6521" Column="13" TopLine="6502"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="21" Column="13"/>
       </Position6>
       <Position7>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="6518" Column="21" TopLine="6502"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="75" Column="13" TopLine="55"/>
       </Position7>
       <Position8>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="1607" Column="23" TopLine="1602"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="87" Column="15" TopLine="55"/>
       </Position8>
       <Position9>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="1560" Column="26" TopLine="1548"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="121" Column="11" TopLine="89"/>
       </Position9>
       <Position10>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="1558" Column="19" TopLine="1548"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="286" Column="13" TopLine="254"/>
       </Position10>
       <Position11>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="11" Column="91" TopLine="120"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="7" Column="22"/>
       </Position11>
       <Position12>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="6522" Column="19" TopLine="6494"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="139" Column="24" TopLine="122"/>
       </Position12>
       <Position13>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="6580" Column="27" TopLine="6549"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="632" Column="39" TopLine="608"/>
       </Position13>
       <Position14>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="7005" Column="25" TopLine="6973"/>
+        <Filename Value="nifti.pas"/>
+        <Caret Line="3457" Column="26" TopLine="3434"/>
       </Position14>
       <Position15>
         <Filename Value="mainunit.pas"/>
         <Caret Line="1610" Column="43" TopLine="1587"/>
       </Position15>
       <Position16>
-        <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="85" Column="20" TopLine="55"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="6520" TopLine="6488"/>
       </Position16>
       <Position17>
-        <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="21" Column="13"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="10223" Column="46" TopLine="10192"/>
       </Position17>
       <Position18>
-        <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="75" Column="13" TopLine="55"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="1557" TopLine="1538"/>
       </Position18>
       <Position19>
-        <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="87" Column="15" TopLine="55"/>
+        <Filename Value="mainunit.pas"/>
+        <Caret Line="10222" Column="46" TopLine="10191"/>
       </Position19>
       <Position20>
         <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="121" Column="11" TopLine="89"/>
+        <Caret Line="181" Column="20" TopLine="163"/>
       </Position20>
       <Position21>
         <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="286" Column="13" TopLine="254"/>
+        <Caret Line="182" Column="24" TopLine="163"/>
       </Position21>
       <Position22>
         <Filename Value="nifti_foreign.pas"/>
-        <Caret Line="7" Column="22"/>
+        <Caret Line="190" Column="40" TopLine="167"/>
       </Position22>
       <Position23>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="139" Column="24" TopLine="122"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="6161" Column="20" TopLine="6138"/>
       </Position23>
       <Position24>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="632" Column="39" TopLine="608"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="85" Column="44" TopLine="71"/>
       </Position24>
       <Position25>
-        <Filename Value="nifti.pas"/>
-        <Caret Line="3457" Column="26" TopLine="3434"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="113" Column="20" TopLine="90"/>
       </Position25>
       <Position26>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="1610" Column="43" TopLine="1587"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="144" Column="22" TopLine="121"/>
       </Position26>
       <Position27>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="6520" TopLine="6488"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="8" Column="61"/>
       </Position27>
       <Position28>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="10223" Column="46" TopLine="10192"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="19" Column="17"/>
       </Position28>
       <Position29>
-        <Filename Value="mainunit.pas"/>
-        <Caret Line="1557" TopLine="1538"/>
+        <Filename Value="nifti_foreign.pas"/>
+        <Caret Line="205" Column="10" TopLine="184"/>
       </Position29>
       <Position30>
         <Filename Value="mainunit.pas"/>
-        <Caret Line="10222" Column="46" TopLine="10191"/>
+        <Caret Line="10195" Column="38" TopLine="10191"/>
       </Position30>
     </JumpHistory>
     <RunParams>
