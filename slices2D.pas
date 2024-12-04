@@ -1498,7 +1498,7 @@ procedure TextLabelXY(X,Y,lSlice,FntScale: single; lOrient,lDec: integer);
       lH := txt.BaseHeight*FntScale;
       txt.TextOut(x-lW,y-lH,FntScale,lS);
 end;
-  procedure GLCrossLine(lMosaic: TMosaic; scale, lineWid:single);
+  procedure GLCrossLine(lMosaic: TMosaic; scale, lineWid:single; FlipLR: boolean);
   var
     i,j, lOrient, lCrossOrient, lColInc,lRow, lRowInc,lCol:integer;
     fh, fw, l,b,w,h: single;
@@ -1542,8 +1542,12 @@ end;
                    //   fw := (1.0 - lMosaic.Slices[i,j]) * w
                    //else
                        fw := lMosaic.Slices[i,j] * w;
-                   if (lOrient = kSagRightOrient) or (lOrient = kSagLeftOrient) then
-                      DrawLineLBWH(l+fw,b,0,h);
+
+                   if (lOrient = kSagRightOrient) or (lOrient = kSagLeftOrient) then begin
+                    if (FlipLR) then // issue65
+                       fw := (1.0 - lMosaic.Slices[i,j]) * w;
+                    DrawLineLBWH(l+fw,b,0,h);
+                   end;
                    if (lOrient = kAxialOrient) then
                       DrawLineLBWH(l,b+fh,w,0.0);
                    if (lOrient = kCoronalOrient) then begin
@@ -1633,7 +1637,7 @@ begin
    lRow := lRow+lRowInc;
   end;//row
   lineWid := lLineWid;
-  GLCrossLine(lMosaic, lScale, lLineWid);
+  GLCrossLine(lMosaic, lScale, lLineWid, isRadiological);
   fZoomScale := lZoomScale; //restore zoomScale
   fZoomCenter := lZoomCenter;
 end;
