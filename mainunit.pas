@@ -2920,6 +2920,11 @@ begin
   Result:= PyBool_FromLong(Ord(True));
     if Boolean(PyArg_ParseTuple(Args, 'i:transparent', @transparent)) then begin
        gPrefs.ScreenCaptureTransparentBackground := (transparent = 1);
+       gPrefs.ScreenCaptureTransparentBackground := (transparent = 1);
+       if gPrefs.ScreenCaptureTransparentBackground then
+         gPrefs.ClearColor.A := 0
+       else
+         gPrefs.ClearColor.A := 255;
     end;
     {$IFDEF PY4LAZ}end;{$ENDIF}
 end;
